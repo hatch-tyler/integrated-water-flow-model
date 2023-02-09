@@ -801,7 +801,7 @@ CONTAINS
     CHARACTER(LEN=*),INTENT(IN)        :: cOutputFileName,LengthUnit,AreaUnit,VolumeUnit,cPrintTimeStep
     REAL(8),INTENT(IN)                 :: FactLength,FactArea,FactVolume
     TYPE(PrintIntervalType),INTENT(IN) :: PrintInterval
-    INTEGER,OPTIONAL,INTENT(IN)        :: iLocations(:)
+    INTEGER,INTENT(IN)                 :: iLocations(:)
     INTEGER,INTENT(OUT)                :: iStat
     
     !Local variables
@@ -1064,7 +1064,8 @@ CONTAINS
                     rValues(indxCol) = rTempValues(indxCol) * FactVolume
                 ELSE
                     !Special accumulation method 
-                    rValues(indxCol) = rValues(indxCol) + (rAgSupReq_Modified - rTempValues(iAgPumpCol) - rTempValues(iAgDivCol) - rTempValues(iAgOtherInflowCol)) * FactVolume
+                    rValues(indxCol) = rValues(indxCol) + (rAgSupReq_Modified - rTempValues(iAgPumpCol) - rTempValues(iAgDivCol)) * FactVolume
+                    IF (iAgOtherInflowCol .GT. 0) rValues(indxCol) = rValues(indxCol) - (rTempValues(iAgOtherInflowCol) * FactVolume) 
                 END IF
             CASE (f_iVLB)
               IF (lFirstAfterPrint) rValues(indxCol) = rTempValues(indxCol) * FactVolume
@@ -1233,7 +1234,12 @@ CONTAINS
         IF (iCol .EQ. iAgShortCol) THEN
             CALL Budget%InputFile%ReadData(cTime,iLocation,iAgPumpCol,rRead_AgPump,ErrorCode,iStat)                ;  IF(iStat .EQ. -1) RETURN
             CALL Budget%InputFile%ReadData(cTime,iLocation,iAgDivCol,rRead_AgDiv,ErrorCode,iStat)                  ;  IF(iStat .EQ. -1) RETURN
-            CALL Budget%InputFile%ReadData(cTime,iLocation,iAgOtherInflowCol,rRead_AgOtherInflow,ErrorCode,iStat)  ;  IF(iStat .EQ. -1) RETURN
+            IF (iAgOtherInflowCol .GT. 0) THEN
+                CALL Budget%InputFile%ReadData(cTime,iLocation,iAgOtherInflowCol,rRead_AgOtherInflow,ErrorCode,iStat)
+                IF(iStat .EQ. -1) RETURN
+            ELSE
+                rRead_AgOtherInflow = 0.0
+            END IF
         END IF
     END IF
     
@@ -1281,6 +1287,7 @@ CONTAINS
     DO
         !Initialize ouput array for the output time step
         rValues(iOutputTimeCounter) = 0.0
+        rAgShortPrevious            = 0.0
         
         !Calculate number of data intervals in output interval
         IF (TrackTime) THEN
@@ -1421,12 +1428,11 @@ CONTAINS
     REAL(8),ALLOCATABLE                    :: rTempValues(:,:)
     
     !Initialize
-    iStat            = 0
-    lLWUBudget       = .FALSE.
-    nReadColumns     = SIZE(iReadCols)
-    rAgShortPrevious = 0.0
-    DataTimeStep     = Budget%Header%TimeStep
-    TrackTime        = DataTimeStep%TrackTime
+    iStat        = 0
+    lLWUBudget   = .FALSE.
+    nReadColumns = SIZE(iReadCols)
+    DataTimeStep = Budget%Header%TimeStep
+    TrackTime    = DataTimeStep%TrackTime
     
     !Number of intervals over which the budget data is to be accumulated
     IF (TrackTime) THEN
@@ -1524,8 +1530,9 @@ CONTAINS
         !Increment output time counter
         iOutputTimeCounter = iOutputTimeCounter + 1
 
-        !Initialize ouput array for the output time step
+        !Initialize ouput array and previous ag shortage for the output time step
         rValues(:,iOutputTimeCounter) = 0.0
+        rAgShortPrevious              = 0.0
         
         !Calculate number of data intervals in output interval
         IF (TrackTime) THEN
@@ -1570,7 +1577,8 @@ CONTAINS
                             rValues(indxCol,iOutputTimeCounter) = rTempValues(iCol,iTimeCounter) * rFact_VL
                         ELSE
                             !Special accumulation method 
-                            rValues(indxCol,iOutputTimeCounter) = rValues(indxCol,iOutputTimeCounter) + (rAgSupReq_Modified - rTempValues(iAgPumpCol,iTimeCounter) - rTempValues(iAgDivCol,iTimeCounter) - rTempValues(iAgOtherInflowCol,iTimeCounter)) * rFact_VL
+                            rValues(indxCol,iOutputTimeCounter) = rValues(indxCol,iOutputTimeCounter) + (rAgSupReq_Modified - rTempValues(iAgPumpCol,iTimeCounter) - rTempValues(iAgDivCol,iTimeCounter)) * rFact_VL
+                            IF (iAgOtherInflowCol .GT. 0) rValues(indxCol,iOutputTimeCounter) = rValues(indxCol,iOutputTimeCounter) - (rTempValues(iAgOtherInflowCol,iTimeCounter) * rFact_VL)
                         END IF
                     CASE (f_iVLB)
                         IF (indxTime .EQ. 1) rValues(indxCol,iOutputTimeCounter) = rTempValues(iCol,iTimeCounter) * rFact_VL
@@ -1641,7 +1649,6 @@ CONTAINS
     iStat            = 0
     lLWUBudget       = .FALSE.
     nReadColumns     = SIZE(iReadCols)
-    rAgShortPrevious = 0.0
     DataTimeStep     = Budget%Header%TimeStep
     TrackTime        = DataTimeStep%TrackTime
     
@@ -1709,6 +1716,7 @@ CONTAINS
 
         !Initialize ouput array for the output time step
         rValues(:,iTimeCounter) = 0.0
+        rAgShortPrevious        = 0.0
 
         !Calculate number of data intervals in output interval
         IF (TrackTime) THEN
@@ -1754,7 +1762,8 @@ CONTAINS
                             rValues(indxCol,iTimeCounter) = rTempValues(iCol) * rFact_VL
                         ELSE
                             !Special accumulation method 
-                            rValues(indxCol,iTimeCounter) = rValues(indxCol,iTimeCounter) + (rAgSupReq_Modified - rTempValues(iAgPumpCol) - rTempValues(iAgDivCol) - rTempValues(iAgOtherInflowCol)) * rFact_VL
+                            rValues(indxCol,iTimeCounter) = rValues(indxCol,iTimeCounter) + (rAgSupReq_Modified - rTempValues(iAgPumpCol) - rTempValues(iAgDivCol)) * rFact_VL
+                            IF (iAgOtherInflowCol .GT. 0) rValues(indxCol,iTimeCounter) = rValues(indxCol,iTimeCounter) - (rTempValues(iAgOtherInflowCol) * rFact_VL)
                         END IF
                     CASE (f_iVLB)
                         IF (indxTime .EQ. 1) rValues(indxCol,iTimeCounter) = rTempValues(iCol) * rFact_VL

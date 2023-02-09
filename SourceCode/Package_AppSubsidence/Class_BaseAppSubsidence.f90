@@ -21,7 +21,6 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 MODULE Class_BaseAppSubsidence
-  USE Class_Version           , ONLY: VersionType             
   USE MessageLogger           , ONLY: LogMessage          , &
                                       f_iFILE             , &
                                       f_iMessage            
@@ -68,7 +67,6 @@ MODULE Class_BaseAppSubsidence
   ! --- BASE APPLICATION LAKES DATA TYPE
   ! -------------------------------------------------------------
   TYPE,ABSTRACT :: BaseAppSubsidenceType
-      TYPE(VersionType)                   :: Version                             !Subsidence component version number
       REAL(8)                             :: FactorLen                = 1.0      !Factor for output unit conversion
       CHARACTER(LEN=6)                    :: cUnitLen                 = ''       !Output unit
       REAL(8),ALLOCATABLE                 :: ElasticSC(:,:)                      !Elastic storage coefficent at (node,layer)
@@ -100,7 +98,6 @@ MODULE Class_BaseAppSubsidence
       PROCEDURE,PASS                                                :: GetHydrographCoordinates
       PROCEDURE,PASS                                                :: GetHydrographNames
       PROCEDURE,PASS                                                :: GetHydOutputFileName
-      PROCEDURE(Abstract_GetVersion),PASS,DEFERRED                  :: GetVersion
       PROCEDURE(Abstract_Simulate),PASS,DEFERRED                    :: Simulate                          
       PROCEDURE(Abstract_AdvanceState),PASS,DEFERRED                :: AdvanceState                 
       PROCEDURE,PASS                                                :: PrintResults
@@ -149,13 +146,6 @@ MODULE Class_BaseAppSubsidence
     END SUBROUTINE Abstract_KillImplementation
     
     
-    FUNCTION Abstract_GetVersion(AppSubsidence) RESULT(cVrs)
-       IMPORT                       :: BaseAppSubsidenceType
-       CLASS(BaseAppSubsidenceType) :: AppSubsidence
-       CHARACTER(:),ALLOCATABLE     :: cVrs
-    END FUNCTION Abstract_GetVersion
-     
-     
     SUBROUTINE Abstract_PrintParameters(AppSubs,iGWNodeIDs,NodeAreas)
         IMPORT                                  :: BaseAppSubsidenceType
         CLASS(BaseAppSubsidenceType),INTENT(IN) :: AppSubs

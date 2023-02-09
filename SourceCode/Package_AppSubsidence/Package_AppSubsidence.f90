@@ -62,8 +62,8 @@ MODULE Package_AppSubsidence
   ! -------------------------------------------------------------
   TYPE AppSubsidenceType
       PRIVATE
-      INTEGER                                  :: iVersion = 0
-      LOGICAL                                  :: lDefined = .FALSE.
+      INTEGER                                  :: iComponentVersion = 0
+      LOGICAL                                  :: lDefined          = .FALSE.
       CLASS(BaseAppSubsidenceType),ALLOCATABLE :: Me
   CONTAINS
       PROCEDURE,PASS   :: New
@@ -95,8 +95,8 @@ MODULE Package_AppSubsidence
   ! -------------------------------------------------------------
   ! --- SUBSIDENCE COMPONENT FACADE VERSION RELATED DATA
   ! -------------------------------------------------------------
-  INTEGER,PARAMETER                    :: iLenVersion = 8
-  CHARACTER(LEN=iLenVersion),PARAMETER :: cVersion ='4.0.0000'
+  INTEGER,PARAMETER                    :: iLenVersion = 11
+  CHARACTER(LEN=iLenVersion),PARAMETER :: cVersion    ='2022.0.0000'
   INCLUDE 'Package_AppSubsidence_Revision.fi'
  
   
@@ -164,10 +164,10 @@ CONTAINS
     SELECT CASE (TRIM(cVersion))
         CASE ('4.0')
             ALLOCATE(AppSubsidence_v40_Type :: AppSubsidence%Me)
-            AppSubsidence%iVersion = 40
+            AppSubsidence%iComponentVersion = 40
         CASE ('5.0')
             ALLOCATE(AppSubsidence_v50_Type :: AppSubsidence%Me)
-            AppSubsidence%iVersion = 50
+            AppSubsidence%iComponentVersion = 50
         CASE DEFAULT
             CALL SetLastMessage('Subsidence Component version number is not recognized ('//TRIM(cVersion)//')!',f_iFatal,ThisProcedure)
             iStat = -1
@@ -381,12 +381,10 @@ CONTAINS
     CHARACTER(:),ALLOCATABLE :: cVrs
     
     !Local variables
-    TYPE(AppSubsidence_v40_Type) :: v40
-    TYPE(AppSubsidence_v50_Type) :: v50
-    TYPE(VersionType)            :: MyVersion
+    TYPE(VersionType) :: MyVersion
     
     MyVersion = MyVersion%New(iLenVersion,cVersion,cRevision)
-    cVrs      = TRIM(MyVersion%GetVersion()) // ' (Interface) ; ' // TRIM(v40%GetVersion()) // ', ' // TRIM(v50%GetVersion()) // ' (Components)'
+    cVrs      = TRIM(MyVersion%GetVersion())
     
   END FUNCTION GetVersion  
   

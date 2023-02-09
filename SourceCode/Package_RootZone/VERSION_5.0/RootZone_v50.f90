@@ -210,17 +210,8 @@ MODULE RootZone_v50
       PROCEDURE,PASS   :: RegionalReturnFlow_Urb                => RootZone_v50_RegionalReturnFlow_Urb
       PROCEDURE,PASS   :: PrintResults                          => RootZone_v50_PrintResults
       PROCEDURE,PASS   :: PrintRestartData                      => RootZone_v50_PrintRestartData
-      PROCEDURE,PASS   :: GetVersion                            => RootZone_v50_GetVersion
   END TYPE RootZone_v50_Type
 
-
-  ! -------------------------------------------------------------
-  ! --- VERSION RELATED ENTITIES
-  ! -------------------------------------------------------------
-  INTEGER,PARAMETER                    :: iLenVersion = 8
-  CHARACTER(LEN=iLenVersion),PARAMETER :: cVersion    = '5.0.0000'
-  INCLUDE 'RootZone_v50_Revision.fi'
-  
 
   ! -------------------------------------------------------------
   ! --- BUDGET OUTPUT RELATED ENTITIES
@@ -316,10 +307,10 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- NEW ROOT ZONE DATA
   ! -------------------------------------------------------------
-  SUBROUTINE RootZone_v50_New(RootZone,IsForInquiry,cFileName,cWorkingDirectory,AppGrid,TimeStep,NTIME,ET,Precip,iStat,iStrmNodeIDs,iLakeIDs)
+  SUBROUTINE RootZone_v50_New(RootZone,IsForInquiry,cFileName,cWorkingDirectory,cPackageVersion,AppGrid,TimeStep,NTIME,ET,Precip,iStat,iStrmNodeIDs,iLakeIDs)
     CLASS(RootZone_v50_Type)           :: RootZone
     LOGICAL,INTENT(IN)                 :: IsForInquiry
-    CHARACTER(LEN=*),INTENT(IN)        :: cFileName,cWorkingDirectory
+    CHARACTER(LEN=*),INTENT(IN)        :: cFileName,cWorkingDirectory,cPackageVersion
     TYPE(AppGridType),INTENT(IN)       :: AppGrid
     TYPE(TimeStepType),INTENT(IN)      :: TimeStep
     INTEGER,INTENT(IN)                 :: NTIME
@@ -331,7 +322,7 @@ CONTAINS
     !Local variables
     CHARACTER(LEN=ModNameLen+16)                :: ThisProcedure = ModName // 'RootZone_v50_New'
     CHARACTER(LEN=1000)                         :: ALine,AgDataFile,UrbanDataFile,NVRVFile,GenericMoistureFile
-    CHARACTER                                   :: cVersionLocal*20
+    CHARACTER                                   :: cVersionFull*25
     REAL(8)                                     :: FACTK,FACTCN,RegionArea(AppGrid%NSubregions+1),DummyFactor(1)
     REAL(8),ALLOCATABLE                         :: DummyRealArray(:,:)
     INTEGER                                     :: NElements,NRegion,ErrorCode,indxElem,NSoils,indxRegion,indxSoil,iSoilType,iRegion, &
@@ -356,8 +347,7 @@ CONTAINS
     CALL EchoProgress('Instantiating root zone')
     
     !Initialize
-    RootZone%Version       = RootZone%Version%New(iLenVersion,cVersion,cRevision)
-    cVersionLocal          = ADJUSTL('v' // TRIM(RootZone%Version%GetVersion()))
+    cVersionFull           = 'v5.0-' // TRIM(cPackageVersion)
     NElements              = AppGrid%NElements
     NRegion                = AppGrid%NSubregions
     iSubregionIDs          = AppGrid%AppSubregion%ID
@@ -506,7 +496,7 @@ CONTAINS
     CALL CleanSpecialCharacters(ALine)
     IF (ALine .NE. '') THEN
         CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(ALine)),cWorkingDirectory,cAbsPathFileName)
-        CALL LWUseBudRawFile_New(IsForInquiry,cAbsPathFileName,TimeStep,NTIME,NRegion+1,RegionArea,RegionNames,'land and water use budget',cVersionLocal,RootZone%LWUseBudRawFile,iStat)
+        CALL LWUseBudRawFile_New(IsForInquiry,cAbsPathFileName,TimeStep,NTIME,NRegion+1,RegionArea,RegionNames,'land and water use budget',TRIM(cVersionFull),RootZone%LWUseBudRawFile,iStat)
         IF (iStat .EQ. -1) RETURN
         RootZone%Flags%LWUseBudRawFile_Defined = .TRUE.      
     END IF
@@ -517,7 +507,7 @@ CONTAINS
     CALL CleanSpecialCharacters(ALine)
     IF (ALine .NE. '') THEN
         CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(ALine)),cWorkingDirectory,cAbsPathFileName)
-        CALL RootZoneBudRawFile_New(IsForInquiry,cAbsPathFileName,TimeStep,NTIME,NRegion+1,RegionArea,RegionNames,'root zone budget',cVersionLocal,RootZone%RootZoneBudRawFile,iStat)
+        CALL RootZoneBudRawFile_New(IsForInquiry,cAbsPathFileName,TimeStep,NTIME,NRegion+1,RegionArea,RegionNames,'root zone budget',TRIM(cVersionFull),RootZone%RootZoneBudRawFile,iStat)
         IF (iStat .EQ. -1) RETURN
         RootZone%Flags%RootZoneBudRawFile_Defined = .TRUE.
     END IF
@@ -535,7 +525,7 @@ CONTAINS
     CALL CleanSpecialCharacters(ALine)
     IF (ALine .NE. '') THEN
         CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(ALine)),cWorkingDirectory,cAbsPathFileName)
-        CALL LWUseZoneBudRawFile_New(IsForInquiry,cAbsPathFileName,TimeStep,NTIME,cVersionLocal,lElemFlowToSubregions,RootZone%Flags,AppGrid,RootZone%LWUZoneBudRawFile,iStat)
+        CALL LWUseZoneBudRawFile_New(IsForInquiry,cAbsPathFileName,TimeStep,NTIME,TRIM(cVersionFull),lElemFlowToSubregions,RootZone%Flags,AppGrid,RootZone%LWUZoneBudRawFile,iStat)
         IF (iStat .EQ. -1) RETURN
         RootZone%Flags%LWUseZoneBudRawFile_Defined = .TRUE.      
     END IF
@@ -546,7 +536,7 @@ CONTAINS
     CALL CleanSpecialCharacters(ALine)
     IF (ALine .NE. '') THEN
         CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(ALine)),cWorkingDirectory,cAbsPathFileName)
-        CALL RootZoneZoneBudRawFile_New(IsForInquiry,cAbsPathFileName,TimeStep,NTIME,cVersionLocal,lElemFlowToSubregions,RootZone%Flags,AppGrid,RootZone%RootZoneZoneBudRawFile,iStat)
+        CALL RootZoneZoneBudRawFile_New(IsForInquiry,cAbsPathFileName,TimeStep,NTIME,TRIM(cVersionFull),lElemFlowToSubregions,RootZone%Flags,AppGrid,RootZone%RootZoneZoneBudRawFile,iStat)
         IF (iStat .EQ. -1) RETURN
         RootZone%Flags%RootZoneZoneBudRawFile_Defined = .TRUE.
     END IF
@@ -2855,21 +2845,6 @@ CONTAINS
 
   END SUBROUTINE RootZone_v50_GetWaterSupply
   
-  
-  ! -------------------------------------------------------------
-  ! --- GET VERSION NUMBER 
-  ! -------------------------------------------------------------
-  FUNCTION RootZone_v50_GetVersion(RootZone) RESULT(cVrs)
-    CLASS(RootZone_v50_Type) :: RootZone
-    CHARACTER(:),ALLOCATABLE :: cVrs
-    
-    IF (.NOT. RootZone%Version%IsDefined())   &
-        RootZone%Version = RootZone%Version%New(iLenVersion,cVersion,cRevision)
-
-    cVrs = RootZone%Version%GetVersion()
-    
-  END FUNCTION RootZone_v50_GetVersion
-  
 
   ! -------------------------------------------------------------
   ! ---GET ELEMENTAL VOLUMETRIC SOIL MOISTURE
@@ -4383,8 +4358,8 @@ CONTAINS
         RootZone%cFutureDemandDates(indxTime) = TimeStep_Work%CurrentDateAndTime
 
         !Read time series data
-        CALL Precip%ReadTSData(TimeStep_Work,iStat)                                 ;  IF (iStat .NE. 0) RETURN
-        CALL ET%ReadTSData(TimeStep_Work,iStat)                                     ;  IF (iStat .NE. 0) RETURN
+        CALL Precip%ReadTSData(TimeStep_Work,.TRUE.,iStat)                          ;  IF (iStat .NE. 0) RETURN
+        CALL ET%ReadTSData(TimeStep_Work,.TRUE.,iStat)                              ;  IF (iStat .NE. 0) RETURN
         CALL RootZone_Work%ReadTSData(AppGrid,TimeStep_Work,Precip,ET,iStat=iStat)  ;  IF (iStat .NE. 0) RETURN
 
         !Compute water demand
@@ -4415,9 +4390,9 @@ CONTAINS
     
     !Rewind timeseries input files
     CALL Precip%File%RewindFile_To_BeginningOfTSData(iStat)  ;  IF (iStat .NE. 0) RETURN
-    CALL Precip%ReadTSData(TimeStep,iStat)                   ;  IF (iStat .NE. 0) RETURN
+    CALL Precip%ReadTSData(TimeStep,.TRUE.,iStat)            ;  IF (iStat .NE. 0) RETURN
     CALL ET%File%RewindFile_To_BeginningOfTSData(iStat)      ;  IF (iStat .NE. 0) RETURN
-    CALL ET%ReadTSData(TimeStep,iStat)                       ;  IF (iStat .NE. 0) RETURN
+    CALL ET%ReadTSData(TimeStep,.TRUE.,iStat)                ;  IF (iStat .NE. 0) RETURN
     CALL RewindTSInputFilesToTimeStamp(RootZone,AppGrid%AppSubregion%ID,AppGrid%AppSubregion%Area,TimeStep,iStat)             
 
   END SUBROUTINE RootZone_v50_ComputeFutureWaterDemand

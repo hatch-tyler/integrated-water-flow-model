@@ -74,7 +74,6 @@ MODULE Class_AppSubsidence_v40
   CONTAINS
       PROCEDURE,PASS :: New                             => AppSubsidence_v40_New
       PROCEDURE,PASS :: KillImplementation              => AppSubsidence_v40_KillImplementation
-      PROCEDURE,PASS :: GetVersion                      => AppSubsidence_v40_GetVersion
       PROCEDURE,PASS :: PrintParameters                 => AppSubsidence_v40_PrintParameters
       PROCEDURE,PASS :: PrintFinalSubs                  => AppSubsidence_v40_PrintFinalSubs
       PROCEDURE,PASS :: PrintRestartData_Implementation => AppSubsidence_v40_PrintRestartData
@@ -85,15 +84,6 @@ MODULE Class_AppSubsidence_v40
       PROCEDURE,PASS :: AdvanceState                    => AppSubsidence_v40_AdvanceState
   END TYPE AppSubsidence_v40_Type
   
-  
-  ! -------------------------------------------------------------
-  ! --- LAKE PACKAGE VERSION RELATED DATA
-  ! -------------------------------------------------------------
-  INTEGER,PARAMETER                    :: iVersion    = 40
-  INTEGER,PARAMETER                    :: iLenVersion = 8
-  CHARACTER(LEN=iLenVersion),PARAMETER :: cVersion    ='4.0.0000'
-  INCLUDE 'AppSubsidence_v40_Revision.fi'
- 
   
   ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
@@ -315,33 +305,6 @@ CONTAINS
   
   
 
-! ******************************************************************
-! ******************************************************************
-! ******************************************************************
-! ***
-! *** GETTERS
-! ***
-! ******************************************************************
-! ******************************************************************
-! ******************************************************************
-  
-  ! -------------------------------------------------------------
-  ! --- GET VERSION NUMBER 
-  ! -------------------------------------------------------------
-  FUNCTION AppSubsidence_v40_GetVersion(AppSubsidence) RESULT(cVrs)
-    CLASS(AppSubsidence_v40_Type) :: AppSubsidence
-    CHARACTER(:),ALLOCATABLE      :: cVrs
-    
-    IF (.NOT. AppSubsidence%Version%IsDefined())   &
-        AppSubsidence%Version = AppSubsidence%Version%New(iLenVersion,cVersion,cRevision)
-
-    cVrs = AppSubsidence%Version%GetVersion()
-    
-  END FUNCTION AppSubsidence_v40_GetVersion
-
-  
-  
-  
 ! ******************************************************************
 ! ******************************************************************
 ! ******************************************************************

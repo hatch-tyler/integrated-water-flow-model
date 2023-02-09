@@ -673,6 +673,8 @@ CONTAINS
         lWPForEachGWNode = .TRUE.
         IF (nGWNodes .GT. 1) THEN
             CALL InFile%ReadData(ALine,iStat)  ;  IF (iStat .EQ. -1) RETURN
+            CALL CleanSpecialCharacters(ALine)
+            ALine = TRIM(StripTextUntilCharacter(ALine,'/'))
             READ (ALine,*,IOSTAT=iStat) rDummyArray4
             IF (iStat .EQ. 0) THEN
                 lWPForEachGWNode = .TRUE.
@@ -705,6 +707,8 @@ CONTAINS
             !Wetted perimeter is specified for each gw node
             IF (lWPForEachGWNode) THEN
                 CALL InFile%ReadData(ALine,iStat)       ;  IF (iStat .EQ. -1) RETURN
+                CALL CleanSpecialCharacters(ALine)
+                ALine = TRIM(StripTextUntilCharacter(ALine,'/'))
                 READ (ALine,*,IOSTAT=iStat) rDummyArray4
                 IF (iStat .NE. 0) THEN
                     MessageArray(1) = 'Expecting to read 4 stream bed parameters at stream node '//TRIM(IntToText(iStrmNodeID))//'!'
@@ -730,6 +734,8 @@ CONTAINS
             !Wetted perimeter is given for the stream node and will be distributed to gw nodes by IWFM
             ELSE
                 CALL InFile%ReadData(ALine,iStat)  ;  IF (iStat .EQ. -1) RETURN
+                CALL CleanSpecialCharacters(ALine)
+                ALine = TRIM(StripTextUntilCharacter(ALine,'/'))
                 READ (ALine,*,IOSTAT=iStat) rDummyArray3
                 IF (iStat .NE. 0) THEN
                     MessageArray(1) = 'Expecting to read 3 stream bed parameters at stream node '//TRIM(IntToText(iStrmNodeID))//'!'
@@ -881,13 +887,13 @@ CONTAINS
             !Loop over each connected gw node
             DO indxGW=1,nGWNodes
                 !Corresponding GW node and conductance
-                Conductance = pData%Conductance(indxGW)
+                iGWNode              = (pData%iLayers(indxGW)-1) * iNNodes + pData%iGWNodes(indxGW)
+                iNodes_RHS(1+indxGW) = iGWNode
+                Conductance          = pData%Conductance(indxGW)
                 IF (Conductance .EQ. 0.0) THEN
                     pData%StrmGWFlow(indxGW) = 0.0
                     CYCLE
                 END IF
-                iGWNode              = (pData%iLayers(indxGW)-1) * iNNodes + pData%iGWNodes(indxGW)
-                iNodes_RHS(1+indxGW) = iGWNode
 
                 !Head differences
                 rGWHead     = rGWHeads(iOffset+indxGW)

@@ -25,7 +25,8 @@ MODULE SupplyAdjustment
                                           EchoProgress                   , &
                                           MessageArray                   , &
                                           f_iFatal
-  USE GeneralUtilities            , ONLY: NormalizeArray
+  USE GeneralUtilities            , ONLY: NormalizeArray                 , &
+                                          IntToText
   USE TimeSeriesUtilities         , ONLY: TimeStepType
   USE IOInterface                 , ONLY: IntTSDataInFileType
   USE Package_ComponentConnectors , ONLY: SupplyToDestinationType        , &
@@ -166,8 +167,8 @@ CONTAINS
     
     !Stop if no filename is given
     IF (cFileName .EQ. '') THEN
-        MessageArray(1) = 'Supply adjustment specifications file must be specified'
-        MessageArray(2) = ' when pumping or diversions are defined!'
+        MessageArray(1) = 'Supply adjustment specifications file must be specified when'
+        MessageArray(2) = ' root zone is simulated and pumping or diversions are defined!'
         CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
@@ -437,7 +438,8 @@ CONTAINS
     INTEGER,INTENT(OUT)           :: iStat
 
     !Local variables
-    INTEGER :: FileReadCode
+    CHARACTER(LEN=ModNameLen+10) :: ThisProcedure = ModNAme // 'ReadTSData'
+    INTEGER                      :: FileReadCode,indxCol
     
     !Return if no adjustment is asked for
     IF (SupplyAdjustment%iAdjust .EQ. f_iAdjustNone) THEN
@@ -448,6 +450,18 @@ CONTAINS
     !Read data
     CALL SupplyAdjustment%SpecFile%ReadTSData(TimeStep,'supply adjustment specs data',FileReadCode,iStat)
 
+    !Check that none of the supply adjustment flags is for adjusting for both ag and urban
+    DO indxCol=1,SupplyAdjustment%SpecFile%GetNDataColumns()
+        IF (SupplyAdjustment%SpecFile%iValues(indxCol) .EQ. 11) THEN
+            MessageArray(1) = 'Column '//TRIM(IntToText(indxCol))//' of Supply Adjustment Specifications Data File'
+            MessageArray(2) = 'indicates that a water supply will be adjusted to meet both agricultural and urban '
+            MessageArray(3) = 'water demands. This is no longer supported due to computational difficulties!'
+            CALL SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+            iStat = -1
+            RETURN
+        END IF
+    END DO
+    
   END SUBROUTINE ReadTSData
   
   
@@ -725,7 +739,8 @@ CONTAINS
     
     !Local variables
     INTEGER :: indxDest,nAdjustable,nSupply,indxSupply
-    REAL(8) :: Diff,SourcesRequired_Original(SupplyDestConnector%NSupply),Toler,IrigFracs_Original(SupplyDestConnector%NSupply)
+    REAL(8) :: Diff,SourcesRequired_Original(SupplyDestConnector%NSupply),Toler,IrigFracs_Original(SupplyDestConnector%NSupply), &
+               rSum_Ag,rSum_Urb
     LOGICAL :: lAdjustSuppliesForADest(500),lAdjustedSupplies(SupplyDestConnector%NSupply)
     
     !Initialize
@@ -842,12 +857,26 @@ CONTAINS
     
         !Finally convert volumetric supply-to-destination connections to fractions
         DO indxSupply=1,SupplyDestConnector%NSupply
+            !Set SourcesRequired to 0.0 if supply was adjusted and the sum of ag and urban components of the supply are both zero
+            !This situation can occur due to truncation errors in supply adjustment process and SourcesRequired ends up as a small but not zero number
+            rSum_Ag  = SUM(pSupplyToDest(indxSupply)%SupplyToDestFracs_Ag)
+            rSum_Urb = SUM(pSupplyToDest(indxSupply)%SupplyToDestFracs_Urb)
+            IF (lAdjustedSupplies(indxSupply)) THEN
+                IF (rSum_Ag .EQ. 0.0) THEN
+                    IF (rSum_Urb .EQ. 0.0) THEN
+                        IF (SourcesRequired(indxSupply) .GT. 0.0) THEN
+                            SourcesRequired(indxSupply) = 0.0
+                        END IF
+                    END IF
+                END IF
+            END IF
             IF (.NOT. lAdjustedSupplies(indxSupply)) THEN
                 SourcesRequired(indxSupply) = SourcesRequired_Original(indxSupply)
                 IrigFracs(indxSupply)       = IrigFracs_Original(indxSupply)
             ELSE
-                IF (SourcesRequired(indxSupply) .GT. 0.0) THEN
-                    IrigFracs(indxSupply) = SUM(pSupplyToDest(indxSupply)%SupplyToDestFracs_Ag) / SourcesRequired(indxSupply)
+                IF (SourcesRequired(indxSupply) .GT. 0.0) THEN  
+                    IrigFracs(indxSupply) = rSum_Ag / SourcesRequired(indxSupply)
+                    IF (ABS(IrigFracs(indxSupply)-1d0) .LT. 1d-10) IrigFracs(indxSupply) = 1d0   !Trying to control for truncation errors in the previous code line
                 ELSE
                     IrigFracs(indxSupply) = IrigFracs_Original(indxSupply)
                 END IF
@@ -1016,6 +1045,14 @@ CONTAINS
         
       !If the supply needs to be increased...
       ELSE   
+        !Is the maximum source zero (note that pumping/diversion rate, when read in from 
+        !  timeseries input file, is always limited by the maximum rate from the get-go, 
+        !  so a value of zero max pumping/diversion is already imposed on the pumping/diversion 
+        !before adjustment)?
+        IF (MaxSources(iSupply) .EQ. 0.0) THEN
+            lAdjustSupplies(indxSupply) = .FALSE.
+            CYCLE
+        END IF
         !Is the water at source less than the maximum amount?
         IF (SourcesRequired_New(iSupply) .GT. 0.99999d0*MaxSources(iSupply)) THEN  !Use a slightly decreased version of MAxSource in comparison to cover for round-off errors that might show up in SourcesRequired_New 
             lAdjustSupplies(indxSupply) = .FALSE.

@@ -197,10 +197,10 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- INSTANTIATE DIVERSIONS DATABASE
   ! -------------------------------------------------------------
-  SUBROUTINE New(AppDiverBypass,IsForInquiry,DiverSpecFileName,BypassSpecFileName,DiverFileName,DiverDetailBudFileName,cWorkingDirectory,cVersion,NTIME,TimeStep,NStrmNodes,iStrmNodeIDs,iLakeIDs,Reaches,AppGrid,StrmLakeConnector,iStat)
+  SUBROUTINE New(AppDiverBypass,IsForInquiry,DiverSpecFileName,BypassSpecFileName,DiverFileName,DiverDetailBudFileName,cWorkingDirectory,cVersionFull,NTIME,TimeStep,NStrmNodes,iStrmNodeIDs,iLakeIDs,Reaches,AppGrid,StrmLakeConnector,iStat)
     CLASS(AppDiverBypassType),INTENT(OUT) :: AppDiverBypass
     LOGICAL,INTENT(IN)                    :: IsForInquiry
-    CHARACTER(LEN=*),INTENT(IN)           :: DiverSpecFileName,BypassSpecFileName,DiverFileName,DiverDetailBudFileName,cWorkingDirectory,cVersion
+    CHARACTER(LEN=*),INTENT(IN)           :: DiverSpecFileName,BypassSpecFileName,DiverFileName,DiverDetailBudFileName,cWorkingDirectory,cVersionFull
     INTEGER,INTENT(IN)                    :: NTIME,NStrmNodes,iStrmNodeIDs(NStrmNodes),iLakeIDs(:)
     TYPE(TimeStepType),INTENT(IN)         :: TimeStep
     TYPE(StrmReachType)                   :: Reaches(:)
@@ -314,7 +314,7 @@ CONTAINS
                 CALL AppDiverBypass%DiverDetailsBudRawFile%New(TRIM(DiverDetailBudFileName),iStat)
                 IF (iStat .EQ. -1) RETURN
             ELSE
-                BudHeader = PrepareDiverDetailsBudgetHeader(AppDiverBypass%NDiver,TimeStep,NTIME,iElemIDs,iStrmNodeIDs,iSubregionIDs,AppDiverBypass%Diver,cVersion)
+                BudHeader = PrepareDiverDetailsBudgetHeader(AppDiverBypass%NDiver,TimeStep,NTIME,iElemIDs,iStrmNodeIDs,iSubregionIDs,AppDiverBypass%Diver,cVersionFull)
                 CALL AppDiverBypass%DiverDetailsBudRawFile%New(TRIM(DiverDetailBudFileName),BudHeader,iStat)
                 IF (iStat .EQ. -1) RETURN
                 CALL BudHeader%Kill()

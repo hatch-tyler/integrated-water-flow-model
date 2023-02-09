@@ -1201,7 +1201,7 @@ CONTAINS
     CHARACTER(LEN=ModNameLen+13)  :: ThisProcedure = ModName//'ConstructGrid'
     INTEGER                       :: indx,ConvexNode,indxVertex,ErrorCode,NElements,NNodes,iCount,indxFace,iStatParallel,Vertexc(4),    &
                                      Vertex(SIZE(Vertex_IDs,DIM=1),SIZE(Vertex_IDs,DIM=2)),Vertex_1D(SIZE(Vertex_IDs)),ID,              &
-                                     iSubregion_Indices(SIZE(iElemSubregionIDs))
+                                     iSubregion_Indices(SIZE(iElemSubregionIDs)),indxElem,iaNodeID,iLoc
     REAL(8)                       :: Xc(4),Yc(4)
     INTEGER,ALLOCATABLE           :: DummyIntArray(:),iSubregionIDs_Unique(:)
     
@@ -1212,6 +1212,24 @@ CONTAINS
     !Convert vertex IDs to indices
     CALL ConvertID_To_Index(PACK(Vertex_IDs,MASK=.TRUE.),NodeID,Vertex_1D)
     Vertex = RESHAPE(Vertex_1D,[SIZE(Vertex_IDs,DIM=1),SIZE(Vertex_IDS,DIM=2)])
+    
+    !Make sure that node IDs listed for elements are legit
+    !$OMP PARALLEL DEFAULT(PRIVATE) SHARED(ElemID,Vertex_IDs,NodeID,ThisProcedure,iStat) 
+    !$OMP DO SCHEDULE(STATIC,500) 
+    DO indxElem=1,SIZE(ElemID)
+        DO indxVertex=1,4
+            iaNodeID = Vertex_IDs(indxVertex,indxElem)
+            IF (iaNodeID .EQ. 0) CYCLE
+            iLoc = LocateInList(iaNodeID,NodeID)
+            IF (iLoc .EQ. 0) THEN
+                CALL SetLastMessage('Node ID '//TRIM(IntToText(iaNodeID))//' listed for element '//TRIM(IntToText(ElemID(indxElem)))//' is not in the model!',f_iFatal,ThisProcedure)
+                iStat = -1
+            END IF
+        END DO
+    END DO
+    !$OMP END DO 
+    !$OMP END PARALLEL
+    IF (iStat .EQ. -1) RETURN
     
     !Make sure that number of subregions are consistent
     CALL GetUniqueArrayComponents(iElemSubregionIDs,iSubregionIDs_Unique)
@@ -1270,7 +1288,7 @@ CONTAINS
     AppGrid%AppElement%ID = ElemID
     
     !Check if elements are convex
-    !$OMP PARALLEL DEFAULT(PRIVATE) SHARED(NElements,NVertex,Vertex,X,Y,iStat) 
+    !$OMP PARALLEL DEFAULT(PRIVATE) SHARED(NElements,NVertex,Vertex,X,Y,ThisProcedure,iStat) 
     !$OMP DO SCHEDULE(STATIC,500) 
     DO indx=1,NElements
         IF (NVertex(indx) .EQ. 3) CYCLE
@@ -1325,7 +1343,7 @@ CONTAINS
     END IF
     
     !Compute element vertex areas and vertex area fractions
-    !$OMP PARALLEL DEFAULT(PRIVATE) SHARED(NElements,NVertex,Vertex,AppGrid,iStatParallel) 
+    !$OMP PARALLEL DEFAULT(PRIVATE) SHARED(NElements,NVertex,Vertex,AppGrid,iStatParallel,ThisProcedure) 
     !$OMP DO SCHEDULE(STATIC,500) 
     DO indx=1,NElements
         ALLOCATE (AppGrid%AppElement(indx)%VertexArea(NVertex(indx)) , AppGrid%AppElement(indx)%VertexAreaFraction(NVertex(indx)) , STAT=ErrorCode)
@@ -1407,7 +1425,7 @@ CONTAINS
     END IF
 
     !Construct the list of connected nodes for each node
-    !$OMP PARALLEL DEFAULT(PRIVATE) SHARED(NNodes,AppGrid,iStatParallel) 
+    !$OMP PARALLEL DEFAULT(PRIVATE) SHARED(NNodes,AppGrid,iStatParallel,ThisProcedure) 
     !$OMP DO SCHEDULE(STATIC,500)
     DO indx=1,NNodes
         CALL ListConnectedNodes(AppGrid%GridType,indx,AppGrid%AppNode(indx)%ConnectedNode,iStat)
@@ -1426,7 +1444,7 @@ CONTAINS
     AppGrid%NSumConnectedNode = SUM(AppGrid%AppNode%NConnectedNode)
          
     !Identify faces that meet at each node
-    !$OMP PARALLEL DEFAULT(PRIVATE) SHARED(NNodes,AppGrid,iStatParallel) 
+    !$OMP PARALLEL DEFAULT(PRIVATE) SHARED(NNodes,AppGrid,iStatParallel,ThisProcedure) 
     !$OMP DO SCHEDULE(STATIC,500)
     DO indx=1,NNodes
         CALL ListFacesAtNode(AppGrid,indx,AppGrid%AppNode(indx)%FaceID,iStat)  
@@ -1451,7 +1469,7 @@ CONTAINS
     CALL CheckForGaps(AppGrid,NodeID,lFirstCall=.TRUE.)
 
     !Identify elements on the counter-clockwise side of each face that meet at each node
-    !$OMP PARALLEL DEFAULT(PRIVATE) SHARED(NNodes,AppGrid,iStatParallel) 
+    !$OMP PARALLEL DEFAULT(PRIVATE) SHARED(NNodes,AppGrid,iStatParallel,ThisProcedure) 
     !$OMP DO SCHEDULE(STATIC,500)
     DO indx=1,NNodes
         CALL ListElemID_CCW(AppGrid,indx,AppGrid%AppNode(indx)%ElemID_OnCCWSide,iStat)  
@@ -1694,7 +1712,7 @@ CONTAINS
       iMaxDim = SIZE(MessageArray)
       
       MessageArray(1)  = 'The following nodes define a gap in the grid!'
-      MessageArray(2)  = 'Please make sure that this is intential and not an error in the grid.'
+      MessageArray(2)  = 'Please make sure that this is intentional and not an error in the grid.'
       MessageArray(3:) = ''
       indxMsgArray     = 3
       DO indxNode=1,iDim

@@ -21,8 +21,7 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 MODULE Class_BaseAppLake
-   USE Class_Version               , ONLY: VersionType             , &
-                                           ReadVersion
+   USE Class_Version               , ONLY: ReadVersion
    USE MessageLogger               , ONLY: EchoProgress            , &
                                            SetLastMessage          , &
                                            MessageArray            , &
@@ -95,7 +94,6 @@ MODULE Class_BaseAppLake
   ! --- BASE APPLICATION LAKES DATA TYPE
   ! -------------------------------------------------------------
   TYPE,ABSTRACT :: BaseAppLakeType
-      TYPE(VersionType)                 :: Version
       INTEGER                           :: NLakes                 = 0
       TYPE(LakeType),ALLOCATABLE        :: Lakes(:)
       LOGICAL                           :: LakeBudRawFile_Defined = .FALSE.
@@ -109,10 +107,8 @@ MODULE Class_BaseAppLake
       PROCEDURE(Abstract_SetAllComponents),PASS,DEFERRED               :: SetAllComponents
       PROCEDURE(Abstract_SetAllComponentsWithoutBinFile),PASS,DEFERRED :: SetAllComponentsWithoutBinFile 
       PROCEDURE(Abstract_KillImplementation),PASS,DEFERRED             :: KillImplementation
-      PROCEDURE(Abstract_GetVersion),PASS,DEFERRED                     :: GetVersion
       PROCEDURE(Abstract_Simulate),PASS,DEFERRED                       :: Simulate
       PROCEDURE(Abstract_ReadTSData),PASS,DEFERRED                     :: ReadTSData
-      PROCEDURE(Abstract_CheckExternalTSDataPointers),PASS,DEFERRED    :: CheckExternalTSDataPointers
       PROCEDURE(Abstract_ConvertTimeUnit),PASS,DEFERRED                :: ConvertTimeUnit
       PROCEDURE,PASS                                                   :: Kill
       PROCEDURE,PASS                                                   :: GetBudget_List
@@ -145,6 +141,7 @@ MODULE Class_BaseAppLake
       PROCEDURE,PASS                                                   :: UpdateHeads 
       PROCEDURE,PASS                                                   :: ComputeLakeETa
       PROCEDURE,PASS                                                   :: DestinationIDs_To_Indices
+      PROCEDURE,PASS                                                   :: CheckTSDataPointers
       GENERIC                                                          :: New                            => SetStaticComponent             , &
                                                                                                             SetStaticComponentFromBinFile  , &
                                                                                                             SetDynamicComponent            , &
@@ -212,44 +209,50 @@ MODULE Class_BaseAppLake
     END SUBROUTINE Abstract_SetStaticComponentFromBinFile
     
     
-    SUBROUTINE Abstract_SetDynamicComponent(AppLake,IsForInquiry,cFileName,cWorkingDirectory,TimeStep,NTIME,AppGrid,LakeGWConnector,iStat)
-      IMPORT                        :: BaseAppLakeType,TimeStepType,AppGridType,LakeGWConnectorType
-      CLASS(BaseAppLakeType)        :: AppLake
-      LOGICAL,INTENT(IN)            :: IsForInquiry
-      CHARACTER(LEN=*),INTENT(IN)   :: cFileName,cWorkingDirectory
-      TYPE(TimeStepType),INTENT(IN) :: TimeStep
-      INTEGER,INTENT(IN)            :: NTIME
-      TYPE(AppGridType),INTENT(IN)  :: AppGrid
-      TYPE(LakeGWConnectorType)     :: LakeGWConnector
-      INTEGER,INTENT(OUT)           :: iStat
+    SUBROUTINE Abstract_SetDynamicComponent(AppLake,IsForInquiry,cFileName,cWorkingDirectory,cPackageVersion,TimeStep,NTIME,AppGrid,LakeGWConnector,Precip,ET,iStat)
+      IMPORT                             :: BaseAppLakeType,TimeStepType,AppGridType,LakeGWConnectorType,PrecipitationType,ETType
+      CLASS(BaseAppLakeType)             :: AppLake
+      LOGICAL,INTENT(IN)                 :: IsForInquiry
+      CHARACTER(LEN=*),INTENT(IN)        :: cFileName,cWorkingDirectory,cPackageVersion
+      TYPE(TimeStepType),INTENT(IN)      :: TimeStep
+      INTEGER,INTENT(IN)                 :: NTIME
+      TYPE(AppGridType),INTENT(IN)       :: AppGrid
+      TYPE(LakeGWConnectorType)          :: LakeGWConnector
+      TYPE(PrecipitationType),INTENT(IN) :: Precip
+      TYPE(ETType),INTENT(IN)            :: ET
+      INTEGER,INTENT(OUT)                :: iStat
     END SUBROUTINE Abstract_SetDynamicComponent
     
     
-    SUBROUTINE Abstract_SetAllComponents(AppLake,IsForInquiry,cFileName,cSimWorkingDirectory,TimeStep,NTIME,AppGrid,BinFile,LakeGWConnector,iStat)
-      IMPORT                             :: BaseAppLakeType,TimeStepType,AppGridType,GenericFileType,LakeGWConnectorType
+    SUBROUTINE Abstract_SetAllComponents(AppLake,IsForInquiry,cFileName,cSimWorkingDirectory,cPackageVersion,TimeStep,NTIME,AppGrid,BinFile,LakeGWConnector,Precip,ET,iStat)
+      IMPORT                             :: BaseAppLakeType,TimeStepType,AppGridType,GenericFileType,LakeGWConnectorType,PrecipitationType,ETType
       CLASS(BaseAppLakeType),INTENT(OUT) :: AppLake
       LOGICAL,INTENT(IN)                 :: IsForInquiry
-      CHARACTER(LEN=*),INTENT(IN)        :: cFileName,cSimWorkingDirectory
+      CHARACTER(LEN=*),INTENT(IN)        :: cFileName,cSimWorkingDirectory,cPackageVersion
       TYPE(TimeStepType),INTENT(IN)      :: TimeStep
       INTEGER,INTENT(IN)                 :: NTIME
       TYPE(AppGridType),INTENT(IN)       :: AppGrid
       TYPE(GenericFileType)              :: BinFile
       TYPE(LakeGWConnectorType)          :: LakeGWConnector
+      TYPE(PrecipitationType),INTENT(IN) :: Precip
+      TYPE(ETType),INTENT(IN)            :: ET
       INTEGER,INTENT(OUT)                :: iStat
     END SUBROUTINE Abstract_SetAllComponents
 
     
-    SUBROUTINE Abstract_SetAllComponentsWithoutBinFile(AppLake,IsForInquiry,cPPFileName,cSimFileName,cSimWorkingDirectory,AppGrid,Stratigraphy,TimeStep,NTIME,StrmLakeConnector,LakeGWConnector,iStat)
-      IMPORT                                :: BaseAppLakeType,AppGridType,StratigraphyType,TimeStepType,StrmLakeConnectorType,LakeGWConnectorType
+    SUBROUTINE Abstract_SetAllComponentsWithoutBinFile(AppLake,IsForInquiry,cPPFileName,cSimFileName,cSimWorkingDirectory,cPackageVersion,AppGrid,Stratigraphy,TimeStep,NTIME,StrmLakeConnector,LakeGWConnector,Precip,ET,iStat)
+      IMPORT                                :: BaseAppLakeType,AppGridType,StratigraphyType,TimeStepType,StrmLakeConnectorType,LakeGWConnectorType,PrecipitationType,ETType
       CLASS(BaseAppLakeType),INTENT(OUT)    :: AppLake
       LOGICAL,INTENT(IN)                    :: IsForInquiry
-      CHARACTER(LEN=*),INTENT(IN)           :: cPPFileName,cSimFileName,cSimWorkingDirectory
+      CHARACTER(LEN=*),INTENT(IN)           :: cPPFileName,cSimFileName,cSimWorkingDirectory,cPackageVersion
       TYPE(AppGridType),INTENT(IN)          :: AppGrid
       TYPE(StratigraphyType),INTENT(IN)     :: Stratigraphy
       TYPE(TimeStepType),INTENT(IN)         :: TimeStep
       INTEGER,INTENT(IN)                    :: NTIME
       TYPE(StrmLakeConnectorType)           :: StrmLakeConnector
       TYPE(LakeGWConnectorType),INTENT(OUT) :: LakeGWConnector
+      TYPE(PrecipitationType),INTENT(IN)    :: Precip
+      TYPE(ETType),INTENT(IN)               :: ET
       INTEGER,INTENT(OUT)                   :: iStat
     END SUBROUTINE Abstract_SetAllComponentsWithoutBinFile
     
@@ -260,13 +263,6 @@ MODULE Class_BaseAppLake
     END SUBROUTINE Abstract_KillImplementation
 
     
-     FUNCTION Abstract_GetVersion(AppLake) RESULT(cVrs)
-        IMPORT                   :: BaseAppLakeType
-        CLASS(BaseAppLakeType)   :: AppLake
-        CHARACTER(:),ALLOCATABLE :: cVrs
-     END FUNCTION Abstract_GetVersion
-     
-     
      FUNCTION Abstract_GetMaxElevs(AppLake) RESULT(MaxElevs)
        IMPORT                            :: BaseAppLakeType
        CLASS(BaseAppLakeType),INTENT(IN) :: AppLake
@@ -294,15 +290,6 @@ MODULE Class_BaseAppLake
     END SUBROUTINE Abstract_ReadTSData
     
     
-    SUBROUTINE Abstract_CheckExternalTSDataPointers(AppLake,Precip,ET,iStat)
-      IMPORT                             :: BaseAppLakeType,PrecipitationType,ETType
-      CLASS(BaseAppLakeType),INTENT(IN)  :: AppLake
-      TYPE(PrecipitationType),INTENT(IN) :: Precip
-      TYPE(ETType),INTENT(IN)            :: ET
-      INTEGER,INTENT(OUT)                :: iStat
-    END SUBROUTINE Abstract_CheckExternalTSDataPointers
-
-
     SUBROUTINE Abstract_ConvertTimeUnit(AppLake,NewUnit)
       IMPORT                      :: BaseAppLakeType
       CLASS(BaseAppLakeType)      :: AppLake
@@ -1158,9 +1145,6 @@ CONTAINS
     !Initialize
     iStat = 0
     
-    !Inform user
-    CALL EchoProgress('Registering lake component with matrix...')
-    
     !Add component to matrix
     CALL Matrix%AddComponent(f_iLakeComp,AppLake%NLakes,iStat)
     IF (iStat .EQ. -1) RETURN
@@ -1178,11 +1162,11 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- PREPARE HEADER FOR LAKE BUDGET RAW FILE
   ! -------------------------------------------------------------
-  FUNCTION PrepareLakeBudgetHeader(Lakes,NTIME,TimeStep,cVersion) RESULT(Header)
+  FUNCTION PrepareLakeBudgetHeader(Lakes,NTIME,TimeStep,cComponentVersion) RESULT(Header)
     TYPE(LakeType),INTENT(IN)     :: Lakes(:)
     INTEGER,INTENT(IN)            :: NTIME
     TYPE(TimeStepType),INTENT(IN) :: TimeStep
-    CHARACTER(LEN=*),INTENT(IN)   :: cVersion
+    CHARACTER(LEN=*),INTENT(IN)   :: cComponentVersion
     TYPE(BudgetHeaderType)        :: Header
    
     !Local variables
@@ -1254,7 +1238,7 @@ CONTAINS
       pASCIIOutput%TitleLen = TitleLen
       pASCIIOutput%NTitles  = NTitles
       ALLOCATE(pASCIIOutput%cTitles(NTitles)  ,  pASCIIOutput%lTitlePersist(NTitles))
-        pASCIIOutput%cTitles(1)         = ArrangeText('IWFM LAKE PACKAGE (v'//TRIM(cVersion)//')' , pASCIIOutput%TitleLen)
+        pASCIIOutput%cTitles(1)         = ArrangeText('IWFM LAKE PACKAGE (v'//TRIM(cComponentVersion)//')' , pASCIIOutput%TitleLen)
         pASCIIOutput%cTitles(2)         = ArrangeText('LAKE BUDGET IN '//f_cVolumeUnitMarker//' FOR '//f_cLocationNameMarker , pASCIIOutput%TitleLen)
         pASCIIOutput%cTitles(3)         = ArrangeText('LAKE AREA: '//f_cAreaMarker//' '//f_cAreaUnitMarker , pASCIIOutput%TitleLen)
         pASCIIOutput%cTitles(4)         = REPEAT('-',pASCIIOutput%TitleLen)
@@ -1473,5 +1457,46 @@ CONTAINS
     CALL RatingTable%New(Counter+1,HLake,VLake,iStat)        
 
   END SUBROUTINE GenerateRatingTable  
+
   
+  ! -------------------------------------------------------------
+  ! --- MAKE SURE THAT POINTED TIME-SERIES DATA HAVE ENOUGH COLUMNS
+  ! -------------------------------------------------------------
+  SUBROUTINE CheckTSDataPointers(AppLake,Precip,ET,iStat)
+    CLASS(BaseAppLakeType),INTENT(IN)  :: AppLake
+    TYPE(PrecipitationType),INTENT(IN) :: Precip
+    TYPE(ETType),INTENT(IN)            :: ET
+    INTEGER,INTENT(OUT)                :: iStat
+    
+    !Local variables
+    CHARACTER(Len=ModNameLen+19) :: ThisProcedure = ModName // 'CheckTSDataPointers'
+    INTEGER                      :: iLake(1),ID
+    
+    !Initialize
+    iStat = 0
+    
+    !Check precip columns
+    IF (Precip%GetNDataColumns() .LT. MAXVAL(AppLake%Lakes%iColPrecip)) THEN
+        iLake = MAXLOC(AppLake%Lakes%iColPrecip)
+        ID    = AppLake%Lakes(iLake(1))%ID
+        MessageArray(1) = 'Precipitation data column for lake '//TRIM(IntToText(ID))//' is greater than the'
+        MessageArray(2) = 'available data columns in the Precipitation Data file!'
+        CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+        iStat = -1
+        RETURN
+    END IF
+    
+    !Check ET columns
+    IF (ET%GetNDataColumns() .LT. MAXVAL(AppLake%Lakes%iColET)) THEN
+        iLake = MAXLOC(AppLake%Lakes%iColET)
+        ID    = AppLake%Lakes(iLake(1))%ID
+        MessageArray(1) = 'Evapotranspiration data column for lake '//TRIM(IntToText(ID))//' is greater than the'
+        MessageArray(2) = 'available data columns in the Evapotranspiration Data file!'
+        CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+        iStat = -1
+        RETURN
+    END IF
+    
+  END SUBROUTINE CheckTSDataPointers
+    
 END MODULE

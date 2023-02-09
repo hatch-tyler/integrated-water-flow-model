@@ -6,7 +6,7 @@
 	<Configurations>
 		<Configuration Name="Debug|Win32" TargetName="ZBudget2015_D">
 				<Tool Name="VFFortranCompilerTool" AdditionalOptions="/fp:consistent /assume:norealloc_lhs /assume:noieee_compares" SuppressStartupBanner="true" DebugInformationFormat="debugEnabled" Optimization="optimizeDisabled" Preprocess="preprocessYes" AdditionalIncludeDirectories="$(SolutionDir)..\SourceCode\HDF5Lib\$(Platform)\$(Configuration);$(SolutionDir)..\SourceCode\heclib" F2003Semantics="true" DisableSpecificDiagnostics="8290" WarnUnusedVariables="true" WarnUncalled="true" Traceback="true" BoundsCheck="true" RuntimeLibrary="rtMultiThreadedDebug" Interfaces="true"/>
-				<Tool Name="VFLinkerTool" LinkIncremental="linkIncrementalNo" SuppressStartupBanner="true" AdditionalLibraryDirectories="$(SolutionDir)..\SourceCode\HDF5Lib\$(Platform)\$(Configuration);$(SolutionDir)..\SourceCode\heclib" GenerateDebugInformation="true" SubSystem="subSystemConsole" StackReserveSize="256000000" AdditionalDependencies="heclib_ivf_debug.lib libhdf5_fortran_D.lib libhdf5_D.lib libhdf5_f90cstub_D.lib libszip_D.lib libzlib_D.lib"/>
+				<Tool Name="VFLinkerTool" LinkIncremental="linkIncrementalNo" SuppressStartupBanner="true" AdditionalLibraryDirectories="$(SolutionDir)..\SourceCode\HDF5Lib\$(Platform)\$(Configuration);$(SolutionDir)..\SourceCode\heclib" GenerateDebugInformation="true" SubSystem="subSystemConsole" StackReserveSize="256000000" AdditionalDependencies="heclib_ivf_debug.lib libhdf5_fortran_D.lib libhdf5_D.lib libhdf5_f90cstub_D.lib libszaec_D.lib libaec_D.lib libz_D.lib"/>
 				<Tool Name="VFResourceCompilerTool"/>
 				<Tool Name="VFMidlTool" SuppressStartupBanner="true"/>
 				<Tool Name="VFCustomBuildTool"/>
@@ -16,7 +16,7 @@
 				<Tool Name="VFManifestTool" SuppressStartupBanner="true"/></Configuration>
 		<Configuration Name="Release|Win32" TargetName="ZBudget2015">
 				<Tool Name="VFFortranCompilerTool" AdditionalOptions="/fp:consistent /assume:norealloc_lhs /assume:noieee_compares" SuppressStartupBanner="true" InterproceduralOptimizations="ipoMultiFile" Preprocess="preprocessYes" AdditionalIncludeDirectories="$(SolutionDir)..\SourceCode\HDF5Lib\$(Platform)\$(Configuration);$(SolutionDir)..\SourceCode\heclib" F2003Semantics="true" DisableSpecificDiagnostics="8290,10212"/>
-				<Tool Name="VFLinkerTool" LinkIncremental="linkIncrementalNo" SuppressStartupBanner="true" AdditionalLibraryDirectories="$(SolutionDir)..\SourceCode\HDF5Lib\$(Platform)\$(Configuration);$(SolutionDir)..\SourceCode\heclib" SubSystem="subSystemConsole" StackReserveSize="256000000" AdditionalDependencies="heclib_ivf_release.lib libhdf5_fortran.lib libhdf5.lib libhdf5_f90cstub.lib libszip.lib libzlib.lib"/>
+				<Tool Name="VFLinkerTool" LinkIncremental="linkIncrementalNo" SuppressStartupBanner="true" AdditionalLibraryDirectories="$(SolutionDir)..\SourceCode\HDF5Lib\$(Platform)\$(Configuration);$(SolutionDir)..\SourceCode\heclib" SubSystem="subSystemConsole" StackReserveSize="256000000" AdditionalDependencies="heclib_ivf_release.lib libhdf5_fortran.lib libhdf5.lib libhdf5_f90cstub.lib libszaec.lib libaec.lib libz.lib"/>
 				<Tool Name="VFResourceCompilerTool"/>
 				<Tool Name="VFMidlTool" SuppressStartupBanner="true"/>
 				<Tool Name="VFCustomBuildTool"/>
@@ -26,7 +26,7 @@
 				<Tool Name="VFManifestTool" SuppressStartupBanner="true"/></Configuration>
 		<Configuration Name="Debug|x64" IntermediateDirectory="$(ProjectDir)$(PlatformName)\$(ConfigurationName)" TargetName="ZBudget2015_x64_D">
 				<Tool Name="VFFortranCompilerTool" AdditionalOptions="/fp:consistent /assume:norealloc_lhs /assume:noieee_compares" SuppressStartupBanner="true" DebugInformationFormat="debugEnabled" Optimization="optimizeDisabled" Preprocess="preprocessYes" AdditionalIncludeDirectories="$(SolutionDir)..\SourceCode\HDF5Lib\$(Platform)\$(Configuration);$(SolutionDir)..\SourceCode\heclib" F2003Semantics="true" DisableSpecificDiagnostics="8290" WarnUnusedVariables="true" WarnUncalled="true" Traceback="true" BoundsCheck="true" RuntimeLibrary="rtMultiThreadedDebug" Interfaces="true"/>
-				<Tool Name="VFLinkerTool" LinkIncremental="linkIncrementalNo" SuppressStartupBanner="true" AdditionalLibraryDirectories="$(SolutionDir)..\SourceCode\HDF5Lib\$(Platform)\$(Configuration);$(SolutionDir)..\SourceCode\heclib" GenerateDebugInformation="true" SubSystem="subSystemConsole" StackReserveSize="256000000" AdditionalDependencies="heclib_ivf_debug_x64.lib libhdf5_fortran_D.lib libhdf5_D.lib libhdf5_f90cstub_D.lib libszip_D.lib libzlib_D.lib"/>
+				<Tool Name="VFLinkerTool" LinkIncremental="linkIncrementalNo" SuppressStartupBanner="true" AdditionalLibraryDirectories="$(SolutionDir)..\SourceCode\HDF5Lib\$(Platform)\$(Configuration);$(SolutionDir)..\SourceCode\heclib" GenerateDebugInformation="true" SubSystem="subSystemConsole" StackReserveSize="256000000" AdditionalDependencies="heclib_ivf_debug_x64.lib libhdf5_fortran_D.lib libhdf5_D.lib libhdf5_f90cstub_D.lib libszaec_D.lib libaec_D.lib libz_D.lib"/>
 				<Tool Name="VFResourceCompilerTool"/>
 				<Tool Name="VFMidlTool" SuppressStartupBanner="true" TargetEnvironment="midlTargetAMD64"/>
 				<Tool Name="VFCustomBuildTool"/>
@@ -36,7 +36,7 @@
 				<Tool Name="VFManifestTool" SuppressStartupBanner="true"/></Configuration>
 		<Configuration Name="Release|x64" IntermediateDirectory="$(ProjectDir)$(PlatformName)\$(ConfigurationName)" TargetName="ZBudget2015_x64">
 				<Tool Name="VFFortranCompilerTool" AdditionalOptions="/fp:consistent /assume:norealloc_lhs /assume:noieee_compares" SuppressStartupBanner="true" InterproceduralOptimizations="ipoMultiFile" Preprocess="preprocessYes" AdditionalIncludeDirectories="$(SolutionDir)..\SourceCode\HDF5Lib\$(Platform)\$(Configuration);$(SolutionDir)..\SourceCode\heclib" F2003Semantics="true" DisableSpecificDiagnostics="8290,10212"/>
-				<Tool Name="VFLinkerTool" LinkIncremental="linkIncrementalNo" SuppressStartupBanner="true" AdditionalLibraryDirectories="$(SolutionDir)..\SourceCode\HDF5Lib\$(Platform)\$(Configuration);$(SolutionDir)..\SourceCode\heclib" SubSystem="subSystemConsole" StackReserveSize="256000000" AdditionalDependencies="heclib_ivf_release_x64.lib libhdf5_fortran.lib libhdf5.lib libhdf5_f90cstub.lib libszip.lib libzlib.lib"/>
+				<Tool Name="VFLinkerTool" LinkIncremental="linkIncrementalNo" SuppressStartupBanner="true" AdditionalLibraryDirectories="$(SolutionDir)..\SourceCode\HDF5Lib\$(Platform)\$(Configuration);$(SolutionDir)..\SourceCode\heclib" SubSystem="subSystemConsole" StackReserveSize="256000000" AdditionalDependencies="heclib_ivf_release_x64.lib libhdf5_fortran.lib libhdf5.lib libhdf5_f90cstub.lib libszaec.lib libaec.lib libz.lib"/>
 				<Tool Name="VFResourceCompilerTool"/>
 				<Tool Name="VFMidlTool" SuppressStartupBanner="true" TargetEnvironment="midlTargetAMD64"/>
 				<Tool Name="VFCustomBuildTool"/>

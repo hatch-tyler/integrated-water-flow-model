@@ -1521,7 +1521,7 @@ CONTAINS
         FPAR(1) = 0.0
     ELSE
         !FPAR(1) = STOPCD/rDiv                           ! NEW TOLERANCE CONDITION
-        FPAR(1) = Toler / RHS_L2
+        FPAR(1) = MIN(Toler/RHS_L2 , 0.9999d0)
     END IF
     FPAR(2)     = EPSILON(0d0)                           ! MACHINE PRECISION
     

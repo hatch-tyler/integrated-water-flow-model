@@ -22,95 +22,95 @@
 !***********************************************************************
 MODULE RootZone_v40
   !$ USE OMP_LIB
-  USE Package_Misc                 , ONLY: SolverDataType                              , &
-                                           f_iFlowDest_Outside                         , &
-                                           f_iFlowDest_StrmNode                        , &
-                                           f_iFlowDest_Element                         , &
-                                           f_iFlowDest_Lake                            , &
-                                           f_iFlowDest_Subregion                       , &
-                                           f_iFlowDest_GWElement                       , &
-                                           f_iSupply_Diversion                         , &
-                                           f_iSupply_Pumping                           , &
-                                           f_iSupply_UpstrmElemRunoff                  , &
-                                           f_iLocationType_Subregion                   , &
-                                           f_iAllLocationIDsListed                     , &
-                                           f_iLandUse_Ag                               , &
-                                           f_iLandUse_Urb                              , &
-                                           f_iLandUse_NonPondedAg                      , &
-                                           f_iLandUse_PondedAg                         , &
-                                           f_iLandUse_Rice                             , &
-                                           f_iLandUse_Refuge                           , &
-                                           f_iLandUse_NVRV                                     
-  USE TimeSeriesUtilities          , ONLY: TimeStepType                                , &
-                                           TimeIntervalConversion                      , &
-                                           IncrementTimeStamp                          , &
-                                           NPeriods                                    , &
-                                           CTimeStep_To_RTimeStep                      , &
-                                           TimeStampToJulian                           , &
-                                           OPERATOR(.TSGE.)
-  USE GeneralUtilities             , ONLY: StripTextUntilCharacter                     , &
-                                           IntToText                                   , &
-                                           LocateInList                                , &
-                                           CleanSpecialCharacters                      , &
-                                           NormalizeArray                              , &
-                                           ConvertID_To_Index                          , &
-                                           EstablishAbsolutePathFileName               , &
-                                           GetFileDirectory                            , &
-                                           UpperCase                                   
-  USE IOInterface                  , ONLY: GenericFileType                             , &
-                                           RealTSDataInFileType                        , &
-                                           IntTSDataInFileType                         , & 
-                                           f_iUNKNOWN   
-  USE MessageLogger                , ONLY: SetLastMessage                              , &
-                                           EchoProgress                                , &
-                                           MessageArray                                , &
-                                           f_iFatal                                      
-  USE Package_ComponentConnectors  , ONLY: SupplyType                                  
-  USE Class_GenericLandUse         , ONLY: GenericLandUseType 
-  USE Util_Package_RootZone        , ONLY: WaterSupplyType                             , &
-                                           AddStringToStringList                       , &
-                                           f_iBudgetType_LWU                           , &
-                                           f_iBudgetType_RootZone                      , &
-                                           f_iBudgetType_NonPondedCrop_LWU             , &
-                                           f_iBudgetType_NonPondedCrop_RZ              , & 
-                                           f_iBudgetType_PondedCrop_LWU                , &
-                                           f_iBudgetType_PondedCrop_RZ                 , & 
-                                           f_cDescription_NPCrop_LWUBudget             , &
-                                           f_cDescription_NPCrop_RootZoneBudget        , &
-                                           f_cDescription_PCrop_LWUBudget              , &
-                                           f_cDescription_PCrop_RootZoneBudget  
-  USE Util_RootZone_v40            , ONLY: LWUseBudRawFile_New                         , &
-                                           RootZoneBudRawFile_New                      , &
-                                           f_iNLWUseBudColumns                         , &
-                                           f_iNRootZoneBudColumns                      , & 
-                                           f_iNAgLWUseBudColumns                       , &
-                                           f_iNAgRootZoneBudColumns                    , &
-                                           f_cLWUseBudgetColumnTitles                  , &
-                                           f_cRootZoneBudgetColumnTitles               
-  USE Class_GenericMoistureData    , ONLY: GenericMoistureDataType                     
-  USE Class_NonPondedAgLandUse     , ONLY: NonPondedAgDatabaseType                     
-  USE Class_PondedAgLandUse        , ONLY: PondedAgDatabaseType                        , &
-                                           f_iNPondedCrops
-  USE Class_UrbanLandUse           , ONLY: UrbanDatabaseType 
-  USE Class_NativeRiparianLandUse  , ONLY: NativeRiparianDatabaseType                  
-  USE Package_Discretization       , ONLY: AppGridType
-  USE Package_PrecipitationET      , ONLY: PrecipitationType                           , &
-                                           ETType                                      
-  USE Package_UnsatZone            , ONLY: RootZoneSoilType                            , &
-                                           f_iKUnsatMethodList                         
-  USE Class_BaseRootZone           , ONLY: BaseRootZoneType                            , &
-                                           FlagsType                                   , &
-                                           ElemSurfaceFlowToDestType                   , &
-                                           CompileElemSurfaceFlowToDestinationList     , &
-                                           ComputeRegionalETPot                        , &
-                                           ElementLU_InterpolateExtrapolate            , &
-                                           iMeasuredLUDataForSubregion                 , &
-                                           iMeasuredLUDataForModelDomain 
-  USE Package_Budget               , ONLY: BudgetType                                  , &
-                                           f_iMaxLocationNameLen                       , &
-                                           f_iColumnHeaderLen
-  USE Package_ZBudget              , ONLY: ZBudgetType                                 , &
-                                           ZoneListType
+  USE Package_Misc                    , ONLY: SolverDataType                              , &
+                                              f_iFlowDest_Outside                         , &
+                                              f_iFlowDest_StrmNode                        , &
+                                              f_iFlowDest_Element                         , &
+                                              f_iFlowDest_Lake                            , &
+                                              f_iFlowDest_Subregion                       , &
+                                              f_iFlowDest_GWElement                       , &
+                                              f_iSupply_Diversion                         , &
+                                              f_iSupply_Pumping                           , &
+                                              f_iSupply_UpstrmElemRunoff                  , &
+                                              f_iLocationType_Subregion                   , &
+                                              f_iAllLocationIDsListed                     , &
+                                              f_iLandUse_Ag                               , &
+                                              f_iLandUse_Urb                              , &
+                                              f_iLandUse_NonPondedAg                      , &
+                                              f_iLandUse_PondedAg                         , &
+                                              f_iLandUse_Rice                             , &
+                                              f_iLandUse_Refuge                           , &
+                                              f_iLandUse_NVRV                                     
+  USE TimeSeriesUtilities             , ONLY: TimeStepType                                , &
+                                              TimeIntervalConversion                      , &
+                                              IncrementTimeStamp                          , &
+                                              NPeriods                                    , &
+                                              CTimeStep_To_RTimeStep                      , &
+                                              TimeStampToJulian                           , &
+                                              OPERATOR(.TSGE.)
+  USE GeneralUtilities                , ONLY: StripTextUntilCharacter                     , &
+                                              IntToText                                   , &
+                                              LocateInList                                , &
+                                              CleanSpecialCharacters                      , &
+                                              NormalizeArray                              , &
+                                              ConvertID_To_Index                          , &
+                                              EstablishAbsolutePathFileName               , &
+                                              GetFileDirectory                            , &
+                                              UpperCase                                   
+  USE IOInterface                     , ONLY: GenericFileType                             , &
+                                              RealTSDataInFileType                        , &
+                                              IntTSDataInFileType                         , & 
+                                              f_iUNKNOWN   
+  USE MessageLogger                   , ONLY: SetLastMessage                              , &
+                                              EchoProgress                                , &
+                                              MessageArray                                , &
+                                              f_iFatal                                      
+  USE Package_ComponentConnectors     , ONLY: SupplyType                                  
+  USE Class_GenericLandUse            , ONLY: GenericLandUseType 
+  USE Util_Package_RootZone           , ONLY: WaterSupplyType                             , &
+                                              AddStringToStringList                       , &
+                                              f_iBudgetType_LWU                           , &
+                                              f_iBudgetType_RootZone                      , &
+                                              f_iBudgetType_NonPondedCrop_LWU             , &
+                                              f_iBudgetType_NonPondedCrop_RZ              , & 
+                                              f_iBudgetType_PondedCrop_LWU                , &
+                                              f_iBudgetType_PondedCrop_RZ                 , & 
+                                              f_cDescription_NPCrop_LWUBudget             , &
+                                              f_cDescription_NPCrop_RootZoneBudget        , &
+                                              f_cDescription_PCrop_LWUBudget              , &
+                                              f_cDescription_PCrop_RootZoneBudget  
+  USE Util_RootZone_v40               , ONLY: LWUseBudRawFile_New                         , &
+                                              RootZoneBudRawFile_New                      , &
+                                              f_iNLWUseBudColumns                         , &
+                                              f_iNRootZoneBudColumns                      , & 
+                                              f_iNAgLWUseBudColumns                       , &
+                                              f_iNAgRootZoneBudColumns                    , &
+                                              f_cLWUseBudgetColumnTitles                  , &
+                                              f_cRootZoneBudgetColumnTitles               
+  USE Class_GenericMoistureData       , ONLY: GenericMoistureDataType                     
+  USE Class_NonPondedAgLandUse_v40    , ONLY: NonPondedAgDatabase_v40_Type                     
+  USE Class_PondedAgLandUse_v40       , ONLY: PondedAgDatabase_v40_Type                   , &
+                                              f_iNPondedCrops
+  USE Class_UrbanLandUse_v40          , ONLY: UrbanDatabase_v40_Type 
+  USE Class_NativeRiparianLandUse_v40 , ONLY: NativeRiparianDatabase_v40_Type                  
+  USE Package_Discretization          , ONLY: AppGridType
+  USE Package_PrecipitationET         , ONLY: PrecipitationType                           , &
+                                              ETType                                      
+  USE Package_UnsatZone               , ONLY: RootZoneSoilType                            , &
+                                              f_iKUnsatMethodList                         
+  USE Class_BaseRootZone              , ONLY: BaseRootZoneType                            , &
+                                              FlagsType                                   , &
+                                              ElemSurfaceFlowToDestType                   , &
+                                              CompileElemSurfaceFlowToDestinationList     , &
+                                              ComputeRegionalETPot                        , &
+                                              ElementLU_InterpolateExtrapolate            , &
+                                              iMeasuredLUDataForSubregion                 , &
+                                              iMeasuredLUDataForModelDomain 
+  USE Package_Budget                  , ONLY: BudgetType                                  , &
+                                              f_iMaxLocationNameLen                       , &
+                                              f_iColumnHeaderLen
+  USE Package_ZBudget                 , ONLY: ZBudgetType                                 , &
+                                              ZoneListType
   IMPLICIT NONE
   
   
@@ -140,10 +140,10 @@ MODULE RootZone_v40
     INTEGER                                   :: NLands                       = 0                       !Total number of land use types
     TYPE(RootZoneSoilType),ALLOCATABLE        :: ElemSoilsData(:)                                       !Soils data for each element
     REAL(8),ALLOCATABLE                       :: HydCondPonded(:)                                       !Saturated hydraulic conductivity to be used for ponded crops for each (element); overwrites the hydraulic conductivity listed in ElemSoils data
-    TYPE(NonPondedAgDatabaseType)             :: NonPondedAgRootZone                                    !Non-ponded ag database
-    TYPE(PondedAgDatabaseType)                :: PondedAgRootZone                                       !Rice/refuge database
-    TYPE(UrbanDatabaseType)                   :: UrbanRootZone                                          !Urban database
-    TYPE(NativeRiparianDatabaseType)          :: NVRVRootZone                                           !Native/riparian database
+    TYPE(NonPondedAgDatabase_v40_Type)        :: NonPondedAgRootZone                                    !Non-ponded ag database
+    TYPE(PondedAgDatabase_v40_Type)           :: PondedAgRootZone                                       !Rice/refuge database
+    TYPE(UrbanDatabase_v40_Type)              :: UrbanRootZone                                          !Urban database
+    TYPE(NativeRiparianDatabase_v40_Type)     :: NVRVRootZone                                           !Native/riparian database
     TYPE(IntTSDataInFileType)                 :: IrigPeriodFile                                         !Irrigation period data file
     TYPE(GenericMoistureDataType)             :: GenericMoistureData                                    !Data to simulate generic moisture inflow (e.g. levee seepage, fog)
     TYPE(RealTSDataInFileType)                :: AgWaterDemandFile                                      !Agricultural water demand data file
@@ -206,17 +206,8 @@ MODULE RootZone_v40
     PROCEDURE,PASS   :: RegionalReturnFlow_Urb                => RootZone_v40_RegionalReturnFlow_Urb
     PROCEDURE,PASS   :: PrintResults                          => RootZone_v40_PrintResults
     PROCEDURE,PASS   :: PrintRestartData                      => RootZone_v40_PrintRestartData
-    PROCEDURE,PASS   :: GetVersion                            => RootZone_v40_GetVersion
   END TYPE RootZone_v40_Type 
 
-
-  ! -------------------------------------------------------------
-  ! --- VERSION RELATED ENTITIES
-  ! -------------------------------------------------------------
-  INTEGER,PARAMETER                    :: iLenVersion          = 8
-  CHARACTER(LEN=iLenVersion),PARAMETER :: cVersion             = '4.0.0000'
-  INCLUDE 'RootZone_v40_Revision.fi'
-  
 
   ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
@@ -243,10 +234,10 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- NEW ROOT ZONE DATA
   ! -------------------------------------------------------------
-  SUBROUTINE RootZone_v40_New(RootZone,IsForInquiry,cFileName,cWorkingDirectory,AppGrid,TimeStep,NTIME,ET,Precip,iStat,iStrmNodeIDs,iLakeIDs)
+  SUBROUTINE RootZone_v40_New(RootZone,IsForInquiry,cFileName,cWorkingDirectory,cPackageVersion,AppGrid,TimeStep,NTIME,ET,Precip,iStat,iStrmNodeIDs,iLakeIDs)
     CLASS(RootZone_v40_Type)           :: RootZone
     LOGICAL,INTENT(IN)                 :: IsForInquiry
-    CHARACTER(LEN=*),INTENT(IN)        :: cFileName,cWorkingDirectory
+    CHARACTER(LEN=*),INTENT(IN)        :: cFileName,cWorkingDirectory,cPackageVersion
     TYPE(AppGridType),INTENT(IN)       :: AppGrid
     TYPE(TimeStepType),INTENT(IN)      :: TimeStep
     INTEGER,INTENT(IN)                 :: NTIME
@@ -258,7 +249,7 @@ CONTAINS
     !Local variables
     CHARACTER(LEN=ModNameLen+16)                :: ThisProcedure = ModName // 'RootZone_v40_New'
     CHARACTER(LEN=1000)                         :: ALine,NonPondedCropFile,RiceRefugeFile,UrbanDataFile,NVRVFile,AgWaterDemandFile,GenericMoistureFile
-    CHARACTER                                   :: cVersionLocal*20
+    CHARACTER                                   :: cVersionFull*25
     REAL(8)                                     :: FACTK,FACTCN,RegionArea(AppGrid%NSubregions+1),DummyFactor(1),rDummy(13)
     INTEGER                                     :: NElements,NRegion,ErrorCode,indxElem,iColGenericMoisture(AppGrid%NElements),SurfaceFlowDest(AppGrid%NElements), &
                                                    SurfaceFlowDestType(AppGrid%NElements),nDataCols,iElemIDs(AppGrid%NElements),iElemID,iElem,iFeatureIndex,       &
@@ -280,8 +271,7 @@ CONTAINS
     CALL EchoProgress('Instantiating root zone')
 
     !Initialize
-    RootZone%Version       = RootZone%Version%New(iLenVersion,cVersion,cRevision)
-    cVersionLocal          = ADJUSTL('v' // TRIM(RootZone%Version%GetVersion()))
+    cVersionFull           = 'v4.0-' // TRIM(cPackageVersion)
     NElements              = AppGrid%NElements
     NRegion                = AppGrid%NSubregions
     iElemIDs               = AppGrid%AppElement%ID
@@ -333,7 +323,7 @@ CONTAINS
     NonPondedCropFile = StripTextUntilCharacter(NonPondedCropFile,'/') 
     CALL CleanSpecialCharacters(NonPondedCropFile)
     CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(NonPondedCropFile)),cWorkingDirectory,cAbsPathFileName)
-    CALL RootZone%NonPondedAgRootZone%New(IsForInquiry,cAbsPathFileName,cWorkingDirectory,FactCN,AppGrid,iElemIDs,TimeStep,NTIME,cVersionLocal,iStat)
+    CALL RootZone%NonPondedAgRootZone%New(IsForInquiry,cAbsPathFileName,cWorkingDirectory,FactCN,AppGrid,iElemIDs,TimeStep,NTIME,TRIM(cVersionFull),iStat)
     IF (iStat .EQ. -1) RETURN
        
     !Rice/refuge data file
@@ -341,7 +331,7 @@ CONTAINS
     RiceRefugeFile = StripTextUntilCharacter(RiceRefugeFile,'/') 
     CALL CleanSpecialCharacters(RiceRefugeFile)
     CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(RiceRefugeFile)),cWorkingDirectory,cAbsPathFileName)
-    CALL RootZone%PondedAgRootZone%New(IsForInquiry,cAbsPathFileName,cWorkingDirectory,FactCN,AppGrid,iElemIDs,TimeStep,NTIME,cVersionLocal,iStat)
+    CALL RootZone%PondedAgRootZone%New(IsForInquiry,cAbsPathFileName,cWorkingDirectory,FactCN,AppGrid,iElemIDs,TimeStep,NTIME,TRIM(cVersionFull),iStat)
     IF (iStat .EQ. -1) RETURN
     
     !Urban data file
@@ -457,7 +447,7 @@ CONTAINS
     CALL CleanSpecialCharacters(ALine)
     IF (ALine .NE. '') THEN
         CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(ALine)),cWorkingDirectory,cAbsPathFileName)
-        CALL LWUseBudRawFile_New(IsForInquiry,cAbsPathFileName,TimeStep,NTIME,NRegion+1,RegionArea,RegionNames,'land and water use budget',cVersionLocal,RootZone%LWUseBudRawFile,iStat)
+        CALL LWUseBudRawFile_New(IsForInquiry,cAbsPathFileName,TimeStep,NTIME,NRegion+1,RegionArea,RegionNames,'land and water use budget',TRIM(cVersionFull),RootZone%LWUseBudRawFile,iStat)
         IF (iStat .EQ. -1) RETURN
         RootZone%Flags%LWUseBudRawFile_Defined = .TRUE.      
     END IF
@@ -468,7 +458,7 @@ CONTAINS
     CALL CleanSpecialCharacters(ALine)
     IF (ALine .NE. '') THEN
         CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(ALine)),cWorkingDirectory,cAbsPathFileName)
-        CALL RootZoneBudRawFile_New(IsForInquiry,cAbsPathFileName,TimeStep,NTIME,NRegion+1,RegionArea,RegionNames,'root zone budget',cVersionLocal,RootZone%RootZoneBudRawFile,iStat)
+        CALL RootZoneBudRawFile_New(IsForInquiry,cAbsPathFileName,TimeStep,NTIME,NRegion+1,RegionArea,RegionNames,'root zone budget',TRIM(cVersionFull),RootZone%RootZoneBudRawFile,iStat)
         IF (iStat .EQ. -1) RETURN
         RootZone%Flags%RootZoneBudRawFile_Defined = .TRUE.
     END IF
@@ -1298,21 +1288,6 @@ CONTAINS
   END SUBROUTINE RootZone_v40_GetZBudget_ColumnTitles
      
      
-  ! -------------------------------------------------------------
-  ! --- GET VERSION NUMBER 
-  ! -------------------------------------------------------------
-  FUNCTION RootZone_v40_GetVersion(RootZone) RESULT(cVrs)
-    CLASS(RootZone_v40_Type) :: RootZone
-    CHARACTER(:),ALLOCATABLE :: cVrs
-    
-    IF (.NOT. RootZone%Version%IsDefined())   &
-        RootZone%Version = RootZone%Version%New(iLenVersion,cVersion,cRevision)
-
-    cVrs = RootZone%Version%GetVersion()
-    
-  END FUNCTION RootZone_v40_GetVersion
-  
-
   ! -------------------------------------------------------------
   ! --- GET TOTAL AG OR URBAN WATER SUPPLIES TO ELEMENTS 
   ! -------------------------------------------------------------
@@ -2325,24 +2300,6 @@ CONTAINS
       END ASSOCIATE
     END IF
     
-    !Make sure that ag demand (if read from file) is zero when area is zero
-    IF (RootZone%Flags%lReadNonPondedAgWaterDemand .OR. RootZone%Flags%lReadPondedAgWaterDemand) THEN
-        IF (lAgWaterDemandUpdated                                  .OR. &
-            RootZone%NonPondedAgRootZone%LandUseDataFile%lUpdated  .OR. &
-            RootZone%PondedAgRootZone%LandUseDataFile%lUpdated          ) THEN
-            !Check with non-ponded crops
-            IF (RootZone%Flags%lNonPondedAg_Defined) THEN
-                CALL RootZone%NonPondedAgRootZone%CheckSpecifiedDemandAndArea(iElemIDs,RootZone%AgWaterDemandFile%rValues,iStat)
-                IF (iStat .NE. 0) RETURN
-            END IF
-            !Check with ponded crops
-            IF (RootZone%Flags%lPondedAg_Defined) THEN
-                CALL RootZone%PondedAgRootZone%CheckSpecifiedDemandAndArea(iElemIDs,RootZone%AgWaterDemandFile%rValues,iStat)
-                IF (iStat .NE. 0) RETURN
-            END IF
-        END IF
-    END IF
-    
     !Make sure that urban demand is zero when urban area is zero
     IF (RootZone%Flags%lUrban_Defined) THEN
       IF (RootZone%UrbanRootZone%LandUseDataFile%lUpdated        .OR.  &
@@ -3171,8 +3128,8 @@ CONTAINS
         RootZone%cFutureDemandDates(indxTime) = TimeStep_Work%CurrentDateAndTime
         
         !Read time series data
-        CALL Precip%ReadTSData(TimeStep_Work,iStat)                                 ;  IF (iStat .NE. 0) RETURN
-        CALL ET%ReadTSData(TimeStep_Work,iStat)                                     ;  IF (iStat .NE. 0) RETURN
+        CALL Precip%ReadTSData(TimeStep_Work,.TRUE.,iStat)                          ;  IF (iStat .NE. 0) RETURN
+        CALL ET%ReadTSData(TimeStep_Work,.TRUE.,iStat)                              ;  IF (iStat .NE. 0) RETURN
         CALL RootZone_Work%ReadTSData(AppGrid,TimeStep_Work,Precip,ET,iStat=iStat)  ;  IF (iStat .NE. 0) RETURN
 
         !Compute water demand
@@ -3203,9 +3160,9 @@ CONTAINS
     
     !Rewind timeseries input files
     CALL Precip%File%RewindFile_To_BeginningOfTSData(iStat)  ;  IF (iStat .NE. 0) RETURN
-    CALL Precip%ReadTSData(TimeStep,iStat)                   ;  IF (iStat .NE. 0) RETURN
+    CALL Precip%ReadTSData(TimeStep,.TRUE.,iStat)            ;  IF (iStat .NE. 0) RETURN
     CALL ET%File%RewindFile_To_BeginningOfTSData(iStat)      ;  IF (iStat .NE. 0) RETURN
-    CALL ET%ReadTSData(TimeStep,iStat)                       ;  IF (iStat .NE. 0) RETURN
+    CALL ET%ReadTSData(TimeStep,.TRUE.,iStat)                ;  IF (iStat .NE. 0) RETURN
     CALL RewindTSInputFilesToTimeStamp(RootZone,AppGrid%AppElement%ID,AppGrid%AppElement%Area,TimeStep,iStat)             
 
   END SUBROUTINE RootZone_v40_ComputeFutureWaterDemand

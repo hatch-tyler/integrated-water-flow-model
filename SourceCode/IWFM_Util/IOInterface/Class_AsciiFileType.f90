@@ -81,6 +81,7 @@ MODULE Class_AsciiFileType
   CONTAINS
       PROCEDURE,PASS :: New                                    => New_AsciiInFile
       PROCEDURE,PASS :: Kill                                   => Kill_AsciiInFile
+      PROCEDURE,PASS :: GetLineNumber
       PROCEDURE,PASS :: ReadSingleData_AsciiInFile
       PROCEDURE,PASS :: ReadArrayData_AsciiInFile
       PROCEDURE,PASS :: ReadMatrixData_AsciiInFile
@@ -460,6 +461,30 @@ CONTAINS
 
 
 
+! ******************************************************************
+! ******************************************************************
+! ******************************************************************
+! ***
+! *** GETTERS
+! ***
+! ******************************************************************
+! ******************************************************************
+! ******************************************************************
+
+  ! -------------------------------------------------------------
+  ! --- GET LINE NUMBER
+  ! -------------------------------------------------------------
+  FUNCTION GetLineNumber(ThisFile) RESULT(iAtLine)
+    CLASS(AsciiInFileType),INTENT(IN) :: ThisFile
+    INTEGER                           :: iAtLine
+    
+    iAtLine = ThisFile%AtLine
+    
+  END FUNCTION GetLineNumber
+  
+  
+  
+  
 ! ******************************************************************
 ! ******************************************************************
 ! ******************************************************************

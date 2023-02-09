@@ -85,6 +85,7 @@ MODULE IWFM_Misc_Exports
   USE Package_Discretization      , ONLY: Package_Discretization_GetVersion
   USE Package_PrecipitationET     , ONLY: Package_PrecipitationET_GetVersion
   USE Package_AppGW               , ONLY: f_iBudgetType_GW                         
+  USE Package_AppSubsidence       , ONLY: AppSubsidenceType
   USE Package_ComponentConnectors , ONLY: Package_ComponentConnectors_GetVersion
   USE Package_GWZBudget           , ONLY: f_iZBudgetType_GW                     
   USE Package_UnsatZone           , ONLY: Package_UnsatZone_GetVersion
@@ -168,11 +169,12 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT)         :: iStat
     
     !Local variables
-    TYPE(RootZoneType)  :: RootZone
-    TYPE(MatrixType)    :: Matrix
-    TYPE(AppStreamType) :: AppStream
-    TYPE(AppLakeType)   :: AppLake
-    CHARACTER           :: cVer_F*iLen
+    TYPE(RootZoneType)      :: RootZone
+    TYPE(MatrixType)        :: Matrix
+    TYPE(AppStreamType)     :: AppStream
+    TYPE(AppLakeType)       :: AppLake
+    TYPE(AppSubsidenceType) :: AppSubsidence
+    CHARACTER               :: cVer_F*iLen
     
     iStat = 0
     
@@ -183,12 +185,13 @@ CONTAINS
              'Package_ComponentConnectors.lib: ' // TRIM(Package_ComponentConnectors_GetVersion()) // f_cLineFeed // &
              'Package_Budget.lib: ' // TRIM(Package_Budget_GetVersion())                           // f_cLineFeed // &
              'Package_ZBudget.lib: ' // TRIM(Package_ZBudget_GetVersion())                         // f_cLineFeed // &
+             'Package_Matrix.lib: ' // TRIM(Matrix%GetVersion())                                   // f_cLineFeed // &
+             'Package_PrecipitationET.lib: ' // TRIM(Package_PrecipitationET_GetVersion())         // f_cLineFeed // &
              'Package_AppStream.lib: ' // TRIM(AppStream%GetVersion())                             // f_cLineFeed // &
              'Package_AppLake.lib: ' // TRIM(AppLake%GetVersion())                                 // f_cLineFeed // &
              'Package_UnsatZone.lib: ' // TRIM(Package_UnsatZone_GetVersion())                     // f_cLineFeed // &
              'Package_RootZone.lib: ' // TRIM(RootZone%GetVersion())                               // f_cLineFeed // &
-             'Package_Matrix.lib: ' // TRIM(Matrix%GetVersion())                                   // f_cLineFeed // &
-             'Package_PrecipitationET.lib: ' // TRIM(Package_PrecipitationET_GetVersion())  
+             'Package_AppSubsidence.lib: '//TRIM(AppSubsidence%GetVersion())
     
     CALL String_Copy_F_C(cVer_F,cVer)
     

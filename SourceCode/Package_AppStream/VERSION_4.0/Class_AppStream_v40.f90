@@ -105,7 +105,6 @@ MODULE Class_AppStream_v40
     PROCEDURE,PASS :: GetNUpstrmNodes                => AppStream_v40_GetNUpstrmNodes
     PROCEDURE,PASS :: GetUpstrmNodes                 => AppStream_v40_GetUpstrmNodes
     PROCEDURE,PASS :: GetStageFlowRatingTable        => AppStream_v40_GetStageFlowRatingTable
-    PROCEDURE,PASS :: GetVersion                     => AppStream_v40_GetVersion
     PROCEDURE,PASS :: GetBottomElevations            => AppStream_v40_GetBottomElevations
     PROCEDURE,PASS :: GetNRatingTablePoints          => AppStream_v40_GetNRatingTablePoints
     PROCEDURE,PASS :: KillImplementation             => AppStream_v40_Kill
@@ -118,15 +117,6 @@ MODULE Class_AppStream_v40
   END TYPE AppStream_v40_Type
     
     
-  ! -------------------------------------------------------------
-  ! --- VERSION RELATED ENTITIES
-  ! -------------------------------------------------------------
-  INTEGER,PARAMETER                    :: iVersion    = 40
-  INTEGER,PARAMETER                    :: iLenVersion = 8
-  CHARACTER(LEN=iLenVersion),PARAMETER :: cVersion    = '4.0.0000'
-  INCLUDE 'AppStream_v40_Revision.fi'
-  
-
   ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
@@ -187,7 +177,6 @@ CONTAINS
     
     !Read away the first line that holds the version number and set the version number using internal variables
     CALL DataFile%ReadData(ALine,iStat)  ;  IF (iStat .EQ. -1) RETURN
-    AppStream%Version = AppStream%Version%New(iLenVersion,cVersion,cRevision)
     
     !Read dimensions
     CALL DataFile%ReadData(AppStream%NReaches,iStat)    ;  IF (iStat .EQ. -1) RETURN
@@ -233,10 +222,10 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- INSTANTIATE DYNAMIC PART OF STREAM DATA (GENERALLY CALLED IN SIMULATION)
   ! -------------------------------------------------------------
-  SUBROUTINE AppStream_v40_SetDynamicComponent(AppStream,IsForInquiry,cFileName,cWorkingDirectory,TimeStep,NTIME,iLakeIDs,AppGrid,Stratigraphy,ETData,StrmLakeConnector,StrmGWConnector,iStat)
+  SUBROUTINE AppStream_v40_SetDynamicComponent(AppStream,IsForInquiry,cFileName,cWorkingDirectory,cPackageVersion,TimeStep,NTIME,iLakeIDs,AppGrid,Stratigraphy,ETData,StrmLakeConnector,StrmGWConnector,iStat)
     CLASS(AppStream_v40_Type)         :: AppStream
     LOGICAL,INTENT(IN)                :: IsForInquiry
-    CHARACTER(LEN=*),INTENT(IN)       :: cFileName,cWorkingDirectory
+    CHARACTER(LEN=*),INTENT(IN)       :: cFileName,cWorkingDirectory,cPackageVersion
     TYPE(TimeStepType),INTENT(IN)     :: TimeStep
     INTEGER,INTENT(IN)                :: NTIME,iLakeIDs(:)
     TYPE(AppGridType),INTENT(IN)      :: AppGrid
@@ -250,31 +239,33 @@ CONTAINS
     CHARACTER(LEN=ModNameLen+33) :: ThisProcedure = ModName // 'AppStream_v40_SetDynamicComponent'
     INTEGER                      :: indxNode,iStrmNodeIDs(AppStream%NStrmNodes),iReachIDs(AppStream%NReaches),indx,iNStrmNodes
     TYPE(GenericFileType)        :: MainFile
+    CHARACTER                    :: cVersionFull*25
     CHARACTER(LEN=1000)          :: ALine,DiverFileName,DiverSpecFileName,BypassSpecFileName,DiverDetailBudFileName,ReachBudRawFileName
     TYPE(BudgetHeaderType)       :: BudHeader
-    CHARACTER(:),ALLOCATABLE     :: cVersionSim,cVersionPre,cAbsPathFileName
+    CHARACTER(:),ALLOCATABLE     :: cVersionSim,cAbsPathFileName
     
     !Initialzie
     iStat        = 0
     iNStrmNodes  = AppStream%NStrmNodes
     iStrmNodeIDs = AppStream%Nodes%ID
+    cVersionFull = '4.0-' // TRIM(cPackageVersion)
   
     !Open main file
     CALL MainFile%New(FileName=cFileName,InputFile=.TRUE.,Descriptor='main stream data file',iStat=iStat)
     IF (iStat .EQ. -1) RETURN
         
-    !Make sure that version numbers from Pre-processor and Simulation match
-    cVersionPre = AppStream%Version%GetVersion()  ;  cVersionPre = StripTextUntilCharacter(cVersionPre,'.',Back=.TRUE.)
-    CALL ReadVersion(MainFile,'STREAM',cVersionSim,iStat)  ;  IF (iStat .EQ. -1) RETURN
-    IF (TRIM(cVersionSim) .NE. TRIM(cVersionPre)) THEN
+    !Read away component version number and make sure Pre and Sim component versions are the same 
+    CALL ReadVersion(MainFile,'STREAM',cVersionSim,iStat)
+    IF (iStat .EQ. -1) RETURN
+    IF (TRIM(cVersionSim) .NE. '4.0') THEN
         MessageArray(1) = 'Stream Component versions used in Pre-Processor and Simulation must match!'
-        MessageArray(2) = 'Version number in Pre-Processor = ' // TRIM(cVersionPre)
+        MessageArray(2) = 'Version number in Pre-Processor = 4.0' 
         MessageArray(3) = 'Version number in Simulation    = ' // TRIM(cVersionSim)
         CALL SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
-    
+
     !Allocate memory for stream states
     IF (.NOT. ALLOCATED(AppStream%State)) ALLOCATE (AppStream%State(iNStrmNodes))
     
@@ -339,7 +330,7 @@ CONTAINS
     END IF
     
     !Diversions and bypasses
-    CALL AppStream%AppDiverBypass%New(IsForInquiry,DiverSpecFileName,BypassSpecFileName,DiverFileName,DiverDetailBudFileName,cWorkingDirectory,AppStream%GetVersion(),NTIME,TimeStep,AppStream%NStrmNodes,iStrmNodeIDs,iLakeIDs,AppStream%Reaches,AppGrid,StrmLakeConnector,iStat)
+    CALL AppStream%AppDiverBypass%New(IsForInquiry,DiverSpecFileName,BypassSpecFileName,DiverFileName,DiverDetailBudFileName,cWorkingDirectory,TRIM(cVersionFull),NTIME,TimeStep,AppStream%NStrmNodes,iStrmNodeIDs,iLakeIDs,AppStream%Reaches,AppGrid,StrmLakeConnector,iStat)
     IF (iStat .EQ. -1) RETURN
     
     !Reach IDs 
@@ -358,7 +349,7 @@ CONTAINS
             !Restore messed iReachID array
             iReachIDs = AppStream%Reaches%ID
             !Prepare budget header
-            BudHeader = PrepareStreamBudgetHeader(AppStream%NReaches,AppStream%iPrintReachBudgetOrder,iReachIDs,iStrmNodeIDs,NTIME,TimeStep,AppStream%GetVersion(),cReachNames=AppStream%Reaches%cName)
+            BudHeader = PrepareStreamBudgetHeader(AppStream%NReaches,AppStream%iPrintReachBudgetOrder,iReachIDs,iStrmNodeIDs,NTIME,TimeStep,TRIM(cVersionFull),cReachNames=AppStream%Reaches%cName)
             CALL AppStream%StrmReachBudRawFile%New(ReachBudRawFileName,BudHeader,iStat)
             IF (iStat .EQ. -1) RETURN
             CALL BudHeader%Kill()
@@ -371,7 +362,7 @@ CONTAINS
     IF (iStat .EQ. -1) RETURN
     
     !Stream budget at selected nodes
-    CALL AppStream%StrmNodeBudget%New(AppStream%lRouted,IsForInquiry,cWorkingDirectory,iReachIDs,iStrmNodeIDs,NTIME,TimeStep,AppStream%GetVersion(),PrepareStreamBudgetHeader,MainFile,iStat)
+    CALL AppStream%StrmNodeBudget%New(AppStream%lRouted,IsForInquiry,cWorkingDirectory,iReachIDs,iStrmNodeIDs,NTIME,TimeStep,TRIM(cVersionFull),PrepareStreamBudgetHeader,MainFile,iStat)
     IF (iStat .EQ. -1) RETURN
     
     !Stream bed parameters for stream-gw connectivity, wetted perimeter and stream length for each node
@@ -404,10 +395,10 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- INSTANTIATE COMPLETE STREAM DATA
   ! -------------------------------------------------------------
-  SUBROUTINE AppStream_v40_SetAllComponents(AppStream,IsForInquiry,cFileName,cSimWorkingDirectory,TimeStep,NTIME,iLakeIDs,AppGrid,Stratigraphy,ETData,BinFile,StrmLakeConnector,StrmGWConnector,iStat)
+  SUBROUTINE AppStream_v40_SetAllComponents(AppStream,IsForInquiry,cFileName,cSimWorkingDirectory,cPackageVersion,TimeStep,NTIME,iLakeIDs,AppGrid,Stratigraphy,ETData,BinFile,StrmLakeConnector,StrmGWConnector,iStat)
     CLASS(AppStream_v40_Type),INTENT(OUT) :: AppStream
     LOGICAL,INTENT(IN)                    :: IsForInquiry
-    CHARACTER(LEN=*),INTENT(IN)           :: cFileName,cSimWorkingDirectory
+    CHARACTER(LEN=*),INTENT(IN)           :: cFileName,cSimWorkingDirectory,cPackageVersion
     TYPE(TimeStepType),INTENT(IN)         :: TimeStep
     INTEGER,INTENT(IN)                    :: NTIME,iLakeIDs(:)
     TYPE(AppGridType),INTENT(IN)          :: AppGrid
@@ -432,7 +423,7 @@ CONTAINS
     IF (iStat .EQ. -1) RETURN
     
     !Set the dynamic part of AppStream
-    CALL AppStream_v40_SetDynamicComponent(AppStream,IsForInquiry,cFileName,cSimWorkingDirectory,TimeStep,NTIME,iLakeIDs,AppGrid,Stratigraphy,ETData,StrmLakeConnector,StrmGWConnector,iStat)
+    CALL AppStream_v40_SetDynamicComponent(AppStream,IsForInquiry,cFileName,cSimWorkingDirectory,cPackageVersion,TimeStep,NTIME,iLakeIDs,AppGrid,Stratigraphy,ETData,StrmLakeConnector,StrmGWConnector,iStat)
     IF (iStat .EQ. -1) RETURN
     
     !Make sure that if static part is defined, so is the dynamic part
@@ -452,10 +443,10 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- INSTANTIATE COMPLETE STREAM DATA WITHOUT INTERMEDIATE BINARY FILE
   ! -------------------------------------------------------------
-  SUBROUTINE AppStream_v40_SetAllComponentsWithoutBinFile(AppStream,IsRoutedStreams,IsForInquiry,cPPFileName,cSimFileName,cSimWorkingDirectory,AppGrid,Stratigraphy,ETData,TimeStep,NTIME,iLakeIDs,StrmLakeConnector,StrmGWConnector,iStat)
+  SUBROUTINE AppStream_v40_SetAllComponentsWithoutBinFile(AppStream,IsRoutedStreams,IsForInquiry,cPPFileName,cSimFileName,cSimWorkingDirectory,cPackageVersion,AppGrid,Stratigraphy,ETData,TimeStep,NTIME,iLakeIDs,StrmLakeConnector,StrmGWConnector,iStat)
     CLASS(AppStream_v40_Type),INTENT(OUT) :: AppStream
     LOGICAL,INTENT(IN)                    :: IsRoutedStreams,IsForInquiry
-    CHARACTER(LEN=*),INTENT(IN)           :: cPPFileName,cSimFileName,cSimWorkingDirectory
+    CHARACTER(LEN=*),INTENT(IN)           :: cPPFileName,cSimFileName,cSimWorkingDirectory,cPackageVersion
     TYPE(AppGridType),INTENT(IN)          :: AppGrid
     TYPE(StratigraphyType),INTENT(IN)     :: Stratigraphy
     TYPE(ETType),INTENT(IN)               :: ETData
@@ -476,7 +467,7 @@ CONTAINS
     IF (iStat .EQ. -1) RETURN
     
     !Instantiate the dynamic component of the AppStream data
-    CALL AppStream_v40_SetDynamicComponent(AppStream,IsForInquiry,cSimFileName,cSimWorkingDirectory,TimeStep,NTIME,iLakeIDs,AppGrid,Stratigraphy,ETData,StrmLakeConnector,StrmGWConnector,iStat)
+    CALL AppStream_v40_SetDynamicComponent(AppStream,IsForInquiry,cSimFileName,cSimWorkingDirectory,cPackageVersion,TimeStep,NTIME,iLakeIDs,AppGrid,Stratigraphy,ETData,StrmLakeConnector,StrmGWConnector,iStat)
     IF (iStat .EQ. -1) RETURN
     
     !Make sure that if static part is defined, so is the dynamic part
@@ -531,21 +522,6 @@ CONTAINS
 ! ******************************************************************
 ! ******************************************************************
 ! ******************************************************************
-
-  ! -------------------------------------------------------------
-  ! --- GET VERSION NUMBER 
-  ! -------------------------------------------------------------
-  FUNCTION AppStream_v40_GetVersion(AppStream) RESULT(cVrs)
-    CLASS(AppStream_v40_Type) :: AppStream
-    CHARACTER(:),ALLOCATABLE  :: cVrs
-    
-    IF (.NOT. AppStream%Version%IsDefined())   &
-        AppStream%Version = AppStream%Version%New(iLenVersion,cVersion,cRevision)
-
-    cVrs = AppStream%Version%GetVersion()
-    
-  END FUNCTION AppStream_v40_GetVersion
-  
 
   ! -------------------------------------------------------------
   ! --- GET STREAM NODE IDS
@@ -702,18 +678,11 @@ CONTAINS
     
     !Local variables
     CHARACTER(LEN=ModNameLen+20) :: ThisProcedure = ModName // 'ReadPreprocessedData'
-    INTEGER                      :: ErrorCode,iLenVersion
-    CHARACTER(:),ALLOCATABLE     :: cVrs
+    INTEGER                      :: ErrorCode
     
     !Initialize
     iStat = 0
         
-    !Read version number
-    CALL BinFile%ReadData(iLenVersion,iStat)  ;  IF (iStat .EQ. -1) RETURN
-    ALLOCATE (CHARACTER(iLenVersion) :: cVrs)
-    CALL BinFile%ReadData(cVrs,iStat)  ;  IF (iStat .EQ. -1) RETURN
-    AppStream%Version = AppStream%Version%New(cVrs)
-    
     !Routed/non-routed flag
     CALL BinFile%ReadData(AppStream%lRouted,iStat)  ;  IF (iStat .EQ. -1) RETURN
     
@@ -839,7 +808,7 @@ CONTAINS
     END DO
     
     !Store GW nodes for each stream node in strm-gw connector database
-    CALL StrmGWConnector%New(iVersion,iGWNodes,iLayers,iStat)
+    CALL StrmGWConnector%New(40,iGWNodes,iLayers,iStat)
     IF (iStat .EQ. -1) RETURN
     
     !Convert outflow destination stream node IDs to indices and make sure that reach numbers are set properly
@@ -1017,14 +986,6 @@ CONTAINS
   SUBROUTINE AppStream_v40_WritePreprocessedData(AppStream,OutFile)
     CLASS(AppStream_v40_Type),INTENT(IN) :: AppStream
     TYPE(GenericFileType)                :: OutFile
-    
-    !LOcal variables
-    CHARACTER(:),ALLOCATABLE :: cVersionLocal
-    
-    !Write version number
-    cVersionLocal = AppStream%Version%GetVersion()
-    CALL OutFile%WriteData(LEN(cVersionLocal))
-    CALL OutFile%WriteData(cVersionLocal)
     
     !Routed/non-routed flag
     CALL OutFile%WriteData(AppStream%lRouted)

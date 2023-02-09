@@ -646,18 +646,16 @@ CONTAINS
     
     !Compile
     DO indx=1,SIZE(Supply)
-      ASSOCIATE (pServedDests => SupplyDestConnector%SupplyToDestination(indx))
-        
-        SupplyActual     = Supply(indx)%SupplyActual
-        SupplyActual_Ag  = SupplyActual * Supply(indx)%IrigFrac
-        SupplyActual_Urb = MAX(0.0 , SupplyActual - SupplyActual_Ag)
-        DO indxDest=1,pServedDests%nDest
-          iDest             = pServedDests%iDests(indxDest)
-          Supply_Ag(iDest)  = Supply_Ag(iDest)  + SupplyActual_Ag * pServedDests%SupplyToDestFracs_Ag(indxDest)
-          Supply_Urb(iDest) = Supply_Urb(iDest) + SupplyActual_Urb * pServedDests%SupplyToDestFracs_Urb(indxDest)
-        END DO
-
-      END ASSOCIATE
+        ASSOCIATE (pServedDests => SupplyDestConnector%SupplyToDestination(indx))
+            SupplyActual     = Supply(indx)%SupplyActual
+            SupplyActual_Ag  = SupplyActual * Supply(indx)%IrigFrac
+            SupplyActual_Urb = MAX(0.0 , SupplyActual - SupplyActual_Ag)
+            DO indxDest=1,pServedDests%nDest
+                iDest             = pServedDests%iDests(indxDest)
+                Supply_Ag(iDest)  = Supply_Ag(iDest)  + SupplyActual_Ag * pServedDests%SupplyToDestFracs_Ag(indxDest)
+                Supply_Urb(iDest) = Supply_Urb(iDest) + SupplyActual_Urb * pServedDests%SupplyToDestFracs_Urb(indxDest)
+            END DO
+        END ASSOCIATE
     END DO
   
   END SUBROUTINE Supply_GetSupply

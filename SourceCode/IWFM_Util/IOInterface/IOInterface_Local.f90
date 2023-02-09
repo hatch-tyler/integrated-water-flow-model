@@ -109,6 +109,7 @@ MODULE IOInterface_Local
     PROCEDURE,PASS :: GetPositionInFile
     PROCEDURE,PASS :: GetDSSPathNames          
     PROCEDURE,PASS :: iGetFileType
+    PROCEDURE,PASS :: GetLineNumber
     PROCEDURE,PASS :: SetNSPVariable
     PROCEDURE,PASS :: SetNFQVariable           
     PROCEDURE,PASS :: SetBlocksToSkip          
@@ -582,6 +583,26 @@ CONTAINS
     END SELECT 
   
   END SUBROUTINE GetDSSPathnames
+  
+
+  ! -------------------------------------------------------------
+  ! --- GET LINE NUMBER FOR ASSCII INPUT FILES (INCLUDING TS FILES)
+  ! -------------------------------------------------------------
+  FUNCTION GetLineNumber(ThisFile) RESULT(iLineNumber)                  
+    CLASS(GenericFileType),INTENT(IN) :: ThisFile
+    INTEGER                           :: iLineNumber
+    
+    
+    SELECT TYPE (p => ThisFile%Me)
+      CLASS IS (AsciiInFileType)  !ASCII input file
+        iLineNumber = p%GetLineNumber()
+        
+      CLASS DEFAULT
+        iLineNumber = -1
+    
+    END SELECT 
+  
+  END FUNCTION GetLineNumber
  
   
   

@@ -282,7 +282,7 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- NEW SMALL WATERSHED DATABASE
   ! -------------------------------------------------------------
-  SUBROUTINE New(AppSWShed,IsForInquiry,cFileName,cWorkingDirectory,TimeStep,NTIME,NStrmNodes,iStrmNodeIDs,AppGrid,Stratigraphy,cIWFMVersion,iStat) 
+  SUBROUTINE New(AppSWShed,IsForInquiry,cFileName,cWorkingDirectory,TimeStep,NTIME,NStrmNodes,iStrmNodeIDs,AppGrid,Stratigraphy,Precip,ET,cIWFMVersion,iStat) 
     CLASS(AppSmallWatershedType),INTENT(OUT) :: AppSWShed
     LOGICAL,INTENT(IN)                       :: IsForInquiry
     CHARACTER(LEN=*),INTENT(IN)              :: cFileName,cWorkingDirectory,cIWFMVersion
@@ -290,6 +290,8 @@ CONTAINS
     INTEGER,INTENT(IN)                       :: NStrmNodes,iStrmNodeIDs(NStrmNodes),NTIME
     TYPE(AppGridType),INTENT(IN)             :: AppGrid
     TYPE(StratigraphyType),INTENT(IN)        :: Stratigraphy
+    TYPE(PrecipitationType),INTENT(IN)       :: Precip
+    TYPE(ETType),INTENT(IN)                  :: ET
     INTEGER,INTENT(OUT)                      :: iStat
     
     !Local variables
@@ -384,6 +386,10 @@ CONTAINS
         CALL CompileNodesWithBCType(AppSWShed,indxLayer,SWShedPercFlowBCID,AppSWShed%PercFlowNodeList(indxLayer)%Nodes)
         AppSWShed%PercFlowNodeList(indxLayer)%NNodes = SIZE(AppSWShed%PercFlowNodeList(indxLayer)%Nodes)        
     END DO
+    
+    !Check if pointed TS data columns actually exist
+    CALL CheckTSDataPointers(AppSWShed,Precip,ET,iStat)
+    IF (iStat .NE. 0) RETURN
     
     !Set the flag
     IF (AppSWShed%NSWShed .GT. 0) AppSWShed%lDefined = .TRUE.
@@ -2144,4 +2150,45 @@ CONTAINS
     
   END SUBROUTINE CompileNodesWithBCType
 
+  
+  ! -------------------------------------------------------------
+  ! --- MAKE SURE THAT POINTED TIME-SERIES DATA HAVE ENOUGH COLUMNS
+  ! -------------------------------------------------------------
+  SUBROUTINE CheckTSDataPointers(AppSWShed,Precip,ET,iStat)
+    TYPE(AppSmallWatershedType),INTENT(IN) :: AppSWShed
+    TYPE(PrecipitationType),INTENT(IN)     :: Precip
+    TYPE(ETType),INTENT(IN)                :: ET
+    INTEGER,INTENT(OUT)                    :: iStat
+    
+    !Local variables
+    CHARACTER(LEN=ModNameLen+19) :: ThisProcedure = ModName // 'CheckTSDataPointers'
+    INTEGER                      :: iSWShed(1),ID
+    
+    !Initialize
+    iStat = 0
+    
+    !Check precip columns
+    IF (Precip%GetNDataColumns() .LT. MAXVAL(AppSWShed%Smallwatersheds%iColPrecip)) THEN
+        iSWShed = MAXLOC(AppSWShed%Smallwatersheds%iColPrecip)
+        ID      = AppSWShed%Smallwatersheds(iSWShed(1))%ID
+        MessageArray(1) = 'Precipitation data column for small watershed '//TRIM(IntToText(ID))//' is greater than the'
+        MessageArray(2) = 'available data columns in the Precipitation Data file!'
+        CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+        iStat = -1
+        RETURN
+    END IF
+    
+    !Check ET columns
+    IF (ET%GetNDataColumns() .LT. MAXVAL(AppSWShed%Smallwatersheds%iColET)) THEN
+        iSWShed = MAXLOC(AppSWShed%Smallwatersheds%iColET)
+        ID      = AppSWShed%Smallwatersheds(iSWShed(1))%ID
+        MessageArray(1) = 'Evapotranspiration data column for small watershed '//TRIM(IntToText(ID))//' is greater than the'
+        MessageArray(2) = 'available data columns in the Evapotranspiration Data file!'
+        CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+        iStat = -1
+        RETURN
+    END IF
+    
+  END SUBROUTINE CheckTSDataPointers
+  
 END MODULE

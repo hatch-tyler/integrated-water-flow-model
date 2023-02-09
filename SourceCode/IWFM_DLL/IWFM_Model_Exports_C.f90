@@ -3001,9 +3001,7 @@ CONTAINS
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_PrintResults
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
-    iStat = 0
-  
-    CALL Model%PrintResults()
+    CALL Model%PrintResults(iStat)
                                              
   END SUBROUTINE IW_Model_PrintResults
   

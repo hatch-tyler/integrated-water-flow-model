@@ -22,83 +22,81 @@
 !***********************************************************************                     
 MODULE RootZone_v412                                                                         
   !$ USE OMP_LIB                                                                             
-  USE MessageLogger              , ONLY: SetLastMessage                                         , &
-                                         EchoProgress                                           , &
-                                         MessageArray                                           , &
-                                         f_iFatal                                                 
-  USE GeneralUtilities           , ONLY: StripTextUntilCharacter                                , &
-                                         IntToText                                              , &
-                                         ArrangeText                                            , &
-                                         UpperCase                                              , & 
-                                         ConvertID_To_Index                                     , &
-                                         CleanSpecialCharacters                                 , &
-                                         EstablishAbsolutePathFileName                          , &
-                                         LocateInList                                           , &
-                                         NormalizeArray                                         
-  USE TimeSeriesUtilities        , ONLY: TimeStepType                                           , &
-                                         IncrementTimeStamp                                     
-  USE IOInterface                , ONLY: GenericFileType                                        , &
-                                         IntPairTSDataInFileType                                
-  USE Package_Misc               , ONLY: f_iFlowDest_Outside                                    , &
-                                         f_iFlowDest_StrmNode                                   , &
-                                         f_iFlowDest_Lake                                       , &
-                                         f_iFlowDest_GWElement                                  , &
-                                         f_iFlowDest_Element                                    , &
-                                         f_iFlowDest_Subregion                                  , &
-                                         f_iLandUse_Ag                                          , &
-                                         f_iLandUse_NonPondedAg                                 , &
-                                         f_iLandUse_PondedAg                                    , &
-                                         f_iLandUse_Urb                                         , &
-                                         f_iLandUse_UrbIn                                       , &
-                                         f_iLandUse_UrbOut                                      , &
-                                         f_iLandUse_NVRV                                        , &
-                                         f_iLandUse_Rice                                        , &
-                                         f_iLandUse_Refuge                                     
-  USE Package_Discretization     , ONLY: AppGridType                                            
-  USE Package_PrecipitationET    , ONLY: PrecipitationType                                      , &
-                                         ETType                                                 
-  USE Class_GenericLandUseGW     , ONLY: GenericLandUseGWType             
-  USE Class_BaseRootZone         , ONLY: FlagsType                                              , &
-                                         ElemSurfaceFlowToDestType                              
-  USE Util_Package_RootZone      , ONLY: WaterSupplyType                                        , &
-                                         f_iBudgetType_LWU                                      , &
-                                         f_iBudgetType_RootZone                                 , &
-                                         f_iZBudgetType_RootZone                                , &
-                                         f_iZBudgetType_LWU                       
-  USE Class_PondedAgLandUseGW    , ONLY: PondedAgDatabaseType                                   , &
-                                         f_iNPondedCrops                                        
-  USE Class_NonPondedAgLandUseGW , ONLY: NonPondedAgDatabaseType
-  USE RootZone_v411              , ONLY: RootZone_v411_Type                                     
-  USE Package_UnsatZone          , ONLY: f_iKUnsatMethodList                                    
-  USE Package_Budget             , ONLY: BudgetType                                             , &
-                                         BudgetHeaderType                                       , &
-                                         f_iMaxLocationNameLen_Budget  => f_iMaxLocationNameLen , &                  
-                                         f_cVolumeUnitMarker_Budget    => f_cVolumeUnitMarker   , &
-                                         f_cAreaUnitMarker_Budget      => f_cAreaUnitMarker     , &
-                                         f_cLocationNameMarker_Budget  => f_cLocationNameMarker , &
-                                         f_cAreaMarker_Budget          => f_cAreaMarker         , &
-                                         f_iAR_Budget                  => f_iAR                 , &
-                                         f_iVR_Budget                  => f_iVR                 , &
-                                         f_iVLB_Budget                 => f_iVLB                , &
-                                         f_iVLE_Budget                 => f_iVLE                , &
-                                         f_iVR_lwu_PotCUAW                                      , &
-                                         f_iVR_lwu_AgSupplyReq                                  , &
-                                         f_iVR_lwu_AgPump                                       , &
-                                         f_iVR_lwu_AgDiv                                        , &
-                                         f_iVR_lwu_AgShort                                      , &
-                                         f_iPER_AVER                                            , &
-                                         f_iPER_CUM                                             
-  USE Package_ZBudget            , ONLY: ZBudgetType                                            , &
-                                         SystemDataType                                         , &
-                                         ZBudgetHeaderType                                      , &
-                                         ZoneListType                                           , &
-                                         f_iElemDataType                                        , &
-                                         f_cMarkerChar_ZBudget         => f_cMarkerChar         , &
-                                         f_cAreaUnitMarker_ZBudget     => f_cAreaUnitMarker     , &
-                                         f_iAR_ZBudget                 => f_iAR                 , &
-                                         f_iVR_ZBudget                 => f_iVR                 , &
-                                         f_iVLB_ZBudget                => f_iVLB                , &
-                                         f_iVLE_ZBudget                => f_iVLE                
+  USE MessageLogger                , ONLY: SetLastMessage                                         , &
+                                           EchoProgress                                           , &
+                                           MessageArray                                           , &
+                                           f_iFatal                                                 
+  USE GeneralUtilities             , ONLY: StripTextUntilCharacter                                , &
+                                           IntToText                                              , &
+                                           ArrangeText                                            , &
+                                           UpperCase                                              , & 
+                                           ConvertID_To_Index                                     , &
+                                           CleanSpecialCharacters                                 , &
+                                           EstablishAbsolutePathFileName                          , &
+                                           LocateInList                                           , &
+                                           NormalizeArray                                         
+  USE TimeSeriesUtilities          , ONLY: TimeStepType                                           , &
+                                           IncrementTimeStamp                                     
+  USE IOInterface                  , ONLY: GenericFileType                                        , &
+                                           IntPairTSDataInFileType                                
+  USE Package_Misc                 , ONLY: f_iFlowDest_Outside                                    , &
+                                           f_iFlowDest_StrmNode                                   , &
+                                           f_iFlowDest_Lake                                       , &
+                                           f_iFlowDest_GWElement                                  , &
+                                           f_iFlowDest_Element                                    , &
+                                           f_iFlowDest_Subregion                                  , &
+                                           f_iLandUse_Ag                                          , &
+                                           f_iLandUse_NonPondedAg                                 , &
+                                           f_iLandUse_PondedAg                                    , &
+                                           f_iLandUse_Urb                                         , &
+                                           f_iLandUse_UrbIn                                       , &
+                                           f_iLandUse_UrbOut                                      , &
+                                           f_iLandUse_NVRV                                        , &
+                                           f_iLandUse_Rice                                        , &
+                                           f_iLandUse_Refuge                                     
+  USE Package_Discretization       , ONLY: AppGridType                                            
+  USE Package_PrecipitationET      , ONLY: PrecipitationType                                      , &
+                                           ETType                                                 
+  USE Class_GenericLandUse_v41     , ONLY: GenericLandUse_v41_Type             
+  USE Class_BaseRootZone           , ONLY: FlagsType                                              , &
+                                           ElemSurfaceFlowToDestType                              
+  USE Util_Package_RootZone        , ONLY: WaterSupplyType                                        , &
+                                           f_iBudgetType_LWU                                      , &
+                                           f_iBudgetType_RootZone                                 , &
+                                           f_iZBudgetType_RootZone                                , &
+                                           f_iZBudgetType_LWU                       
+  USE Class_PondedAgLandUse_v41    , ONLY: f_iNPondedCrops                                        
+  USE RootZone_v411                , ONLY: RootZone_v411_Type                                     
+  USE Package_UnsatZone            , ONLY: f_iKUnsatMethodList                                    
+  USE Package_Budget               , ONLY: BudgetType                                             , &
+                                           BudgetHeaderType                                       , &
+                                           f_iMaxLocationNameLen_Budget  => f_iMaxLocationNameLen , &                  
+                                           f_cVolumeUnitMarker_Budget    => f_cVolumeUnitMarker   , &
+                                           f_cAreaUnitMarker_Budget      => f_cAreaUnitMarker     , &
+                                           f_cLocationNameMarker_Budget  => f_cLocationNameMarker , &
+                                           f_cAreaMarker_Budget          => f_cAreaMarker         , &
+                                           f_iAR_Budget                  => f_iAR                 , &
+                                           f_iVR_Budget                  => f_iVR                 , &
+                                           f_iVLB_Budget                 => f_iVLB                , &
+                                           f_iVLE_Budget                 => f_iVLE                , &
+                                           f_iVR_lwu_PotCUAW                                      , &
+                                           f_iVR_lwu_AgSupplyReq                                  , &
+                                           f_iVR_lwu_AgPump                                       , &
+                                           f_iVR_lwu_AgDiv                                        , &
+                                           f_iVR_lwu_AgShort                                      , &
+                                           f_iPER_AVER                                            , &
+                                           f_iPER_CUM                                             
+  USE Package_ZBudget              , ONLY: ZBudgetType                                            , &
+                                           SystemDataType                                         , &
+                                           ZBudgetHeaderType                                      , &
+                                           ZoneListType                                           , &
+                                           f_iElemDataType                                        , &
+                                           f_cMarkerChar_ZBudget         => f_cMarkerChar         , &
+                                           f_cAreaUnitMarker_ZBudget     => f_cAreaUnitMarker     , &
+                                           f_iAR_ZBudget                 => f_iAR                 , &
+                                           f_iVR_ZBudget                 => f_iVR                 , &
+                                           f_iVLB_ZBudget                => f_iVLB                , &
+                                           f_iVLE_ZBudget                => f_iVLE                
   IMPLICIT NONE
   
     
@@ -166,7 +164,6 @@ MODULE RootZone_v412
       PROCEDURE,PASS   :: GetPercElement                        => RootZone_v412_GetPercElement
       PROCEDURE,PASS   :: GetSurfaceFlowDestinations            => RootZone_v412_GetSurfaceFlowDestinations
       PROCEDURE,PASS   :: GetSurfaceFlowDestinationTypes        => RootZone_v412_GetSurfaceFlowDestinationTypes
-      PROCEDURE,PASS   :: GetVersion                            => RootZone_v412_GetVersion
       PROCEDURE,PASS   :: RegionalReturnFlow_Ag                 => RootZone_v412_RegionalReturnFlow_Ag
       PROCEDURE,PASS   :: RegionalReturnFlow_Urb                => RootZone_v412_RegionalReturnFlow_Urb
       PROCEDURE,PASS   :: RegionalPerc                          => RootZone_v412_RegionalPerc
@@ -175,14 +172,6 @@ MODULE RootZone_v412
       PROCEDURE,PASS   :: Simulate                              => RootZone_v412_Simulate
   END TYPE RootZone_v412_Type
 
-  
-  ! -------------------------------------------------------------
-  ! --- VERSION RELATED ENTITIES
-  ! -------------------------------------------------------------
-  INTEGER,PARAMETER                    :: iLenVersion = 9
-  CHARACTER(LEN=iLenVersion),PARAMETER :: cVersion    = '4.12.0000'
-  INCLUDE 'RootZone_v412_Revision.fi'
-  
   
   ! -------------------------------------------------------------
   ! --- Z-BUDGET AND BUDGET RELATED DATA
@@ -431,10 +420,10 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- NEW ROOT ZONE DATA
   ! -------------------------------------------------------------
-  SUBROUTINE RootZone_v412_New(RootZone,IsForInquiry,cFileName,cWorkingDirectory,AppGrid,TimeStep,NTIME,ET,Precip,iStat,iStrmNodeIDs,iLakeIDs)
+  SUBROUTINE RootZone_v412_New(RootZone,IsForInquiry,cFileName,cWorkingDirectory,cPackageVersion,AppGrid,TimeStep,NTIME,ET,Precip,iStat,iStrmNodeIDs,iLakeIDs)
     CLASS(RootZone_v412_Type)          :: RootZone
     LOGICAL,INTENT(IN)                 :: IsForInquiry
-    CHARACTER(LEN=*),INTENT(IN)        :: cFileName,cWorkingDirectory
+    CHARACTER(LEN=*),INTENT(IN)        :: cFileName,cWorkingDirectory,cPackageVersion
     TYPE(AppGridType),INTENT(IN)       :: AppGrid
     TYPE(TimeStepType),INTENT(IN)      :: TimeStep
     INTEGER,INTENT(IN)                 :: NTIME
@@ -446,7 +435,7 @@ CONTAINS
     !Local variables
     CHARACTER(LEN=ModNameLen+17)                :: ThisProcedure = ModName // 'RootZone_v412_New'
     CHARACTER(LEN=1000)                         :: ALine,NonPondedCropFile,RiceRefugeFile,UrbanDataFile,NVRVFile,AgWaterDemandFile,GenericMoistureFile
-    CHARACTER                                   :: cVersionLocal*20
+    CHARACTER                                   :: cVersionFull*25
     REAL(8)                                     :: FACTK,FACTCN,RegionArea(AppGrid%NSubregions+1),rDummyFactor(1),rDummyArray16(AppGrid%NElements,16), &
                                                    FACTEXDTH                                                                                           
     INTEGER                                     :: NElements,NRegion,ErrorCode,indxElem,iColGenericMoisture(AppGrid%NElements),iElemID,iElem,          &
@@ -468,8 +457,7 @@ CONTAINS
     CALL EchoProgress('Instantiating root zone')
 
     !Initialize
-    RootZone%Version          = RootZone%Version%New(iLenVersion,cVersion,cRevision)
-    cVersionLocal             = ADJUSTL('v' // TRIM(RootZone%Version%GetVersion()))
+    cVersionFull              = 'v4.12-' // TRIM(cPackageVersion)
     NElements                 = AppGrid%NElements
     NRegion                   = AppGrid%NSubregions
     iElemIDs                  = AppGrid%AppElement%ID
@@ -561,7 +549,7 @@ CONTAINS
     NonPondedCropFile = StripTextUntilCharacter(NonPondedCropFile,'/') 
     CALL CleanSpecialCharacters(NonPondedCropFile)
     CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(NonPondedCropFile)),cWorkingDirectory,cAbsPathFileName)
-    CALL RootZone%NonPondedAgRootZone%New(IsForInquiry,cAbsPathFileName,cWorkingDirectory,FactCN,AppGrid,iElemIDs,TimeStep,NTIME,cVersionLocal,iStat,pAgLWUseBudRawFile_New,pAgRootZoneBudRawFile_New)
+    CALL RootZone%NonPondedAgRootZone%New(IsForInquiry,cAbsPathFileName,cWorkingDirectory,FactCN,AppGrid,iElemIDs,TimeStep,NTIME,TRIM(cVersionFull),iStat,pAgLWUseBudRawFile_New,pAgRootZoneBudRawFile_New)
     IF (iStat .EQ. -1) RETURN
        
     !Rice/refuge data file
@@ -569,7 +557,7 @@ CONTAINS
     RiceRefugeFile = StripTextUntilCharacter(RiceRefugeFile,'/') 
     CALL CleanSpecialCharacters(RiceRefugeFile)
     CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(RiceRefugeFile)),cWorkingDirectory,cAbsPathFileName)
-    CALL RootZone%PondedAgRootZone%New(IsForInquiry,cAbsPathFileName,cWorkingDirectory,FactCN,AppGrid,iElemIDs,TimeStep,NTIME,cVersionLocal,iStat,pAgLWUseBudRawFile_New,pAgRootZoneBudRawFile_New)
+    CALL RootZone%PondedAgRootZone%New(IsForInquiry,cAbsPathFileName,cWorkingDirectory,FactCN,AppGrid,iElemIDs,TimeStep,NTIME,TRIM(cVersionFull),iStat,pAgLWUseBudRawFile_New,pAgRootZoneBudRawFile_New)
     IF (iStat .EQ. -1) RETURN
     
     !Urban data file
@@ -692,7 +680,7 @@ CONTAINS
     CALL CleanSpecialCharacters(ALine)
     IF (ALine .NE. '') THEN
         CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(ALine)),cWorkingDirectory,cAbsPathFileName)
-        CALL LWUseBudRawFile_New(IsForInquiry,cAbsPathFileName,TimeStep,NTIME,NRegion+1,RegionArea,RegionNames,'land and water use budget',cVersionLocal,RootZone%LWUseBudRawFile,iStat)
+        CALL LWUseBudRawFile_New(IsForInquiry,cAbsPathFileName,TimeStep,NTIME,NRegion+1,RegionArea,RegionNames,'land and water use budget',TRIM(cVersionFull),RootZone%LWUseBudRawFile,iStat)
         IF (iStat .EQ. -1) RETURN
         RootZone%Flags%LWUseBudRawFile_Defined = .TRUE.      
     END IF
@@ -703,7 +691,7 @@ CONTAINS
     CALL CleanSpecialCharacters(ALine)
     IF (ALine .NE. '') THEN
         CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(ALine)),cWorkingDirectory,cAbsPathFileName)
-        CALL RootZoneBudRawFile_New(IsForInquiry,cAbsPathFileName,TimeStep,NTIME,NRegion+1,RegionArea,RegionNames,'root zone budget',cVersionLocal,RootZone%RootZoneBudRawFile,iStat)
+        CALL RootZoneBudRawFile_New(IsForInquiry,cAbsPathFileName,TimeStep,NTIME,NRegion+1,RegionArea,RegionNames,'root zone budget',TRIM(cVersionFull),RootZone%RootZoneBudRawFile,iStat)
         IF (iStat .EQ. -1) RETURN
         RootZone%Flags%RootZoneBudRawFile_Defined = .TRUE.
     END IF
@@ -714,7 +702,7 @@ CONTAINS
     CALL CleanSpecialCharacters(ALine)
     IF (ALine .NE. '') THEN
         CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(ALine)),cWorkingDirectory,cAbsPathFileName)
-        CALL LWUseZoneBudRawFile_New(IsForInquiry,cAbsPathFileName,TimeStep,NTIME,cVersionLocal,RootZone%Flags,AppGrid,RootZone%LWUZoneBudRawFile,iStat)
+        CALL LWUseZoneBudRawFile_New(IsForInquiry,cAbsPathFileName,TimeStep,NTIME,TRIM(cVersionFull),RootZone%Flags,AppGrid,RootZone%LWUZoneBudRawFile,iStat)
         IF (iStat .EQ. -1) RETURN
         RootZone%Flags%LWUseZoneBudRawFile_Defined = .TRUE.      
     END IF
@@ -725,7 +713,7 @@ CONTAINS
     CALL CleanSpecialCharacters(ALine)
     IF (ALine .NE. '') THEN
         CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(ALine)),cWorkingDirectory,cAbsPathFileName)
-        CALL RootZoneZoneBudRawFile_New(IsForInquiry,cAbsPathFileName,TimeStep,NTIME,cVersionLocal,RootZone%Flags,AppGrid,RootZone%RootZoneZoneBudRawFile,iStat)
+        CALL RootZoneZoneBudRawFile_New(IsForInquiry,cAbsPathFileName,TimeStep,NTIME,TRIM(cVersionFull),RootZone%Flags,AppGrid,RootZone%RootZoneZoneBudRawFile,iStat)
         IF (iStat .EQ. -1) RETURN
         RootZone%Flags%RootZoneZoneBudRawFile_Defined = .TRUE.
     END IF
@@ -3518,21 +3506,6 @@ CONTAINS
   END SUBROUTINE RootZone_v412_GetSurfaceFlowDestinationTypes
   
   
-  ! -------------------------------------------------------------
-  ! --- GET VERSION NUMBER 
-  ! -------------------------------------------------------------
-  FUNCTION RootZone_v412_GetVersion(RootZone) RESULT(cVrs)
-    CLASS(RootZone_v412_Type) :: RootZone
-    CHARACTER(:),ALLOCATABLE  :: cVrs
-    
-    IF (.NOT. RootZone%Version%IsDefined())   &
-        RootZone%Version = RootZone%Version%New(iLenVersion,cVersion,cRevision)
-
-    cVrs = RootZone%Version%GetVersion()
-    
-  END FUNCTION RootZone_v412_GetVersion
-  
-  
   
   
 ! ******************************************************************
@@ -3973,24 +3946,24 @@ CONTAINS
         
         IF (pNonPondedAg%lRootZoneBudRawFile_Defined) THEN
             rZeroDrain = 0.0
-            CALL WriteAgRootZoneFlowsToBudRawFile(pNonPondedAg%RootZoneBudRawFile         , &
-                                                  AppGrid                                 , &
-                                                  pNonPondedAg%iBudgetCrops               , &
-                                                  pNonPondedAg%Crops%GenericLandUseGWType , &
-                                                  RLUArea                                 , &
-                                                  RootZone%ElemPrecipData%Precip          , &
-                                                  RRunoff,RPump,RDeli                     , &
-                                                  pNonPondedAg%Crops%Reuse                , &
-                                                  RReturn                                 , &
-                                                  RSrfcInForGW_Ag                         , &
-                                                  RSrfcInForGW_UrbIn                      , &
-                                                  RSrfcInForGW_UrbOut                     , &
-                                                  RSrfcInForGW_NVRV                       , &
-                                                  RGenMoistInflow                         , &
-                                                  RInfilt                                 , &
-                                                  RPerc                                   , &
-                                                  RZeroDrain                              , &
-                                                  pNonPondedAg%RegionETPot                )
+            CALL WriteAgRootZoneFlowsToBudRawFile(pNonPondedAg%RootZoneBudRawFile            , &
+                                                  AppGrid                                    , &
+                                                  pNonPondedAg%iBudgetCrops                  , &
+                                                  pNonPondedAg%Crops%GenericLandUse_v41_Type , &
+                                                  RLUArea                                    , &
+                                                  RootZone%ElemPrecipData%Precip             , &
+                                                  RRunoff,RPump,RDeli                        , &
+                                                  pNonPondedAg%Crops%Reuse                   , &
+                                                  RReturn                                    , &
+                                                  RSrfcInForGW_Ag                            , &
+                                                  RSrfcInForGW_UrbIn                         , &
+                                                  RSrfcInForGW_UrbOut                        , &
+                                                  RSrfcInForGW_NVRV                          , &
+                                                  RGenMoistInflow                            , &
+                                                  RInfilt                                    , &
+                                                  RPerc                                      , &
+                                                  RZeroDrain                                 , &
+                                                  pNonPondedAg%RegionETPot                   )
         END IF
     END ASSOCIATE
     
@@ -4081,24 +4054,24 @@ CONTAINS
                                                pPondedAg%Crops%ETOth            )
         
         IF (pPondedAg%lRootZoneBudRawFile_Defined) THEN
-            CALL WriteAgRootZoneFlowsToBudRawFile(pPondedAg%RootZoneBudRawFile         , &
-                                                  AppGrid                              , &
-                                                  pPondedAg%iBudgetCrops               , &
-                                                  pPondedAg%Crops%GenericLandUseGWType , &
-                                                  RLUArea                              , &
-                                                  RootZone%ElemPrecipData%Precip       , &
-                                                  RRunoff,RPump,RDeli                  , &
-                                                  pPondedAg%Crops%Reuse                , &
-                                                  RReturn                              , &
-                                                  RSrfcInForGW_Ag                      , &
-                                                  RSrfcInForGW_UrbIn                   , &
-                                                  RSrfcInForGW_UrbOut                  , &
-                                                  RSrfcInForGW_NVRV                    , &
-                                                  RGenMoistInflow                      , &
-                                                  RInfilt                              , &
-                                                  RPerc                                , &
-                                                  RDrain                               , &
-                                                  pPondedAg%RegionETPot                )
+            CALL WriteAgRootZoneFlowsToBudRawFile(pPondedAg%RootZoneBudRawFile            , &
+                                                  AppGrid                                 , &
+                                                  pPondedAg%iBudgetCrops                  , &
+                                                  pPondedAg%Crops%GenericLandUse_v41_Type , &
+                                                  RLUArea                                 , &
+                                                  RootZone%ElemPrecipData%Precip          , &
+                                                  RRunoff,RPump,RDeli                     , &
+                                                  pPondedAg%Crops%Reuse                   , &
+                                                  RReturn                                 , &
+                                                  RSrfcInForGW_Ag                         , &
+                                                  RSrfcInForGW_UrbIn                      , &
+                                                  RSrfcInForGW_UrbOut                     , &
+                                                  RSrfcInForGW_NVRV                       , &
+                                                  RGenMoistInflow                         , &
+                                                  RInfilt                                 , &
+                                                  RPerc                                   , &
+                                                  RDrain                                  , &
+                                                  pPondedAg%RegionETPot                   )
         END IF
     END ASSOCIATE
     
@@ -4434,13 +4407,13 @@ CONTAINS
   ! --- PRINT CROP-SPECIFIC ROOT ZONE BUDGET RAW DATA
   ! -------------------------------------------------------------
   SUBROUTINE WriteAgRootZoneFlowsToBudRawFile(RootZoneBudRawFile,AppGrid,iBudgetCrops,Crops,RLUArea,rElemPrecip,RRunoff,RPump,RDeli,rCropsReuse,RReturn,RSrfcInForGW_Ag,RSrfcInForGW_UrbIn,RSrfcInForGW_UrbOut,RSrfcInForGW_NVRV,RGenMoistInflow,RInfilt,RPerc,RDrain,RegionETPot)
-    TYPE(BudgetType)                      :: RootZoneBudRawFile
-    TYPE(AppGridType),INTENT(IN)          :: AppGrid
-    INTEGER,INTENT(IN)                    :: iBudgetCrops(:)
-    TYPE(GenericLandUseGWType),INTENT(IN) :: Crops
-    REAL(8),INTENT(IN)                    :: RPump(:),RDeli(:),RGenMoistInflow(:),RRunoff(:),RReturn(:),RInfilt(:),RPerc(:),      &
-                                             RLUArea(:),RDrain(:),rElemPrecip(:),RegionETPot(:,:),rCropsReuse(:,:),               &
-                                             RSrfcInForGW_Ag(:),RSrfcInForGW_UrbIn(:),RSrfcInForGW_UrbOut(:),RSrfcInForGW_NVRV(:) 
+    TYPE(BudgetType)                         :: RootZoneBudRawFile
+    TYPE(AppGridType),INTENT(IN)             :: AppGrid
+    INTEGER,INTENT(IN)                       :: iBudgetCrops(:)
+    TYPE(GenericLandUse_v41_Type),INTENT(IN) :: Crops
+    REAL(8),INTENT(IN)                       :: RPump(:),RDeli(:),RGenMoistInflow(:),RRunoff(:),RReturn(:),RInfilt(:),RPerc(:),      &
+                                                RLUArea(:),RDrain(:),rElemPrecip(:),RegionETPot(:,:),rCropsReuse(:,:),               &
+                                                RSrfcInForGW_Ag(:),RSrfcInForGW_UrbIn(:),RSrfcInForGW_UrbOut(:),RSrfcInForGW_NVRV(:) 
     
     !Local variables
     INTEGER                                                       :: iNBudgetCrops,indxCrop,indxLast,iCrop
@@ -4815,7 +4788,7 @@ CONTAINS
             rUrbError      = rUrbError + rUrbOthIn                                                                                                           
         END IF
         IF (RootZone%Flags%lComputeETFromGW) THEN                                                                                              !Urban groundwater inflow for ET
-            rUrbETGW(:,1) = RootZone%UrbanRootZone%UrbData%ETFromGW_Actual(1,:) 
+            rUrbETGW(:,1) = RootZone%UrbanRootZone%UrbData%ETFromGW_Actual(:,1) 
             rUrbError     = rUrbError + rUrbETGW
         END IF
     END IF
@@ -5253,15 +5226,17 @@ CONTAINS
                 rElemSrfcInForGW_NVRV   = 0.0 
                 rElemInfilt             = 0.0
                 rElemPerc               = 0.0
-                DO indxCrop=1,RootZone%NonPondedAgRootZone%NCrops
-                    CALL ElementalNonPondedCropFlows_ForACrop(RootZone,AppGrid,indxCrop,rElemSrfcInForGW_Ag_Work,rElemSrfcInForGW_UrbIn_Work,rElemSrfcInForGW_UrbOut_Work,rElemSrfcInForGW_NVRV_Work,rElemInfilt_Work,rElemPerc_Work)
-                    rElemSrfcInForGW_Ag     = rElemSrfcInForGW_Ag     + rElemSrfcInForGW_Ag_Work    
-                    rElemSrfcInForGW_UrbIn  = rElemSrfcInForGW_UrbIn  + rElemSrfcInForGW_UrbIn_Work 
-                    rElemSrfcInForGW_UrbOut = rElemSrfcInForGW_UrbOut + rElemSrfcInForGW_UrbOut_Work
-                    rElemSrfcInForGW_NVRV   = rElemSrfcInForGW_NVRV   + rElemSrfcInForGW_NVRV_Work   
-                    rElemInfilt             = rElemInfilt             + rElemInfilt_Work            
-                    rElemPerc               = rElemPerc               + rElemPerc_Work              
-                END DO
+                IF (RootZone%Flags%lNonPondedAg_Defined) THEN
+                    DO indxCrop=1,RootZone%NonPondedAgRootZone%NCrops
+                        CALL ElementalNonPondedCropFlows_ForACrop(RootZone,AppGrid,indxCrop,rElemSrfcInForGW_Ag_Work,rElemSrfcInForGW_UrbIn_Work,rElemSrfcInForGW_UrbOut_Work,rElemSrfcInForGW_NVRV_Work,rElemInfilt_Work,rElemPerc_Work)
+                        rElemSrfcInForGW_Ag     = rElemSrfcInForGW_Ag     + rElemSrfcInForGW_Ag_Work    
+                        rElemSrfcInForGW_UrbIn  = rElemSrfcInForGW_UrbIn  + rElemSrfcInForGW_UrbIn_Work 
+                        rElemSrfcInForGW_UrbOut = rElemSrfcInForGW_UrbOut + rElemSrfcInForGW_UrbOut_Work
+                        rElemSrfcInForGW_NVRV   = rElemSrfcInForGW_NVRV   + rElemSrfcInForGW_NVRV_Work   
+                        rElemInfilt             = rElemInfilt             + rElemInfilt_Work            
+                        rElemPerc               = rElemPerc               + rElemPerc_Work              
+                    END DO
+                END IF
             END IF
             
         CASE (f_iLandUse_PondedAg)
@@ -5274,15 +5249,17 @@ CONTAINS
                 rElemSrfcInForGW_NVRV   = 0.0 
                 rElemInfilt             = 0.0
                 rElemPerc               = 0.0
-                DO indxCrop=1,RootZone%PondedAgRootZone%NCrops
-                    CALL ElementalPondedCropFlows_ForACrop(RootZone,AppGrid,indxCrop,rElemSrfcInForGW_Ag_Work,rElemSrfcInForGW_UrbIn_Work,rElemSrfcInForGW_UrbOut_Work,rElemSrfcInForGW_NVRV_Work,rElemInfilt_Work,rElemPerc_Work)
-                    rElemSrfcInForGW_Ag     = rElemSrfcInForGW_Ag     + rElemSrfcInForGW_Ag_Work    
-                    rElemSrfcInForGW_UrbIn  = rElemSrfcInForGW_UrbIn  + rElemSrfcInForGW_UrbIn_Work 
-                    rElemSrfcInForGW_UrbOut = rElemSrfcInForGW_UrbOut + rElemSrfcInForGW_UrbOut_Work
-                    rElemSrfcInForGW_NVRV   = rElemSrfcInForGW_NVRV   + rElemSrfcInForGW_NVRV_Work   
-                    rElemInfilt             = rElemInfilt             + rElemInfilt_Work            
-                    rElemPerc               = rElemPerc               + rElemPerc_Work              
-                END DO
+                IF (RootZone%Flags%lPondedAg_Defined) THEN
+                    DO indxCrop=1,RootZone%PondedAgRootZone%NCrops
+                        CALL ElementalPondedCropFlows_ForACrop(RootZone,AppGrid,indxCrop,rElemSrfcInForGW_Ag_Work,rElemSrfcInForGW_UrbIn_Work,rElemSrfcInForGW_UrbOut_Work,rElemSrfcInForGW_NVRV_Work,rElemInfilt_Work,rElemPerc_Work)
+                        rElemSrfcInForGW_Ag     = rElemSrfcInForGW_Ag     + rElemSrfcInForGW_Ag_Work    
+                        rElemSrfcInForGW_UrbIn  = rElemSrfcInForGW_UrbIn  + rElemSrfcInForGW_UrbIn_Work 
+                        rElemSrfcInForGW_UrbOut = rElemSrfcInForGW_UrbOut + rElemSrfcInForGW_UrbOut_Work
+                        rElemSrfcInForGW_NVRV   = rElemSrfcInForGW_NVRV   + rElemSrfcInForGW_NVRV_Work   
+                        rElemInfilt             = rElemInfilt             + rElemInfilt_Work            
+                        rElemPerc               = rElemPerc               + rElemPerc_Work              
+                    END DO
+                END IF
             END IF
             
         CASE (f_iLandUse_Urb)

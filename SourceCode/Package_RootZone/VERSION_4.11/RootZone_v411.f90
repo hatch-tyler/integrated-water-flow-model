@@ -81,7 +81,7 @@ MODULE RootZone_v411
                                              f_cRootZoneBudgetColumnTitles            , &
                                              f_iNLWUseBudColumns                      , &
                                              f_iNRootZoneBudColumns                   
-  USE Class_PondedAgLandUseGW        , ONLY: f_iNPondedCrops                            
+  USE Class_PondedAgLandUse_v41      , ONLY: f_iNPondedCrops                            
   USE Class_BaseRootZone             , ONLY: FlagsType                                , &
                                              ElemSurfaceFlowToDestType                , &
                                              CompileElemSurfaceFlowToDestinationList
@@ -117,7 +117,6 @@ MODULE RootZone_v411
       PROCEDURE,PASS   :: New                                   => RootZone_v411_New
       PROCEDURE,PASS   :: KillRZImplementation                  => RootZone_v411_Kill
       PROCEDURE,PASS   :: PrintResults                          => RootZone_v411_PrintResults
-      PROCEDURE,PASS   :: GetVersion                            => RootZone_v411_GetVersion
       PROCEDURE,PASS   :: GetZBudget_List                       => RootZone_v411_GetZBudget_List
       PROCEDURE,PASS   :: GetZBudget_NColumns                   => RootZone_v411_GetZBudget_NColumns
       PROCEDURE,PASS   :: GetZBudget_ColumnTitles               => RootZone_v411_GetZBudget_ColumnTitles
@@ -126,14 +125,6 @@ MODULE RootZone_v411
       PROCEDURE,PASS   :: GetZBudget_TSData                     => RootZone_v411_GetZBudget_TSData
   END TYPE RootZone_v411_Type
 
-
-  ! -------------------------------------------------------------
-  ! --- VERSION RELATED ENTITIES
-  ! -------------------------------------------------------------
-  INTEGER,PARAMETER                    :: iLenVersion = 9
-  CHARACTER(LEN=iLenVersion),PARAMETER :: cVersion    = '4.11.0000'
-  INCLUDE 'RootZone_v411_Revision.fi'
-  
 
   ! -------------------------------------------------------------
   ! --- Z-BUDGET OUTPUT RELATED ENTITIES
@@ -293,10 +284,10 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- NEW ROOT ZONE DATA
   ! -------------------------------------------------------------
-  SUBROUTINE RootZone_v411_New(RootZone,IsForInquiry,cFileName,cWorkingDirectory,AppGrid,TimeStep,NTIME,ET,Precip,iStat,iStrmNodeIDs,iLakeIDs)
+  SUBROUTINE RootZone_v411_New(RootZone,IsForInquiry,cFileName,cWorkingDirectory,cPackageVersion,AppGrid,TimeStep,NTIME,ET,Precip,iStat,iStrmNodeIDs,iLakeIDs)
     CLASS(RootZone_v411_Type)          :: RootZone
     LOGICAL,INTENT(IN)                 :: IsForInquiry
-    CHARACTER(LEN=*),INTENT(IN)        :: cFileName,cWorkingDirectory
+    CHARACTER(LEN=*),INTENT(IN)        :: cFileName,cWorkingDirectory,cPackageVersion
     TYPE(AppGridType),INTENT(IN)       :: AppGrid
     TYPE(TimeStepType),INTENT(IN)      :: TimeStep
     INTEGER,INTENT(IN)                 :: NTIME
@@ -308,7 +299,7 @@ CONTAINS
     !Local variables
     CHARACTER(LEN=ModNameLen+17)                :: ThisProcedure = ModName // 'RootZone_v411_New'
     CHARACTER(LEN=1000)                         :: ALine,NonPondedCropFile,RiceRefugeFile,UrbanDataFile,NVRVFile,AgWaterDemandFile,GenericMoistureFile
-    CHARACTER                                   :: cVersionLocal*20
+    CHARACTER                                   :: cVersionFull*25
     REAL(8)                                     :: FACTK,FACTCN,RegionArea(AppGrid%NSubregions+1),DummyFactor(1),FACTEXDTH,rDummy(14)
     INTEGER                                     :: NElements,NRegion,ErrorCode,indxElem,iColGenericMoisture(AppGrid%NElements),iFlagETFromGW,          &
                                                    SurfaceFlowDest(AppGrid%NElements),SurfaceFlowDestType(AppGrid%NElements),nDataCols,                &
@@ -330,8 +321,7 @@ CONTAINS
     CALL EchoProgress('Instantiating root zone')
 
     !Initialize
-    RootZone%Version       = RootZone%Version%New(iLenVersion,cVersion,cRevision)
-    cVersionLocal          = ADJUSTL('v' // TRIM(RootZone%Version%GetVersion()))
+    cVersionFull           = 'v4.11-' // TRIM(cPackageVersion)
     NElements              = AppGrid%NElements
     NRegion                = AppGrid%NSubregions
     iElemIDs               = AppGrid%AppElement%ID
@@ -397,7 +387,7 @@ CONTAINS
     NonPondedCropFile = StripTextUntilCharacter(NonPondedCropFile,'/') 
     CALL CleanSpecialCharacters(NonPondedCropFile)
     CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(NonPondedCropFile)),cWorkingDirectory,cAbsPathFileName)
-    CALL RootZone%NonPondedAgRootZone%New(IsForInquiry,cAbsPathFileName,cWorkingDirectory,FactCN,AppGrid,iElemIDs,TimeStep,NTIME,cVersionLocal,iStat)
+    CALL RootZone%NonPondedAgRootZone%New(IsForInquiry,cAbsPathFileName,cWorkingDirectory,FactCN,AppGrid,iElemIDs,TimeStep,NTIME,TRIM(cVersionFull),iStat)
     IF (iStat .EQ. -1) RETURN
        
     !Rice/refuge data file
@@ -405,7 +395,7 @@ CONTAINS
     RiceRefugeFile = StripTextUntilCharacter(RiceRefugeFile,'/') 
     CALL CleanSpecialCharacters(RiceRefugeFile)
     CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(RiceRefugeFile)),cWorkingDirectory,cAbsPathFileName)
-    CALL RootZone%PondedAgRootZone%New(IsForInquiry,cAbsPathFileName,cWorkingDirectory,FactCN,AppGrid,iElemIDs,TimeStep,NTIME,cVersionLocal,iStat)
+    CALL RootZone%PondedAgRootZone%New(IsForInquiry,cAbsPathFileName,cWorkingDirectory,FactCN,AppGrid,iElemIDs,TimeStep,NTIME,TRIM(cVersionFull),iStat)
     IF (iStat .EQ. -1) RETURN
     
     !Urban data file
@@ -525,7 +515,7 @@ CONTAINS
     CALL CleanSpecialCharacters(ALine)
     IF (ALine .NE. '') THEN
         CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(ALine)),cWorkingDirectory,cAbsPathFileName)
-        CALL LWUseBudRawFile_New(IsForInquiry,cAbsPathFileName,TimeStep,NTIME,NRegion+1,RegionArea,RegionNames,'land and water use budget',cVersionLocal,RootZone%LWUseBudRawFile,iStat)
+        CALL LWUseBudRawFile_New(IsForInquiry,cAbsPathFileName,TimeStep,NTIME,NRegion+1,RegionArea,RegionNames,'land and water use budget',TRIM(cVersionFull),RootZone%LWUseBudRawFile,iStat)
         IF (iStat .EQ. -1) RETURN
         RootZone%Flags%LWUseBudRawFile_Defined = .TRUE.      
     END IF
@@ -536,7 +526,7 @@ CONTAINS
     CALL CleanSpecialCharacters(ALine)
     IF (ALine .NE. '') THEN
         CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(ALine)),cWorkingDirectory,cAbsPathFileName)
-        CALL RootZoneBudRawFile_New(IsForInquiry,cAbsPathFileName,TimeStep,NTIME,NRegion+1,RegionArea,RegionNames,'root zone budget',cVersionLocal,RootZone%RootZoneBudRawFile,iStat)
+        CALL RootZoneBudRawFile_New(IsForInquiry,cAbsPathFileName,TimeStep,NTIME,NRegion+1,RegionArea,RegionNames,'root zone budget',TRIM(cVersionFull),RootZone%RootZoneBudRawFile,iStat)
         IF (iStat .EQ. -1) RETURN
         RootZone%Flags%RootZoneBudRawFile_Defined = .TRUE.
     END IF
@@ -554,7 +544,7 @@ CONTAINS
     CALL CleanSpecialCharacters(ALine)
     IF (ALine .NE. '') THEN
         CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(ALine)),cWorkingDirectory,cAbsPathFileName)
-        CALL LWUseZoneBudRawFile_New(IsForInquiry,cAbsPathFileName,TimeStep,NTIME,cVersionLocal,lElemFlowToSubregions,RootZone%Flags,AppGrid,RootZone%LWUZoneBudRawFile,iStat)
+        CALL LWUseZoneBudRawFile_New(IsForInquiry,cAbsPathFileName,TimeStep,NTIME,TRIM(cVersionFull),lElemFlowToSubregions,RootZone%Flags,AppGrid,RootZone%LWUZoneBudRawFile,iStat)
         IF (iStat .EQ. -1) RETURN
         RootZone%Flags%LWUseZoneBudRawFile_Defined = .TRUE.      
     END IF
@@ -565,7 +555,7 @@ CONTAINS
     CALL CleanSpecialCharacters(ALine)
     IF (ALine .NE. '') THEN
         CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(ALine)),cWorkingDirectory,cAbsPathFileName)
-        CALL RootZoneZoneBudRawFile_New(IsForInquiry,cAbsPathFileName,TimeStep,NTIME,cVersionLocal,lElemFlowToSubregions,RootZone%Flags,AppGrid,RootZone%RootZoneZoneBudRawFile,iStat)
+        CALL RootZoneZoneBudRawFile_New(IsForInquiry,cAbsPathFileName,TimeStep,NTIME,TRIM(cVersionFull),lElemFlowToSubregions,RootZone%Flags,AppGrid,RootZone%RootZoneZoneBudRawFile,iStat)
         IF (iStat .EQ. -1) RETURN
         RootZone%Flags%RootZoneZoneBudRawFile_Defined = .TRUE.
     END IF
@@ -1524,21 +1514,6 @@ CONTAINS
 ! ******************************************************************
 
   ! -------------------------------------------------------------
-  ! --- GET VERSION NUMBER 
-  ! -------------------------------------------------------------
-  FUNCTION RootZone_v411_GetVersion(RootZone) RESULT(cVrs)
-    CLASS(RootZone_v411_Type) :: RootZone
-    CHARACTER(:),ALLOCATABLE  :: cVrs
-    
-    IF (.NOT. RootZone%Version%IsDefined())   &
-        RootZone%Version = RootZone%Version%New(iLenVersion,cVersion,cRevision)
-
-    cVrs = RootZone%Version%GetVersion()
-    
-  END FUNCTION RootZone_v411_GetVersion
-
-
-  ! -------------------------------------------------------------
   ! --- GET Z-BUDGET LIST 
   ! -------------------------------------------------------------
   SUBROUTINE RootZone_v411_GetZBudget_List(RootZone,iZBudgetTypeList,cZBudgetDescriptions,cZBudgetFiles)
@@ -2325,7 +2300,7 @@ CONTAINS
             rUrbError      = rUrbError + rUrbOthIn                                                                                                           
         END IF
         IF (RootZone%Flags%lComputeETFromGW) THEN                                                                                              !Urban groundwater inflow for ET
-            rUrbETGW(:,1) = RootZone%UrbanRootZone%UrbData%ETFromGW_Actual(1,:) 
+            rUrbETGW(:,1) = RootZone%UrbanRootZone%UrbData%ETFromGW_Actual(:,1) 
             rUrbError     = rUrbError + rUrbETGW
         END IF
     END IF

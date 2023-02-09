@@ -269,6 +269,7 @@ CONTAINS
     !Store element numbers within each zone, calculate zone areas,assign zone names and find the number of adjacent zones to each zone
     !... when zonation is defined for horizontal
     IF (ZoneList%iZoneExtent .EQ. f_iZoneHorizontal) THEN
+        NLayers = SystemData%NLayers
         DO indxZone=1,NZones
             iZone =  ZoneList%iOrderedZoneList(indxZone)
             iLoc  = LocateInList(iZone,iZoneListWithNames)
@@ -278,14 +279,16 @@ CONTAINS
                 TYPE IS (ZoneType)
                     !Elements in the zone
                     iNZoneElems  = COUNT(ElemZones(:,1) .EQ. iZone)
-                    DO indxLayer=1,SystemData%NLayers
+                    DO indxLayer=1,NLayers
                         ALLOCATE (pCurrentZone%LayerZoneElements(indxLayer)%Elements(iNZoneElems))
                     END DO
                     IF (iNZoneElems .EQ. 0) CYCLE
                     iCount = 1
                     DO indxElem=1,SIZE(ElemZones,DIM=1)
                        IF (ElemZones(indxElem,1) .EQ. iZone) THEN
-                           pCurrentZone%LayerZoneElements%Elements(iCount) = indxElem
+                           DO indxLayer=1,NLayers
+                               pCurrentZone%LayerZoneElements(indxLayer)%Elements(iCount) = indxElem
+                           END DO 
                            iCount = iCount + 1
                            IF (iCount .GT. iNZoneElems) EXIT
                         END IF

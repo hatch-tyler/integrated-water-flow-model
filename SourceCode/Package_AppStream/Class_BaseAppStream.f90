@@ -21,7 +21,6 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 MODULE Class_BaseAppStream
-  USE Class_Version               , ONLY: VersionType
   USE MessageLogger               , ONLY: EchoProgress                           , &
                                           SetLastMessage                         , &
                                           f_iWarn                                , &
@@ -107,7 +106,6 @@ MODULE Class_BaseAppStream
   ! --- ABSTRACT BASE APPLICATION STREAM DATA TYPE
   ! -------------------------------------------------------------
   TYPE,ABSTRACT :: BaseAppStreamType
-      TYPE(VersionType)               :: Version                                             !Stream component version number
       LOGICAL                         :: lRouted                      = .TRUE.               !Flag to check if stream flows are actually routed (used when stream flows are recieved from another model)
       INTEGER                         :: NStrmNodes                   = 0                    !Number of stream nodes
       INTEGER                         :: NReaches                     = 0                    !Number of reaches
@@ -132,7 +130,6 @@ MODULE Class_BaseAppStream
       PROCEDURE(Abstract_GetStrmNodeID),PASS,DEFERRED                  :: GetStrmNodeID
       PROCEDURE(Abstract_GetStrmNodeIndex),PASS,DEFERRED               :: GetStrmNodeIndex
       PROCEDURE(Abstract_GetStageFlowRatingTable),PASS,DEFERRED        :: GetStageFlowRatingTable
-      PROCEDURE(Abstract_GetVersion),PASS,DEFERRED                     :: GetVersion
       PROCEDURE(Abstract_GetBottomElevations),PASS,DEFERRED            :: GetBottomElevations
       PROCEDURE(Abstract_GetNRatingTablePoints),PASS,DEFERRED          :: GetNRatingTablePoints
       PROCEDURE(Abstract_GetNUpstrmNodes),PASS,DEFERRED                :: GetNUpstrmNodes
@@ -295,11 +292,11 @@ MODULE Class_BaseAppStream
      END SUBROUTINE Abstract_SetStaticComponent
      
      
-     SUBROUTINE Abstract_SetDynamicComponent(AppStream,IsForInquiry,cFileName,cWorkingDirectory,TimeStep,NTIME,iLakeIDs,AppGrid,Stratigraphy,ETData,StrmLakeConnector,StrmGWConnector,iStat)
+     SUBROUTINE Abstract_SetDynamicComponent(AppStream,IsForInquiry,cFileName,cWorkingDirectory,cPackageVersion,TimeStep,NTIME,iLakeIDs,AppGrid,Stratigraphy,ETData,StrmLakeConnector,StrmGWConnector,iStat)
         IMPORT                            :: BaseAppStreamType,TimeStepType,AppGridType,StratigraphyType,ETType,StrmLakeConnectorType,StrmGWConnectorType
         CLASS(BaseAppStreamType)          :: AppStream
         LOGICAL,INTENT(IN)                :: IsForInquiry
-        CHARACTER(LEN=*),INTENT(IN)       :: cFileName,cWorkingDirectory
+        CHARACTER(LEN=*),INTENT(IN)       :: cFileName,cWorkingDirectory,cPackageVersion
         TYPE(TimeStepType),INTENT(IN)     :: TimeStep
         INTEGER,INTENT(IN)                :: NTIME,iLakeIDs(:)
         TYPE(AppGridType),INTENT(IN)      :: AppGrid
@@ -319,11 +316,11 @@ MODULE Class_BaseAppStream
      END SUBROUTINE Abstract_SetStaticComponentFromBinFile
      
     
-     SUBROUTINE Abstract_SetAllComponents(AppStream,IsForInquiry,cFileName,cSimWorkingDirectory,TimeStep,NTIME,iLakeIDs,AppGrid,Stratigraphy,ETData,BinFile,StrmLakeConnector,StrmGWConnector,iStat)
+     SUBROUTINE Abstract_SetAllComponents(AppStream,IsForInquiry,cFileName,cSimWorkingDirectory,cPackageVersion,TimeStep,NTIME,iLakeIDs,AppGrid,Stratigraphy,ETData,BinFile,StrmLakeConnector,StrmGWConnector,iStat)
         IMPORT                               :: BaseAppStreamType,TimeStepType,StratigraphyType,AppGridType,GenericFileType,StrmLakeConnectorType,StrmGWConnectorType,ETType
         CLASS(BaseAppStreamType),INTENT(OUT) :: AppStream
         LOGICAL,INTENT(IN)                   :: IsForInquiry
-        CHARACTER(LEN=*),INTENT(IN)          :: cFileName,cSimWorkingDirectory
+        CHARACTER(LEN=*),INTENT(IN)          :: cFileName,cSimWorkingDirectory,cPackageVersion
         TYPE(TimeStepType),INTENT(IN)        :: TimeStep
         INTEGER,INTENT(IN)                   :: NTIME,iLakeIDs(:)
         TYPE(AppGridType),INTENT(IN)         :: AppGrid
@@ -336,11 +333,11 @@ MODULE Class_BaseAppStream
      END SUBROUTINE Abstract_SetAllComponents
 
      
-     SUBROUTINE Abstract_SetAllComponentsWithoutBinFile(AppStream,IsRoutedStreams,IsForInquiry,cPPFileName,cSimFileName,cSimWorkingDirectory,AppGrid,Stratigraphy,ETData,TimeStep,NTIME,iLakeIDs,StrmLakeConnector,StrmGWConnector,iStat)
+     SUBROUTINE Abstract_SetAllComponentsWithoutBinFile(AppStream,IsRoutedStreams,IsForInquiry,cPPFileName,cSimFileName,cSimWorkingDirectory,cPackageVersion,AppGrid,Stratigraphy,ETData,TimeStep,NTIME,iLakeIDs,StrmLakeConnector,StrmGWConnector,iStat)
         IMPORT                                :: BaseAppStreamType,TimeStepType,StratigraphyType,AppGridType,StrmLakeConnectorType,StrmGWConnectorType,ETType
         CLASS(BaseAppStreamType),INTENT(OUT)  :: AppStream
         LOGICAL,INTENT(IN)                    :: IsRoutedStreams,IsForInquiry
-        CHARACTER(LEN=*),INTENT(IN)           :: cPPFileName,cSimFileName,cSimWorkingDirectory
+        CHARACTER(LEN=*),INTENT(IN)           :: cPPFileName,cSimFileName,cSimWorkingDirectory,cPackageVersion
         TYPE(AppGridType),INTENT(IN)          :: AppGrid
         TYPE(StratigraphyType),INTENT(IN)     :: Stratigraphy
         TYPE(ETType),INTENT(IN)               :: ETData 
@@ -396,13 +393,6 @@ MODULE Class_BaseAppStream
         CLASS(BaseAppStreamType),INTENT(IN) :: AppStream
         REAL(8)                             :: BottomElev(AppStream%NStrmNodes)
      END FUNCTION Abstract_GetBottomElevations
-     
-     
-     FUNCTION Abstract_GetVersion(AppStream) RESULT(cVrs)
-        IMPORT                   :: BaseAppStreamType
-        CLASS(BaseAppStreamType) :: AppStream
-        CHARACTER(:),ALLOCATABLE :: cVrs
-     END FUNCTION Abstract_GetVersion
      
      
      FUNCTION Abstract_GetNUpstrmNodes(AppStream,iStrmNode) RESULT(iNNodes)
@@ -508,7 +498,6 @@ CONTAINS
     INTEGER :: ErrorCode
     
     !Kill components
-    CALL AppStream%Version%Kill()
     DEALLOCATE(AppStream%Reaches , AppStream%State , STAT=ErrorCode)
     CALL AppStream%StrmInflowData%Kill()
     CALL AppStream%AppDiverBypass%Kill()

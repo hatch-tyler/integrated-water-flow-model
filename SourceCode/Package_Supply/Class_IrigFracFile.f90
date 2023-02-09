@@ -21,6 +21,10 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 MODULE Class_IrigFracFile
+  USE MessageLogger        , ONLY: SetLastMessage       , &
+                                   MessageArray         , &
+                                   f_iFatal
+  USE GeneralUtilities     , ONLY: IntToText
   USE TimeSeriesUtilities  , ONLY: TimeStepType
   USE IOInterface          , ONLY: RealTSDataInFileType 
   USE Package_AppGW        , ONLY: AppGWType
@@ -58,11 +62,21 @@ MODULE Class_IrigFracFile
     PROCEDURE,PASS :: IrigFracFile_ReadTSData
     GENERIC        :: ReadTSData              => IrigFracFile_ReadTSData
   END TYPE
-    
+   
   
-
+  ! -------------------------------------------------------------
+  ! --- MISC. ENTITIES
+  ! -------------------------------------------------------------
+  INTEGER,PARAMETER                   :: ModNameLen = 20
+  CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'Class_IrigFracFile::'
+  
+  
+  
+    
 CONTAINS
 
+    
+    
 
   ! -------------------------------------------------------------
   ! --- NEW IRRIGATION FRACTIONS FILE
@@ -111,7 +125,8 @@ CONTAINS
     INTEGER,INTENT(OUT)           :: iStat
     
     !Local variables
-    INTEGER :: FileReadCode
+    CHARACTER(LEN=ModNameLen+10) :: ThisProcedure = ModName // 'ReadTSData'
+    INTEGER                      :: FileReadCode,indxCol
     
     !Read time series data
     CALL IrigFracFile%ReadTSData(TimeStep,'Irrigations fractions data',FileReadCode,iStat)
@@ -126,6 +141,20 @@ CONTAINS
           
         !Data was read with sucess
         CASE (0)
+            !Make sure that irrigation fraction is either 1.0 (ag water) or 0.0 (urban water)
+            DO indxCol=1,IrigFracFile%GetNDataColumns()
+                IF (IrigFracFile%rValues(indxCol) .NE. 1.0) THEN
+                    IF (IrigFracFile%rValues(indxCol) .NE. 0.0) THEN
+                        MessageArray(1) = 'Column '//TRIM(IntToText(indxCol))//' of the Irrigation Fractions Data File indicates that'
+                        MessageArray(2) = 'a water supply is serving both agricultural and urban water demands.'
+                        MessageArray(3) = 'This is no longer supported due to computational difficulties. A supply can'
+                        MessageArray(4) = 'now be either an agricultural water supply or urban water supply, but not both.'
+                        CALL SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
+                        iStat = -1
+                        RETURN
+                    END IF
+                END IF
+            END DO
             !Fraction of diversion to be used for agricultural purposes
             CALL AppStream%SetIrigFracsRead(IrigFracFile%rValues)
             !Fraction of pumping to be used for agricultural purposes

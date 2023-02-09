@@ -94,22 +94,11 @@ MODULE Class_AppLake_v40
       PROCEDURE,PASS :: SetAllComponents                => AppLake_v40_SetAllComponents
       PROCEDURE,PASS :: SetAllComponentsWithoutBinFile  => AppLake_v40_SetAllComponentsWithoutBinFile
       PROCEDURE,PASS :: KillImplementation              => AppLake_v40_Kill  
-      PROCEDURE,PASS :: GetVersion                      => AppLake_v40_GetVersion
       PROCEDURE,PASS :: Simulate                        => AppLake_v40_Simulate
       PROCEDURE,PASS :: ReadTSData                      => AppLake_v40_ReadTSData
-      PROCEDURE,PASS :: CheckExternalTSDataPointers     => AppLake_v40_CheckExternalTSDataPointers
       PROCEDURE,PASS :: ConvertTimeUnit                 => AppLake_v40_ConvertTimeUnit
   END TYPE AppLake_v40_Type  
       
-  
-  ! -------------------------------------------------------------
-  ! --- LAKE PACKAGE VERSION RELATED DATA
-  ! -------------------------------------------------------------
-  INTEGER,PARAMETER                    :: iVersion    = 40
-  INTEGER,PARAMETER                    :: iLenVersion = 8
-  CHARACTER(LEN=iLenVersion),PARAMETER :: cVersion    ='4.0.0000'
-  INCLUDE 'AppLake_v40_Revision.fi'
- 
   
   ! -------------------------------------------------------------
   ! --- MISC. DATA 
@@ -318,24 +307,26 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- INSTANTIATE THE DYNAMIC COMPONENT OF LAKE DATA (GENERALLY CALLED IN SIMULATION)
   ! -------------------------------------------------------------
-  SUBROUTINE AppLake_v40_SetDynamicComponent(AppLake,IsForInquiry,cFileName,cWorkingDirectory,TimeStep,NTIME,AppGrid,LakeGWConnector,iStat)
-    CLASS(AppLake_v40_Type)       :: AppLake
-    LOGICAL,INTENT(IN)            :: IsForInquiry
-    CHARACTER(LEN=*),INTENT(IN)   :: cFileName,cWorkingDirectory
-    TYPE(TimeStepType),INTENT(IN) :: TimeStep
-    INTEGER,INTENT(IN)            :: NTIME
-    TYPE(AppGridType),INTENT(IN)  :: AppGrid
-    TYPE(LakeGWConnectorType)     :: LakeGWConnector
-    INTEGER,INTENT(OUT)           :: iStat
+  SUBROUTINE AppLake_v40_SetDynamicComponent(AppLake,IsForInquiry,cFileName,cWorkingDirectory,cPackageVersion,TimeStep,NTIME,AppGrid,LakeGWConnector,Precip,ET,iStat)
+    CLASS(AppLake_v40_Type)            :: AppLake
+    LOGICAL,INTENT(IN)                 :: IsForInquiry
+    CHARACTER(LEN=*),INTENT(IN)        :: cFileName,cWorkingDirectory,cPackageVersion
+    TYPE(TimeStepType),INTENT(IN)      :: TimeStep
+    INTEGER,INTENT(IN)                 :: NTIME
+    TYPE(AppGridType),INTENT(IN)       :: AppGrid
+    TYPE(LakeGWConnectorType)          :: LakeGWConnector
+    TYPE(PrecipitationType),INTENT(IN) :: Precip
+    TYPE(ETType),INTENT(IN)            :: ET
+    INTEGER,INTENT(OUT)                :: iStat
     
     !Local variables
     CHARACTER(LEN=ModNameLen+31) :: ThisProcedure = ModName // 'AppLake_v40_SetDynamicComponent'
     TYPE(GenericFileType)        :: LakeDataFile
-    CHARACTER                    :: ALine*2000,TimeUnitConductance*6,cLakeBudgetFileName*2000
+    CHARACTER                    :: ALine*2000,TimeUnitConductance*6,cLakeBudgetFileName*2000,cComponentVersion*25
     TYPE(BudgetHeaderType)       :: BudHeader
     REAL(8)                      :: FactK,DummyArray(6),FactL,CLAKE,DLAKE,FactC
     INTEGER                      :: indxLake,ID,indx,iLoc,iLakeIDs(AppLake%NLakes),iLake
-    CHARACTER(:),ALLOCATABLE     :: cVersion,cAbsPathFileName
+    CHARACTER(:),ALLOCATABLE     :: cVersionSim,cAbsPathFileName
     LOGICAL                      :: lProcessed(AppLake%NLakes)
     
     !Initialize
@@ -351,9 +342,17 @@ CONTAINS
     CALL LakeDataFile%New(cFileName,InputFile=.TRUE.,iStat=iStat)
     IF (iStat .EQ. -1) RETURN
     
-    !Read first line that stores the version number
-    CALL ReadVersion(LakeDataFile,'LAKE',cVersion,iStat)
+    !Read first line that stores the version number and check that it is the same as the Preprocessor version
+    CALL ReadVersion(LakeDataFile,'LAKE',cVersionSim,iStat)
     IF (iStat .EQ. -1) RETURN
+    IF (TRIM(cVersionSim) .NE. '4.0') THEN
+        MessageArray(1) = 'Lake Component versions used in Pre-Processor and Simulation must match!'
+        MessageArray(2) = 'Version number in Pre-Processor = 4.0' 
+        MessageArray(3) = 'Version number in Simulation    = ' // TRIM(cVersionSim)
+        CALL SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+        iStat = -1
+        RETURN
+    END IF
     
     !Maximum lake elevation data file
     CALL LakeDataFile%ReadData(ALine,iStat)  ;  IF(iStat .EQ. -1) RETURN
@@ -460,7 +459,8 @@ CONTAINS
             CALL AppLake%LakeBudRawFile%New(TRIM(cLakeBudgetFileName),iStat)
             IF (iStat .EQ. -1) RETURN
         ELSE
-            BudHeader = PrepareLakeBudgetHeader(AppLake%Lakes,NTIME,TimeStep,AppLake%GetVersion())
+            cComponentVersion = '4.0-' // TRIM(cPackageVersion)
+            BudHeader = PrepareLakeBudgetHeader(AppLake%Lakes,NTIME,TimeStep,TRIM(cComponentVersion))
             CALL AppLake%LakeBudRawFile%New(TRIM(cLakeBudgetFileName),BudHeader,iStat)
             IF (iStat .EQ. -1) RETURN
             CALL BudHeader%Kill()
@@ -471,6 +471,10 @@ CONTAINS
     !Initial lake elevations
     CALL ReadInitialLakeElevs(LakeDataFile,AppLake%Lakes,iLakeIDs,iStat)
     
+    !Check that TS data columns that are pointed to are legit
+    CALL AppLake%CheckTSDataPointers(Precip,ET,iStat)
+    IF (iStat .NE. 0) RETURN
+    
     !Close file
     CALL LakeDataFile%Kill()
     
@@ -480,15 +484,17 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- INSTANTIATE COMPLETE LAKE DATA
   ! -------------------------------------------------------------
-  SUBROUTINE AppLake_v40_SetAllComponents(AppLake,IsForInquiry,cFileName,cSimWorkingDirectory,TimeStep,NTIME,AppGrid,BinFile,LakeGWConnector,iStat)
+  SUBROUTINE AppLake_v40_SetAllComponents(AppLake,IsForInquiry,cFileName,cSimWorkingDirectory,cPackageVersion,TimeStep,NTIME,AppGrid,BinFile,LakeGWConnector,Precip,ET,iStat)
     CLASS(AppLake_v40_Type),INTENT(OUT) :: AppLake
     LOGICAL,INTENT(IN)                  :: IsForInquiry
-    CHARACTER(LEN=*),INTENT(IN)         :: cFileName,cSimWorkingDirectory
+    CHARACTER(LEN=*),INTENT(IN)         :: cFileName,cSimWorkingDirectory,cPackageVersion
     TYPE(TimeStepType),INTENT(IN)       :: TimeStep
     INTEGER,INTENT(IN)                  :: NTIME
     TYPE(AppGridType),INTENT(IN)        :: AppGrid
     TYPE(GenericFileType)               :: BinFile
     TYPE(LakeGWConnectorType)           :: LakeGWConnector
+    TYPE(PrecipitationType),INTENT(IN)  :: Precip
+    TYPE(ETType),INTENT(IN)             :: ET
     INTEGER,INTENT(OUT)                 :: iStat
     
     !Local variables
@@ -505,7 +511,7 @@ CONTAINS
     IF (AppLake%NLakes .EQ. 0) RETURN
     
     !Set the dynamic part of AppLake
-    CALL AppLake%SetDynamicComponent(IsForInquiry,cFileName,cSimWorkingDirectory,TimeStep,NTIME,AppGrid,LakeGWConnector,iStat)
+    CALL AppLake%SetDynamicComponent(IsForInquiry,cFileName,cSimWorkingDirectory,cPackageVersion,TimeStep,NTIME,AppGrid,LakeGWConnector,Precip,ET,iStat)
     IF (iStat .EQ. -1) RETURN
     
     !Make sure that if static part is defined, so is the dynamic part
@@ -525,16 +531,18 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- INSTANTIATE COMPLETE LAKE DATA WITHOUT INTERMEDIATE BINARY FILE
   ! -------------------------------------------------------------
-  SUBROUTINE AppLake_v40_SetAllComponentsWithoutBinFile(AppLake,IsForInquiry,cPPFileName,cSimFileName,cSimWorkingDirectory,AppGrid,Stratigraphy,TimeStep,NTIME,StrmLakeConnector,LakeGWConnector,iStat)
+  SUBROUTINE AppLake_v40_SetAllComponentsWithoutBinFile(AppLake,IsForInquiry,cPPFileName,cSimFileName,cSimWorkingDirectory,cPackageVersion,AppGrid,Stratigraphy,TimeStep,NTIME,StrmLakeConnector,LakeGWConnector,Precip,ET,iStat)
     CLASS(AppLake_v40_Type),INTENT(OUT)   :: AppLake
     LOGICAL,INTENT(IN)                    :: IsForInquiry
-    CHARACTER(LEN=*),INTENT(IN)           :: cPPFileName,cSimFileName,cSimWorkingDirectory
+    CHARACTER(LEN=*),INTENT(IN)           :: cPPFileName,cSimFileName,cSimWorkingDirectory,cPackageVersion
     TYPE(AppGridType),INTENT(IN)          :: AppGrid
     TYPE(StratigraphyType),INTENT(IN)     :: Stratigraphy
     TYPE(TimeStepType),INTENT(IN)         :: TimeStep
     INTEGER,INTENT(IN)                    :: NTIME
     TYPE(StrmLakeConnectorType)           :: StrmLakeConnector
     TYPE(LakeGWConnectorType),INTENT(OUT) :: LakeGWConnector
+    TYPE(PrecipitationType),INTENT(IN)    :: Precip
+    TYPE(ETType),INTENT(IN)               :: ET
     INTEGER,INTENT(OUT)                   :: iStat
     
     !Local variables
@@ -548,7 +556,7 @@ CONTAINS
     IF (iStat .EQ. -1) RETURN
     
     !Instantiate the dynamic component of the AppLake data
-    CALL AppLake%SetDynamicComponent(IsForInquiry,cSimFileName,cSimWorkingDirectory,TimeStep,NTIME,AppGrid,LakeGWConnector,iStat)
+    CALL AppLake%SetDynamicComponent(IsForInquiry,cSimFileName,cSimWorkingDirectory,cPackageVersion,TimeStep,NTIME,AppGrid,LakeGWConnector,Precip,ET,iStat)
     IF (iStat .EQ. -1) RETURN
     
     !Make sure that if static part is defined, so is the dynamic part
@@ -597,33 +605,6 @@ CONTAINS
   END SUBROUTINE AppLake_v40_Kill
   
   
-  
-  
-! ******************************************************************
-! ******************************************************************
-! ******************************************************************
-! ***
-! *** GETTERS
-! ***
-! ******************************************************************
-! ******************************************************************
-! ******************************************************************
-
-  ! -------------------------------------------------------------
-  ! --- GET VERSION NUMBER 
-  ! -------------------------------------------------------------
-  FUNCTION AppLake_v40_GetVersion(AppLake) RESULT(cVrs)
-    CLASS(AppLake_v40_Type)  :: AppLake
-    CHARACTER(:),ALLOCATABLE :: cVrs
-    
-    IF (.NOT. AppLake%Version%IsDefined())   &
-        AppLake%Version = AppLAke%Version%New(iLenVersion,cVersion,cRevision)
-
-    cVrs = AppLake%Version%GetVersion()
-    
-  END FUNCTION AppLake_v40_GetVersion
-  
-
   
   
 ! ******************************************************************
@@ -797,47 +778,6 @@ CONTAINS
   END FUNCTION RHSLake
 
 
-  ! -------------------------------------------------------------
-  ! --- MAKE SURE THAT POINTED TIME-SERIES DATA HAVE ENOUGH COLUMNS
-  ! -------------------------------------------------------------
-  SUBROUTINE AppLake_v40_CheckExternalTSDataPointers(AppLake,Precip,ET,iStat)
-    CLASS(AppLake_v40_Type),INTENT(IN) :: AppLake
-    TYPE(PrecipitationType),INTENT(IN) :: Precip
-    TYPE(ETType),INTENT(IN)            :: ET
-    INTEGER,INTENT(OUT)                :: iStat
-    
-    !Local variables
-    CHARACTER(Len=ModNameLen+39) :: ThisProcedure = ModName // 'AppLake_v40_CheckExternalTSDataPointers'
-    INTEGER                      :: iLake(1),ID
-    
-    !Initialize
-    iStat = 0
-    
-    !Check precip columns
-    IF (Precip%GetNDataColumns() .LT. MAXVAL(AppLake%Lakes%iColPrecip)) THEN
-        iLake = MAXLOC(AppLake%Lakes%iColPrecip)
-        ID    = AppLake%Lakes(iLake(1))%ID
-        MessageArray(1) = 'Precipitation data column for lake '//TRIM(IntToText(ID))//' is greater than the'
-        MessageArray(2) = 'available data columns in the Precipitation Data file!'
-        CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
-        iStat = -1
-        RETURN
-    END IF
-    
-    !Check ET columns
-    IF (ET%GetNDataColumns() .LT. MAXVAL(AppLake%Lakes%iColET)) THEN
-        iLake = MAXLOC(AppLake%Lakes%iColET)
-        ID    = AppLake%Lakes(iLake(1))%ID
-        MessageArray(1) = 'Evapotranspiration data column for lake '//TRIM(IntToText(ID))//' is greater than the'
-        MessageArray(2) = 'available data columns in the Evapotranspiration Data file!'
-        CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
-        iStat = -1
-        RETURN
-    END IF
-    
-  END SUBROUTINE AppLake_v40_CheckExternalTSDataPointers
-  
-  
   ! -------------------------------------------------------------
   ! --- CONVERT TIME UNIT OF LAKE RELATED ENTITIES
   ! -------------------------------------------------------------

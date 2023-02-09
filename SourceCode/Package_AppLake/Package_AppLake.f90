@@ -72,8 +72,8 @@ MODULE Package_AppLake
   ! -------------------------------------------------------------
   TYPE AppLakeType
       PRIVATE
-      INTEGER                            :: iVersion = 0
-      LOGICAL                            :: lDefined = .FALSE.
+      INTEGER                            :: iComponentVersion = 0
+      LOGICAL                            :: lDefined          = .FALSE.
       CLASS(BaseAppLakeType),ALLOCATABLE :: Me
   CONTAINS
       PROCEDURE,PASS   :: SetStaticComponent
@@ -112,7 +112,6 @@ MODULE Package_AppLake
       PROCEDURE,PASS   :: Simulate
       PROCEDURE,PASS   :: ConvertTimeUnit
       PROCEDURE,PASS   :: ResetElevations
-      PROCEDURE,PASS   :: CheckExternalTSDataPointers
       PROCEDURE,PASS   :: AdvanceState
       PROCEDURE,PASS   :: UpdateHeads
       PROCEDURE,PASS   :: DestinationIDs_To_Indices
@@ -129,8 +128,8 @@ MODULE Package_AppLake
   ! -------------------------------------------------------------
   ! --- LAKE PACKAGE FACADE VERSION RELATED DATA
   ! -------------------------------------------------------------
-  INTEGER,PARAMETER                    :: iLenVersion = 8
-  CHARACTER(LEN=iLenVersion),PARAMETER :: cVersion    ='4.0.0000'
+  INTEGER,PARAMETER                      :: f_iLenVersion = 11
+  CHARACTER(LEN=f_iLenVersion),PARAMETER :: f_cVersion    ='2022.0.0000'
   INCLUDE 'Package_AppLake_Revision.fi'
  
   
@@ -201,8 +200,8 @@ CONTAINS
                 DEALLOCATE (AppLake%Me ,STAT=ErrorCode)
                 RETURN
             END IF
-            AppLake%iVersion = 40
-            AppLake%lDefined = .TRUE.
+            AppLake%iComponentVersion = 40
+            AppLake%lDefined          = .TRUE.
             
         CASE ('5.0')
             ALLOCATE(AppLake_v50_Type :: AppLake%Me)
@@ -213,8 +212,8 @@ CONTAINS
                 DEALLOCATE (AppLake%Me ,STAT=ErrorCode)
                 RETURN
             END IF
-            AppLake%iVersion = 50
-            AppLake%lDefined = .TRUE.
+            AppLake%iComponentVersion = 50
+            AppLake%lDefined          = .TRUE.
             
         CASE DEFAULT
             CALL SetLastMessage('Lake Component version number is not recognized ('//TRIM(cVersionLocal)//')!',f_iFatal,ThisProcedure)
@@ -258,8 +257,8 @@ CONTAINS
                 DEALLOCATE (AppLake%Me ,STAT=ErrorCode)
                 RETURN
             END IF
-            AppLake%iVersion = 40
-            AppLake%lDefined = .TRUE.
+            AppLake%iComponentVersion = 40
+            AppLake%lDefined          = .TRUE.
             
         CASE (50)
             ALLOCATE(AppLake_v50_Type :: AppLake%Me)
@@ -270,8 +269,8 @@ CONTAINS
                 DEALLOCATE (AppLake%Me ,STAT=ErrorCode)
                 RETURN
             END IF
-            AppLake%iVersion = 50
-            AppLake%lDefined = .TRUE.
+            AppLake%iComponentVersion = 50
+            AppLake%lDefined          = .TRUE.
             
         CASE DEFAULT
             CALL SetLastMessage('Lake Component version number is not recognized ('//TRIM(IntToText(iVersion))//')!',f_iFatal,ThisProcedure)
@@ -285,15 +284,17 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- INSTANTIATE DYNAMIC COMPONENT LAKE DATA (GENERALLY CALLED IN SIMULATION)
   ! -------------------------------------------------------------
-  SUBROUTINE SetDynamicComponent(AppLake,IsForInquiry,cFileName,cWorkingDirectory,TimeStep,NTIME,AppGrid,LakeGWConnector,iStat)
-    CLASS(AppLakeType)            :: AppLake
-    LOGICAL,INTENT(IN)            :: IsForInquiry
-    CHARACTER(LEN=*),INTENT(IN)   :: cFileName,cWorkingDirectory
-    TYPE(TimeStepType),INTENT(IN) :: TimeStep
-    INTEGER,INTENT(IN)            :: NTIME
-    TYPE(AppGridType),INTENT(IN)  :: AppGrid
-    TYPE(LakeGWConnectorType)     :: LakeGWConnector
-    INTEGER,INTENT(OUT)           :: iStat
+  SUBROUTINE SetDynamicComponent(AppLake,IsForInquiry,cFileName,cWorkingDirectory,TimeStep,NTIME,AppGrid,LakeGWConnector,Precip,ET,iStat)
+    CLASS(AppLakeType)                 :: AppLake
+    LOGICAL,INTENT(IN)                 :: IsForInquiry
+    CHARACTER(LEN=*),INTENT(IN)        :: cFileName,cWorkingDirectory
+    TYPE(TimeStepType),INTENT(IN)      :: TimeStep
+    INTEGER,INTENT(IN)                 :: NTIME
+    TYPE(AppGridType),INTENT(IN)       :: AppGrid
+    TYPE(LakeGWConnectorType)          :: LakeGWConnector
+    TYPE(PrecipitationType),INTENT(IN) :: Precip
+    TYPE(ETType),INTENT(IN)            :: ET
+    INTEGER,INTENT(OUT)                :: iStat
     
     !Local variables
     CHARACTER(LEN=ModNameLen+19) :: ThisProcedure = ModName // 'SetDynamicComponent'
@@ -308,7 +309,7 @@ CONTAINS
     !Return if no filename is defined
     IF (cFileName .EQ. '') THEN
         !If static component of lakes are defined, dynamic component must be defined as well
-        IF (AppLake%iVersion .GT. 0) THEN
+        IF (AppLake%iComponentVersion .GT. 0) THEN
             MessageArray(1) = 'For proper simulation of lakes, relevant lake data files must'
             MessageArray(2) = 'be specified when lakes are defined in Pre-Processor.'
             CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
@@ -329,13 +330,13 @@ CONTAINS
     
     !Make sure versions from static and dynamic components are the same
     ErrorCode   = 0
-    rVersionPre = REAL(AppLake%iVersion)/10.0
+    rVersionPre = REAL(AppLake%iComponentVersion)/10.0
     SELECT CASE (TRIM(cVersionSim))
         CASE ('4.0')
-            IF (AppLake%iVersion .NE. 40) ErrorCode = 1
+            IF (AppLake%iComponentVersion .NE. 40) ErrorCode = 1
             
         CASE ('5.0')
-            IF (AppLake%iVersion .NE. 50) ErrorCode = 1
+            IF (AppLake%iComponentVersion .NE. 50) ErrorCode = 1
             
         CASE DEFAULT
             CALL SetLastMessage('Lake Component version number is not recognized ('//TRIM(cVersionSim)//')!',f_iFatal,ThisProcedure)
@@ -352,7 +353,7 @@ CONTAINS
     END IF
     
     !Instantiate the dynamic component
-    CALL AppLake%Me%New(IsForInquiry,cFileName,cWorkingDirectory,TimeStep,NTIME,AppGrid,LakeGWConnector,iStat)
+    CALL AppLake%Me%New(IsForInquiry,cFileName,cWorkingDirectory,GetVersion(),TimeStep,NTIME,AppGrid,LakeGWConnector,Precip,ET,iStat)
         
   END SUBROUTINE SetDynamicComponent
   
@@ -360,16 +361,18 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- INSTANTIATE COMPLETE LAKE DATA
   ! -------------------------------------------------------------
-  SUBROUTINE SetAllComponents(AppLake,IsForInquiry,cFileName,cSimWorkingDirectory,TimeStep,NTIME,AppGrid,BinFile,LakeGWConnector,iStat)
-    CLASS(AppLakeType),INTENT(OUT) :: AppLake
-    LOGICAL,INTENT(IN)             :: IsForInquiry
-    CHARACTER(LEN=*),INTENT(IN)    :: cFileName,cSimWorkingDirectory
-    TYPE(TimeStepType),INTENT(IN)  :: TimeStep
-    INTEGER,INTENT(IN)             :: NTIME
-    TYPE(AppGridType),INTENT(IN)   :: AppGrid
-    TYPE(GenericFileType)          :: BinFile
-    TYPE(LakeGWConnectorType)      :: LakeGWConnector
-    INTEGER,INTENT(OUT)            :: iStat
+  SUBROUTINE SetAllComponents(AppLake,IsForInquiry,cFileName,cSimWorkingDirectory,TimeStep,NTIME,AppGrid,BinFile,LakeGWConnector,Precip,ET,iStat)
+    CLASS(AppLakeType),INTENT(OUT)     :: AppLake
+    LOGICAL,INTENT(IN)                 :: IsForInquiry
+    CHARACTER(LEN=*),INTENT(IN)        :: cFileName,cSimWorkingDirectory
+    TYPE(TimeStepType),INTENT(IN)      :: TimeStep
+    INTEGER,INTENT(IN)                 :: NTIME
+    TYPE(AppGridType),INTENT(IN)       :: AppGrid
+    TYPE(GenericFileType)              :: BinFile
+    TYPE(LakeGWConnectorType)          :: LakeGWConnector
+    TYPE(PrecipitationType),INTENT(IN) :: Precip
+    TYPE(ETType),INTENT(IN)            :: ET
+    INTEGER,INTENT(OUT)                :: iStat
     
     !Local variables
     CHARACTER(LEN=ModNameLen+16) :: ThisProcedure = ModName // 'SetAllComponents'
@@ -389,27 +392,27 @@ CONTAINS
     SELECT CASE (iVersion)
         CASE (40)
             ALLOCATE(AppLake_v40_Type :: AppLake%Me)
-            CALL AppLake%Me%New(IsForInquiry,cFileName,cSimWorkingDirectory,TimeStep,NTIME,AppGrid,BinFile,LakeGWConnector,iStat)
+            CALL AppLake%Me%New(IsForInquiry,cFileName,cSimWorkingDirectory,GetVersion(),TimeStep,NTIME,AppGrid,BinFile,LakeGWConnector,Precip,ET,iStat)
             IF (iStat .EQ. -1) RETURN
             IF (AppLake%Me%NLakes .EQ. 0) THEN
                 CALL AppLake%Me%Kill()
                 DEALLOCATE (AppLake%Me ,STAT=ErrorCode)
                 RETURN
             END IF
-            AppLake%iVersion = 40
-            AppLake%lDefined = .TRUE.
+            AppLake%iComponentVersion = 40
+            AppLake%lDefined          = .TRUE.
             
         CASE (50)
             ALLOCATE(AppLake_v50_Type :: AppLake%Me)
-            CALL AppLake%Me%New(IsForInquiry,cFileName,cSimWorkingDirectory,TimeStep,NTIME,AppGrid,BinFile,LakeGWConnector,iStat)
+            CALL AppLake%Me%New(IsForInquiry,cFileName,cSimWorkingDirectory,GetVersion(),TimeStep,NTIME,AppGrid,BinFile,LakeGWConnector,Precip,ET,iStat)
             IF (iStat .EQ. -1) RETURN
             IF (AppLake%Me%NLakes .EQ. 0) THEN
                 CALL AppLake%Me%Kill()
                 DEALLOCATE (AppLake%Me ,STAT=ErrorCode)
                 RETURN
             END IF
-            AppLake%iVersion = 50
-            AppLake%lDefined = .TRUE.
+            AppLake%iComponentVersion = 50
+            AppLake%lDefined          = .TRUE.
             
         CASE DEFAULT
             CALL SetLastMessage('Lake Component version number is not recognized ('//TRIM(IntToText(iVersion))//')!',f_iFatal,ThisProcedure)
@@ -423,7 +426,7 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- INSTANTIATE COMPLETE LAKE DATA WITHOUT INTERMEDIATE BINARY FILE
   ! -------------------------------------------------------------
-  SUBROUTINE SetAllComponentsWithoutBinFile(AppLake,IsForInquiry,cPPFileName,cSimFileName,cSimWorkingDirectory,AppGrid,Stratigraphy,TimeStep,NTIME,StrmLakeConnector,LakeGWConnector,iStat)
+  SUBROUTINE SetAllComponentsWithoutBinFile(AppLake,IsForInquiry,cPPFileName,cSimFileName,cSimWorkingDirectory,AppGrid,Stratigraphy,TimeStep,NTIME,StrmLakeConnector,LakeGWConnector,Precip,ET,iStat)
     CLASS(AppLakeType),INTENT(OUT)        :: AppLake
     LOGICAL,INTENT(IN)                    :: IsForInquiry
     CHARACTER(LEN=*),INTENT(IN)           :: cPPFileName,cSimFileName,cSimWorkingDirectory
@@ -433,6 +436,8 @@ CONTAINS
     INTEGER,INTENT(IN)                    :: NTIME
     TYPE(StrmLakeConnectorType)           :: StrmLakeConnector
     TYPE(LakeGWConnectorType),INTENT(OUT) :: LakeGWConnector
+    TYPE(PrecipitationType),INTENT(IN)    :: Precip
+    TYPE(ETType),INTENT(IN)               :: ET
     INTEGER,INTENT(OUT)                   :: iStat
     
     !Local variables
@@ -459,27 +464,27 @@ CONTAINS
     SELECT CASE (TRIM(cVersionPre))
         CASE ('4.0')
             ALLOCATE(AppLake_v40_Type :: AppLake%Me)
-            CALL AppLake%Me%New(IsForInquiry,cPPFileName,cSimFileName,cSimWorkingDirectory,AppGrid,Stratigraphy,TimeStep,NTIME,StrmLakeConnector,LakeGWConnector,iStat)
+            CALL AppLake%Me%New(IsForInquiry,cPPFileName,cSimFileName,cSimWorkingDirectory,GetVersion(),AppGrid,Stratigraphy,TimeStep,NTIME,StrmLakeConnector,LakeGWConnector,Precip,ET,iStat)
             IF (iStat .EQ. -1) RETURN
             IF (AppLake%Me%NLakes .EQ. 0) THEN
                 CALL AppLake%Me%Kill()
                 DEALLOCATE (AppLake%Me ,STAT=ErrorCode)
                 RETURN
             END IF
-            AppLake%iVersion = 40
-            AppLake%lDefined = .TRUE.
+            AppLake%iComponentVersion = 40
+            AppLake%lDefined          = .TRUE.
             
         CASE ('5.0')
             ALLOCATE(AppLake_v50_Type :: AppLake%Me)
-            CALL AppLake%Me%New(IsForInquiry,cPPFileName,cSimFileName,cSimWorkingDirectory,AppGrid,Stratigraphy,TimeStep,NTIME,StrmLakeConnector,LakeGWConnector,iStat)
+            CALL AppLake%Me%New(IsForInquiry,cPPFileName,cSimFileName,cSimWorkingDirectory,GetVersion(),AppGrid,Stratigraphy,TimeStep,NTIME,StrmLakeConnector,LakeGWConnector,Precip,ET,iStat)
             IF (iStat .EQ. -1) RETURN
             IF (AppLake%Me%NLakes .EQ. 0) THEN
                 CALL AppLake%Me%Kill()
                 DEALLOCATE (AppLake%Me ,STAT=ErrorCode)
                 RETURN
             END IF
-            AppLake%iVersion = 50
-            AppLake%lDefined = .TRUE.
+            AppLake%iComponentVersion = 50
+            AppLake%lDefined          = .TRUE.
             
         CASE DEFAULT
             CALL SetLastMessage('Lake Component version number is not recognized ('//TRIM(cVersionPre)//')!',f_iFatal,ThisProcedure)
@@ -511,11 +516,11 @@ CONTAINS
     !Local variables
     INTEGER :: ErrorCode
     
-    IF (AppLake%iVersion .GT. 0) THEN
+    IF (AppLake%iComponentVersion .GT. 0) THEN
         CALL AppLake%Me%Kill()
         DEALLOCATE (AppLake%Me , STAT=ErrorCode)
-        AppLake%iVersion = 0
-        AppLake%lDefined = .FALSE.
+        AppLake%iComponentVersion = 0
+        AppLake%lDefined          = .FALSE.
     END IF
     
   END SUBROUTINE Kill
@@ -941,12 +946,10 @@ CONTAINS
     CHARACTER(:),ALLOCATABLE :: cVrs
     
     !Local variables
-    TYPE(AppLake_v40_Type) :: v40
-    TYPE(AppLake_v50_Type) :: v50
-    TYPE(VersionType)      :: MyVersion
+    TYPE(VersionType) :: MyVersion
     
-    MyVersion = MyVersion%New(iLenVersion,cVersion,cRevision)
-    cVrs      = TRIM(MyVersion%GetVersion()) // ' (Interface) ; ' // TRIM(v40%GetVersion()) // ', ' // TRIM(v50%GetVersion()) // ' (Components)'
+    MyVersion = MyVersion%New(f_iLenVersion,f_cVersion,cRevision)
+    cVrs      = TRIM(MyVersion%GetVersion()) 
     
   END FUNCTION GetVersion
   
@@ -1012,7 +1015,7 @@ CONTAINS
     TYPE(GenericFileType)         :: OutFile
     
     IF (AppLake%lDefined) THEN
-        CALL OutFile%WriteData(AppLake%iVersion)
+        CALL OutFile%WriteData(AppLake%iComponentVersion)
         CALL AppLake%Me%WritePreprocessedData(OutFile)
     ELSE
         CALL OutFile%WriteData(0)
@@ -1151,21 +1154,6 @@ CONTAINS
     IF (AppLake%lDefined) CALL AppLake%Me%ResetElevations()
 
   END SUBROUTINE ResetElevations
-  
-  
-  ! -------------------------------------------------------------
-  ! --- MAKE SURE THAT POINTED TIME-SERIES DATA HAVE ENOUGH COLUMNS
-  ! -------------------------------------------------------------
-  SUBROUTINE CheckExternalTSDataPointers(AppLake,Precip,ET,iStat)
-    CLASS(AppLakeType),INTENT(IN)      :: AppLake
-    TYPE(PrecipitationType),INTENT(IN) :: Precip
-    TYPE(ETType),INTENT(IN)            :: ET
-    INTEGER,INTENT(OUT)                :: iStat
-    
-    iStat = 0
-    IF (AppLake%lDefined) CALL AppLake%Me%CheckExternalTSDataPointers(Precip,ET,iStat)
-  
-  END SUBROUTINE CheckExternalTSDataPointers
   
   
   ! -------------------------------------------------------------

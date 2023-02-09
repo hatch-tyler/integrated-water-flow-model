@@ -930,11 +930,11 @@ CONTAINS
     CALL Model%LakeGWConnector%New(PPBinaryFile,iStat)    ;  IF (iStat .EQ. -1) RETURN
   
     !Precipitation data
-    CALL Model%PrecipData%New(ProjectFileNames(SIM_PrecipDataFileID),Model%cSIMWorkingDirectory,'precipitation data',Model%TimeStep,iStat)
+    CALL Model%PrecipData%New(ProjectFileNames(SIM_PrecipDataFileID),Model%cSIMWorkingDirectory,'precipitation',Model%TimeStep,iStat)
     IF (iStat .EQ. -1) RETURN
 
     !ET data
-    CALL Model%ETData%New(ProjectFileNames(SIM_ETDataFileID),Model%cSIMWorkingDirectory,'ET data',Model%TimeStep,iStat)
+    CALL Model%ETData%New(ProjectFileNames(SIM_ETDataFileID),Model%cSIMWorkingDirectory,'ET',Model%TimeStep,iStat)
     IF (iStat .EQ. -1) RETURN
   
     !Lakes
@@ -946,7 +946,7 @@ CONTAINS
             RETURN
         END IF
     END IF
-    CALL Model%AppLake%New(lForInquiry,ProjectFileNames(SIM_LakeDataFileID),Model%cSIMWorkingDirectory,Model%TimeStep,Model%NTIME,Model%AppGrid,PPBinaryFile,Model%LakeGWConnector,iStat)
+    CALL Model%AppLake%New(lForInquiry,ProjectFileNames(SIM_LakeDataFileID),Model%cSIMWorkingDirectory,Model%TimeStep,Model%NTIME,Model%AppGrid,PPBinaryFile,Model%LakeGWConnector,Model%PrecipData,Model%ETData,iStat)
     IF (iStat .EQ. -1) RETURN
     NLakes = Model%AppLake%GetNLakes()
     ALLOCATE (Model%LakeRunoff(NLakes) , Model%LakeReturnFlow(NLakes) , Model%LakePondDrain(NLakes) , iLakeIDs(NLakes) , STAT=ErrorCode , ERRMSG=cErrorMsg)
@@ -1020,7 +1020,7 @@ CONTAINS
     Model%lAppUnsatZone_Defined = Model%AppUnsatZone%IsDefined()
     
     !Small watersheds
-    CALL Model%AppSWShed%New(lForInquiry,ProjectFileNames(SIM_SmallWatershedDataFileID),Model%cSIMWorkingDirectory,Model%TimeStep,Model%NTIME,NStrmNodes,iStrmNodeIDs,Model%AppGrid,Model%Stratigraphy,cIWFMVersion,iStat)
+    CALL Model%AppSWShed%New(lForInquiry,ProjectFileNames(SIM_SmallWatershedDataFileID),Model%cSIMWorkingDirectory,Model%TimeStep,Model%NTIME,NStrmNodes,iStrmNodeIDs,Model%AppGrid,Model%Stratigraphy,Model%PrecipData,Model%ETData,cIWFMVersion,iStat)
     IF (iStat .EQ. -1) RETURN
 
     !Root zone component (must be instantiated after gw and streams)
@@ -1256,7 +1256,7 @@ CONTAINS
             RETURN
         END IF
     END IF
-    CALL Model%AppLake%New(lForInquiry,ProjectFileNames(SIM_LakeDataFileID),Model%cSIMWorkingDirectory,Model%TimeStep,Model%NTIME,Model%AppGrid,Model%LakeGWConnector,iStat)
+    CALL Model%AppLake%New(lForInquiry,ProjectFileNames(SIM_LakeDataFileID),Model%cSIMWorkingDirectory,Model%TimeStep,Model%NTIME,Model%AppGrid,Model%LakeGWConnector,Model%PrecipData,Model%ETData,iStat)
     IF (iStat .EQ. -1) RETURN
     NLakes = Model%AppLake%GetNLakes()
     ALLOCATE (Model%LakeRunoff(NLakes) , Model%LakeReturnFlow(NLakes) , Model%LakePondDrain(NLakes) , iLakeIDs(NLakes) , STAT=ErrorCode , ERRMSG=cErrorMsg)
@@ -1338,7 +1338,7 @@ CONTAINS
     Model%lAppUnsatZone_Defined = Model%AppUnsatZone%IsDefined()
     
     !Small watersheds
-    CALL Model%AppSWShed%New(lForInquiry,ProjectFileNames(SIM_SmallWatershedDataFileID),Model%cSIMWorkingDirectory,Model%TimeStep,Model%NTIME,NStrmNodes,iStrmNodeIDs,Model%AppGrid,Model%Stratigraphy,cIWFMVersion,iStat)
+    CALL Model%AppSWShed%New(lForInquiry,ProjectFileNames(SIM_SmallWatershedDataFileID),Model%cSIMWorkingDirectory,Model%TimeStep,Model%NTIME,NStrmNodes,iStrmNodeIDs,Model%AppGrid,Model%Stratigraphy,Model%PrecipData,Model%ETData,cIWFMVersion,iStat)
     IF (iStat .EQ. -1) RETURN
     
     !Root zone component (must be instantiated after gw and streams)
@@ -1599,7 +1599,7 @@ CONTAINS
             RETURN
         END IF
     END IF
-    CALL Model%AppLake%New(lForInquiry,cSIMFileNames(SIM_LakeDataFileID),Model%cSIMWorkingDirectory,Model%TimeStep,Model%NTIME,Model%AppGrid,Model%LakeGWConnector,iStat)
+    CALL Model%AppLake%New(lForInquiry,cSIMFileNames(SIM_LakeDataFileID),Model%cSIMWorkingDirectory,Model%TimeStep,Model%NTIME,Model%AppGrid,Model%LakeGWConnector,Model%PrecipData,Model%ETData,iStat)
     IF (iStat .EQ. -1) RETURN
     NLakes = Model%AppLake%GetNLakes()
     ALLOCATE (Model%LakeRunoff(NLakes) , Model%LakeReturnFlow(NLakes) , Model%LakePondDrain(NLakes) , iLakeIDs(NLakes) , STAT=ErrorCode , ERRMSG=cErrorMsg)
@@ -1681,7 +1681,7 @@ CONTAINS
     Model%lAppUnsatZone_Defined = Model%AppUnsatZone%IsDefined()
     
     !Small watersheds
-    CALL Model%AppSWShed%New(lForInquiry,cSIMFileNames(SIM_SmallWatershedDataFileID),Model%cSIMWorkingDirectory,Model%TimeStep,Model%NTIME,NStrmNodes,iStrmNodeIDs,Model%AppGrid,Model%Stratigraphy,cIWFMVersion,iStat)
+    CALL Model%AppSWShed%New(lForInquiry,cSIMFileNames(SIM_SmallWatershedDataFileID),Model%cSIMWorkingDirectory,Model%TimeStep,Model%NTIME,NStrmNodes,iStrmNodeIDs,Model%AppGrid,Model%Stratigraphy,Model%PrecipData,Model%ETData,cIWFMVersion,iStat)
     IF (iStat .EQ. -1) RETURN
 
     !Root zone component (must be instantiated after gw and streams)
@@ -6081,7 +6081,7 @@ CONTAINS
     
     !If restarting, overwrite the simulation begin time and number of simulation timesteps  
     IF (iRestartModel .EQ. iRestart) THEN
-        CALL ReadRestartDateAndTime(Model%NTIME,Model%TimeStep,iStat)
+        CALL ReadRestartDateAndTime(TRIM(Model%cSIMWorkingDirectory),Model%NTIME,Model%TimeStep,iStat)
         IF (iStat .EQ. -1) RETURN
         Model%NTIME = NPeriods(Model%TimeStep%DELTAT_InMinutes,Model%TimeStep%CurrentDateAndTime,Model%TimeStep%EndDateAndTime)
     END IF
@@ -6095,22 +6095,25 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- READ IN ONLY THE RESTART DATE AND TIME
   ! -------------------------------------------------------------
-  SUBROUTINE ReadRestartDateAndTime(NTIME,TimeStep,iStat)
-    INTEGER,INTENT(IN)  :: NTIME
-    TYPE(TimeStepType)  :: TimeStep
-    INTEGER,INTENT(OUT) :: iStat
+  SUBROUTINE ReadRestartDateAndTime(cSimDir,NTIME,TimeStep,iStat)
+    CHARACTER(LEN=*),INTENT(IN) :: cSimDir
+    INTEGER,INTENT(IN)          :: NTIME
+    TYPE(TimeStepType)          :: TimeStep
+    INTEGER,INTENT(OUT)         :: iStat
     
     !Local variables
     CHARACTER(LEN=ModNameLen+22),PARAMETER :: ThisProcedure = ModName // 'ReadRestartDateAndTime'
     INTEGER                                :: ErrorCode
     TYPE(GenericFileType)                  :: InputFile
     CHARACTER(LEN=f_iTimeStampLength)      :: EndDateAndTime,BeginDateAndTime
+    CHARACTER(:),ALLOCATABLE               :: cAbsPathFileName
     
     !Initialize
     iStat = 0
     
     !Check if restart dta file exists, if not return
-    OPEN (FILE='IW_Restart.bin', UNIT=1111, IOSTAT=ErrorCode)
+    CALL EstablishAbsolutePathFileName('IW_Restart.bin',cSIMDir,cAbsPathFileName)
+    OPEN (FILE=cAbsPathFileName, UNIT=1111, STATUS='OLD' , IOSTAT=ErrorCode)
     IF (ErrorCode .NE. 0) THEN
         CLOSE (1111,IOSTAT=ErrorCode)
         RETURN
@@ -6123,7 +6126,7 @@ CONTAINS
     EndDateAndTime   = IncrementTimeStamp(TimeStep%CurrentDateAndTime,TimeStep%DeltaT_InMinutes,NTIME)
     
     !Open output file
-    CALL InputFile%New(FileName='IW_Restart.bin',InputFile=.TRUE.,IsTSFile=.FALSE.,Descriptor='Model restart file',FileType='BIN',iStat=iStat)
+    CALL InputFile%New(FileName=cAbsPathFileName,InputFile=.TRUE.,IsTSFile=.FALSE.,Descriptor='Model restart file',FileType='BIN',iStat=iStat)
     IF (iStat .EQ. -1) RETURN
     
     !Restart simulation date and time
@@ -6156,12 +6159,14 @@ CONTAINS
     INTEGER                                :: ErrorCode
     TYPE(GenericFileType)                  :: InputFile
     CHARACTER(LEN=f_iTimeStampLength)      :: EndDateAndTime,BeginDateAndTime
+    CHARACTER(:),ALLOCATABLE               :: cAbsPathFileName
     
     !Initialize
     iStat = 0
     
     !Check if restart dta file exists, if not return
-    OPEN (FILE='IW_Restart.bin', UNIT=1111, IOSTAT=ErrorCode)
+    CALL EstablishAbsolutePathFileName('IW_Restart.bin',Model%cSIMWorkingDirectory,cAbsPathFileName)
+    OPEN (FILE=cAbsPathFileName, UNIT=1111, STATUS='OLD' , IOSTAT=ErrorCode)
     IF (ErrorCode .NE. 0) THEN
         CALL LogMessage('Cannot find the restart data file!'//f_cLineFeed//'Running the model from the beginning of simulation period.',f_iInfo,ThisProcedure)
         CLOSE (1111,IOSTAT=ErrorCode)
@@ -6175,7 +6180,7 @@ CONTAINS
     EndDateAndTime   = IncrementTimeStamp(Model%TimeStep%CurrentDateAndTime,Model%TimeStep%DeltaT_InMinutes,Model%NTIME)
     
     !Open output file
-    CALL InputFile%New(FileName='IW_Restart.bin',InputFile=.TRUE.,IsTSFile=.FALSE.,Descriptor='Model restart file',FileType='BIN',iStat=iStat)
+    CALL InputFile%New(FileName=cAbsPathFileName,InputFile=.TRUE.,IsTSFile=.FALSE.,Descriptor='Model restart file',FileType='BIN',iStat=iStat)
     IF (iStat .EQ. -1) RETURN
     
     !Restart simulation date and time
@@ -6244,8 +6249,9 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- PRINT SIMULATION RESULTS
   ! -------------------------------------------------------------
-  SUBROUTINE PrintResults(Model)
-    CLASS(ModelType) :: Model
+  SUBROUTINE PrintResults(Model,iStat)
+    CLASS(ModelType)    :: Model
+    INTEGER,INTENT(OUT) :: iStat
     
     !Local variables
     INTEGER :: NSubregions,BndFaceLayers(Model%AppGrid%NBoundaryFaces),indxLayer
@@ -6253,6 +6259,15 @@ CONTAINS
                RSWShedIn(Model%AppGrid%NSubregions+1)                                      , &
                SWShedBndFaceFlows(Model%AppGrid%NBoundaryFaces,Model%Stratigraphy%NLayers) 
     
+    !Initialize
+    iStat = 0
+    
+    !Print restart file, if asked for
+    IF (Model%iRestartOption .EQ. iRestart) THEN
+        CALL PrintRestartData(Model,iStat)
+        IF (iStat .NE. 0) RETURN
+    END IF
+
     !Get data from root zone to pass it to other components 
     IF (Model%lRootZone_Defined) THEN
       Model%QPERC = Model%RootZone%GetPercAll(Model%AppGrid)
@@ -6640,11 +6655,11 @@ CONTAINS
     TimeStep = Model%TimeStep
     
     !Rainfall data
-    CALL Model%PrecipData%ReadTSData(TimeStep,iStat)   
+    CALL Model%PrecipData%ReadTSData(TimeStep,.TRUE.,iStat)   
     IF (iStat .EQ. -1) RETURN
   
     !ET data
-    CALL Model%ETData%ReadTSData(TimeStep,iStat)   
+    CALL Model%ETData%ReadTSData(TimeStep,.TRUE.,iStat)   
     IF (iStat .EQ. -1) RETURN
   
     !Small watersheds
@@ -6756,10 +6771,6 @@ CONTAINS
             RETURN
         END IF
     END IF
-  
-    !Check if time series data pointers are pointing to existing columns
-    IF (lAppLake_Defined) CALL Model%AppLake%CheckExternalTSDataPointers(Model%PrecipData,Model%ETData,iStat)
-    IF (iStat .EQ. -1) RETURN
   
     !Root zone must be defined and irrigation fractions data file must be specified if any pumping goes to model domain
     IF (Model%AppGW%IsPumpingToModelDomain()) THEN
@@ -6943,7 +6954,7 @@ CONTAINS
        
        CALL Model%SimulateOneTimeStep(iStat)  ;  IF (iStat .EQ. -1) RETURN
        
-       CALL Model%PrintResults()
+       CALL Model%PrintResults(iStat)  ;  IF (iStat .EQ. -1) RETURN
        
        IF (Model%IsEndOfSimulation()) EXIT
        
@@ -7021,7 +7032,7 @@ CONTAINS
         CALL Model%SimulateOneTimeStep(iStat)  ;  IF (iStat .EQ. -1) RETURN
     
         !Print out simulation results
-        CALL Model%PrintResults()
+        CALL Model%PrintResults(iStat)  ;  IF (iStat .EQ. -1) RETURN
                                        
         !Exit the do-loop if it is end of simulation; i.e. last time step
         IF (Model%IsEndOfSimulation()) EXIT
@@ -7216,11 +7227,6 @@ CONTAINS
     CALL Model%AppUnsatZone%UpdateStorage(Model%AppGrid)
     CALL Model%AppGW%UpdateStorage(Model%AppGrid , Model%Stratigraphy)
 
-
-! *************************************************************************
-! ***** PRINT OUT RESTART FILE, IF ASKED FOR
-! *************************************************************************
-    IF (Model%iRestartOption .EQ. iRestart) CALL PrintRestartData(Model,iStat)
 
 ! *************************************************************************
 ! ***** RESET THE STATE OF THE SUPPLY ADJUSTMENT OBJECT

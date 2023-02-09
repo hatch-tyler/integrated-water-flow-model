@@ -98,8 +98,6 @@ MODULE Class_StrmNodeBudget
 
   END INTERFACE  
   
-  PROCEDURE(Abstract_PrepareStreamNodeBudgetHeader),POINTER :: p 
-
   
   ! -------------------------------------------------------------
   ! --- MISC. ENTITIES

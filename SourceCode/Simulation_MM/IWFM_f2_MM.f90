@@ -47,9 +47,11 @@ PROGRAM IWFM_f2_MultiModel
                                      MessageArray            , & 
                                      f_iInfo                 , &
                                      f_iMessage              , &
+                                     f_iWarn                 , &
                                      f_iFatal                , &
                                      f_iFILE                 , &
-                                     f_iSCREEN
+                                     f_iSCREEN               , &
+                                     f_iSCREEN_FILE
   USE GeneralUtilities       , ONLY: IntToText               , &
                                      StripTextUntilCharacter , & 
                                      CleanSpecialCharacters  , &
@@ -85,6 +87,10 @@ PROGRAM IWFM_f2_MultiModel
   TYPE ModelConnectionType
       INTEGER             :: iMaxIter             = 100     !Maximum number of iterations between models 
       REAL(8)             :: rConvergence         = 0.1     !Convergence creteria (change in flow/flow)
+      REAL(8)             :: rMaxNonConvergeFlow  = 0.0     !Maximum exchange flow that did not converge at the last iteration
+      CHARACTER(LEN=30)   :: cMaxNonConvergeVar   = ''      !Variable for rMaxNonConvergeFlow
+      CHARACTER(LEN=30)   :: cMaxNonConvergeModel = ''      !Model for rMaxNonConvergeFlow
+      INTEGER             :: iMaxNonConvergeTStep = 0       !Time step for rMaxNonConvergeFlow
       !Connections in the aquifer
       INTEGER             :: iNLinkNodesGW        = 0       !Number of connections in the aquifer
       REAL(8),ALLOCATABLE :: rFlowGW(:)                     !Current estimate of boundary flow at each node at each (connection)
@@ -168,24 +174,30 @@ PROGRAM IWFM_f2_MultiModel
   SYNC ALL
   IF (iStat[iErrImage] .NE. 0) CALL EndExecution()
    
-  !Use only active images
+  !Use only active images (master and runners)
   IF (LocateInList(THIS_IMAGE(),iActiveImages) .EQ. 0) CALL EndExecution()
 
   !Instantiate model
-  CALL InstantiateModel(cSimFileName,Model,TimeStep,iNTime,iStat)
-  IF (iStat .NE. 0) iStat[iErrImage] = iStat
+  IF (lRunner) THEN
+      CALL InstantiateModel(cSimFileName,Model,TimeStep,iNTime,iStat)
+      IF (iStat .NE. 0) iStat[iErrImage] = iStat
+  END IF
   SYNC IMAGES(iActiveImages)
   IF (iStat[iErrImage] .NE. 0) CALL EndExecution()
   
   !Check that model time related data are the same for all models
-  CALL CheckForModelConsistency(iNModels,iNTime,TimeStep,iStat)
-  IF (iStat .NE. 0) iStat[iErrImage] = iStat
+  IF (lMaster) THEN
+      CALL CheckForModelConsistency(iNModels,iNTime,TimeStep,iStat)
+      IF (iStat .NE. 0) iStat[iErrImage] = iStat
+  END IF  
   SYNC IMAGES(iActiveImages)
   IF (iStat[iErrImage] .NE. 0) CALL EndExecution()
   
   !Convert model link node IDs to indices and prepare connections to pass flows between models
-  CALL PrepConnections(Model,cModelNames,iModelIndex,Connections,iStat)
-  IF (iStat .NE. 0) iStat[iErrImage] = iStat
+  IF (lRunner) THEN
+      CALL PrepConnections(Model,cModelNames,iModelIndex,Connections,iStat)
+      IF (iStat .NE. 0) iStat[iErrImage] = iStat
+  END IF
   SYNC IMAGES(iActiveImages)
   IF (iStat[iErrImage] .NE. 0) CALL EndExecution()
   
@@ -238,27 +250,37 @@ PROGRAM IWFM_f2_MultiModel
           IF (iStat[iErrImage] .NE. 0) CALL EndExecution()
           
           !Check convergence
-          lConverged = CheckConvergence(Model,cModelNames,iModelIndex,iIter,Connections)
+          lConverged = CheckConvergence(Model,cModelNames,iModelIndex,indxTime,iIter,Connections)
           SYNC IMAGES(iActiveImages)
           IF (lConverged[1]) EXIT
-          
-          !Advance number of iterations
-          CALL AdvanceIterations(Connections,iIter,iStat)
-          IF (iStat .NE. 0) iStat[iErrImage] = iStat
-          SYNC IMAGES(iActiveImages)
-          IF (iStat[iErrImage] .NE. 0) CALL EndExecution()
           
           !Flag to check if this is the first iteration between the models in a given timestep
           lFirstCall = .FALSE.
       END DO
           
       !Print results
-      IF (lRunner) CALL Model%PrintResults()
-                       
+      IF (lRunner) THEN
+          CALL Model%PrintResults(iStat)
+          IF (iStat .NE. 0) iStat[iErrImage] = iStat
+      END IF
+      SYNC IMAGES(iActiveImages)
+      IF (iStat[iErrImage] .NE. 0) CALL EndExecution()
+      
       !Advance state of the model
       IF (lRunner) CALL Model%AdvanceState()  
           
   END DO
+  
+  !Write out the max offending non-convergent flow
+  IF (lMaster) THEN
+      IF (ABS(Connections%rMaxNonConvergeFlow .GT. 0.0)) THEN
+          MessageArray(1) = 'There were timesteps where exchange flows between models did not converge!'
+          MessageArray(2) = 'Maximum exchange flow that did not converge (units in consistent'
+          MessageArray(3) = ' simulation units) at time step '//TRIM(IntToText(Connections%iMaxNonConvergeTStep))//':'
+          WRITE (MessageArray(4),'(G13.6,4X,A,4X,A)') Connections%rMaxNonConvergeFlow,TRIM(Connections%cMaxNonConvergeVar),TRIM(Connections%cMaxNonConvergeModel)
+          CALL LogMessage(MessageArray(1:4),f_iWarn,'',Destination=f_iSCREEN_FILE)
+      END IF
+  END IF
       
   !Kill model and close its message file
   IF (lRunner)  THEN
@@ -351,10 +373,9 @@ CONTAINS
     
     !Indices of active images
     iNModels       = iNModels[1]
-    iNActiveImages = iNModels + 2
+    iNActiveImages = iNModels + 1
     ALLOCATE (iActiveImages(iNActiveImages))
-    iActiveImages(1:iNActiveImages-1) = [(indx,indx=1,iNActiveImages-1)]
-    iActiveImages(iNActiveImages)     = NUM_IMAGES()
+    iActiveImages(1:iNActiveImages) = [(indx,indx=1,iNActiveImages)]
     
     !Identify model running images
     IF (THIS_IMAGE() .GT. 1) THEN
@@ -831,9 +852,6 @@ CONTAINS
     !Initialize
     iStat = 0
     
-    !Return if not a model running image
-    IF (.NOT. lRunner) RETURN
-    
     !Standard output file for the model
     CALL GetFileDirectory(cSimFileName,cSimDir)
     CALL SetLogFileName(cSimDir // 'SimulationMessages.out',iStat)
@@ -875,9 +893,6 @@ CONTAINS
     
     !Initialize
     iStat = 0
-    
-    !Return if a Runner image
-    IF (lRunner) RETURN
     
     !Return if there is only 1 model
     IF (iNModels .EQ. 1) RETURN
@@ -934,9 +949,6 @@ CONTAINS
     
     !Initialize
     iStat = 0
-    
-    !Return if this is not a model running image
-    IF (.NOT. lRunner) RETURN
     
     !Allocate memory
     ALLOCATE (iBCNodes(Connections[1]%iNLinkNodesGW) , iBCLayers(Connections[1]%iNLinkNodesGW))
@@ -1311,8 +1323,7 @@ CONTAINS
         CALL LogMessage(MessageArray(1),f_iMessage,'',Destination=f_iFILE)
         
         !Print title for iteration and convergence tracking
-        CALL LogMessage('   ITER      CONVERGENCE         MAX.DIFF    VARIABLE      MODEL'//f_cLineFeed//REPEAT('-',65),f_iMessage,'',Destination=f_iFILE)
-
+        CALL LogMessage('   ITER      CONVERGENCE      MAX.DIFF         FLOW           VARIABLE        MODEL'//f_cLineFeed//REPEAT('-',83),f_iMessage,'',Destination=f_iFILE)
     END IF
     
   END SUBROUTINE AdvanceTime
@@ -1340,19 +1351,19 @@ CONTAINS
     !Initailize
     iStat = 0
     
-    !First collect heads from models
-    IF (lRunner) CALL CollectHeadsFlows(Model,iModelIndex,Connections)
-    SYNC IMAGES (iActiveImages)
-    
-    !Calculate gw flows and store the connection flows at the beginning of time step
-    IF (lMaster) THEN
-        CALL CalculateGWFlows(Connections)
-        IF (lFirstCall) THEN
+    IF (lFirstCall) THEN
+        !First collect heads from models
+        IF (lRunner) CALL CollectHeadsFlows(Model,iModelIndex,Connections)
+        SYNC IMAGES (iActiveImages)
+        
+        !Calculate gw flows and store the connection flows at the beginning of time step
+        IF (lMaster) THEN
+            CALL CalculateGWFlows(Connections)
             Connections%rFlowGW_P = Connections%rFlowGW
             Connections%rFlowST_P = Connections%rFlowST
         END IF
+        SYNC IMAGES (iActiveImages)
     END IF
-    SYNC IMAGES (iActiveImages)
   
     !Pass boundary flows to models
     IF (lRunner) THEN
@@ -1551,19 +1562,22 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- CHECK FOR CONVERGENCE
   ! -------------------------------------------------------------
-  FUNCTION CheckConvergence(Model,cModelNames,iModelIndex,iIter,Connections) RESULT(lConverged)
+  FUNCTION CheckConvergence(Model,cModelNames,iModelIndex,indxTime,iIter,Connections) RESULT(lConverged)
     TYPE(ModelWithIDType),INTENT(IN) :: Model[*]
     CHARACTER(LEN=*),INTENT(IN)      :: cModelNames(:)[*]
-    INTEGER,INTENT(IN)               :: iModelIndex,iIter
+    INTEGER,INTENT(IN)               :: iModelIndex,indxTime
+    INTEGER                          :: iIter
     TYPE(ModelConnectionType)        :: Connections[*]
     LOGICAL                          :: lConverged
     
     !Local variables
-    INTEGER   :: indx,indxModel,iNode,iImage
-    REAL(8)   :: rConverge,rDiff,rDiffMax
-    CHARACTER :: cMessage*100,cVariable*10,cModel*30
+    INTEGER   :: indx,indxModel,iNode,iImage,iLayer
+    REAL(8)   :: rConverge,rDiff,rDiffMax,rValue
+    CHARACTER :: cMessage*100,cVariable*12,cModel*30
     
     !Initialize
+    cVariable  = 'n/a'
+    cModel     = 'n/a'
     lConverged = .TRUE.
     
     !Retrieve the latest heads from models
@@ -1578,16 +1592,19 @@ CONTAINS
         !Calculate convergence from groundwater
         rConverge = 0.0
         rDiffMax  = 0.0
+        rValue    = 0.0 
         DO indx=1,Connections%iNLinkNodesGW
             IF (Connections%rFlowGW(indx) .EQ. 0.0) CYCLE
             rDiff     = ABS(Connections%rFlowGW(indx)-Connections%rFlowGW_P(indx)) / Connections%rFlowGW(indx)
             rConverge = rConverge + rDiff*rDiff
             IF (ABS(rDiff) .GT. rDiffMax) THEN
+                rValue    = Connections%rFlowGW(indx)
                 rDiffMax  = rDiff
                 indxModel = Connections%iModelGW(indx)
                 iImage    = indxModel + 1
                 iNode     = Connections%iNodeGW(indx)
-                cVariable = TRIM(IntToText(Model[iImage]%iNodeIDs(iNode))) // '_GW'
+                iLayer    = Connections%iLayerGW(indx)
+                cVariable = TRIM(IntToText(Model[iImage]%iNodeIDs(iNode))) // '_GW_L' // TRIM(IntToText(iLayer))
                 cModel    = TRIM(cModelNames(indxModel))
             END IF
         END DO
@@ -1598,6 +1615,7 @@ CONTAINS
             rDiff     = ABS(Connections%rFlowST(indx)-Connections%rFlowST_P(indx)) / Connections%rFlowST(indx)
             rConverge = rConverge + rDiff*rDiff
             IF (ABS(rDiff) .GT. rDiffMax) THEN
+                rValue    = Connections%rFlowST(indx)
                 rDiffMax  = rDiff
                 indxModel = Connections%iModelST(indx)
                 iImage    = indxModel + 1
@@ -1611,41 +1629,31 @@ CONTAINS
         !Don't do anything; if stream flows converge so should bypasses
         
         !Print-out converegence
-        WRITE (cMessage,'(I7,4X,G13.6,4X,G13.6,4X,A,4X,A)') iIter,SQRT(rConverge),rDiffMax,ADJUSTL(cVariable),TRIM(ADJUSTL(cModel))
+        WRITE (cMessage,'(I7,4X,G13.6,4X,G13.6,4X,G13.6,4X,A,4X,A)') iIter,SQRT(rConverge),rDiffMax,rValue,ADJUSTL(cVariable),TRIM(ADJUSTL(cModel))
         CALL LogMessage(TRIM(cMessage),f_iMessage,'',Destination=f_iFILE)
         
         !Did the models converge?
         IF (SQRT(rConverge) .GT. Connections%rConvergence) lConverged = .FALSE.
+        IF (iIter .EQ. Connections%iMaxIter) THEN
+            IF (ABS(rValue) .GT. ABS(Connections%rMaxNonConvergeFlow)) THEN
+                Connections%rMaxNonConvergeFlow  = rValue
+                Connections%cMaxNonConvergeVar   = TRIM(cVariable)
+                Connections%cMaxNonConvergeModel = cModel
+                Connections%iMaxNonConvergeTStep = indxTime
+            END IF
+            lConverged = .TRUE.
+        END IF
+        
+        !If not converged advance iteration and calculations
+        IF (.NOT. lConverged) THEN
+            iIter                 = iIter + 1
+            Connections%rFlowGW_P = Connections%rFlowGW
+            Connections%rFlowST_P = Connections%rFlowST
+        END IF
+
     END IF
     
   END FUNCTION CheckConvergence
-  
-  
-  ! -------------------------------------------------------------
-  ! --- ADVANCE ITERATIONS BETWEEN MODELS
-  ! -------------------------------------------------------------
-  SUBROUTINE AdvanceIterations(Connections,iIter,iStat)
-    TYPE(ModelConnectionType) :: Connections
-    INTEGER                   :: iIter
-    INTEGER,INTENT(OUT)       :: iStat
-    
-    !Local variables
-    CHARACTER(LEN=f_iModNameLen+19),PARAMETER :: ThisProcedure = f_cModName // '::AdvanceIterations'
-    
-    !Initialize
-    iStat = 0
-    
-    IF (lRunner) RETURN
-    
-    iIter = iIter + 1
-    IF (iIter .GT. Connections%iMaxIter) THEN
-        CALL SetLastMessage('Models failed to converge at their interfaces!',f_iFatal,ThisProcedure)
-        iStat = -1
-    END IF
-    Connections%rFlowGW_P = Connections%rFlowGW
-    Connections%rFlowST_P = Connections%rFlowST
-
-  END SUBROUTINE AdvanceIterations
   
   
   ! -------------------------------------------------------------
@@ -1697,7 +1705,7 @@ CONTAINS
     END IF
     
     !Stop the program
-    STOP
+    STOP, QUIET=.TRUE.
     
   END SUBROUTINE EndExecution
 END

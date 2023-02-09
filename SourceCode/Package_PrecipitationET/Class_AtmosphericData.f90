@@ -23,7 +23,9 @@
 MODULE Class_AtmosphericData
   USE IOInterface          , ONLY: RealTSDataInFileType
   USE TimeSeriesUtilities  , ONLY: TimeStepType
-  USE MessageLogger        , ONLY: EchoProgress       
+  USE MessageLogger        , ONLY: EchoProgress         , &
+                                   SetLastMessage       , &
+                                   f_iFatal 
   IMPLICIT NONE
 
 
@@ -109,10 +111,10 @@ CONTAINS
     IF (FileName .EQ. '') RETURN
     
     !Print progress
-    CALL EchoProgress('Instantiating '//TRIM(cDataName))
+    CALL EchoProgress('Instantiating '//TRIM(cDataName)//' data...')
 
     !Instantiate
-    CALL AtmosphericData%Init(FileName,cWorkingDirectory,TRIM(cDataName)//' file',TimeStep%TrackTime,1,.TRUE.,Factor,DummyArray,iStat=iStat)  
+    CALL AtmosphericData%Init(FileName,cWorkingDirectory,TRIM(cDataName)//' data file',TimeStep%TrackTime,1,.TRUE.,Factor,DummyArray,iStat=iStat)  
     IF (iStat .EQ. -1) RETURN
     AtmosphericData%Fact      = Factor(1)
     AtmosphericData%cDataName = TRIM(cDataName)
@@ -193,14 +195,17 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- READ DATA FOR A TIME RANGE FOR A COLUMN
   ! -------------------------------------------------------------
-  SUBROUTINE AtmosphericData_ReadTSData_ForTimeRange(AtmosphericData,iCol,lForInquiry,cBeginDateAndTime,cEndDateAndTime,nActualOutput,rOutputValues,rOutputDates,FileReadCode,iStat)
+  SUBROUTINE AtmosphericData_ReadTSData_ForTimeRange(AtmosphericData,iCol,lForInquiry,lCheckForNegativity,cBeginDateAndTime,cEndDateAndTime,nActualOutput,rOutputValues,rOutputDates,FileReadCode,iStat)
     CLASS(AtmosphericDataType)  :: AtmosphericData
     INTEGER,INTENT(IN)          :: iCol       
-    LOGICAL,INTENT(IN)          :: lForInquiry
+    LOGICAL,INTENT(IN)          :: lForInquiry,lCheckForNegativity
     CHARACTER(LEN=*),INTENT(IN) :: cBeginDateAndTime,cEndDateAndTime
     INTEGER,INTENT(OUT)         :: nActualOutput
     REAL(8),INTENT(OUT)         :: rOutputValues(:),rOutputDates(:)
     INTEGER,INTENT(OUT)         :: FileReadCode,iStat
+    
+    !Local variables
+    CHARACTER(LEN=ModNameLen+39) :: ThisProcedure = ModName // 'AtmosphericData_ReadTSData_ForTimeRange'
     
     !Read data
     CALL AtmosphericData%ReadTSData(iCol,cBeginDateAndTime,cEndDateAndTime,nActualOutput,rOutputValues,rOutputDates,FileReadCode,iStat)
@@ -208,6 +213,15 @@ CONTAINS
     
     !Unit conversion
     rOutputValues(1:nActualOutput) = rOutputValues(1:nActualOutput) * AtmosphericData%Fact
+    
+    !Check for negativity, if desired
+    IF (lCheckForNegativity) THEN
+        IF (ANY(rOutputValues(1:nActualOutput) .LT. 0.0)) THEN
+            CALL SetLastMessage('Timeseries input for '//TRIM(AtmosphericData%cDataName)//' data cannot be zero!',f_iFatal,ThisProcedure)
+            iStat = -1
+            RETURN
+        END IF
+    END IF
     
     !Rewind file if necessary
     IF (lForInquiry) CALL AtmosphericData%File%RewindFile_To_BeginningOfTSData(iStat)
@@ -218,23 +232,35 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- READ DATA FOR A TIME STAMP
   ! -------------------------------------------------------------
-  SUBROUTINE AtmosphericData_ReadTSData(AtmosphericData,TimeStep,iStat)
+  SUBROUTINE AtmosphericData_ReadTSData(AtmosphericData,TimeStep,lCheckForNegativity,iStat)
     CLASS(AtmosphericDataType)    :: AtmosphericData
     TYPE(TimeStepType),INTENT(IN) :: TimeStep
+    LOGICAL,INTENT(IN)            :: lCheckForNegativity
     INTEGER,INTENT(OUT)           :: iStat
     
     !Local variables
-    INTEGER :: FileReadCode
+    CHARACTER(LEN=ModNameLen+26) :: ThisProcedure = ModName // 'AtmosphericData_ReadTSData' 
+    INTEGER                      :: FileReadCode
 
     !Print progress
-    CALL EchoProgress('Reading time series '//AtmosphericData%cDataName//' data')
+    CALL EchoProgress('Reading time series '//AtmosphericData%cDataName//' data...')
 
     !Read data
     CALL AtmosphericData%ReadTSData(TimeStep,AtmosphericData%cDataName,FileReadCode,iStat)
     IF (iStat .EQ. -1) RETURN
 
     !If error code returned was zero (data read successfully), scale atmospheric data
-    IF (FileReadCode .EQ. 0) AtmosphericData%rValues = AtmosphericData%rValues * AtmosphericData%Fact
+    IF (FileReadCode .EQ. 0) THEN
+        AtmosphericData%rValues = AtmosphericData%rValues * AtmosphericData%Fact
+        !Check for negativity if desired
+        IF (lCheckForNegativity) THEN
+            IF (ANY(AtmosphericData%rValues .LT. 0.0)) THEN
+                CALL SetLastMessage('Timeseries input for '//TRIM(AtmosphericData%cDataName)//' data cannot be zero!',f_iFatal,ThisProcedure)
+                iStat = -1
+                RETURN
+            END IF
+        END IF
+    END IF
     
   END SUBROUTINE AtmosphericData_ReadTSData
 

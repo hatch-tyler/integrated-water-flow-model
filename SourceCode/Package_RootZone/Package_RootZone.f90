@@ -103,7 +103,7 @@ MODULE Package_RootZone
   ! -------------------------------------------------------------
   TYPE RootZoneType
       PRIVATE
-      INTEGER                             :: iVersion   =  0
+      INTEGER                             :: iComponentVersion   =  0
       CLASS(BaseRootZoneType),ALLOCATABLE :: Me
   CONTAINS
       PROCEDURE,PASS   :: New
@@ -187,8 +187,8 @@ MODULE Package_RootZone
   ! -------------------------------------------------------------
   ! --- ROOT ZONE FACADE VERSION RELATED DATA
   ! -------------------------------------------------------------
-  INTEGER,PARAMETER                    :: iLenVersion = 8
-  CHARACTER(LEN=iLenVersion),PARAMETER :: cVersion ='4.0.0000'
+  INTEGER,PARAMETER                      :: f_iLenVersion = 11
+  CHARACTER(LEN=f_iLenVersion),PARAMETER :: f_cVersion    = '2022.0.0000'
   INCLUDE 'Package_RootZone_Revision.fi'
   
   
@@ -256,22 +256,22 @@ CONTAINS
     SELECT CASE (TRIM(cVersion))
         CASE ('5.0')
             ALLOCATE(RootZone_v50_Type :: RootZone%Me)
-            RootZone%iVersion = 50
+            RootZone%iComponentVersion = 50
         CASE ('4.0')
             ALLOCATE(RootZone_v40_Type :: RootZone%Me)
-            RootZone%iVersion = 40
+            RootZone%iComponentVersion = 40
         CASE ('4.01')
             ALLOCATE(RootZone_v401_Type :: RootZone%Me)
-            RootZone%iVersion = 401
+            RootZone%iComponentVersion = 401
         CASE ('4.1')
             ALLOCATE(RootZone_v41_Type :: RootZone%Me)
-            RootZone%iVersion = 41
+            RootZone%iComponentVersion = 41
         CASE ('4.11')
             ALLOCATE(RootZone_v411_Type :: RootZone%Me)
-            RootZone%iVersion = 411
+            RootZone%iComponentVersion = 411
         CASE ('4.12')
             ALLOCATE(RootZone_v412_Type :: RootZone%Me)
-            RootZone%iVersion = 412
+            RootZone%iComponentVersion = 412
         CASE DEFAULT
             CALL SetLastMessage('Root Zone Component version number is not recognized ('//TRIM(cVersion)//')!',f_iFatal,ThisProcedure)
             iStat = -1
@@ -281,15 +281,15 @@ CONTAINS
     !Now, instantiate
     IF (PRESENT(iStrmNodeIDs)) THEN
         IF (PRESENT(iLakeIDs)) THEN
-            CALL RootZone%Me%New(IsForInquiry,cFileName,cWorkingDirectory,AppGrid,TimeStep,NTIME,ET,Precip,iStat,iStrmNodeIDs=iStrmNodeIDs,iLakeIDs=iLakeIDs)
+            CALL RootZone%Me%New(IsForInquiry,cFileName,cWorkingDirectory,GetVersion(),AppGrid,TimeStep,NTIME,ET,Precip,iStat,iStrmNodeIDs=iStrmNodeIDs,iLakeIDs=iLakeIDs)
         ELSE
-            CALL RootZone%Me%New(IsForInquiry,cFileName,cWorkingDirectory,AppGrid,TimeStep,NTIME,ET,Precip,iStat,iStrmNodeIDs=iStrmNodeIDs)
+            CALL RootZone%Me%New(IsForInquiry,cFileName,cWorkingDirectory,GetVersion(),AppGrid,TimeStep,NTIME,ET,Precip,iStat,iStrmNodeIDs=iStrmNodeIDs)
         END IF
     ELSE
         IF (PRESENT(iLakeIDs)) THEN
-            CALL RootZone%Me%New(IsForInquiry,cFileName,cWorkingDirectory,AppGrid,TimeStep,NTIME,ET,Precip,iStat,iLakeIDs=iLakeIDs)
+            CALL RootZone%Me%New(IsForInquiry,cFileName,cWorkingDirectory,GetVersion(),AppGrid,TimeStep,NTIME,ET,Precip,iStat,iLakeIDs=iLakeIDs)
         ELSE
-            CALL RootZone%Me%New(IsForInquiry,cFileName,cWorkingDirectory,AppGrid,TimeStep,NTIME,ET,Precip,iStat)
+            CALL RootZone%Me%New(IsForInquiry,cFileName,cWorkingDirectory,GetVersion(),AppGrid,TimeStep,NTIME,ET,Precip,iStat)
         END IF
     END IF
     
@@ -321,7 +321,7 @@ CONTAINS
     
     CALL RootZone%Me%Kill()
     DEALLOCATE (RootZone%Me)
-    RootZone%iVersion =  Dummy%iVersion
+    RootZone%iComponentVersion =  Dummy%iComponentVersion
     
   END SUBROUTINE Kill 
   
@@ -345,7 +345,7 @@ CONTAINS
     CLASS(RootZoneType),INTENT(IN) :: RootZone
     LOGICAL                        :: lDefined
     
-    IF (RootZone%iVersion .EQ. 0) THEN
+    IF (RootZone%iComponentVersion .EQ. 0) THEN
         lDefined = .FALSE.
     ELSE
         lDefined = .TRUE.
@@ -361,7 +361,7 @@ CONTAINS
     CLASS(RootZoneType),INTENT(IN) :: RootZone
     LOGICAL                        :: lUpdated
     
-    IF (RootZone%iVersion .EQ. 0) THEN
+    IF (RootZone%iComponentVersion .EQ. 0) THEN
         lUpdated = .FALSE.
     ELSE
         lUpdated = RootZone%Me%IsLandUseUpdated()
@@ -792,7 +792,7 @@ CONTAINS
     CLASS(RootZoneType),INTENT(IN) :: RootZone
     INTEGER                        :: iCalcLocation
     
-    IF (RootZone%iVersion .EQ. 0) THEN
+    IF (RootZone%iComponentVersion .EQ. 0) THEN
         iCalcLocation = -1
     ELSE
         SELECT TYPE (p => RootZone%Me)
@@ -863,7 +863,7 @@ CONTAINS
     INTEGER,INTENT(IN)             :: iSupplyFor
     REAL(8)                        :: rSupply(:)
     
-    IF (RootZone%iVersion .EQ. 0) THEN
+    IF (RootZone%iComponentVersion .EQ. 0) THEN
         rSupply = 0.0
     ELSE
         CALL RootZone%Me%GetWaterSupply(AppGrid,iSupplyFor,rSupply)
@@ -879,7 +879,7 @@ CONTAINS
     CLASS(RootZoneType),INTENT(IN) :: RootZone
     REAL(8),INTENT(OUT)            :: Ratio(:)
     
-    IF (RootZone%iVersion .EQ. 0) THEN
+    IF (RootZone%iComponentVersion .EQ. 0) THEN
         RETURN
     ELSE
         CALL RootZone%Me%GetRatio_DestSupplyToRegionSupply_Ag(Ratio)
@@ -895,7 +895,7 @@ CONTAINS
     CLASS(RootZoneType),INTENT(IN) :: RootZone
     REAL(8),INTENT(OUT)            :: Ratio(:)
     
-    IF (RootZone%iVersion .EQ. 0) THEN
+    IF (RootZone%iComponentVersion .EQ. 0) THEN
         RETURN
     ELSE
         CALL RootZone%Me%GetRatio_DestSupplyToRegionSupply_Urb(Ratio)
@@ -911,7 +911,7 @@ CONTAINS
     CLASS(RootZoneType),INTENT(IN) :: RootZone
     INTEGER                        :: NLocations
     
-    IF (RootZone%iVersion .EQ. 0) THEN
+    IF (RootZone%iComponentVersion .EQ. 0) THEN
         NLocations = 0
     ELSE
         NLocations = RootZone%Me%GetNDemandLocations()
@@ -928,7 +928,7 @@ CONTAINS
     REAL(8),INTENT(IN)             :: rElemArea(:)
     REAL(8)                        :: rPrecip(:)
     
-    IF (RootZone%iVersion .EQ. 0) THEN
+    IF (RootZone%iComponentVersion .EQ. 0) THEN
         rPrecip = 0.0
     ELSE
         CALL RootZone%Me%GetElementPrecip(rElemArea,rPrecip)
@@ -945,7 +945,7 @@ CONTAINS
     INTEGER,INTENT(IN)             :: ElemRegion(:)
     REAL(8)                        :: PrecipInfilt(:)
     
-    IF (RootZone%iVersion .EQ. 0) THEN
+    IF (RootZone%iComponentVersion .EQ. 0) THEN
         PrecipInfilt = 0.0
     ELSE
         CALL RootZone%Me%GetElementPrecipInfilt(ElemRegion,PrecipInfilt)
@@ -962,7 +962,7 @@ CONTAINS
     INTEGER,INTENT(IN)             :: ElemRegion(:)
     REAL(8)                        :: ET(:)
     
-    IF (RootZone%iVersion .EQ. 0) THEN
+    IF (RootZone%iComponentVersion .EQ. 0) THEN
         ET = 0.0
     ELSE
         CALL RootZone%Me%GetElementActualET(ElemRegion,ET)
@@ -978,7 +978,7 @@ CONTAINS
     CLASS(RootZoneType),INTENT(IN) :: RootZone
     INTEGER                        :: NAgCrops
     
-    IF (RootZone%iVersion .EQ. 0) THEN
+    IF (RootZone%iComponentVersion .EQ. 0) THEN
         NAgCrops = 0
     ELSE
         NAgCrops = RootZone%Me%GetNAgCrops()
@@ -1030,7 +1030,7 @@ CONTAINS
     INTEGER,INTENT(OUT)           :: iStat
     
     
-    IF (RootZone%iVersion .NE. 0) THEN
+    IF (RootZone%iComponentVersion .NE. 0) THEN
         CALL RootZone%Me%GetFutureDemands(AppGrid,TimeStep,Precip,ET,cFutureDemandDate,rElemAgDemand,rElemUrbDemand,iStat)
     ELSE
         iStat          = 0
@@ -1188,7 +1188,7 @@ CONTAINS
     INTEGER,INTENT(IN)             :: iLUType,NLocations
     INTEGER,INTENT(OUT)            :: Dest(NLocations)
     
-    IF (RootZone%iVersion .NE. 0) THEN
+    IF (RootZone%iComponentVersion .NE. 0) THEN
         CALL RootZone%Me%GetSurfaceFlowDestinations(iLUType,NLocations,Dest)
     ELSE
         Dest = 0
@@ -1205,7 +1205,7 @@ CONTAINS
     INTEGER,INTENT(IN)             :: iLUType,NLocations
     INTEGER,INTENT(OUT)            :: DestTypes(NLocations)
     
-    IF (RootZone%iVersion .NE. 0) THEN
+    IF (RootZone%iComponentVersion .NE. 0) THEN
         CALL RootZone%Me%GetSurfaceFlowDestinationTypes(iLUType,NLocations,DestTypes)
     ELSE
         DestTypes = 0
@@ -1223,7 +1223,7 @@ CONTAINS
     REAL(8)                        :: Perc(AppGrid%NElements)
     
     !Return if root zone is not defined
-    IF (RootZone%iVersion .EQ. 0) RETURN
+    IF (RootZone%iComponentVersion .EQ. 0) RETURN
     
     !Print progress
     CALL EchoProgress('Retrieving percolation at all elements')
@@ -1242,7 +1242,7 @@ CONTAINS
     REAL(8)                        :: Perc
   
     !Return if root zone is not defined
-    IF (RootZone%iVersion .EQ. 0) RETURN
+    IF (RootZone%iComponentVersion .EQ. 0) RETURN
 
     !Print progress
     CALL EchoProgress('Retrieving percolation at a specified element')
@@ -1261,7 +1261,7 @@ CONTAINS
     REAL(8),INTENT(OUT)            :: DirectRunoff(:),ReturnFlow(:),PondDrain(:)
     REAL(8),INTENT(INOUT)          :: RiparianET(:)
     
-    IF (RootZone%iVersion .NE. 0) CALL RootZone%Me%GetFlowsToStreams(AppGrid,DirectRunoff,ReturnFlow,PondDrain,RiparianET)
+    IF (RootZone%iComponentVersion .NE. 0) CALL RootZone%Me%GetFlowsToStreams(AppGrid,DirectRunoff,ReturnFlow,PondDrain,RiparianET)
     
   END SUBROUTINE GetFlowsToStreams
   
@@ -1274,7 +1274,7 @@ CONTAINS
     TYPE(AppGridType),INTENT(IN)   :: AppGrid
     REAL(8),INTENT(OUT)            :: DirectRunoff(:),ReturnFlow(:),PondDrain(:)
     
-    IF (RootZone%iVersion .NE. 0) CALL RootZone%Me%GetFlowsToLakes(AppGrid,DirectRunoff,ReturnFlow,PondDrain)
+    IF (RootZone%iComponentVersion .NE. 0) CALL RootZone%Me%GetFlowsToLakes(AppGrid,DirectRunoff,ReturnFlow,PondDrain)
     
   END SUBROUTINE GetFlowsToLakes
   
@@ -1285,17 +1285,10 @@ CONTAINS
   FUNCTION GetVersion() RESULT(cVrs)
     CHARACTER(:),ALLOCATABLE :: cVrs
     
-    !Local variables
-    TYPE(RootZone_v50_Type)  :: v50
-    TYPE(RootZone_v40_Type)  :: v40
-    TYPE(RootZone_v401_Type) :: v401
-    TYPE(RootZone_v41_Type)  :: v41
-    TYPE(RootZone_v411_Type) :: v411
-    TYPE(RootZone_v412_Type) :: v412
-    TYPE(VersionType)        :: MyVersion
+    TYPE(VersionType) :: MyVersion
     
-    MyVersion = MyVersion%New(iLenVersion,cVersion,cRevision)
-    cVrs      = TRIM(MyVersion%GetVersion()) // ' (Interface) ; ' // TRIM(v40%GetVersion()) // ', ' // TRIM(v401%GetVersion()) // ', ' // TRIM(v41%GetVersion()) //  ', ' // TRIM(v411%GetVersion()) // ', ' // TRIM(v412%GetVersion()) // ', ' // TRIM(v50%GetVersion()) // ' (Components)'
+    MyVersion = MyVersion%New(f_iLenVersion,f_cVersion,cRevision)
+    cVrs      = TRIM(MyVersion%GetVersion()) 
     
   END FUNCTION GetVersion
 
@@ -1307,7 +1300,7 @@ CONTAINS
     CLASS(RootZoneType),INTENT(IN) :: RootZone
     INTEGER                        :: iVersion
     
-    iVersion = RootZone%iVersion
+    iVersion = RootZone%iComponentVersion
     
   END FUNCTION GetActiveVersion
   
@@ -1320,7 +1313,7 @@ CONTAINS
     TYPE(AppGridType),INTENT(IN)   :: AppGrid
     REAL(8)                        :: RPERC(AppGrid%NSubregions+1)
     
-    IF (RootZone%iVersion .EQ. 0.0) THEN
+    IF (RootZone%iComponentVersion .EQ. 0.0) THEN
         RPERC = 0.0
     ELSE
         RPERC = RootZone%Me%RegionalPerc(AppGrid)
@@ -1337,7 +1330,7 @@ CONTAINS
     TYPE(AppGridType),INTENT(IN)   :: AppGrid
     REAL(8),INTENT(OUT)            :: RReturnFlow(AppGrid%NSubregions+1)
     
-    IF (RootZone%iVersion .EQ. 0.0) THEN
+    IF (RootZone%iComponentVersion .EQ. 0.0) THEN
         RReturnFlow = 0.0
     ELSE
         CALL RootZone%Me%RegionalReturnFlow_Ag(AppGrid,RReturnFlow)
@@ -1354,7 +1347,7 @@ CONTAINS
     TYPE(AppGridType),INTENT(IN)   :: AppGrid
     REAL(8),INTENT(OUT)            :: RReturnFlow(AppGrid%NSubregions+1)
     
-    IF (RootZone%iVersion .EQ. 0.0) THEN
+    IF (RootZone%iComponentVersion .EQ. 0.0) THEN
         RReturnFlow = 0.0
     ELSE
         CALL RootZone%Me%RegionalReturnFlow_Urb(AppGrid,RReturnFlow)
@@ -1382,7 +1375,7 @@ CONTAINS
     CLASS(RootZoneType) :: RootZone
     INTEGER,INTENT(IN)  :: iLakeElem(:)
     
-    IF (RootZone%iVersion .NE. 0) CALL RootZone%Me%SetLakeElemFlag(iLakeElem)
+    IF (RootZone%iComponentVersion .NE. 0) CALL RootZone%Me%SetLakeElemFlag(iLakeElem)
 
   END SUBROUTINE SetLakeElemFlag
   
@@ -1395,7 +1388,7 @@ CONTAINS
     REAL(8),INTENT(IN)  :: rSupply(:)
     INTEGER,INTENT(IN)  :: iSupplyType,iSupplyFor
     
-    IF (RootZone%iVersion .EQ. 0) RETURN
+    IF (RootZone%iComponentVersion .EQ. 0) RETURN
     
     CALL RootZone%Me%SetSupply(rSupply,iSupplyType,iSupplyFor)
     
@@ -1463,7 +1456,7 @@ CONTAINS
     !Initialize
     iStat = 0
     
-    IF (RootZone%iVersion .NE. 0) THEN
+    IF (RootZone%iComponentVersion .NE. 0) THEN
         IF (PRESENT(RegionLUAreas)) THEN
             !First, compute regional land-use areas based on normalized fractions for subregional areas to avoid any inconsistencies
             ALLOCATE (RegionLUAreas_Work(SIZE(RegionLUAreas,DIM=1),SIZE(RegionLUAreas,DIM=2)))
@@ -1515,7 +1508,7 @@ CONTAINS
     TYPE(TimeStepType),INTENT(IN) :: TimeStep
     LOGICAL,INTENT(IN)            :: lEndOfSimulation
     
-    IF (RootZone%iVersion .NE. 0) CALL RootZone%Me%PrintResults(AppGrid,ETData,TimeStep,lEndOfSimulation)
+    IF (RootZone%iComponentVersion .NE. 0) CALL RootZone%Me%PrintResults(AppGrid,ETData,TimeStep,lEndOfSimulation)
     
   END SUBROUTINE PrintResults
 
@@ -1567,7 +1560,7 @@ CONTAINS
     CLASS(RootZoneType)         :: RootZone
     CHARACTER(LEN=*),INTENT(IN) :: NewUnit
 
-    IF (RootZone%iVersion .NE. 0) CALL RootZone%Me%ConvertTimeUnit(NewUnit)
+    IF (RootZone%iComponentVersion .NE. 0) CALL RootZone%Me%ConvertTimeUnit(NewUnit)
     
   END SUBROUTINE ConvertTimeUnit
   
@@ -1578,7 +1571,7 @@ CONTAINS
   SUBROUTINE AdvanceState(RootZone)
     CLASS(RootZoneType) :: RootZone
     
-    IF (RootZone%iVersion .NE. 0) CALL RootZone%Me%AdvanceState()
+    IF (RootZone%iComponentVersion .NE. 0) CALL RootZone%Me%AdvanceState()
   
   END SUBROUTINE AdvanceState
   
@@ -1616,7 +1609,7 @@ CONTAINS
     INTEGER,INTENT(OUT)           :: iStat
      
     iStat = 0
-    IF (RootZone%iVersion .NE. 0) CALL RootZone%Me%Simulate(AppGrid,TimeStep,ETData,iStat)
+    IF (RootZone%iComponentVersion .NE. 0) CALL RootZone%Me%Simulate(AppGrid,TimeStep,ETData,iStat)
     
   END SUBROUTINE Simulate
   
@@ -1652,7 +1645,7 @@ CONTAINS
     INTEGER,INTENT(OUT)           :: iStat
     
     
-    IF (RootZone%iVersion .NE. 0) THEN
+    IF (RootZone%iComponentVersion .NE. 0) THEN
         CALL RootZone%Me%ComputeFutureWaterDemand(AppGrid,TimeStep,Precip,ET,cEndFutureDemandDate,iStat)
     ELSE
         iStat = 0

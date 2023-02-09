@@ -22,7 +22,8 @@
 !***********************************************************************
 MODULE Class_TSBCDataFile
   USE GeneralUtilities    , ONLY: AllocArray
-  USE TimeSeriesUtilities , ONLY: TimeStepType
+  USE TimeSeriesUtilities , ONLY: TimeStepType          , &
+                                  IncrementTimeStamp
   USE MessageLogger       , ONLY: SetLastMessage        , &
                                   f_iFatal
   USE IOInterface         , ONLY: RealTSDataInFileType 
@@ -103,6 +104,7 @@ CONTAINS
     CHARACTER                   :: cErrorMsg*200
     INTEGER                     :: ErrorCode
     REAL(8)                     :: rFactor(2)
+    TYPE(TimeStepType)          :: TimeStepWork
     LOGICAL,ALLOCATABLE         :: RateTypeDataArray(:)
     
     !Initialize
@@ -145,7 +147,13 @@ CONTAINS
     TSBCDataFile%lDefined = .TRUE.
     
     !Read the time series b.c. for the first time step to compute groundwater storage
-    CALL TSBCDataFile%ReadTSData(TimeStep,iStat)
+    !Make sure that the data is read for t=1, not t=0
+    TimeStepWork = TimeStep
+    IF (TimeStepWork%CurrentTimeStep .EQ. 0) THEN
+        TimeStepWork%CurrentTimeStep    = TimeStepWork%CurrentTimeStep + 1
+        TimeStepWork%CurrentDateAndTime = IncrementTimeStamp(TimeStepWork%CurrentDateAndTime,TimeStepWork%DeltaT_InMinutes,1)
+    END IF
+    CALL TSBCDataFile%ReadTSData(TimeStepWork,iStat)
     
     !Free memory
     DEALLOCATE (RateTypeDataArray , STAT=ErrorCode)

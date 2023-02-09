@@ -22,7 +22,6 @@
 !***********************************************************************
 MODULE Class_BaseRootZone
   !$ USE OMP_LIB
-  USE Class_Version               , ONLY: VersionType
   USE MessageLogger               , ONLY: SetLastMessage                       , &
                                           f_iFatal                               
   USE IOInterface                 , ONLY: GenericFileType                      , &
@@ -137,7 +136,6 @@ MODULE Class_BaseRootZone
   ! --- ABSTRACT BASE ROOT ZONE DATA TYPE
   ! -------------------------------------------------------------
   TYPE,ABSTRACT :: BaseRootZoneType
-      TYPE(VersionType)                             :: Version                            !Root zone component version number
       CHARACTER(LEN=6)                              :: VarTimeUnit            = ''        !Time unit of rate-type variables
       TYPE(FlagsType)                               :: Flags                              !Flags that affect the simulation of root zone
       TYPE(ElemPrecipDataType),ALLOCATABLE          :: ElemPrecipData(:)                  !Precipitation data at each element
@@ -201,7 +199,6 @@ MODULE Class_BaseRootZone
       PROCEDURE(Abstract_GetFlowsToLakes),PASS,DEFERRED                       :: GetFlowsToLakes
       PROCEDURE(Abstract_GetRatio_DestSupplyToRegionSupply_Ag),PASS,DEFERRED  :: GetRatio_DestSupplyToRegionSupply_Ag
       PROCEDURE(Abstract_GetRatio_DestSupplyToRegionSupply_Urb),PASS,DEFERRED :: GetRatio_DestSupplyToRegionSupply_Urb
-      PROCEDURE(Abstract_GetVersion),PASS,DEFERRED                            :: GetVersion
       PROCEDURE(Abstract_GetMaxAndMinNetReturnFlowFrac),PASS,DEFERRED         :: GetMaxAndMinNetReturnFlowFrac
       PROCEDURE,PASS                                                          :: GetSurfaceFlowDestinations
       PROCEDURE,PASS                                                          :: GetSurfaceFlowDestinationTypes
@@ -231,11 +228,11 @@ MODULE Class_BaseRootZone
   ! -------------------------------------------------------------
   ABSTRACT INTERFACE
   
-     SUBROUTINE Abstract_New(RootZone,IsForInquiry,cFileName,cWorkingDirectory,AppGrid,TimeStep,NTIME,ET,Precip,iStat,iStrmNodeIDs,iLakeIDs) 
+     SUBROUTINE Abstract_New(RootZone,IsForInquiry,cFileName,cWorkingDirectory,cPackageVersion,AppGrid,TimeStep,NTIME,ET,Precip,iStat,iStrmNodeIDs,iLakeIDs) 
         IMPORT                             :: AppGridType,TimeStepType,BaseRootZoneType,ETType,PrecipitationType
         CLASS(BaseRootZoneType)            :: RootZone
         LOGICAL,INTENT(IN)                 :: IsForInquiry
-        CHARACTER(LEN=*),INTENT(IN)        :: cFileName,cWorkingDirectory
+        CHARACTER(LEN=*),INTENT(IN)        :: cFileName,cWorkingDirectory,cPackageVersion
         TYPE(AppGridType),INTENT(IN)       :: AppGrid
         TYPE(TimeStepType),INTENT(IN)      :: TimeStep
         INTEGER,INTENT(IN)                 :: NTIME
@@ -534,13 +531,6 @@ MODULE Class_BaseRootZone
      END SUBROUTINE Abstract_GetRatio_DestSupplyToRegionSupply_Urb
      
      
-     FUNCTION Abstract_GetVersion(RootZone) RESULT(cVrs)
-        IMPORT                   :: BaseRootZoneType
-        CLASS(BaseRootZoneType)  :: RootZone
-        CHARACTER(:),ALLOCATABLE :: cVrs
-     END FUNCTION Abstract_GetVersion
-
-    
      SUBROUTINE Abstract_SetLakeElemFlag(RootZone,iLakeElem)
         IMPORT                  :: BaseRootZoneType
         CLASS(BaseRootZoneType) :: RootZone
@@ -736,7 +726,6 @@ CONTAINS
     
     CALL RootZone%KillRZImplementation()
     
-    CALL RootZone%Version%Kill()
     RootZone%VarTimeUnit = ''
     
   END SUBROUTINE Kill

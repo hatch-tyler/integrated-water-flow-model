@@ -468,6 +468,14 @@ CONTAINS
     !Local variables
     CHARACTER(LEN=ModNameLen+13),PARAMETER :: ThisProcedure = ModName // 'ReadAttribute'
     INTEGER                                :: ErrorCode
+    INTEGER,TARGET                         :: iIntScalar
+    INTEGER,ALLOCATABLE,TARGET             :: iIntArray(:)
+    REAL(8),TARGET                         :: rRealScalar
+    REAL(8),ALLOCATABLE,TARGET             :: rRealArray(:)
+    CHARACTER(:),ALLOCATABLE,TARGET        :: cStrScalar
+    CHARACTER(:),ALLOCATABLE,TARGET        :: cStrArray(:)
+    LOGICAL,TARGET                         :: lLogiScalar
+    LOGICAL,ALLOCATABLE,TARGET             :: lLogiArray(:)
     INTEGER(HID_T)                         :: obj_id,attr_id,type_id
     INTEGER(SIZE_T)                        :: HLen
     TYPE(C_PTR)                            :: pData
@@ -494,25 +502,33 @@ CONTAINS
     !Read attribute
     !Scalar data is being read
     IF (PRESENT(ScalarAttrData)) THEN
-        !Get a C pointer to data
-        pData = C_LOC(ScalarAttrData)
-        
         SELECT TYPE (ScalarAttrData)
             TYPE IS (INTEGER)
+                iIntScalar = ScalarAttrData
+                pData      = C_LOC(iIntScalar)
                 CALL H5AREAD_F(attr_id,ThisFile%iIntegerTypeID,pData,ErrorCode)
+                ScalarAttrData = iIntScalar
                 
             TYPE IS (REAL(8))
+                rRealScalar = ScalarAttrData
+                pData       = C_LOC(rRealScalar)
                 CALL H5AREAD_F(attr_id,ThisFile%iReal8TypeID,pData,ErrorCode)
+                ScalarAttrData = rRealScalar
                 
             TYPE IS (CHARACTER(LEN=*))
-                pData = C_LOC(ScalarAttrData(1:1))
-                HLen  = LEN(ScalarAttrData)
+                ALLOCATE (cStrScalar , SOURCE=ScalarAttrData)
+                pData = C_LOC(cStrScalar(1:1))
+                HLen  = LEN(cStrScalar)
                 CALL H5TCOPY_F(H5T_FORTRAN_S1,type_id,ErrorCode)
                 CALL H5TSET_SIZE_F(type_id,HLen,ErrorCode)
                 CALL H5AREAD_F(attr_id,type_id,pData,ErrorCode)
+                ScalarAttrData = cStrScalar
                 
             TYPE IS (LOGICAL)
+                lLogiScalar = ScalarAttrData
+                pData       = C_LOC(lLogiScalar)
                 CALL H5AREAD_F(attr_id,ThisFile%iIntegerTypeID,pData,ErrorCode)
+                ScalarAttrData = lLogiScalar
                 
             CLASS DEFAULT    
                 CALL SetLastMessage('Attribute '//cAttrName//' with the specified data type cannot be read from file '//ThisFile%Name//'!',f_iFatal,ThisProcedure)
@@ -524,25 +540,33 @@ CONTAINS
         
     !Array data is being read
     ELSEIF (PRESENT(ArrayAttrData)) THEN
-        !Get a C pointer to data
-        pData = C_LOC(ArrayAttrData(1))
-
         SELECT TYPE (ArrayAttrData)
             TYPE IS (INTEGER)
+                ALLOCATE (iIntArray , MOLD=ArrayAttrData)
+                pData = C_LOC(iIntArray(1))
                 CALL H5AREAD_F(attr_id,ThisFile%iIntegerTypeID,pData,ErrorCode)
+                ArrayAttrData = iIntArray
                 
             TYPE IS (REAL(8))
+                ALLOCATE (rRealArray , MOLD=ArrayAttrData)
+                pData = C_LOC(rRealArray(1))
                 CALL H5AREAD_F(attr_id,ThisFile%iReal8TypeID,pData,ErrorCode)
+                ArrayAttrData = rRealArray
                 
             TYPE IS (CHARACTER(LEN=*))
-                pData = C_LOC(ArrayAttrData(1)(1:1))
-                HLen  = LEN(ArrayAttrData(1))
+                ALLOCATE (cStrArray , MOLD=ArrayAttrData)
+                pData = C_LOC(cStrArray(1)(1:1))
+                HLen  = LEN(cStrArray(1))
                 CALL H5TCOPY_F(H5T_FORTRAN_S1,type_id,ErrorCode)
                 CALL H5TSET_SIZE_F(type_id,HLen,ErrorCode)
                 CALL H5AREAD_F(attr_id,type_id,pData,ErrorCode)
+                ArrayAttrData = cStrArray
                 
             TYPE IS (LOGICAL)
+                ALLOCATE (lLogiArray , MOLD=ArrayAttrData)
+                pData = C_LOC(lLogiArray(1))
                 CALL H5AREAD_F(attr_id,ThisFile%iIntegerTypeID,pData,ErrorCode)
+                ArrayAttrData = lLogiArray
                 
             CLASS DEFAULT    
                 CALL SetLastMessage('Attribute '//cAttrName//' with the specified data type cannot be read from file '//ThisFile%Name//'!',f_iFatal,ThisProcedure)
@@ -582,6 +606,7 @@ CONTAINS
     !Local variables
     CHARACTER(LEN=ModNameLen+18),PARAMETER :: ThisProcedure = 'Read1DArrayDataSet'
     INTEGER                                :: ErrorCode,IntData(SIZE(Data))
+    CHARACTER(:),ALLOCATABLE,TARGET        :: cStrArray(:)
     INTEGER(HID_T)                         :: iDataSetID
     INTEGER(HSIZE_T)                       :: HDims(1)
     INTEGER(SIZE_T)                        :: HLen
@@ -614,12 +639,13 @@ CONTAINS
             Data = IntData
             
         TYPE IS (CHARACTER(LEN=*))
-            pData = C_LOC(Data(1)(1:1))
-            HLen  = LEN(Data(1))
+            ALLOCATE (cStrArray , MOLD=Data)
+            pData = C_LOC(cStrArray(1)(1:1))
+            HLen  = LEN(cStrArray(1))
             CALL H5TSET_SIZE_F(ThisFile%iCharacterTypeID,HLen,ErrorCode)
             CALL H5DREAD_F(iDataSetID,ThisFile%iCharacterTypeID,pData,ErrorCode)
-            
-        END SELECT
+            Data = cStrArray
+    END SELECT
         
     !Release resources
     CALL H5DCLOSE_F(iDataSetID,ErrorCode)
@@ -639,6 +665,7 @@ CONTAINS
     !Local variables
     CHARACTER(LEN=ModNameLen+18),PARAMETER :: ThisProcedure = 'Read2DArrayDataSet'
     INTEGER                                :: ErrorCode,IntData(SIZE(Data,DIM=1),SIZE(Data,DIM=2))
+    CHARACTER(:),ALLOCATABLE,TARGET        :: cStrArray(:,:)
     INTEGER(HID_T)                         :: iDataSetID
     INTEGER(HSIZE_T)                       :: HDims(2)
     INTEGER(SIZE_T)                        :: HLen
@@ -671,12 +698,13 @@ CONTAINS
             Data = IntData
             
         TYPE IS (CHARACTER(LEN=*))
-            pData = C_LOC(Data(1,1)(1:1))
-            HLen  = LEN(Data(1,1))
+            ALLOCATE (cStrArray , MOLD=Data)
+            pData = C_LOC(cStrArray(1,1)(1:1))
+            HLen  = LEN(cStrArray(1,1))
             CALL H5TSET_SIZE_F(ThisFile%iCharacterTypeID,HLen,ErrorCode)
             CALL H5DREAD_F(iDataSetID,ThisFile%iCharacterTypeID,pData,ErrorCode)
-            
-        END SELECT
+            Data = cStrArray
+    END SELECT
         
     !Release resources
     CALL H5DCLOSE_F(iDataSetID,ErrorCode)
@@ -736,6 +764,8 @@ CONTAINS
     TYPE(C_PTR)                :: pData
     REAL(8)                    :: rTime
     INTEGER                    :: iTimeOffset,ErrorCode1,ErrorCode2,ErrorCode3
+    INTEGER,ALLOCATABLE,TARGET :: iIntArray(:,:)
+    REAL(8),ALLOCATABLE,TARGET :: rRealArray(:,:)
 
     !Calculate time offset
     IF (ThisFile%TimeStep%TrackTime) THEN
@@ -751,19 +781,22 @@ CONTAINS
     iBlock  = [ThisFile%Datasets(iDatasetNo)%nColumns , MIN(SIZE(Data,DIM=2),ThisFile%nTime-iTimeOffset)]
     CALL H5SSELECT_HYPERSLAB_F(ThisFile%Datasets(iDatasetNo)%iDataSpaceID,H5S_SELECT_SET_F,iOffset,iCount,ErrorCode1,iStride,iBlock)
     
-    !C pointer to Data
-    pData = C_LOC(Data(1,1))
-    
     !Create memory data space
     CALL H5SCREATE_SIMPLE_F(2,iBlock,iMemSPaceID,ErrorCode2)
     
     !Read data
     SELECT TYPE (Data)
         TYPE IS (REAL(8))
+            ALLOCATE (rRealArray , MOLD=Data)
+            pData = C_LOC(rRealArray(1,1))
             CALL H5DREAD_F(ThisFile%Datasets(iDataSetNo)%iDataSetID,ThisFile%iReal8TypeID,pData,ErrorCode3,iMemSpaceID,ThisFile%Datasets(iDatasetNo)%iDataSpaceID)
+            Data = rRealArray
             
         TYPE IS (INTEGER)
+            ALLOCATE (iIntArray , MOLD=Data)
+            pData = C_LOC(iIntArray(1,1))
             CALL H5DREAD_F(ThisFile%Datasets(iDataSetNo)%iDataSetID,ThisFile%iIntegerTypeID,pData,ErrorCode3,iMemSpaceID,ThisFile%Datasets(iDatasetNo)%iDataSpaceID)
+            Data = iIntArray
     END SELECT
     
     !Adjust data pointer on file
@@ -796,6 +829,8 @@ CONTAINS
     TYPE(C_PTR)                :: pData
     REAL(8)                    :: rTime
     INTEGER                    :: iTimeOffset,ErrorCode1,ErrorCode2,ErrorCode3
+    INTEGER,ALLOCATABLE,TARGET :: iIntArray(:)
+    REAL(8),ALLOCATABLE,TARGET :: rRealArray(:)
 
     !Calculate time offset
     IF (ThisFile%TimeStep%TrackTime) THEN
@@ -811,19 +846,22 @@ CONTAINS
     iBlock  = [1 , MIN(SIZE(Data),ThisFile%nTime-iTimeOffset)]
     CALL H5SSELECT_HYPERSLAB_F(ThisFile%Datasets(iDatasetNo)%iDataSpaceID,H5S_SELECT_SET_F,iOffset,iCount,ErrorCode1,iStride,iBlock)
     
-    !C pointer to Data
-    pData = C_LOC(Data(1))
-    
     !Create memory data space
     CALL H5SCREATE_SIMPLE_F(2,iBlock,iMemSPaceID,ErrorCode2)
     
     !Read data
     SELECT TYPE (Data)
         TYPE IS (REAL(8))
+            ALLOCATE (rRealArray , MOLD=Data)
+            pData = C_LOC(rRealArray(1))
             CALL H5DREAD_F(ThisFile%Datasets(iDataSetNo)%iDataSetID,ThisFile%iReal8TypeID,pData,ErrorCode3,iMemSpaceID,ThisFile%Datasets(iDatasetNo)%iDataSpaceID)
+            Data = rRealArray
             
         TYPE IS (INTEGER)
+            ALLOCATE (iIntArray , MOLD=Data)
+            pData = C_LOC(iIntArray(1))
             CALL H5DREAD_F(ThisFile%Datasets(iDataSetNo)%iDataSetID,ThisFile%iIntegerTypeID,pData,ErrorCode3,iMemSpaceID,ThisFile%Datasets(iDatasetNo)%iDataSpaceID)
+            Data = iIntArray
     END SELECT
     
     !Adjust data pointer on file
@@ -848,8 +886,10 @@ CONTAINS
     INTEGER,INTENT(OUT)         :: FileReadCode,iStat
     
     !Local variables
-    INTEGER                    :: indx,iData(SIZE(Data,DIM=1)),iTimeOffset
-    REAL(8)                    :: rData(SIZE(Data,DIM=1)),rTime
+    INTEGER                    :: indx,iTimeOffset
+    INTEGER,ALLOCATABLE,TARGET :: iData(:)
+    REAL(8)                    :: rTime
+    REAL(8),ALLOCATABLE,TARGET :: rData(:)
     INTEGER(HSIZE_T),PARAMETER :: iStride(2)  = [1,1] 
     INTEGER(HSIZE_T),PARAMETER :: iCount(2)   = [1,1] 
     INTEGER(HSIZE_T)           :: iOffset(2),iBlock(2)
@@ -875,17 +915,19 @@ CONTAINS
     !Read data   
     SELECT TYPE(Data)
         TYPE IS (REAL(8))
+            ALLOCATE (rData(SIZE(Data,DIM=1)))
+            pData = C_LOC(rData(1))
             !Iterate over datasets
             DO indx=1,ThisFile%nDatasets
-                pData = C_LOC(rData(1))
                 CALL H5DREAD_F(ThisFile%Datasets(indx)%iDataSetID,ThisFile%iReal8TypeID,pData,FileReadCode,ThisFile%Datasets(indx)%iDataSpaceID_OneTimeStep,ThisFile%Datasets(indx)%iDataSpaceID)
                 Data(:,indx) = rData
             END DO
     
         TYPE IS (INTEGER)
+            ALLOCATE (iData(SIZE(Data,DIM=1)))
+            pData = C_LOC(iData(1))
             !Iterate over datasets
             DO indx=1,ThisFile%nDatasets
-                pData = C_LOC(iData(1))
                 CALL H5DREAD_F(ThisFile%Datasets(indx)%iDataSetID,ThisFile%iIntegerTypeID,pData,FileReadCode,ThisFile%Datasets(indx)%iDataSpaceID_OneTimeStep,ThisFile%Datasets(indx)%iDataSpaceID)
                 Data(:,indx) = iData
             END DO
@@ -894,7 +936,6 @@ CONTAINS
     !Adjust data pointer
     ThisFile%Datasets%iDataPointer_File = iTimeOffset + 1
 
-    
   END SUBROUTINE ReadData_OneTimeStep_AllColumns_AllDatasets_GivenTime
   
   
@@ -927,12 +968,13 @@ CONTAINS
     INTEGER,INTENT(OUT)  :: Stat
     
     !Local variables
-    INTEGER                    :: indx,iData(SIZE(Data,DIM=1))
-    REAL(8)                    :: rData(SIZE(Data,DIM=1))
+    INTEGER                    :: indx
+    INTEGER,ALLOCATABLE,TARGET :: iData(:) 
+    REAL(8),ALLOCATABLE,TARGET :: rData(:)
     INTEGER(HSIZE_T),PARAMETER :: iStride(2)  = [1,1] 
     INTEGER(HSIZE_T),PARAMETER :: iCount(2)   = [1,1] 
     INTEGER(HSIZE_T)           :: iOffset(2),iBlock(2)
-    TYPE(C_PTR) :: pData
+    TYPE(C_PTR)                :: pData
     
     !File data offset
     iOffset = [iColumnNo-1 , 0]
@@ -944,17 +986,19 @@ CONTAINS
     !Read data   
     SELECT TYPE(Data)
         TYPE IS (REAL(8))
+            ALLOCATE (rData(SIZE(Data,DIM=1)))
+            pData = C_LOC(rData(1))
             !Iterate over datasets
             DO indx=1,ThisFile%nDatasets
-                pData = C_LOC(rData(1))
                 CALL H5DREAD_F(ThisFile%Datasets(indx)%iDataSetID,ThisFile%iReal8TypeID,pData,Stat,ThisFile%Datasets(indx)%iDataSpaceID_OneColumn,ThisFile%Datasets(indx)%iDataSpaceID)
                 Data(:,indx) = rData
             END DO
     
         TYPE IS (INTEGER)
+            ALLOCATE (iData(SIZE(Data,DIM=1)))
+            pData = C_LOC(iData(1))
             !Iterate over datasets
             DO indx=1,ThisFile%nDatasets
-                pData = C_LOC(iData(1))
                 CALL H5DREAD_F(ThisFile%Datasets(indx)%iDataSetID,ThisFile%iIntegerTypeID,pData,Stat,ThisFile%Datasets(indx)%iDataSpaceID_OneColumn,ThisFile%Datasets(indx)%iDataSpaceID)
                 Data(:,indx) = iData
             END DO
@@ -976,19 +1020,24 @@ CONTAINS
     INTEGER,INTENT(OUT)  :: Stat
     
     !Local variables
-    TYPE(C_PTR) :: pData
-    
-    !C pointer to data
-    pData = C_LOC(Data(1,1))
+    INTEGER,ALLOCATABLE,TARGET :: iIntArray(:,:)
+    REAL(8),ALLOCATABLE,TARGET :: rRealArray(:,:)
+    TYPE(C_PTR)                :: pData
     
     !Read data   
     SELECT TYPE(Data)
         TYPE IS (REAL(8))
+            ALLOCATE (rRealArray , MOLD=Data)
+            pData = C_LOC(rRealArray(1,1))
             CALL H5DREAD_F(ThisFile%Datasets(iDatasetNo)%iDataSetID,ThisFile%iReal8TypeID,pData,Stat)
-
+            Data = rRealArray
+            
         TYPE IS (INTEGER)
+            ALLOCATE (iIntArray , MOLD=Data)
+            pData = C_LOC(iIntArray(1,1))
             CALL H5DREAD_F(ThisFile%Datasets(iDatasetNo)%iDataSetID,ThisFile%iIntegerTypeID,pData,Stat)
-
+            Data = iIntArray
+            
     END SELECT
         
     ThisFile%Datasets(iDatasetNo)%iDataPointer_File = 0
@@ -1007,6 +1056,8 @@ CONTAINS
     
     !Local variables
     INTEGER                    :: indx
+    INTEGER,ALLOCATABLE,TARGET :: iIntArray(:)
+    REAL(8),ALLOCATABLE,TARGET :: rRealArray(:)
     INTEGER(HSIZE_T),PARAMETER :: iStride(2)  = [1,1] 
     INTEGER(HSIZE_T),PARAMETER :: iCount(2)   = [1,1] 
     INTEGER(HSIZE_T)           :: iOffset(2),iBlock(2)
@@ -1016,19 +1067,23 @@ CONTAINS
     iOffset = [iColumnNo-1 , 0]
     iBlock  = [1 , SIZE(Data)]
     
-    !C pointer to Data
-    pData = C_LOC(Data(1))
-    
     !Select partial array on file 
     CALL H5SSELECT_HYPERSLAB_F(ThisFile%Datasets(iDatasetNo)%iDataSpaceID,H5S_SELECT_SET_F,iOffset,iCount,Stat,iStride,iBlock)
     
     !Read data   
     SELECT TYPE(Data)
         TYPE IS (REAL(8))
+            ALLOCATE (rRealArray , MOLD=Data)    
+            pData = C_LOC(rRealArray(1))
             CALL H5DREAD_F(ThisFile%Datasets(indx)%iDataSetID,ThisFile%iReal8TypeID,pData,Stat,ThisFile%Datasets(indx)%iDataSpaceID_OneColumn,ThisFile%Datasets(indx)%iDataSpaceID)
-    
+            Data = rRealArray
+            
         TYPE IS (INTEGER)
+            ALLOCATE (iIntArray , MOLD=Data)    
+            pData = C_LOC(iIntArray(1))
             CALL H5DREAD_F(ThisFile%Datasets(indx)%iDataSetID,ThisFile%iIntegerTypeID,pData,Stat,ThisFile%Datasets(indx)%iDataSpaceID_OneColumn,ThisFile%Datasets(indx)%iDataSpaceID)
+            Data = iIntArray
+            
     END SELECT 
         
     ThisFile%Datasets(iDatasetNo)%iDataPointer_File = 0
@@ -1153,6 +1208,7 @@ CONTAINS
     INTEGER                                :: ErrorCode,IntData(SIZE(Data))
     TYPE(C_PTR)                            :: pData  
     LOGICAL                                :: lArrayExists
+    CHARACTER(:),ALLOCATABLE,TARGET        :: cStrArray(:)
     
     !Array dimension
     HDims = SHAPE(Data)
@@ -1201,7 +1257,8 @@ CONTAINS
             CALL H5DWRITE_F(iDataSetID,ThisFile%iIntegerTypeID,IntData,HDims,ErrorCode)
             
         TYPE IS (CHARACTER(LEN=*))
-            pData = C_LOC(Data(1)(1:1))
+            ALLOCATE (cStrArray , SOURCE=Data)
+            pData = C_LOC(cStrArray(1)(1:1))
             HLen  = LEN(Data(1))
             CALL H5TSET_SIZE_F(ThisFile%iCharacterTypeID,HLen,ErrorCode)
             !Create dataset if it does not exist
@@ -1235,6 +1292,7 @@ CONTAINS
     INTEGER                                :: ErrorCode,IntData(SIZE(Data,DIM=1),SIZE(Data,DIM=2))
     TYPE(C_PTR)                            :: pData  
     LOGICAL                                :: lArrayExists
+    CHARACTER(:),ALLOCATABLE,TARGET        :: cStrArray(:,:)
     
     !Array dimension
     HDims = SHAPE(Data)
@@ -1282,8 +1340,9 @@ CONTAINS
             IntData = Data
             CALL H5DWRITE_F(iDataSetID,ThisFile%iIntegerTypeID,IntData,HDims,ErrorCode)
             
-       TYPE IS (CHARACTER(LEN=*))
-            pData = C_LOC(Data(1,1)(1:1))
+        TYPE IS (CHARACTER(LEN=*))
+            ALLOCATE (cStrArray , SOURCE=Data)
+            pData = C_LOC(cStrArray(1,1)(1:1))
             HLen  = LEN(Data(1,1))
             CALL H5TSET_SIZE_F(ThisFile%iCharacterTypeID,HLen,ErrorCode)
             !Create dataset if it does not exist
@@ -1513,6 +1572,14 @@ CONTAINS
     !Local variables
     CHARACTER(LEN=ModNameLen+14),PARAMETER :: ThisProcedure = ModName // 'WriteAttribute'
     INTEGER                                :: ErrorCode
+    INTEGER,TARGET                         :: iIntScalar
+    INTEGER,ALLOCATABLE,TARGET             :: iIntArray(:)
+    REAL(8),TARGET                         :: rRealScalar
+    REAL(8),ALLOCATABLE,TARGET             :: rRealArray(:)
+    CHARACTER(:),ALLOCATABLE,TARGET        :: cStrScalar
+    CHARACTER(:),ALLOCATABLE,TARGET        :: cStrArray(:) 
+    LOGICAL,TARGET                         :: lLogiScalar
+    LOGICAL,ALLOCATABLE,TARGET             :: lLogiArray(:)
     INTEGER(HID_T)                         :: space_id,obj_id,attr_id
     INTEGER(HSIZE_T)                       :: HDims(1)
     INTEGER(SIZE_T)                        :: HLen
@@ -1533,10 +1600,6 @@ CONTAINS
     !Establish dataspace and data type, create and write attribute
     !Write scalar data
     IF (PRESENT(ScalarAttrData)) THEN
-        
-        !Get a C pointer to scalar data
-        pData = C_LOC(ScalarAttrData)
-        
         !Create or open attribute
         SELECT TYPE (ScalarAttrData)
             TYPE IS (REAL(8))
@@ -1545,6 +1608,8 @@ CONTAINS
                 ELSE
                     CALL H5ACREATE_F(obj_id,cAttrName,ThisFile%iReal8TypeID,ThisFile%iScalarDataSpaceID,attr_id,ErrorCode)
                 END IF
+                rRealScalar = ScalarAttrData
+                pData      = C_LOC(rRealScalar)
                 CALL H5AWRITE_F(attr_id,ThisFile%iReal8TypeID,pData,ErrorCode)
                 
             TYPE IS (INTEGER)
@@ -1553,11 +1618,14 @@ CONTAINS
                 ELSE
                     CALL H5ACREATE_F(obj_id,cAttrName,ThisFile%iIntegerTypeID,ThisFile%iScalarDataSpaceID,attr_id,ErrorCode)
                 END IF
+                iIntScalar = ScalarAttrData
+                pData      = C_LOC(iIntScalar)
                 CALL H5AWRITE_F(attr_id,ThisFile%iIntegerTypeID,pData,ErrorCode)
                 
             TYPE IS (CHARACTER(LEN=*))
-                pData = C_LOC(ScalarAttrData(1:1))
-                HLen  = LEN(ScalarAttrData)
+                ALLOCATE (cStrScalar , SOURCE=ScalarAttrData)
+                pData = C_LOC(cStrScalar(1:1))
+                HLen  = LEN(cStrScalar)
                 CALL H5TSET_SIZE_F(ThisFile%iCharacterTypeID,HLen,ErrorCode)
                 IF (lAttrExists) THEN
                     CALL H5AOPEN_F(obj_id,cAttrName,attr_id,ErrorCode)
@@ -1572,6 +1640,8 @@ CONTAINS
                 ELSE
                     CALL H5ACREATE_F(obj_id,cAttrName,ThisFile%iIntegerTypeID,ThisFile%iScalarDataSpaceID,attr_id,ErrorCode)
                 END IF
+                lLogiScalar = ScalarAttrData
+                pData       = C_LOC(lLogiScalar)
                 CALL H5AWRITE_F(attr_id,ThisFile%iIntegerTypeID,pData,ErrorCode)
                 
             CLASS DEFAULT
@@ -1590,9 +1660,6 @@ CONTAINS
         HDims(1) = SIZE(ArrayAttrData)
         CALL H5SCREATE_SIMPLE_F(1,HDims,space_id,ErrorCode)
         
-        !Get a C pointer to attribute to be written
-        pData = C_LOC(ArrayAttrData(1))
-        
         !Create attribute
         SELECT TYPE (ArrayAttrData)
             TYPE IS (REAL(8))
@@ -1601,6 +1668,8 @@ CONTAINS
                 ELSE
                     CALL H5ACREATE_F(obj_id,cAttrName,ThisFile%iReal8TypeID,space_id,attr_id,ErrorCode)
                 END IF
+                ALLOCATE (rRealArray , SOURCE=ArrayAttrData)
+                pData = C_LOC(rRealArray(1))
                 CALL H5AWRITE_F(attr_id,ThisFile%iReal8TypeID,pData,ErrorCode)
                 
             TYPE IS (INTEGER)
@@ -1609,11 +1678,14 @@ CONTAINS
                 ELSE
                     CALL H5ACREATE_F(obj_id,cAttrName,ThisFile%iIntegerTypeID,space_id,attr_id,ErrorCode)
                 END IF
+                ALLOCATE (iIntArray , SOURCE=ArrayAttrData)
+                pData = C_LOC(iIntArray(1))
                 CALL H5AWRITE_F(attr_id,ThisFile%iIntegerTypeID,pData,ErrorCode)
                 
             TYPE IS (CHARACTER(LEN=*))
-                pData = C_LOC(ArrayAttrData(1)(1:1))
-                HLen  = LEN(ArrayAttrData(1))
+                ALLOCATE (cStrArray , SOURCE=ArrayAttrData)
+                pData = C_LOC(cStrArray(1)(1:1))
+                HLen  = LEN(cStrArray(1))
                 CALL H5TSET_SIZE_F(ThisFile%iCharacterTypeID,HLen,ErrorCode)
                 IF (lAttrExists) THEN
                     CALL H5AOPEN_F(obj_id,cAttrName,attr_id,ErrorCode)
@@ -1628,6 +1700,8 @@ CONTAINS
                 ELSE
                     CALL H5ACREATE_F(obj_id,cAttrName,ThisFile%iIntegerTypeID,space_id,attr_id,ErrorCode)
                 END IF
+                ALLOCATE (lLogiArray , SOURCE=ArrayAttrData)
+                pData = C_LOC(lLogiArray(1))
                 CALL H5AWRITE_F(attr_id,ThisFile%iIntegerTypeID,pData,ErrorCode)
                 
             CLASS DEFAULT

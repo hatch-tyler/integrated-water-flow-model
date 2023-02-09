@@ -1329,8 +1329,9 @@ CONTAINS
     !Set b.c.
     SELECT CASE (iBCType)
         CASE (f_iSpFlowBCID)
-            iLoc                           = LocateInList(iNode,LayerBC%SpecFlowBC%iNode)
-            LayerBC%SpecFlowBC(iLoc)%rFlow = rFlow
+            iLoc                               = LocateInList(iNode,LayerBC%SpecFlowBC%iNode)
+            LayerBC%SpecFlowBC(iLoc)%rFlowRead = rFlow
+            LayerBC%SpecFlowBC(iLoc)%rFlow     = rFlow
 
             
         CASE (f_iSpHeadBCID)

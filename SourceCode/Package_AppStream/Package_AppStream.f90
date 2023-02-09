@@ -104,8 +104,8 @@ MODULE Package_AppStream
   ! -------------------------------------------------------------
   TYPE AppStreamType
       PRIVATE
-      INTEGER                              :: iVersion = 0
-      LOGICAL                              :: lDefined = .FALSE.
+      INTEGER                              :: iComponentVersion = 0
+      LOGICAL                              :: lDefined          = .FALSE.
       CLASS(BaseAppStreamType),ALLOCATABLE :: Me
   CONTAINS
       PROCEDURE,PASS   :: SetStaticComponent
@@ -237,8 +237,8 @@ MODULE Package_AppStream
   ! -------------------------------------------------------------
   ! --- STREAM COMPONENT FACADE VERSION RELATED DATA
   ! -------------------------------------------------------------
-  INTEGER,PARAMETER                    :: iLenVersion = 8
-  CHARACTER(LEN=iLenVersion),PARAMETER :: cVersion ='4.0.0000'
+  INTEGER,PARAMETER                      :: f_iLenVersion = 11
+  CHARACTER(LEN=f_iLenVersion),PARAMETER :: f_cVersion    ='2022.0.0000'
   INCLUDE 'Package_AppStream_Revision.fi'
  
   
@@ -280,9 +280,9 @@ CONTAINS
     INTEGER,INTENT(OUT)                   :: iStat
     
     !Local variables
-    CHARACTER(LEN=ModNameLen+18)         :: ThisProcedure = ModName // 'SetStaticComponent'
-    TYPE(GenericFileType)                :: AppStreamMainFile
-    CHARACTER(:),ALLOCATABLE             :: cVersionLocal
+    CHARACTER(LEN=ModNameLen+18) :: ThisProcedure = ModName // 'SetStaticComponent'
+    TYPE(GenericFileType)        :: AppStreamMainFile
+    CHARACTER(:),ALLOCATABLE     :: cVersionLocal
     
     !Initialize
     iStat = 0
@@ -304,32 +304,32 @@ CONTAINS
             ALLOCATE(AppStream_v40_Type :: AppStream%Me)
             CALL AppStream%Me%New(cFileName,AppGrid,Stratigraphy,IsRoutedStreams,StrmGWConnector,StrmLakeConnector,iStat)
             IF (iStat .EQ. -1) RETURN
-            AppStream%iVersion = 40
-            AppStream%lDefined = .TRUE.
+            AppStream%iComponentVersion = 40
+            AppStream%lDefined          = .TRUE.
         CASE ('4.1')
             ALLOCATE(AppStream_v41_Type :: AppStream%Me)
             CALL AppStream%Me%New(cFileName,AppGrid,Stratigraphy,IsRoutedStreams,StrmGWConnector,StrmLakeConnector,iStat)
             IF (iStat .EQ. -1) RETURN
-            AppStream%iVersion = 41
-            AppStream%lDefined = .TRUE.
+            AppStream%iComponentVersion = 41
+            AppStream%lDefined          = .TRUE.
         CASE ('4.2')
             ALLOCATE(AppStream_v42_Type :: AppStream%Me)
             CALL AppStream%Me%New(cFileName,AppGrid,Stratigraphy,IsRoutedStreams,StrmGWConnector,StrmLakeConnector,iStat)
             IF (iStat .EQ. -1) RETURN
-            AppStream%iVersion = 42
-            AppStream%lDefined = .TRUE.
+            AppStream%iComponentVersion = 42
+            AppStream%lDefined          = .TRUE.
         CASE ('4.21')
             ALLOCATE(AppStream_v421_Type :: AppStream%Me)
             CALL AppStream%Me%New(cFileName,AppGrid,Stratigraphy,IsRoutedStreams,StrmGWConnector,StrmLakeConnector,iStat)
             IF (iStat .EQ. -1) RETURN
-            AppStream%iVersion = 421
-            AppStream%lDefined = .TRUE.
+            AppStream%iComponentVersion = 421
+            AppStream%lDefined          = .TRUE.
         CASE ('5.0')
             ALLOCATE(AppStream_v50_Type :: AppStream%Me)
             CALL AppStream%Me%New(cFileName,AppGrid,Stratigraphy,IsRoutedStreams,StrmGWConnector,StrmLakeConnector,iStat)
             IF (iStat .EQ. -1) RETURN
-            AppStream%iVersion = 50
-            AppStream%lDefined = .TRUE.
+            AppStream%iComponentVersion = 50
+            AppStream%lDefined          = .TRUE.
         CASE DEFAULT
             CALL SetLastMessage('Stream Component version number is not recognized ('//TRIM(cVersionLocal)//')!',f_iFatal,ThisProcedure)
             iStat = -1
@@ -359,7 +359,7 @@ CONTAINS
     CHARACTER(LEN=ModNameLen+19) :: ThisProcedure = ModName // 'SetDynamicComponent'
     TYPE(GenericFileType)        :: AppStreamMainFile
     INTEGER                      :: ErrorCode
-    REAL(8)                      :: rVersionPre
+    CHARACTER                    :: cVersionPre*4
     CHARACTER(:),ALLOCATABLE     :: cVersionSim
     
     !Initailize
@@ -389,26 +389,37 @@ CONTAINS
     
     !Make sure versions from static and dynamic components are the same
     ErrorCode   = 0
-    rVersionPre = REAL(AppStream%iVersion)/10.0
     SELECT CASE (TRIM(cVersionSim))
         CASE ('4.0')
-            IF (AppStream%iVersion .NE. 40) ErrorCode = 1
+            IF (AppStream%iComponentVersion .NE. 40) ErrorCode = 1
         CASE ('4.1')
-            IF (AppStream%iVersion .NE. 41) ErrorCode = 1
+            IF (AppStream%iComponentVersion .NE. 41) ErrorCode = 1
         CASE ('4.2')
-            IF (AppStream%iVersion .NE. 42) ErrorCode = 1
+            IF (AppStream%iComponentVersion .NE. 42) ErrorCode = 1
         CASE ('4.21')
-            IF (AppStream%iVersion .NE. 421) ErrorCode = 1
+            IF (AppStream%iComponentVersion .NE. 421) ErrorCode = 1
         CASE ('5.0')
-            IF (AppStream%iVersion .NE. 50) ErrorCode = 1
+            IF (AppStream%iComponentVersion .NE. 50) ErrorCode = 1
         CASE DEFAULT
             CALL SetLastMessage('Stream Component version number is not recognized ('//TRIM(cVersionSim)//')!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
     END SELECT
     IF (ErrorCode .EQ. 1) THEN
+        SELECT CASE (AppStream%iComponentVersion)
+            CASE (40)
+                cVersionPre = '4.0'
+            CASE (41)
+                cVersionPre = '4.1'
+            CASE (42)
+                cVersionPre = '4.2'
+            CASE (421)
+                cVersionPre = '4.21'
+            CASE (50)
+                cVersionPre = '5.0'
+        END SELECT
         MessageArray(1) = 'Stream Component versions used in Pre-Processor and Simulation must match!'
-        WRITE(MessageArray(2),'(A,F3.1)') 'Version number in Pre-Processor = ',rVersionPre
+        MessageArray(2) = 'Version number in Pre-Processor = ' // TRIM(cVersionPre)
         MessageArray(3) = 'Version number in Simulation    = ' // TRIM(cVersionSim)
         CALL SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
         iStat = -1
@@ -416,7 +427,7 @@ CONTAINS
     END IF
     
     !Instantiate the dynamic component
-    CALL AppStream%Me%New(IsForInquiry,cFileName,cWorkingDirectory,TimeStep,NTIME,iLakeIDs,AppGrid,Stratigraphy,ETData,StrmLakeConnector,StrmGWConnector,iStat)
+    CALL AppStream%Me%New(IsForInquiry,cFileName,cWorkingDirectory,GetVersion(),TimeStep,NTIME,iLakeIDs,AppGrid,Stratigraphy,ETData,StrmLakeConnector,StrmGWConnector,iStat)
         
   END SUBROUTINE SetDynamicComponent
   
@@ -449,32 +460,32 @@ CONTAINS
             ALLOCATE(AppStream_v40_Type :: AppStream%Me)
             CALL AppStream%Me%New(BinFile,iStat)
             IF (iStat .EQ. -1) RETURN
-            AppStream%iVersion = 40
-            AppStream%lDefined = .TRUE.
+            AppStream%iComponentVersion = 40
+            AppStream%lDefined          = .TRUE.
         CASE (41)
             ALLOCATE(AppStream_v41_Type :: AppStream%Me)
             CALL AppStream%Me%New(BinFile,iStat)
             IF (iStat .EQ. -1) RETURN
-            AppStream%iVersion = 41
-            AppStream%lDefined = .TRUE.
+            AppStream%iComponentVersion = 41
+            AppStream%lDefined          = .TRUE.
         CASE (42)
             ALLOCATE(AppStream_v42_Type :: AppStream%Me)
             CALL AppStream%Me%New(BinFile,iStat)
             IF (iStat .EQ. -1) RETURN
-            AppStream%iVersion = 42
-            AppStream%lDefined = .TRUE.
+            AppStream%iComponentVersion = 42
+            AppStream%lDefined          = .TRUE.
         CASE (421)
             ALLOCATE(AppStream_v421_Type :: AppStream%Me)
             CALL AppStream%Me%New(BinFile,iStat)
             IF (iStat .EQ. -1) RETURN
-            AppStream%iVersion = 421
-            AppStream%lDefined = .TRUE.
+            AppStream%iComponentVersion = 421
+            AppStream%lDefined          = .TRUE.
         CASE (50)
             ALLOCATE(AppStream_v50_Type :: AppStream%Me)
             CALL AppStream%Me%New(BinFile,iStat)
             IF (iStat .EQ. -1) RETURN
-            AppStream%iVersion = 50
-            AppStream%lDefined = .TRUE.
+            AppStream%iComponentVersion = 50
+            AppStream%lDefined          = .TRUE.
         CASE DEFAULT
             CALL SetLastMessage('Stream Component version number is not recognized ('//TRIM(IntToText(iVersion))//')!',f_iFatal,ThisProcedure)
             iStat = -1
@@ -525,34 +536,34 @@ CONTAINS
     SELECT CASE (iVersion)
         CASE (40)
             ALLOCATE(AppStream_v40_Type :: AppStream%Me)
-            CALL AppStream%Me%New(IsForInquiry,cFileName,cSimWorkingDirectory,TimeStep,NTIME,iLakeIDs,AppGrid,Stratigraphy,ETData,BinFile,StrmLakeConnector,StrmGWConnector,iStat)
+            CALL AppStream%Me%New(IsForInquiry,cFileName,cSimWorkingDirectory,GetVersion(),TimeStep,NTIME,iLakeIDs,AppGrid,Stratigraphy,ETData,BinFile,StrmLakeConnector,StrmGWConnector,iStat)
             IF (iStat .EQ. -1) RETURN
-            AppStream%iVersion = 40
-            AppStream%lDefined = .TRUE.
+            AppStream%iComponentVersion = 40
+            AppStream%lDefined          = .TRUE.
         CASE (41)
             ALLOCATE(AppStream_v41_Type :: AppStream%Me)
-            CALL AppStream%Me%New(IsForInquiry,cFileName,cSimWorkingDirectory,TimeStep,NTIME,iLakeIDs,AppGrid,Stratigraphy,ETData,BinFile,StrmLakeConnector,StrmGWConnector,iStat)
+            CALL AppStream%Me%New(IsForInquiry,cFileName,cSimWorkingDirectory,GetVersion(),TimeStep,NTIME,iLakeIDs,AppGrid,Stratigraphy,ETData,BinFile,StrmLakeConnector,StrmGWConnector,iStat)
             IF (iStat .EQ. -1) RETURN
-            AppStream%iVersion = 41
-            AppStream%lDefined = .TRUE.
+            AppStream%iComponentVersion = 41
+            AppStream%lDefined          = .TRUE.
         CASE (42)
             ALLOCATE(AppStream_v42_Type :: AppStream%Me)
-            CALL AppStream%Me%New(IsForInquiry,cFileName,cSimWorkingDirectory,TimeStep,NTIME,iLakeIDs,AppGrid,Stratigraphy,ETData,BinFile,StrmLakeConnector,StrmGWConnector,iStat)
+            CALL AppStream%Me%New(IsForInquiry,cFileName,cSimWorkingDirectory,GetVersion(),TimeStep,NTIME,iLakeIDs,AppGrid,Stratigraphy,ETData,BinFile,StrmLakeConnector,StrmGWConnector,iStat)
             IF (iStat .EQ. -1) RETURN
-            AppStream%iVersion = 42
-            AppStream%lDefined = .TRUE.
+            AppStream%iComponentVersion = 42
+            AppStream%lDefined          = .TRUE.
         CASE (421)
             ALLOCATE(AppStream_v421_Type :: AppStream%Me)
-            CALL AppStream%Me%New(IsForInquiry,cFileName,cSimWorkingDirectory,TimeStep,NTIME,iLakeIDs,AppGrid,Stratigraphy,ETData,BinFile,StrmLakeConnector,StrmGWConnector,iStat)
+            CALL AppStream%Me%New(IsForInquiry,cFileName,cSimWorkingDirectory,GetVersion(),TimeStep,NTIME,iLakeIDs,AppGrid,Stratigraphy,ETData,BinFile,StrmLakeConnector,StrmGWConnector,iStat)
             IF (iStat .EQ. -1) RETURN
-            AppStream%iVersion = 421
-            AppStream%lDefined = .TRUE.
+            AppStream%iComponentVersion = 421
+            AppStream%lDefined          = .TRUE.
         CASE (50)
             ALLOCATE(AppStream_v50_Type :: AppStream%Me)
-            CALL AppStream%Me%New(IsForInquiry,cFileName,cSimWorkingDirectory,TimeStep,NTIME,iLakeIDs,AppGrid,Stratigraphy,ETData,BinFile,StrmLakeConnector,StrmGWConnector,iStat)
+            CALL AppStream%Me%New(IsForInquiry,cFileName,cSimWorkingDirectory,GetVersion(),TimeStep,NTIME,iLakeIDs,AppGrid,Stratigraphy,ETData,BinFile,StrmLakeConnector,StrmGWConnector,iStat)
             IF (iStat .EQ. -1) RETURN
-            AppStream%iVersion = 50
-            AppStream%lDefined = .TRUE.
+            AppStream%iComponentVersion = 50
+            AppStream%lDefined          = .TRUE.
         CASE DEFAULT
             CALL SetLastMessage('Stream Component version number is not recognized ('//TRIM(IntToText(iVersion))//')!',f_iFatal,ThisProcedure)
             iStat = -1
@@ -601,34 +612,34 @@ CONTAINS
     SELECT CASE (TRIM(cVersionPre))
         CASE ('4.0')
             ALLOCATE(AppStream_v40_Type :: AppStream%Me)
-            CALL AppStream%Me%New(IsRoutedStreams,IsForInquiry,cPPFileName,cSimFileName,cSimWorkingDirectory,AppGrid,Stratigraphy,ETData,TimeStep,NTIME,iLakeIDs,StrmLakeConnector,StrmGWConnector,iStat)
+            CALL AppStream%Me%New(IsRoutedStreams,IsForInquiry,cPPFileName,cSimFileName,cSimWorkingDirectory,GetVersion(),AppGrid,Stratigraphy,ETData,TimeStep,NTIME,iLakeIDs,StrmLakeConnector,StrmGWConnector,iStat)
             IF (iStat .EQ. -1) RETURN
-            AppStream%iVersion = 40
-            AppStream%lDefined = .TRUE.
+            AppStream%iComponentVersion = 40
+            AppStream%lDefined          = .TRUE.
         CASE ('4.1')
             ALLOCATE(AppStream_v41_Type :: AppStream%Me)
-            CALL AppStream%Me%New(IsRoutedStreams,IsForInquiry,cPPFileName,cSimFileName,cSimWorkingDirectory,AppGrid,Stratigraphy,ETData,TimeStep,NTIME,iLakeIDs,StrmLakeConnector,StrmGWConnector,iStat)
+            CALL AppStream%Me%New(IsRoutedStreams,IsForInquiry,cPPFileName,cSimFileName,cSimWorkingDirectory,GetVersion(),AppGrid,Stratigraphy,ETData,TimeStep,NTIME,iLakeIDs,StrmLakeConnector,StrmGWConnector,iStat)
             IF (iStat .EQ. -1) RETURN
-            AppStream%iVersion = 41
-            AppStream%lDefined = .TRUE.
+            AppStream%iComponentVersion = 41
+            AppStream%lDefined          = .TRUE.
         CASE ('4.2')
             ALLOCATE(AppStream_v42_Type :: AppStream%Me)
-            CALL AppStream%Me%New(IsRoutedStreams,IsForInquiry,cPPFileName,cSimFileName,cSimWorkingDirectory,AppGrid,Stratigraphy,ETData,TimeStep,NTIME,iLakeIDs,StrmLakeConnector,StrmGWConnector,iStat)
+            CALL AppStream%Me%New(IsRoutedStreams,IsForInquiry,cPPFileName,cSimFileName,cSimWorkingDirectory,GetVersion(),AppGrid,Stratigraphy,ETData,TimeStep,NTIME,iLakeIDs,StrmLakeConnector,StrmGWConnector,iStat)
             IF (iStat .EQ. -1) RETURN
-            AppStream%iVersion = 42
-            AppStream%lDefined = .TRUE.
+            AppStream%iComponentVersion = 42
+            AppStream%lDefined          = .TRUE.
         CASE ('4.21')
             ALLOCATE(AppStream_v421_Type :: AppStream%Me)
-            CALL AppStream%Me%New(IsRoutedStreams,IsForInquiry,cPPFileName,cSimFileName,cSimWorkingDirectory,AppGrid,Stratigraphy,ETData,TimeStep,NTIME,iLakeIDs,StrmLakeConnector,StrmGWConnector,iStat)
+            CALL AppStream%Me%New(IsRoutedStreams,IsForInquiry,cPPFileName,cSimFileName,cSimWorkingDirectory,GetVersion(),AppGrid,Stratigraphy,ETData,TimeStep,NTIME,iLakeIDs,StrmLakeConnector,StrmGWConnector,iStat)
             IF (iStat .EQ. -1) RETURN
-            AppStream%iVersion = 421
-            AppStream%lDefined = .TRUE.
+            AppStream%iComponentVersion = 421
+            AppStream%lDefined          = .TRUE.
         CASE ('5.0')
             ALLOCATE(AppStream_v50_Type :: AppStream%Me)
-            CALL AppStream%Me%New(IsRoutedStreams,IsForInquiry,cPPFileName,cSimFileName,cSimWorkingDirectory,AppGrid,Stratigraphy,ETData,TimeStep,NTIME,iLakeIDs,StrmLakeConnector,StrmGWConnector,iStat)
+            CALL AppStream%Me%New(IsRoutedStreams,IsForInquiry,cPPFileName,cSimFileName,cSimWorkingDirectory,GetVersion(),AppGrid,Stratigraphy,ETData,TimeStep,NTIME,iLakeIDs,StrmLakeConnector,StrmGWConnector,iStat)
             IF (iStat .EQ. -1) RETURN
-            AppStream%iVersion = 50
-            AppStream%lDefined = .TRUE.
+            AppStream%iComponentVersion = 50
+            AppStream%lDefined          = .TRUE.
         CASE DEFAULT
             CALL SetLastMessage('Stream Component version number is not recognized ('//TRIM(cVersionPre)//')!',f_iFatal,ThisProcedure)
             iStat = -1
@@ -662,8 +673,8 @@ CONTAINS
     IF (AppStream%lDefined) THEN
         CALL AppStream%Me%Kill()
         DEALLOCATE (AppStream%Me , STAT=ErrorCode)
-        AppStream%iVersion = 0
-        AppStream%lDefined = .FALSE.
+        AppStream%iComponentVersion = 0
+        AppStream%lDefined          = .FALSE.
     END IF
     
   END SUBROUTINE Kill
@@ -781,7 +792,7 @@ CONTAINS
     INTEGER,INTENT(OUT)             :: iStrmNodeList(:)
     
     !If streams are not defined, return
-    IF (AppStream%iVersion .EQ. 0) THEN
+    IF (AppStream%iComponentVersion .EQ. 0) THEN
         iStrmNodeList = 0
         RETURN
     END IF
@@ -2219,7 +2230,7 @@ CONTAINS
     INTEGER,INTENT(OUT)             :: iReaches(:),iStat
     
     !Return if no streams are defined
-    IF (AppStream%iVersion .EQ. 0) THEN
+    IF (AppStream%iComponentVersion .EQ. 0) THEN
         iReaches = 0
         iStat    = 0
         RETURN
@@ -2238,15 +2249,10 @@ CONTAINS
     CHARACTER(:),ALLOCATABLE :: cVrs
     
     !Local variables
-    TYPE(AppStream_v40_Type)  :: v40
-    TYPE(AppStream_v41_Type)  :: v41
-    TYPE(AppStream_v42_Type)  :: v42
-    TYPE(AppStream_v421_Type) :: v421
-    TYPE(AppStream_v50_Type)  :: v50
-    TYPE(VersionType)         :: MyVersion
+    TYPE(VersionType) :: MyVersion
     
-    MyVersion = MyVersion%New(iLenVersion,cVersion,cRevision)
-    cVrs      = TRIM(MyVersion%GetVersion()) // ' (Interface) ; ' // TRIM(v40%GetVersion()) // ', ' // TRIM(v41%GetVersion()) // ', ' // TRIM(v42%GetVersion()) // ', '  // TRIM(v421%GetVersion()) // ', ' // TRIM(v50%GetVersion()) // ' (Components)'
+    MyVersion = MyVersion%New(f_iLenVersion,f_cVersion,cRevision)
+    cVrs      = TRIM(MyVersion%GetVersion())
     
   END FUNCTION GetVersion
 
@@ -2492,7 +2498,7 @@ CONTAINS
     TYPE(GenericFileType)           :: OutFile
     
     IF (AppStream%lDefined) THEN
-        CALL Outfile%WriteData(AppStream%iVersion)
+        CALL Outfile%WriteData(AppStream%iComponentVersion)
         CALL AppStream%Me%WritePreprocessedData(OutFile)
     ELSE
         CALL Outfile%WriteData(0)
