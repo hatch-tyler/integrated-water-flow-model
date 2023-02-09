@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2021  
+!  Copyright (C) 2005-2022  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -41,7 +41,7 @@ MODULE IWFM_Core_Version
   ! --- MISC. ENTTIES
   ! -------------------------------------------------------------
   INTEGER,PARAMETER                    :: iLenVersion = 11
-  CHARACTER(LEN=iLenVersion),PARAMETER :: cVersion    = '2015.1.0000'  !Last 4 digits are for revision number and are dynamically replaced
+  CHARACTER(LEN=iLenVersion),PARAMETER :: cVersion    = '2015.0.0000'  !Last 4 digits are for revision number and are dynamically replaced
   TYPE(IWFM_Core_Type)                 :: IWFM_Core
 
   

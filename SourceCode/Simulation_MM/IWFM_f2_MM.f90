@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2021  
+!  Copyright (C) 2005-2022  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -1090,7 +1090,7 @@ CONTAINS
     !=====================================
     !=== Prepare diversions
     !=====================================
-    CALL Model%GetNDiversions(iNDiver,iStat)  ;  IF (iStat .NE. 0) RETURN 
+    iNDiver = Model%GetNDiversions()  
     ALLOCATE (iDiverIDs(iNDiver))
     CALL Model%GetDiversionIDs(iDiverIDs)
     DO indx=1,Connections[1]%iNLinkNodesDiv
