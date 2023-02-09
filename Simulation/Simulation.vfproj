@@ -1,0 +1,267 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<VisualStudioProject ProjectCreator="Intel Fortran" Keyword="Console Application" Version="11.0" ProjectIdGuid="{31372A25-2EF2-433D-8787-80FCAC74C5F1}">
+	<Platforms>
+		<Platform Name="Win32"/>
+		<Platform Name="x64"/></Platforms>
+	<Configurations>
+		<Configuration Name="Debug|Win32" TargetName="Simulation2015_D">
+				<Tool Name="VFFortranCompilerTool" AdditionalOptions="/fp:consistent" SuppressStartupBanner="true" DebugInformationFormat="debugEnabled" Optimization="optimizeDisabled" Preprocess="preprocessYes" AdditionalIncludeDirectories="$(SolutionDir)..\SourceCode\HDF5Lib\$(Platform)\$(Configuration);$(SolutionDir)..\SourceCode\heclib" F2003Semantics="true" DisableSpecificDiagnostics="5462,8290" WarnUnusedVariables="true" WarnUncalled="true" Traceback="true" BoundsCheck="true" StackFrameCheck="true" RuntimeLibrary="rtMultiThreadedDebug"/>
+				<Tool Name="VFLinkerTool" LinkIncremental="linkIncrementalNo" SuppressStartupBanner="true" AdditionalLibraryDirectories="$(SolutionDir)..\SourceCode\HDF5Lib\$(Platform)\$(Configuration);$(SolutionDir)..\SourceCode\heclib" GenerateDebugInformation="true" SubSystem="subSystemConsole" StackReserveSize="256000000" AdditionalDependencies="heclib_ivf_debug.lib libhdf5_fortran_D.lib libhdf5_D.lib libhdf5_f90cstub_D.lib libszip_D.lib libzlib_D.lib"/>
+				<Tool Name="VFResourceCompilerTool"/>
+				<Tool Name="VFMidlTool" SuppressStartupBanner="true"/>
+				<Tool Name="VFCustomBuildTool"/>
+				<Tool Name="VFPreLinkEventTool"/>
+				<Tool Name="VFPreBuildEventTool"/>
+				<Tool Name="VFPostBuildEventTool" CommandLine="copy /Y &quot;$(OutDir)\$(TargetName)$(TargetExt)&quot; &quot;$(ProjectDir)..\Bin&quot;"/>
+				<Tool Name="VFManifestTool" SuppressStartupBanner="true"/></Configuration>
+		<Configuration Name="Release|Win32" TargetName="Simulation2015">
+				<Tool Name="VFFortranCompilerTool" AdditionalOptions="/fp:consistent" SuppressStartupBanner="true" InterproceduralOptimizations="ipoMultiFile" Preprocess="preprocessYes" AdditionalIncludeDirectories="$(SolutionDir)..\SourceCode\HDF5Lib\$(Platform)\$(Configuration);$(SolutionDir)..\SourceCode\heclib" F2003Semantics="true" ParallelizerDiagLevel="parallelizerDiagLevel1" DisableSpecificDiagnostics="5462,8290,10212"/>
+				<Tool Name="VFLinkerTool" LinkIncremental="linkIncrementalNo" SuppressStartupBanner="true" AdditionalLibraryDirectories="$(SolutionDir)..\SourceCode\HDF5Lib\$(Platform)\$(Configuration);$(SolutionDir)..\SourceCode\heclib" SubSystem="subSystemConsole" StackReserveSize="256000000" AdditionalDependencies="heclib_ivf_release.lib libhdf5_fortran.lib libhdf5.lib libhdf5_f90cstub.lib libszip.lib libzlib.lib"/>
+				<Tool Name="VFResourceCompilerTool"/>
+				<Tool Name="VFMidlTool" SuppressStartupBanner="true"/>
+				<Tool Name="VFCustomBuildTool"/>
+				<Tool Name="VFPreLinkEventTool"/>
+				<Tool Name="VFPreBuildEventTool"/>
+				<Tool Name="VFPostBuildEventTool" CommandLine="copy /Y &quot;$(OutDir)\$(TargetName)$(TargetExt)&quot; &quot;$(ProjectDir)..\Bin&quot;"/>
+				<Tool Name="VFManifestTool" SuppressStartupBanner="true"/></Configuration>
+		<Configuration Name="Debug|x64" IntermediateDirectory="$(ProjectDir)$(PlatformName)\$(ConfigurationName)" TargetName="Simulation2015_x64_D">
+				<Tool Name="VFFortranCompilerTool" AdditionalOptions="/fp:consistent" SuppressStartupBanner="true" DebugInformationFormat="debugEnabled" Optimization="optimizeDisabled" Preprocess="preprocessYes" AdditionalIncludeDirectories="$(SolutionDir)..\SourceCode\HDF5Lib\$(Platform)\$(Configuration);$(SolutionDir)..\SourceCode\heclib" F2003Semantics="true" DisableSpecificDiagnostics="5462,8290" WarnUnusedVariables="true" WarnUncalled="true" Traceback="true" BoundsCheck="true" RuntimeLibrary="rtMultiThreadedDebug"/>
+				<Tool Name="VFLinkerTool" LinkIncremental="linkIncrementalNo" SuppressStartupBanner="true" AdditionalLibraryDirectories="$(SolutionDir)..\SourceCode\HDF5Lib\$(Platform)\$(Configuration);$(SolutionDir)..\SourceCode\heclib" GenerateDebugInformation="true" SubSystem="subSystemConsole" StackReserveSize="256000000" AdditionalDependencies="heclib_ivf_debug_x64.lib libhdf5_fortran_D.lib libhdf5_D.lib libhdf5_f90cstub_D.lib libszip_D.lib libzlib_D.lib"/>
+				<Tool Name="VFResourceCompilerTool"/>
+				<Tool Name="VFMidlTool" SuppressStartupBanner="true" TargetEnvironment="midlTargetAMD64"/>
+				<Tool Name="VFCustomBuildTool"/>
+				<Tool Name="VFPreLinkEventTool"/>
+				<Tool Name="VFPreBuildEventTool"/>
+				<Tool Name="VFPostBuildEventTool" CommandLine="copy /Y &quot;$(OutDir)\$(TargetName)$(TargetExt)&quot; &quot;$(ProjectDir)..\Bin&quot;"/>
+				<Tool Name="VFManifestTool" SuppressStartupBanner="true"/></Configuration>
+		<Configuration Name="Release|x64" IntermediateDirectory="$(ProjectDir)$(PlatformName)\$(ConfigurationName)" TargetName="Simulation2015_x64">
+				<Tool Name="VFFortranCompilerTool" AdditionalOptions="/fp:consistent" SuppressStartupBanner="true" InterproceduralOptimizations="ipoMultiFile" Preprocess="preprocessYes" AdditionalIncludeDirectories="$(SolutionDir)..\SourceCode\HDF5Lib\$(Platform)\$(Configuration);$(SolutionDir)..\SourceCode\heclib" F2003Semantics="true" DisableSpecificDiagnostics="5462,8290,10212"/>
+				<Tool Name="VFLinkerTool" LinkIncremental="linkIncrementalNo" SuppressStartupBanner="true" AdditionalLibraryDirectories="$(SolutionDir)..\SourceCode\HDF5Lib\$(Platform)\$(Configuration);$(SolutionDir)..\SourceCode\heclib" SubSystem="subSystemConsole" StackReserveSize="256000000" AdditionalDependencies="heclib_ivf_release_x64.lib libhdf5_fortran.lib libhdf5.lib libhdf5_f90cstub.lib libszip.lib libzlib.lib"/>
+				<Tool Name="VFResourceCompilerTool"/>
+				<Tool Name="VFMidlTool" SuppressStartupBanner="true" TargetEnvironment="midlTargetAMD64"/>
+				<Tool Name="VFCustomBuildTool"/>
+				<Tool Name="VFPreLinkEventTool"/>
+				<Tool Name="VFPreBuildEventTool"/>
+				<Tool Name="VFPostBuildEventTool" CommandLine="copy /Y &quot;$(OutDir)\$(TargetName)$(TargetExt)&quot; &quot;$(ProjectDir)..\Bin&quot;"/>
+				<Tool Name="VFManifestTool" SuppressStartupBanner="true"/></Configuration></Configurations>
+	<Files>
+		<Filter Name="Header Files" Filter="fi;fd"/>
+		<Filter Name="Resource Files" Filter="rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe"/>
+		<Filter Name="Source Files" Filter="f90;for;f;fpp;ftn;def;odl;idl">
+		<Filter Name="IWFM_Core_Version">
+		<File RelativePath="..\SourceCode\IWFM_Core_Version\IWFM_Core_Version.f90"/>
+		<File RelativePath="..\SourceCode\IWFM_Core_Version\Revision.fi"/></Filter>
+		<Filter Name="IWFM_Util">
+		<Filter Name="IOInterface">
+		<File RelativePath="..\SourceCode\IWFM_Util\IOInterface\Class_AsciiFileType.f90"/>
+		<File RelativePath="..\SourceCode\IWFM_Util\IOInterface\Class_BaseFileType.f90"/>
+		<File RelativePath="..\SourceCode\IWFM_Util\IOInterface\Class_DSSFileType.f90"/>
+		<File RelativePath="..\SourceCode\IWFM_Util\IOInterface\Class_FortBinaryFileType.f90"/>
+		<File RelativePath="..\SourceCode\IWFM_Util\IOInterface\Class_HDF5FileType.f90"/>
+		<File RelativePath="..\SourceCode\IWFM_Util\IOInterface\IOInterface.f90"/></Filter>
+		<Filter Name="Utilities">
+		<File RelativePath="..\SourceCode\IWFM_Util\Utilities\Class_BinaryTree.f90"/>
+		<File RelativePath="..\SourceCode\IWFM_Util\Utilities\Class_LinkedListNode.f90"/>
+		<File RelativePath="..\SourceCode\IWFM_Util\Utilities\Class_Version.f90"/>
+		<File RelativePath="..\SourceCode\IWFM_Util\Utilities\GeneralUtilities.f90"/>
+		<File RelativePath="..\SourceCode\IWFM_Util\Utilities\GenericLinkedList.f90"/>
+		<File RelativePath="..\SourceCode\IWFM_Util\Utilities\IWFM_Util_Revision.fi"/>
+		<File RelativePath="..\SourceCode\IWFM_Util\Utilities\IWFM_Util_VersionF.f90"/>
+		<File RelativePath="..\SourceCode\IWFM_Util\Utilities\MessageLogger.f90"/>
+		<File RelativePath="..\SourceCode\IWFM_Util\Utilities\ProgramTimer.f90"/>
+		<File RelativePath="..\SourceCode\IWFM_Util\Utilities\TimeSeriesUtilities.f90"/></Filter></Filter>
+		<Filter Name="Package_AppGW">
+		<Filter Name="BC">
+		<File RelativePath="..\SourceCode\Package_AppGW\BC\Class_AppBC.f90"/>
+		<File RelativePath="..\SourceCode\Package_AppGW\BC\Class_LayerBC.f90"/>
+		<File RelativePath="..\SourceCode\Package_AppGW\BC\Class_TSBCDataFile.f90"/></Filter>
+		<Filter Name="Package_AppPumping">
+		<File RelativePath="..\SourceCode\Package_AppPumping\Class_ElementPumping.f90"/>
+		<File RelativePath="..\SourceCode\Package_AppPumping\Class_Pumping.f90"/>
+		<File RelativePath="..\SourceCode\Package_AppPumping\Class_PumpsAtElem.f90"/>
+		<File RelativePath="..\SourceCode\Package_AppPumping\Class_Well.f90"/>
+		<File RelativePath="..\SourceCode\Package_AppPumping\Package_AppPumping.f90"/></Filter>
+		<Filter Name="Package_AppSubsidence">
+		<Filter Name="Version_4.0">
+		<File RelativePath="..\SourceCode\Package_AppSubsidence\VERSION_4.0\AppSubsidence_v40_Revision.fi"/>
+		<File RelativePath="..\SourceCode\Package_AppSubsidence\VERSION_4.0\Class_AppSubsidence_v40.f90"/></Filter>
+		<Filter Name="Version_5.0">
+		<File RelativePath="..\SourceCode\Package_AppSubsidence\VERSION_5.0\AppSubsidence_v50_Revision.fi"/>
+		<File RelativePath="..\SourceCode\Package_AppSubsidence\VERSION_5.0\Class_AppSubsidence_v50.f90"/></Filter>
+		<File RelativePath="..\SourceCode\Package_AppSubsidence\Class_BaseAppSubsidence.f90"/>
+		<File RelativePath="..\SourceCode\Package_AppSubsidence\Package_AppSubsidence.f90"/>
+		<File RelativePath="..\SourceCode\Package_AppSubsidence\Package_AppSubsidence_Revision.fi"/></Filter>
+		<Filter Name="Package_AppTileDrain">
+		<File RelativePath="..\SourceCode\Package_AppTileDrain\AppTileDrain_Parameters.f90"/>
+		<File RelativePath="..\SourceCode\Package_AppTileDrain\Class_BaseTileDrain.f90"/>
+		<File RelativePath="..\SourceCode\Package_AppTileDrain\Package_AppTileDrain.f90"/>
+		<File RelativePath="..\SourceCode\Package_AppTileDrain\TileDrainHydrograph.f90"/></Filter>
+		<File RelativePath="..\SourceCode\Package_AppGW\Class_AppGW.f90"/>
+		<File RelativePath="..\SourceCode\Package_AppGW\Class_GWState.f90"/>
+		<File RelativePath="..\SourceCode\Package_AppGW\GWHydrograph.f90"/>
+		<File RelativePath="..\SourceCode\Package_AppGW\Package_AppGW.f90"/>
+		<File RelativePath="..\SourceCode\Package_AppGW\VerticalFlow.f90"/></Filter>
+		<Filter Name="Package_AppLake">
+		<Filter Name="VERSION_4.0">
+		<File RelativePath="..\SourceCode\Package_AppLake\VERSION_4.0\AppLake_v40_Revision.fi"/>
+		<File RelativePath="..\SourceCode\Package_AppLake\VERSION_4.0\Class_AppLake_v40.f90"/>
+		<File RelativePath="..\SourceCode\Package_AppLake\VERSION_4.0\Class_MaxLakeElevFile.f90"/></Filter>
+		<Filter Name="VERSION_5.0">
+		<File RelativePath="..\SourceCode\Package_AppLake\VERSION_5.0\AppLake_v50_Revision.fi"/>
+		<File RelativePath="..\SourceCode\Package_AppLake\VERSION_5.0\Class_AppLake_v50.f90"/></Filter>
+		<File RelativePath="..\SourceCode\Package_AppLake\Class_BaseAppLake.f90"/>
+		<File RelativePath="..\SourceCode\Package_AppLake\Class_Lake.f90"/>
+		<File RelativePath="..\SourceCode\Package_AppLake\Package_AppLake.f90"/>
+		<File RelativePath="..\SourceCode\Package_AppLake\Package_AppLake_Revision.fi"/></Filter>
+		<Filter Name="Package_AppSmallWatershed">
+		<File RelativePath="..\SourceCode\Package_AppSmallWatershed\Package_AppSmallWatershed.f90"/></Filter>
+		<Filter Name="Package_AppStream">
+		<Filter Name="Version_4.0">
+		<File RelativePath="..\SourceCode\Package_AppStream\VERSION_4.0\AppStream_v40_Revision.fi"/>
+		<File RelativePath="..\SourceCode\Package_AppStream\VERSION_4.0\Class_AppStream_v40.f90"/></Filter>
+		<Filter Name="Version_4.1">
+		<File RelativePath="..\SourceCode\Package_AppStream\VERSION_4.1\AppStream_v41_Revision.fi"/>
+		<File RelativePath="..\SourceCode\Package_AppStream\VERSION_4.1\Class_AppStream_v41.f90"/>
+		<File RelativePath="..\SourceCode\Package_AppStream\VERSION_4.1\Class_StrmNode_v41.f90"/></Filter>
+		<Filter Name="Version_4.2">
+		<File RelativePath="..\SourceCode\Package_AppStream\VERSION_4.2\AppStream_v42_Revision.fi"/>
+		<File RelativePath="..\SourceCode\Package_AppStream\VERSION_4.2\Class_AppStream_v42.f90"/></Filter>
+		<Filter Name="Version_4.21">
+		<File RelativePath="..\SourceCode\Package_AppStream\VERSION_4.21\AppStream_v421_Revision.fi"/>
+		<File RelativePath="..\SourceCode\Package_AppStream\VERSION_4.21\Class_AppStream_v421.f90"/></Filter>
+		<Filter Name="Version_5.0">
+		<File RelativePath="..\SourceCode\Package_AppStream\VERSION_5.0\AppStream_v50_Revision.fi"/>
+		<File RelativePath="..\SourceCode\Package_AppStream\VERSION_5.0\Class_AppStream_v50.f90"/>
+		<File RelativePath="..\SourceCode\Package_AppStream\VERSION_5.0\Class_StrmNode_v50.f90"/></Filter>
+		<File RelativePath="..\SourceCode\Package_AppStream\Class_AppDiverBypass.f90"/>
+		<File RelativePath="..\SourceCode\Package_AppStream\Class_BaseAppStream.f90"/>
+		<File RelativePath="..\SourceCode\Package_AppStream\Class_Bypass.f90"/>
+		<File RelativePath="..\SourceCode\Package_AppStream\Class_Diversion.f90"/>
+		<File RelativePath="..\SourceCode\Package_AppStream\Class_ElemToRecvLoss.f90"/>
+		<File RelativePath="..\SourceCode\Package_AppStream\Class_RechargeZone.f90"/>
+		<File RelativePath="..\SourceCode\Package_AppStream\Class_StrmInflow.f90"/>
+		<File RelativePath="..\SourceCode\Package_AppStream\Class_StrmNode.f90"/>
+		<File RelativePath="..\SourceCode\Package_AppStream\Class_StrmNodeBudget.f90"/>
+		<File RelativePath="..\SourceCode\Package_AppStream\Class_StrmReach.f90"/>
+		<File RelativePath="..\SourceCode\Package_AppStream\Class_StrmState.f90"/>
+		<File RelativePath="..\SourceCode\Package_AppStream\Package_AppStream.f90"/>
+		<File RelativePath="..\SourceCode\Package_AppStream\Package_AppStream_Revision.fi"/>
+		<File RelativePath="..\SourceCode\Package_AppStream\StrmHydrograph.f90"/></Filter>
+		<Filter Name="Package_AppUnsatZone">
+		<File RelativePath="..\SourceCode\Package_AppUnsatZone\Package_AppUnsatZone.f90"/></Filter>
+		<Filter Name="Package_Budget">
+		<File RelativePath="..\SourceCode\Package_Budget\Budget_Parameters.f90"/>
+		<File RelativePath="..\SourceCode\Package_Budget\Class_Budget.f90"/>
+		<File RelativePath="..\SourceCode\Package_Budget\Class_BudgetInputFile.f90"/>
+		<File RelativePath="..\SourceCode\Package_Budget\Package_Budget.f90"/>
+		<File RelativePath="..\SourceCode\Package_Budget\Package_Budget_Revision.fi"/></Filter>
+		<Filter Name="Package_ComponentConnectors">
+		<Filter Name="StrmGWConnector">
+		<File RelativePath="..\SourceCode\Package_ComponentConnectors\StrmGWConnector\Class_BaseStrmGWConnector.f90"/>
+		<File RelativePath="..\SourceCode\Package_ComponentConnectors\StrmGWConnector\Class_StrmGWConnector.f90"/>
+		<File RelativePath="..\SourceCode\Package_ComponentConnectors\StrmGWConnector\Class_StrmGWConnector_v40.f90"/>
+		<File RelativePath="..\SourceCode\Package_ComponentConnectors\StrmGWConnector\Class_StrmGWConnector_v41.f90"/>
+		<File RelativePath="..\SourceCode\Package_ComponentConnectors\StrmGWConnector\Class_StrmGWConnector_v42.f90"/>
+		<File RelativePath="..\SourceCode\Package_ComponentConnectors\StrmGWConnector\Class_StrmGWConnector_v421.f90"/>
+		<File RelativePath="..\SourceCode\Package_ComponentConnectors\StrmGWConnector\Class_StrmGWConnector_v50.f90"/></Filter>
+		<File RelativePath="..\SourceCode\Package_ComponentConnectors\LakeGWConnector.f90"/>
+		<File RelativePath="..\SourceCode\Package_ComponentConnectors\Package_ComponentConnectors.f90"/>
+		<File RelativePath="..\SourceCode\Package_ComponentConnectors\Package_ComponentConnectors_Revision.fi"/>
+		<File RelativePath="..\SourceCode\Package_ComponentConnectors\StrmLakeConnector.f90"/>
+		<File RelativePath="..\SourceCode\Package_ComponentConnectors\SupplyDestinationConnector.f90"/></Filter>
+		<Filter Name="Package_Discretization">
+		<File RelativePath="..\SourceCode\Package_Discretization\Class_AppFace.f90"/>
+		<File RelativePath="..\SourceCode\Package_Discretization\Class_AppGrid.f90"/>
+		<File RelativePath="..\SourceCode\Package_Discretization\Class_Grid.f90"/>
+		<File RelativePath="..\SourceCode\Package_Discretization\Class_Stratigraphy.f90"/>
+		<File RelativePath="..\SourceCode\Package_Discretization\Package_Discretization.f90"/>
+		<File RelativePath="..\SourceCode\Package_Discretization\Package_Discretization_Revision.fi"/>
+		<File RelativePath="..\SourceCode\Package_Discretization\ParametricGrid.f90"/></Filter>
+		<Filter Name="Package_GWZBudget">
+		<File RelativePath="..\SourceCode\Package_GWZBudget\Class_GWZBudget.f90"/>
+		<File RelativePath="..\SourceCode\Package_GWZBudget\GWZBudget_Parameters.f90"/>
+		<File RelativePath="..\SourceCode\Package_GWZBudget\Package_GWZBudget.f90"/></Filter>
+		<Filter Name="Package_Matrix">
+		<File RelativePath="..\SourceCode\Package_Matrix\Lubksb.f90"/>
+		<File RelativePath="..\SourceCode\Package_Matrix\Ludcmp.f90"/>
+		<File RelativePath="..\SourceCode\Package_Matrix\Package_Matrix.f90"/>
+		<File RelativePath="..\SourceCode\Package_Matrix\Package_Matrix_Revision.fi"/>
+		<File RelativePath="..\SourceCode\Package_Matrix\pgmres.f"/></Filter>
+		<Filter Name="Package_Misc">
+		<File RelativePath="..\SourceCode\Package_Miscellaneous\AbstractFunction.f90"/>
+		<File RelativePath="..\SourceCode\Package_Miscellaneous\Class_BaseHydrograph.f90"/>
+		<File RelativePath="..\SourceCode\Package_Miscellaneous\Class_GeneralHeadBoundary.f90"/>
+		<File RelativePath="..\SourceCode\Package_Miscellaneous\Class_PairedData.f90"/>
+		<File RelativePath="..\SourceCode\Package_Miscellaneous\Class_SolverData.f90"/>
+		<File RelativePath="..\SourceCode\Package_Miscellaneous\Class_TecplotOutput.f90"/>
+		<File RelativePath="..\SourceCode\Package_Miscellaneous\Opening_screen_WINDOWS.f90"/>
+		<File RelativePath="..\SourceCode\Package_Miscellaneous\Package_Misc.f90"/>
+		<File RelativePath="..\SourceCode\Package_Miscellaneous\Package_Misc_Revision.fi"/>
+		<File RelativePath="..\SourceCode\Package_Miscellaneous\TSDFileHandler.f90"/></Filter>
+		<Filter Name="Package_Model">
+		<File RelativePath="..\SourceCode\Package_Model\Class_Model_ForInquiry.f90"/>
+		<File RelativePath="..\SourceCode\Package_Model\Package_Model.f90"/></Filter>
+		<Filter Name="Package_PrecipitationET">
+		<File RelativePath="..\SourceCode\Package_PrecipitationET\Class_AtmosphericData.f90"/>
+		<File RelativePath="..\SourceCode\Package_PrecipitationET\Package_PrecipET_Revision.fi"/>
+		<File RelativePath="..\SourceCode\Package_PrecipitationET\Package_PrecipitationET.f90"/></Filter>
+		<Filter Name="Package_RootZone">
+		<Filter Name="RootZone_v4.0">
+		<File RelativePath="..\SourceCode\Package_RootZone\VERSION_4.0\Class_NativeRiparianLandUse.f90"/>
+		<File RelativePath="..\SourceCode\Package_RootZone\VERSION_4.0\Class_NonPondedAgLandUse.f90"/>
+		<File RelativePath="..\SourceCode\Package_RootZone\VERSION_4.0\Class_PondedAgLandUse.f90"/>
+		<File RelativePath="..\SourceCode\Package_RootZone\VERSION_4.0\Class_RootDepthFracDataFile.f90"/>
+		<File RelativePath="..\SourceCode\Package_RootZone\VERSION_4.0\Class_UrbanLandUse.f90"/>
+		<File RelativePath="..\SourceCode\Package_RootZone\VERSION_4.0\RootZone_v40.f90"/>
+		<File RelativePath="..\SourceCode\Package_RootZone\VERSION_4.0\RootZone_v40_Revision.fi"/>
+		<File RelativePath="..\SourceCode\Package_RootZone\VERSION_4.0\Util_RootZone_v40.f90"/></Filter>
+		<Filter Name="RootZone_v4.01">
+		<File RelativePath="..\SourceCode\Package_RootZone\VERSION_4.01\RootZone_v401.f90"/>
+		<File RelativePath="..\SourceCode\Package_RootZone\VERSION_4.01\RootZone_v401_Revision.fi"/></Filter>
+		<Filter Name="RootZone_v4.1">
+		<File RelativePath="..\SourceCode\Package_RootZone\VERSION_4.1\Class_GenericLandUseGW.f90"/>
+		<File RelativePath="..\SourceCode\Package_RootZone\VERSION_4.1\Class_NativeRiparianLandUseGW.f90"/>
+		<File RelativePath="..\SourceCode\Package_RootZone\VERSION_4.1\Class_NonPondedAgLandUseGW.f90"/>
+		<File RelativePath="..\SourceCode\Package_RootZone\VERSION_4.1\Class_PondedAgLandUseGW.f90"/>
+		<File RelativePath="..\SourceCode\Package_RootZone\VERSION_4.1\Class_RVETFromStrm.f90"/>
+		<File RelativePath="..\SourceCode\Package_RootZone\VERSION_4.1\Class_UrbanLandUseGW.f90"/>
+		<File RelativePath="..\SourceCode\Package_RootZone\VERSION_4.1\RootZone_v41.f90"/>
+		<File RelativePath="..\SourceCode\Package_RootZone\VERSION_4.1\RootZone_v41_Revision.fi"/>
+		<File RelativePath="..\SourceCode\Package_RootZone\VERSION_4.1\Util_RootZone_v41.f90"/></Filter>
+		<Filter Name="RootZone_v4.11">
+		<File RelativePath="..\SourceCode\Package_RootZone\VERSION_4.11\RootZone_v411.f90"/>
+		<File RelativePath="..\SourceCode\Package_RootZone\VERSION_4.11\RootZone_v411_Revision.fi"/></Filter>
+		<Filter Name="RootZone_v5.0">
+		<File RelativePath="..\SourceCode\Package_RootZone\VERSION_5.0\Class_AgLandUse_v50.f90"/>
+		<File RelativePath="..\SourceCode\Package_RootZone\VERSION_5.0\Class_NativeRiparianLandUse_v50.f90"/>
+		<File RelativePath="..\SourceCode\Package_RootZone\VERSION_5.0\Class_UrbanLandUse_v50.f90"/>
+		<File RelativePath="..\SourceCode\Package_RootZone\VERSION_5.0\RootZone_v50.f90"/>
+		<File RelativePath="..\SourceCode\Package_RootZone\VERSION_5.0\RootZone_v50_Revision.fi"/></Filter>
+		<File RelativePath="..\SourceCode\Package_RootZone\Class_BaseRootZone.f90"/>
+		<File RelativePath="..\SourceCode\Package_RootZone\Class_GenericLandUse.f90"/>
+		<File RelativePath="..\SourceCode\Package_RootZone\Class_GenericMoistureData.f90"/>
+		<File RelativePath="..\SourceCode\Package_RootZone\Class_LandUseDataFile.f90"/>
+		<File RelativePath="..\SourceCode\Package_RootZone\Package_RootZone.f90"/>
+		<File RelativePath="..\SourceCode\Package_RootZone\Package_RootZone_Revision.fi"/>
+		<File RelativePath="..\SourceCode\Package_RootZone\Util_Package_RootZone.f90"/></Filter>
+		<Filter Name="Package_Supply">
+		<File RelativePath="..\SourceCode\Package_Supply\Class_IrigFracFile.f90"/>
+		<File RelativePath="..\SourceCode\Package_Supply\Package_Supply.f90"/>
+		<File RelativePath="..\SourceCode\Package_Supply\SupplyAdjustment.f90"/></Filter>
+		<Filter Name="Package_UnsatZone">
+		<File RelativePath="..\SourceCode\Package_UnsatZone\Class_Soil.f90"/>
+		<File RelativePath="..\SourceCode\Package_UnsatZone\Package_UnsatZone.f90"/>
+		<File RelativePath="..\SourceCode\Package_UnsatZone\Package_UnsatZone_Revision.fi"/>
+		<File RelativePath="..\SourceCode\Package_UnsatZone\RainfallRunoff.f90"/>
+		<File RelativePath="..\SourceCode\Package_UnsatZone\UnsatZoneOps.f90"/></Filter>
+		<Filter Name="Package_ZBudget">
+		<File RelativePath="..\SourceCode\Package_ZBudget\Class_SystemData.f90"/>
+		<File RelativePath="..\SourceCode\Package_ZBudget\Class_ZBudget.f90"/>
+		<File RelativePath="..\SourceCode\Package_ZBudget\Class_ZBudgetHeader.f90"/>
+		<File RelativePath="..\SourceCode\Package_ZBudget\Class_ZoneList.f90"/>
+		<File RelativePath="..\SourceCode\Package_ZBudget\Package_ZBudget.f90"/>
+		<File RelativePath="..\SourceCode\Package_ZBudget\Package_ZBudget_Revision.fi"/>
+		<File RelativePath="..\SourceCode\Package_ZBudget\ZBudget_Parameters.f90"/>
+		<File RelativePath="..\SourceCode\Package_ZBudget\ZBudget_Util.f90"/></Filter>
+		<File RelativePath="..\SourceCode\Simulation\Iwfm_f2.f90"/></Filter></Files>
+	<Globals/></VisualStudioProject>
