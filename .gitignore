@@ -30,3 +30,29 @@
 *.exe
 *.out
 *.app
+
+# VS files
+*.u2d
+
+# Directories
+Bin/
+Simulation/Debug/
+Simulation/Release/
+Simulation/x64/
+PreProcessor/Debug/
+PreProcessor/Release/
+Preprocessor/x64
+Budget/Debug/
+Budget/Release/
+Budget/x64/
+IWFM_DLL/Debug/
+IWFM_DLL/Release/
+IWFM_DLL/x64/
+Simulation_MM/x64/
+Simulation_Parallel/Debug/
+Simulation_Parallel/Release/
+Simulation_Parallel/x64/
+ZBudget/Debug/
+ZBudget/Release/
+ZBudget/x64/
+.vs/

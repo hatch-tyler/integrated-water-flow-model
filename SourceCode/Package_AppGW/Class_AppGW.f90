@@ -235,6 +235,7 @@ MODULE Class_AppGW
       PROCEDURE,PASS   :: GetNElemPumps
       PROCEDURE,PASS   :: GetElemPumpIDs
       PROCEDURE,PASS   :: GetWellIDs
+      PROCEDURE,PASS   :: GetWellXY
       PROCEDURE,PASS   :: GetPumpDestination
       PROCEDURE,PASS   :: GetNodalPumpActual 
       PROCEDURE,PASS   :: GetNodalPumpRequired
@@ -2101,6 +2102,18 @@ CONTAINS
     IF (SIZE(IDs) .GT. 0) CALL AppGW%AppPumping%GetWellIDs(IDs)
     
   END SUBROUTINE GetWellIDs
+  
+  
+  ! -------------------------------------------------------------
+  ! --- GET WELL XY
+  ! -------------------------------------------------------------
+  PURE SUBROUTINE GetWellXY(AppGW, X, Y)
+    CLASS(AppGWType),INTENT(IN) :: AppGW
+    REAL(8),INTENT(OUT)         :: X(:), Y(:)
+    
+    IF (SIZE(X) .GT. 0 .AND. SIZE(Y) .GT. 0) CALL AppGW%AppPumping%GetWellXY(X,Y)
+    
+  END SUBROUTINE GetWellXY
   
    
   ! -------------------------------------------------------------

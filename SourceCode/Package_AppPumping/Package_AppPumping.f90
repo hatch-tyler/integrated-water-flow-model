@@ -129,6 +129,7 @@ MODULE Package_AppPumping
       PROCEDURE,PASS :: GetNElemPumps 
       PROCEDURE,PASS :: GetElemPumpIDs
       PROCEDURE,PASS :: GetWellIDs
+      PROCEDURE,PASS :: GetWellXY
       PROCEDURE,PASS :: GetElement                   
       PROCEDURE,PASS :: GetLayerFactors
       PROCEDURE,PASS :: GetActualNodeLayerPump_ForAPump
@@ -803,6 +804,19 @@ CONTAINS
     IDs = AppPumping%Wells%ID
     
   END SUBROUTINE GetWellIDs
+  
+  
+  ! -------------------------------------------------------------
+  ! --- GET WELL XY
+  ! -------------------------------------------------------------
+  PURE SUBROUTINE GetWellXY(AppPumping, X, Y)
+    CLASS(AppPumpingType),INTENT(IN) :: AppPumping
+    REAL(8),INTENT(OUT)              :: X(:), Y(:)
+    
+    X = AppPumping%Wells%X
+    Y = AppPumping%Wells%Y
+    
+  END SUBROUTINE GetWellXY
   
    
   ! -------------------------------------------------------------

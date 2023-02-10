@@ -234,6 +234,21 @@ CONTAINS
     
   END SUBROUTINE IW_Model_GetWellIDs
   
+  
+  ! -------------------------------------------------------------
+  ! --- GET WELL XY
+  ! -------------------------------------------------------------
+  SUBROUTINE IW_Model_GetWellXY(iNWells, X, Y, iStat) BIND(C,NAME='IW_Model_GetWellXY')
+    !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetWellXY
+    INTEGER(C_INT),INTENT(IN) :: iNWells
+    REAL(C_DOUBLE),INTENT(OUT) :: X(iNWells), Y(iNWells)
+    INTEGER(C_INT),INTENT(OUT) :: iStat
+    
+    CALL Model%GetWellXY(X, Y)
+    iStat = 0
+    
+  END SUBROUTINE IW_Model_GetWellXY
+  
    
   ! -------------------------------------------------------------
   ! --- GET NUMBER OF ELEMENT PUMPING 

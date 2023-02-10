@@ -362,6 +362,7 @@ MODULE Package_Model
       PROCEDURE,PASS   :: GetSubsidence_All
       PROCEDURE,PASS   :: GetNWells
       PROCEDURE,PASS   :: GetWellIDs
+      PROCEDURE,PASS   :: GetWellXY
       PROCEDURE,PASS   :: GetNElemPumps
       PROCEDURE,PASS   :: GetElemPumpIDs
       PROCEDURE,PASS   :: GetNodalGWPumping_Actual
@@ -4006,6 +4007,18 @@ CONTAINS
     CALL Model%AppGW%GetWellIDs(IDs)
     
   END SUBROUTINE GetWellIDs
+  
+  
+  ! -------------------------------------------------------------
+  ! --- GET WELL XY
+  ! -------------------------------------------------------------
+  PURE SUBROUTINE GetWellXY(Model,X,Y)
+    CLASS(ModelType),INTENT(IN) :: Model
+    REAL(8),INTENT(OUT)         :: X(:), Y(:)
+    
+    CALL Model%AppGW%GetWellXY(X,Y)
+    
+  END SUBROUTINE GetWellXY
   
    
   ! -------------------------------------------------------------
