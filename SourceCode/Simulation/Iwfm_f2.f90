@@ -18,7 +18,7 @@
 !  along with this program; if not, write to the Free Software
 !  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 !
-!  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
+!  For technical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 PROGRAM IWFM_F2
   !$ USE OMP_LIB
@@ -54,7 +54,7 @@ PROGRAM IWFM_F2
       CALL LogLastMessage()
   
   ELSE
-      !Instantaite model
+      !Instantiate model
       CALL Model%New('',lForInquiry=.FALSE.,iStat=iStat)
            
       !If an error, print it and stop
