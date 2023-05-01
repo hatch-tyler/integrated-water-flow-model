@@ -18,7 +18,7 @@
 !  along with this program; if not, write to the Free Software
 !  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 !
-!  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov
+!  For technical support, e-mail: IWFMtechsupport@water.ca.gov
 !***********************************************************************
 MODULE TimeSeriesUtilities
   USE MessageLogger
@@ -630,7 +630,7 @@ CONTAINS
 
 
   ! -------------------------------------------------------------
-  ! --- GETE A LIST OF JULIAN DATES BETWEEN TWO TIME STAMPS USING A TIME INCREMENT
+  ! --- GET A LIST OF JULIAN DATES BETWEEN TWO TIME STAMPS USING A TIME INCREMENT
   ! -------------------------------------------------------------
   SUBROUTINE GetJulianDatesBetweenTimeStampsWithTimeIncrement(Interval_InMinutes,cBeginDateAndTime,cEndDateAndTime,rJulianDates)
     INTEGER,INTENT(IN)          :: Interval_InMinutes
@@ -1102,7 +1102,9 @@ CONTAINS
 
     !Compare
     IF (JulianDate1 .GE. JulianDate2) THEN
-        TestResult = .TRUE.
+      TestResult = .TRUE.
+    ELSEIF (JulianDate1.EQ.JulianDate2) THEN
+      IF (MinutesAfterMidnight1.GE.MinutesAfterMidnight2) TestResult=.TRUE.
     END IF
 
   END FUNCTION CheckForGreaterThanOrEqualTo

@@ -18,7 +18,7 @@
 !  along with this program; if not, write to the Free Software
 !  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 !
-!  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov
+!  For technical support, e-mail: IWFMtechsupport@water.ca.gov
 !***********************************************************************
 MODULE Class_DSSFileType
   USE GeneralUtilities    , ONLY: UpperCase                                  , &
@@ -1545,6 +1545,7 @@ CONTAINS
       IF (IDTYPE .EQ. 0) CYCLE
 
       ScratchFileCreated = .TRUE.
+      ! Separate the PathName into its parts
       CALL ZUFPN(APart ,DummyInt          , &
                  BPart ,DummyInt          , &
                  CPart ,DummyInt          , &
@@ -1560,6 +1561,8 @@ CONTAINS
           RETURN
       END IF
       ErrorCode = 1
+      
+      ! Get the interval of the regular time-series data
       CALL ZGINTL(Interval,EPart,DummyInt,ErrorCode)
 
       !If the time is not on the standard boundaries, adjust it and determine the time offset, in minutes.
