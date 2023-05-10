@@ -1401,6 +1401,21 @@ CONTAINS
   
   
   ! -------------------------------------------------------------
+  ! --- GET ELEMENT AREAS
+  ! -------------------------------------------------------------
+  SUBROUTINE IW_Model_GetElementAreas(NElem,Areas,iStat) BIND(C,NAME='IW_Model_GetElementAreas')
+    !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetElementAreas
+    INTEGER(C_INT),INTENT(IN) :: NElem
+    REAL(C_DOUBLE),INTENT(OUT) :: Areas(NElem)
+    INTEGER(C_INT),INTENT(OUT) :: iStat
+    
+    iStat = 0
+    CALL Model%GetElementAreas(Areas)
+    
+  END SUBROUTINE IW_Model_GetElementAreas
+  
+  
+  ! -------------------------------------------------------------
   ! --- GET NUMBER OF LAYERS
   ! -------------------------------------------------------------
   SUBROUTINE IW_Model_GetNLayers(NLayers,iStat) BIND(C,NAME='IW_Model_GetNLayers')
