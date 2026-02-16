@@ -1,0 +1,215 @@
+!***********************************************************************
+!  Integrated Water Flow Model (IWFM)
+!  Copyright (C) 2005-2025  
+!  State of California, Department of Water Resources 
+!
+!  This program is free software; you can redistribute it and/or
+!  modify it under the terms of the GNU General Public License
+!  as published by the Free Software Foundation; either version 2
+!  of the License, or (at your option) any later version.
+!
+!  This program is distributed in the hope that it will be useful,
+!  but WITHOUT ANY WARRANTY; without even the implied warranty of
+!  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+!  GNU General Public License for more details.
+!  (http://www.gnu.org/copyleft/gpl.html)
+!
+!  You should have received a copy of the GNU General Public License
+!  along with this program; if not, write to the Free Software
+!  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
+!
+!  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
+!***********************************************************************
+MODULE Class_GenericLandUse_v41
+  USE Class_GenericLandUse  , ONLY: GenericLandUseType 
+  IMPLICIT NONE
+  
+  
+! ******************************************************************
+! ******************************************************************
+! ******************************************************************
+! ***
+! *** VARIABLE DEFINITIONS
+! ***
+! ******************************************************************
+! ******************************************************************
+! ******************************************************************
+
+  ! -------------------------------------------------------------
+  ! --- PUBLIC ENTITIES
+  ! -------------------------------------------------------------
+  PRIVATE
+  PUBLIC :: GenericLandUseType       , &
+            GenericLandUse_v41_Type  , &
+            ComputeETFromGW_Max
+                                
+
+  ! -------------------------------------------------------------
+  ! --- ROOT ZONE CORE DATA TYPE
+  ! -------------------------------------------------------------
+  TYPE,EXTENDS(GenericLandUseType) :: GenericLandUse_v41_Type
+      REAL(8),ALLOCATABLE :: ETFromGW_Max(:,:)     !Potential maximum inflow from groundwater (unit rate)
+      REAL(8),ALLOCATABLE :: ETFromGW_Actual(:,:)  !Actual inflow of groundwater into the root zone (volumetric rate)
+  CONTAINS
+      PROCEDURE,PASS :: New
+      PROCEDURE,PASS :: Kill
+  END TYPE GenericLandUse_v41_Type
+
+  
+  
+  
+CONTAINS
+    
+    
+
+    
+! ******************************************************************
+! ******************************************************************
+! ******************************************************************
+! ***
+! *** CONSTRUCTOR
+! ***
+! ******************************************************************
+! ******************************************************************
+! ******************************************************************
+
+  ! -------------------------------------------------------------
+  ! --- ALLOCATE MEMORY FOR ARRAYS
+  ! -------------------------------------------------------------
+  SUBROUTINE New(GenericLandUse,iDim1,iDim2,iStat)
+    CLASS(GenericLandUse_v41_Type),INTENT(OUT) :: GenericLandUse
+    INTEGER,INTENT(IN)                         :: iDim1,iDim2
+    INTEGER,INTENT(OUT)                        :: iStat
+    
+    ALLOCATE (GenericLandUse%ETFromGW_Max(iDim1,iDim2)    , &
+              GenericLandUse%ETFromGW_Actual(iDim1,iDim2) , &
+              STAT=iStat                                  )
+    IF (iStat .NE. 0) RETURN
+    
+    !Initialize
+    GenericLandUse%ETFromGW_Max    = 0.0
+    GenericLandUse%ETFromGW_Actual = 0.0
+    
+    !Also instantiate the parent class
+    CALL GenericLandUse%GenericLandUseType%New(iDim1,iDim2,iStat)
+    
+  END SUBROUTINE New
+    
+    
+
+    
+! ******************************************************************
+! ******************************************************************
+! ******************************************************************
+! ***
+! *** DESTRUCTOR
+! ***
+! ******************************************************************
+! ******************************************************************
+! ******************************************************************
+
+  ! -------------------------------------------------------------
+  ! --- DEALLOCATE MEMORY 
+  ! -------------------------------------------------------------
+  SUBROUTINE Kill(GenericLandUse)
+    CLASS(GenericLandUse_v41_Type) :: GenericLandUse
+    
+    !Local variables
+    INTEGER :: iErrorCode
+    
+    DEALLOCATE (GenericLandUse%ETFromGW_Max    , &
+                GenericLandUse%ETFromGW_Actual , &
+                STAT=iErrorCode                )
+    
+    
+    !Also delete the parent class
+    CALL GenericLandUse%GenericLandUseType%Kill()
+    
+  END SUBROUTINE Kill  
+    
+    
+    
+! ******************************************************************
+! ******************************************************************
+! ******************************************************************
+! ***
+! *** MISC. METHODS
+! ***
+! ******************************************************************
+! ******************************************************************
+! ******************************************************************
+
+  ! -------------------------------------------------------------
+  ! --- COMPUTE MAXIMUM POSSIBLE ET FROM GW 
+  ! -------------------------------------------------------------
+  SUBROUTINE ComputeETFromGW_Max(DepthToGW,Sy,RootDepth,CapillaryRise,Area,ETFromGW_Max)
+    REAL(8),INTENT(IN)  :: DepthToGW(:),Sy(:),RootDepth(:),CapillaryRise(:),Area(:,:)
+    REAL(8),INTENT(OUT) :: ETFromGW_Max(:,:)
+    
+    !Local variables
+    INTEGER :: indxElem,indxLU,NLandUse
+    REAL(8) :: rDGW,rSy,rRZ,rRise,rIntersect
+    
+    !Initialize
+    NLandUse = SIZE(RootDepth)
+    
+    !Compute
+    DO indxElem=1,SIZE(DepthToGW)
+        rDGW  = DepthToGW(indxElem)
+        rRise = CapillaryRise(indxElem) 
+        rSy   = Sy(indxElem)
+        DO indxLU=1,NLandUse
+            !No ET from GW if land use area is zero
+            IF (Area(indxLU,indxElem) .EQ. 0.0) THEN
+                ETFromGW_Max(indxLU,indxElem) = 0.0
+                CYCLE
+            END IF
+            
+            !Root depth
+            rRZ = RootDepth(indxLU)
+            
+            !GW is below root zone
+            IF (rDGW .GT. rRZ) THEN
+                !Capillary rise does not reach into root zone
+                IF (rRise+rRZ .LE. rDGW) THEN
+                    ETFromGW_Max(indxLU,indxElem) = 0.0
+                    
+                !Capillary rise extends into root zone 
+                ELSE
+                    !There is no capillary rise
+                    IF (rRise .EQ. 0.0) THEN
+                        ETFromGW_Max(indxLU,indxElem) = 0.0
+                       
+                    !Capillary rise does not exceed land surface
+                    ELSEIF (rDGW .GT. rRise) THEN
+                        rIntersect = rRZ - rDGW + rRise
+                        ETFromGW_Max(indxLU,indxElem) = 0.5 * rIntersect * rIntersect * rSy / rRise
+                    
+                    !Capillary rise exceeds land surface
+                    ELSE
+                        ETFromGW_Max(indxLU,indxElem) = rRZ * rSy * (0.5 * rRZ + rRise - rDGW) / rRise
+                    END IF
+                END IF
+                
+            !GW is above root zone
+            ELSE
+                !Capillary rise does not exceed land surface
+                IF (rDGW .GT. rRise) THEN
+                    ETFromGW_Max(indxLU,indxElem) = 0.5 * rRise * rSy + rSy * (rRZ - rDGW)
+                    
+                !Capillary rise exceeds land surface
+                ELSE
+                    IF (rRise .EQ. 0.0) THEN
+                        ETFromGW_Max(indxLU,indxElem) = rSy * (rRZ - rDGW)
+                    ELSE
+                        ETFromGW_Max(indxLU,indxElem) = 0.5 * rSy * (2.0 * rRise * rRZ - rDGW * rDGW) / rRise
+                    END IF
+                END IF
+            END IF
+            
+        END DO
+    END DO
+    
+  END SUBROUTINE ComputeETFromGW_Max
+
+END MODULE

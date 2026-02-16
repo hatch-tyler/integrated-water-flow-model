@@ -1,0 +1,162 @@
+#***********************************************************************
+#  IWFM Docker Compose Configuration
+#
+#  Services:
+#    - iwfm-build:   Full build environment with Intel compilers
+#    - iwfm-shell:   Interactive shell for development
+#    - iwfm-runtime: Minimal runtime container for simulations
+#
+#  Usage:
+#    # Build the runtime container
+#    docker compose build iwfm-runtime
+#
+#    # Run a simulation
+#    docker compose run --rm iwfm-simulation
+#
+#    # Interactive development shell
+#    docker compose run --rm iwfm-shell
+#
+#  Note: The 'version' field is obsolete in Docker Compose v2+ and has been
+#  removed. This file works with Docker Compose v2.0.0 and later.
+#***********************************************************************
+
+services:
+  # ===========================================================================
+  # Build Environment - Full Intel oneAPI development environment
+  # ===========================================================================
+  iwfm-build:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: iwfm-build:latest
+    container_name: iwfm-build
+    volumes:
+      - ..:/src
+      - ../samplemodel:/src/samplemodel:ro
+    working_dir: /src
+    # Note: Intel base image already has oneAPI environment configured
+    command: >
+      /bin/bash -c "
+        mkdir -p /src/build-linux &&
+        cd /src/build-linux &&
+        cmake .. -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_Fortran_COMPILER=ifx
+          -DCMAKE_C_COMPILER=icx &&
+        cmake --build . --parallel $$(nproc) &&
+        echo 'Build complete! Executables in /src/Bin/'
+      "
+
+  # ===========================================================================
+  # Interactive Shell - For development and debugging
+  # ===========================================================================
+  iwfm-shell:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: iwfm-build:latest
+    container_name: iwfm-shell
+    volumes:
+      - ..:/src
+      - ../samplemodel:/src/samplemodel:ro
+    working_dir: /src
+    stdin_open: true
+    tty: true
+    # Note: Intel base image already has oneAPI environment configured
+    entrypoint: /bin/bash
+
+  # ===========================================================================
+  # Runtime Container - Minimal image for running simulations
+  # ===========================================================================
+  iwfm-runtime:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.runtime
+    image: iwfm-runtime:2025.0
+    container_name: iwfm-runtime
+    volumes:
+      - ${MODEL_DIR:-.}:/data
+    working_dir: /data
+    # Default shows version info
+    command: ["iwfm-simulation", "-about"]
+
+  # ===========================================================================
+  # PreProcessor - Run IWFM PreProcessor on mounted model
+  # ===========================================================================
+  iwfm-preprocessor:
+    image: iwfm-runtime:2025.0
+    volumes:
+      - ${MODEL_DIR:-../samplemodel/PreProcessor}:/data
+    working_dir: /data
+    command: ["iwfm-preprocessor", "${INPUT_FILE:-PreProcessor_MAIN.IN}"]
+    depends_on:
+      - iwfm-runtime
+
+  # ===========================================================================
+  # Simulation - Run IWFM Simulation on mounted model
+  # ===========================================================================
+  iwfm-simulation:
+    image: iwfm-runtime:2025.0
+    volumes:
+      - ${MODEL_DIR:-../samplemodel/Simulation}:/data
+    working_dir: /data
+    command: ["iwfm-simulation", "${INPUT_FILE:-Simulation_MAIN.IN}"]
+    depends_on:
+      - iwfm-runtime
+
+  # ===========================================================================
+  # Budget - Run IWFM Budget post-processor
+  # ===========================================================================
+  iwfm-budget:
+    image: iwfm-runtime:2025.0
+    volumes:
+      - ${MODEL_DIR:-../samplemodel/Budget}:/data
+    working_dir: /data
+    command: ["iwfm-budget", "${INPUT_FILE:-Budget.in}"]
+    depends_on:
+      - iwfm-runtime
+
+  # ===========================================================================
+  # ZBudget - Run IWFM ZBudget post-processor
+  # ===========================================================================
+  iwfm-zbudget:
+    image: iwfm-runtime:2025.0
+    volumes:
+      - ${MODEL_DIR:-../samplemodel/ZBudget}:/data
+    working_dir: /data
+    command: ["iwfm-zbudget", "${INPUT_FILE:-ZBudget.in}"]
+    depends_on:
+      - iwfm-runtime
+
+  # ===========================================================================
+  # Full Pipeline - Run complete model workflow
+  # ===========================================================================
+  iwfm-pipeline:
+    image: iwfm-runtime:2025.0
+    volumes:
+      - ${MODEL_DIR:-../samplemodel}:/model
+    working_dir: /model
+    command: >
+      /bin/sh -c "
+        echo '=== IWFM Model Pipeline ===' &&
+        echo '' &&
+        echo '1. Running PreProcessor...' &&
+        cd /model/PreProcessor &&
+        iwfm-preprocessor PreProcessor_MAIN.IN &&
+        echo '' &&
+        echo '2. Running Simulation...' &&
+        cd /model/Simulation &&
+        iwfm-simulation Simulation_MAIN.IN &&
+        echo '' &&
+        echo '3. Running Budget...' &&
+        cd /model/Budget &&
+        iwfm-budget Budget.in &&
+        echo '' &&
+        echo '4. Running ZBudget...' &&
+        cd /model/ZBudget &&
+        iwfm-zbudget ZBudget.in &&
+        echo '' &&
+        echo '=== Pipeline Complete ==='
+      "
+    depends_on:
+      - iwfm-runtime

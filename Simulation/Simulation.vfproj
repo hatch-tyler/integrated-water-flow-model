@@ -1,0 +1,289 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<VisualStudioProject ProjectCreator="Intel Fortran" Keyword="Console Application" Version="11.0" ProjectIdGuid="{31372A25-2EF2-433D-8787-80FCAC74C5F1}">
+	<Platforms>
+		<Platform Name="x64"/>
+	</Platforms>
+	<Configurations>
+		<Configuration Name="Debug|x64" UseCompiler="ifxCompiler" IntermediateDirectory="$(ProjectDir)$(PlatformName)\$(ConfigurationName)" TargetName="Simulation_x64_D">
+			<Tool Name="VFFortranCompilerTool" AdditionalOptions="/fp:consistent /assume:norealloc_lhs /assume:noieee_compares /Qdiag-disable:10448" SuppressStartupBanner="true" DebugInformationFormat="debugEnabled" Optimization="optimizeDisabled" Preprocess="preprocessYes" AdditionalIncludeDirectories="$(ProjectDir)\..\SourceCode\IWFM-kernel\HDF5\$(PlatformName)\$(ConfigurationName)" F2003Semantics="true" DisableSpecificDiagnostics="5462" WarnUnusedVariables="true" WarnUncalled="true" Traceback="true" BoundsCheck="true" RuntimeLibrary="rtMultiThreadedDebug"/>
+			<Tool Name="VFLinkerTool" LinkIncremental="linkIncrementalNo" SuppressStartupBanner="true" AdditionalLibraryDirectories="$(ProjectDir)\..\SourceCode\IWFM-kernel\HDF5\$(PlatformName)\$(ConfigurationName);$(ProjectDir)\..\SourceCode\IWFM-kernel\heclib" GenerateDebugInformation="true" SubSystem="subSystemConsole" StackReserveSize="256000000" AdditionalDependencies="heclib_x64_D.lib libhdf5_fortran_D.lib libhdf5_D.lib libhdf5_f90cstub_D.lib"/>
+			<Tool Name="VFResourceCompilerTool"/>
+			<Tool Name="VFMidlTool" SuppressStartupBanner="true" TargetEnvironment="midlTargetAMD64"/>
+			<Tool Name="VFCustomBuildTool"/>
+			<Tool Name="VFPreLinkEventTool"/>
+			<Tool Name="VFPreBuildEventTool"/>
+			<Tool Name="VFPostBuildEventTool" CommandLine="copy /Y $(OutDir)\$(TargetName)$(TargetExt) $(ProjectDir)..\Bin"/>
+			<Tool Name="VFManifestTool" SuppressStartupBanner="true" EmbedManifest="false"/>
+		</Configuration>
+		<Configuration Name="Release|x64" UseCompiler="ifxCompiler" IntermediateDirectory="$(ProjectDir)$(PlatformName)\$(ConfigurationName)" TargetName="Simulation_x64">
+			<Tool Name="VFFortranCompilerTool" AdditionalOptions="/fp:consistent /assume:norealloc_lhs /assume:noieee_compares /Qdiag-disable:10448" SuppressStartupBanner="true" Preprocess="preprocessYes" AdditionalIncludeDirectories="$(ProjectDir)\..\SourceCode\IWFM-kernel\HDF5\$(PlatformName)\$(ConfigurationName)" F2003Semantics="true" DisableSpecificDiagnostics="5462"/>
+			<Tool Name="VFLinkerTool" SuppressStartupBanner="true" AdditionalLibraryDirectories="$(ProjectDir)\..\SourceCode\IWFM-kernel\HDF5\$(PlatformName)\$(ConfigurationName);$(ProjectDir)\..\SourceCode\IWFM-kernel\heclib" SubSystem="subSystemConsole" StackReserveSize="256000000" AdditionalDependencies="heclib_x64.lib libhdf5_fortran.lib libhdf5.lib libhdf5_f90cstub.lib "/>
+			<Tool Name="VFResourceCompilerTool"/>
+			<Tool Name="VFMidlTool" SuppressStartupBanner="true" TargetEnvironment="midlTargetAMD64"/>
+			<Tool Name="VFCustomBuildTool"/>
+			<Tool Name="VFPreLinkEventTool"/>
+			<Tool Name="VFPreBuildEventTool"/>
+			<Tool Name="VFPostBuildEventTool" CommandLine="copy /Y $(OutDir)\$(TargetName)$(TargetExt) $(ProjectDir)..\Bin"/>
+			<Tool Name="VFManifestTool" SuppressStartupBanner="true" EmbedManifest="false"/>
+		</Configuration>
+	</Configurations>
+	<Files>
+		<Filter Name="Header Files" Filter="fi;fd"/>
+		<Filter Name="Resource Files" Filter="rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe"/>
+		<Filter Name="Source Files" Filter="f90;for;f;fpp;ftn;def;odl;idl">
+			<Filter Name="IWFM-kernel">
+				<Filter Name="IWFM_Kernel_Version">
+					<File RelativePath="..\SourceCode\IWFM-kernel\IWFM_Kernel_Version\IWFM_Kernel_Version.f90"/>
+					<File RelativePath="..\SourceCode\IWFM-kernel\IWFM_Kernel_Version\IWFMKernelVersion.fi"/>
+				</Filter>
+				<Filter Name="IWFM_Util">
+					<Filter Name="IOInterface">
+						<File RelativePath="..\SourceCode\IWFM-kernel\IWFM_Util\IOInterface\Class_AsciiFileType.f90"/>
+						<File RelativePath="..\SourceCode\IWFM-kernel\IWFM_Util\IOInterface\Class_BaseFileType.f90"/>
+						<File RelativePath="..\SourceCode\IWFM-kernel\IWFM_Util\IOInterface\Class_DSSFileType.f90"/>
+						<File RelativePath="..\SourceCode\IWFM-kernel\IWFM_Util\IOInterface\Class_FortBinaryFileType.f90"/>
+						<File RelativePath="..\SourceCode\IWFM-kernel\IWFM_Util\IOInterface\Class_HDF5FileType.f90"/>
+						<File RelativePath="..\SourceCode\IWFM-kernel\IWFM_Util\IOInterface\IOInterface.f90"/>
+						<File RelativePath="..\SourceCode\IWFM-kernel\IWFM_Util\IOInterface\IOInterface_Local.f90"/>
+						<File RelativePath="..\SourceCode\IWFM-kernel\IWFM_Util\IOInterface\TSDFileHandler.f90"/>
+					</Filter>
+					<Filter Name="Utilities">
+						<File RelativePath="..\SourceCode\IWFM-kernel\IWFM_Util\Utilities\Class_BinaryTree.f90"/>
+						<File RelativePath="..\SourceCode\IWFM-kernel\IWFM_Util\Utilities\Class_Version.f90"/>
+						<File RelativePath="..\SourceCode\IWFM-kernel\IWFM_Util\Utilities\GeneralUtilities.f90"/>
+						<File RelativePath="..\SourceCode\IWFM-kernel\IWFM_Util\Utilities\GenericLinkedList.f90"/>
+						<File RelativePath="..\SourceCode\IWFM-kernel\IWFM_Util\Utilities\MessageLogger.f90"/>
+						<File RelativePath="..\SourceCode\IWFM-kernel\IWFM_Util\Utilities\ProgramTimer.f90"/>
+						<File RelativePath="..\SourceCode\IWFM-kernel\IWFM_Util\Utilities\TimeSeriesUtilities.f90"/>
+					</Filter>
+				</Filter>
+				<Filter Name="Package_AppGW">
+					<Filter Name="BC">
+						<File RelativePath="..\SourceCode\IWFM-kernel\Package_AppGW\BC\Class_AppBC.f90"/>
+						<File RelativePath="..\SourceCode\IWFM-kernel\Package_AppGW\BC\Class_LayerBC.f90"/>
+						<File RelativePath="..\SourceCode\IWFM-kernel\Package_AppGW\BC\Class_TSBCDataFile.f90"/>
+					</Filter>
+					<Filter Name="Package_AppPumping">
+						<File RelativePath="..\SourceCode\IWFM-kernel\Package_AppGW\Package_AppPumping\Class_ElementPumping.f90"/>
+						<File RelativePath="..\SourceCode\IWFM-kernel\Package_AppGW\Package_AppPumping\Class_Pumping.f90"/>
+						<File RelativePath="..\SourceCode\IWFM-kernel\Package_AppGW\Package_AppPumping\Class_PumpsAtElem.f90"/>
+						<File RelativePath="..\SourceCode\IWFM-kernel\Package_AppGW\Package_AppPumping\Class_Well.f90"/>
+						<File RelativePath="..\SourceCode\IWFM-kernel\Package_AppGW\Package_AppPumping\Package_AppPumping.f90"/>
+					</Filter>
+					<Filter Name="Package_AppSubsidence">
+						<Filter Name="VERSION_4.0">
+							<File RelativePath="..\SourceCode\IWFM-kernel\Package_AppGW\Package_AppSubsidence\VERSION_4.0\Class_AppSubsidence_v40.f90"/>
+						</Filter>
+						<Filter Name="VERSION_5.0">
+							<File RelativePath="..\SourceCode\IWFM-kernel\Package_AppGW\Package_AppSubsidence\VERSION_5.0\Class_AppSubsidence_v50.f90"/>
+						</Filter>
+						<File RelativePath="..\SourceCode\IWFM-kernel\Package_AppGW\Package_AppSubsidence\Class_BaseAppSubsidence.f90"/>
+						<File RelativePath="..\SourceCode\IWFM-kernel\Package_AppGW\Package_AppSubsidence\Package_AppSubsidence.f90"/>
+					</Filter>
+					<Filter Name="Package_AppTileDrain">
+						<File RelativePath="..\SourceCode\IWFM-kernel\Package_AppGW\Package_AppTileDrain\AppTileDrain_Parameters.f90"/>
+						<File RelativePath="..\SourceCode\IWFM-kernel\Package_AppGW\Package_AppTileDrain\Class_BaseTileDrain.f90"/>
+						<File RelativePath="..\SourceCode\IWFM-kernel\Package_AppGW\Package_AppTileDrain\Package_AppTileDrain.f90"/>
+						<File RelativePath="..\SourceCode\IWFM-kernel\Package_AppGW\Package_AppTileDrain\TileDrainHydrograph.f90"/>
+					</Filter>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_AppGW\Class_AppGW.f90"/>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_AppGW\Class_GWState.f90"/>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_AppGW\GWHydrograph.f90"/>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_AppGW\Package_AppGW.f90"/>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_AppGW\VerticalFlow.f90"/>
+				</Filter>
+				<Filter Name="Package_AppLake">
+					<Filter Name="VERSION_4.0">
+						<File RelativePath="..\SourceCode\IWFM-kernel\Package_AppLake\VERSION_4.0\Class_AppLake_v40.f90"/>
+						<File RelativePath="..\SourceCode\IWFM-kernel\Package_AppLake\VERSION_4.0\Class_MaxLakeElevFile.f90"/>
+					</Filter>
+					<Filter Name="VERSION_5.0">
+						<File RelativePath="..\SourceCode\IWFM-kernel\Package_AppLake\VERSION_5.0\Class_AppLake_v50.f90"/>
+					</Filter>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_AppLake\Class_BaseAppLake.f90"/>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_AppLake\Class_Lake.f90"/>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_AppLake\Package_AppLake.f90"/>
+				</Filter>
+				<Filter Name="Package_AppSmallWatershed">
+					<Filter Name="Version_4.1">
+						<File RelativePath="..\SourceCode\IWFM-kernel\Package_AppSmallWatershed\Version_4.1\Class_AppSmallWatershed_v41.f90"/>
+					</Filter>
+					<Filter Name="Version_4.0">
+						<File RelativePath="..\SourceCode\IWFM-kernel\Package_AppSmallWatershed\Version_4.0\Class_AppSmallWatershed_v40.f90"/>
+					</Filter>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_AppSmallWatershed\Class_BaseAppSmallWatershed.f90"/>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_AppSmallWatershed\Package_AppSmallWatershed.f90"/>
+				</Filter>
+				<Filter Name="Package_AppStream">
+					<Filter Name="Version_4.0">
+						<File RelativePath="..\SourceCode\IWFM-kernel\Package_AppStream\VERSION_4.0\Class_AppStream_v40.f90"/>
+					</Filter>
+					<Filter Name="Version_4.1">
+						<File RelativePath="..\SourceCode\IWFM-kernel\Package_AppStream\VERSION_4.1\Class_AppStream_v41.f90"/>
+						<File RelativePath="..\SourceCode\IWFM-kernel\Package_AppStream\VERSION_4.1\Class_StrmNode_v41.f90"/>
+					</Filter>
+					<Filter Name="Version_4.2">
+						<File RelativePath="..\SourceCode\IWFM-kernel\Package_AppStream\VERSION_4.2\Class_AppStream_v42.f90"/>
+					</Filter>
+					<Filter Name="Version_4.21">
+						<File RelativePath="..\SourceCode\IWFM-kernel\Package_AppStream\VERSION_4.21\Class_AppStream_v421.f90"/>
+					</Filter>
+					<Filter Name="Version_4.2_WSA">
+						<File RelativePath="..\SourceCode\IWFM-kernel\Package_AppStream\VERSION_4.2_WSA\Class_AppStream_v42_WSA.f90"/>
+					</Filter>
+					<Filter Name="Version_5.0">
+						<File RelativePath="..\SourceCode\IWFM-kernel\Package_AppStream\VERSION_5.0\Class_AppStream_v50.f90"/>
+						<File RelativePath="..\SourceCode\IWFM-kernel\Package_AppStream\VERSION_5.0\Class_StrmNode_v50.f90"/>
+					</Filter>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_AppStream\Class_AppDiverBypass.f90"/>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_AppStream\Class_BaseAppStream.f90"/>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_AppStream\Class_Bypass.f90"/>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_AppStream\Class_Diversion.f90"/>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_AppStream\Class_ElemToRecvLoss.f90"/>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_AppStream\Class_LossDestination.f90"/>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_AppStream\Class_StrmEvap.f90"/>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_AppStream\Class_StrmInflow.f90"/>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_AppStream\Class_StrmNode.f90"/>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_AppStream\Class_StrmNodeBudget.f90"/>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_AppStream\Class_StrmReach.f90"/>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_AppStream\Class_StrmState.f90"/>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_AppStream\Package_AppStream.f90"/>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_AppStream\StrmHydrograph.f90"/>
+				</Filter>
+				<Filter Name="Package_AppUnsatZone">
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_AppUnsatZone\Package_AppUnsatZone.f90"/>
+				</Filter>
+				<Filter Name="Package_Budget">
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_Budget\Budget_Parameters.f90"/>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_Budget\Class_Budget.f90"/>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_Budget\Class_BudgetInputFile.f90"/>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_Budget\Package_Budget.f90"/>
+				</Filter>
+				<Filter Name="Package_ComponentConnectors">
+					<Filter Name="StrmGWConnector">
+						<File RelativePath="..\SourceCode\IWFM-kernel\Package_ComponentConnectors\StrmGWConnector\Class_BaseStrmGWConnector.f90"/>
+						<File RelativePath="..\SourceCode\IWFM-kernel\Package_ComponentConnectors\StrmGWConnector\Class_StrmGWConnector.f90"/>
+						<File RelativePath="..\SourceCode\IWFM-kernel\Package_ComponentConnectors\StrmGWConnector\Class_StrmGWConnector_v40.f90"/>
+						<File RelativePath="..\SourceCode\IWFM-kernel\Package_ComponentConnectors\StrmGWConnector\Class_StrmGWConnector_v41.f90"/>
+						<File RelativePath="..\SourceCode\IWFM-kernel\Package_ComponentConnectors\StrmGWConnector\Class_StrmGWConnector_v42.f90"/>
+						<File RelativePath="..\SourceCode\IWFM-kernel\Package_ComponentConnectors\StrmGWConnector\Class_StrmGWConnector_v421.f90"/>
+						<File RelativePath="..\SourceCode\IWFM-kernel\Package_ComponentConnectors\StrmGWConnector\Class_StrmGWConnector_v50.f90"/>
+					</Filter>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_ComponentConnectors\LakeGWConnector.f90"/>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_ComponentConnectors\Package_ComponentConnectors.f90"/>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_ComponentConnectors\StrmLakeConnector.f90"/>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_ComponentConnectors\SupplyDestinationConnector.f90"/>
+				</Filter>
+				<Filter Name="Package_Discretization">
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_Discretization\Class_AppFace.f90"/>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_Discretization\Class_AppGrid.f90"/>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_Discretization\Class_Grid.f90"/>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_Discretization\Class_Stratigraphy.f90"/>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_Discretization\Package_Discretization.f90"/>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_Discretization\ParametricGrid.f90"/>
+				</Filter>
+				<Filter Name="Package_GWZBudget">
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_GWZBudget\Class_GWZBudget.f90"/>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_GWZBudget\Package_GWZBudget.f90"/>
+				</Filter>
+				<Filter Name="Package_Matrix">
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_Matrix\Lubksb.f90"/>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_Matrix\Ludcmp.f90"/>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_Matrix\Package_Matrix.f90"/>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_Matrix\pgmres.f90"/>
+				</Filter>
+				<Filter Name="Package_Misc">
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_Miscellaneous\AbstractFunction.f90"/>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_Miscellaneous\Class_BaseHydrograph.f90"/>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_Miscellaneous\Class_PairedData.f90"/>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_Miscellaneous\Class_SolverData.f90"/>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_Miscellaneous\Class_TecplotOutput.f90"/>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_Miscellaneous\Opening_screen_WINDOWS.f90"/>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_Miscellaneous\Package_Misc.f90"/>
+				</Filter>
+				<Filter Name="Package_PrecipitationET">
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_PrecipitationET\Class_AtmosphericData.f90"/>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_PrecipitationET\Package_PrecipitationET.f90"/>
+				</Filter>
+				<Filter Name="Package_RootZone">
+					<Filter Name="RootZone_v4.0">
+						<File RelativePath="..\SourceCode\IWFM-kernel\Package_RootZone\VERSION_4.0\Class_NativeRiparianLandUse_v40.f90"/>
+						<File RelativePath="..\SourceCode\IWFM-kernel\Package_RootZone\VERSION_4.0\Class_NonPondedAgLandUse_v40.f90"/>
+						<File RelativePath="..\SourceCode\IWFM-kernel\Package_RootZone\VERSION_4.0\Class_PondedAgLandUse_v40.f90"/>
+						<File RelativePath="..\SourceCode\IWFM-kernel\Package_RootZone\VERSION_4.0\Class_RootDepthFracDataFile.f90"/>
+						<File RelativePath="..\SourceCode\IWFM-kernel\Package_RootZone\VERSION_4.0\Class_UrbanLandUse_v40.f90"/>
+						<File RelativePath="..\SourceCode\IWFM-kernel\Package_RootZone\VERSION_4.0\RootZone_v40.f90"/>
+						<File RelativePath="..\SourceCode\IWFM-kernel\Package_RootZone\VERSION_4.0\Util_RootZone_v40.f90"/>
+					</Filter>
+					<Filter Name="RootZone_v4.01">
+						<File RelativePath="..\SourceCode\IWFM-kernel\Package_RootZone\VERSION_4.01\RootZone_v401.f90"/>
+					</Filter>
+					<Filter Name="RootZone_v4.1">
+						<File RelativePath="..\SourceCode\IWFM-kernel\Package_RootZone\VERSION_4.1\Class_GenericLandUse_v41.f90"/>
+						<File RelativePath="..\SourceCode\IWFM-kernel\Package_RootZone\VERSION_4.1\Class_NativeRiparianLandUse_v41.f90"/>
+						<File RelativePath="..\SourceCode\IWFM-kernel\Package_RootZone\VERSION_4.1\Class_NonPondedAgLandUse_v41.f90"/>
+						<File RelativePath="..\SourceCode\IWFM-kernel\Package_RootZone\VERSION_4.1\Class_PondedAgLandUse_v41.f90"/>
+						<File RelativePath="..\SourceCode\IWFM-kernel\Package_RootZone\VERSION_4.1\Class_RVETFromStrm.f90"/>
+						<File RelativePath="..\SourceCode\IWFM-kernel\Package_RootZone\VERSION_4.1\Class_UrbanLandUse_v41.f90"/>
+						<File RelativePath="..\SourceCode\IWFM-kernel\Package_RootZone\VERSION_4.1\RootZone_v41.f90"/>
+						<File RelativePath="..\SourceCode\IWFM-kernel\Package_RootZone\VERSION_4.1\Util_RootZone_v41.f90"/>
+					</Filter>
+					<Filter Name="RootZone_v4.11">
+						<File RelativePath="..\SourceCode\IWFM-kernel\Package_RootZone\VERSION_4.11\RootZone_v411.f90"/>
+					</Filter>
+					<Filter Name="RootZone_v4.12">
+						<File RelativePath="..\SourceCode\IWFM-kernel\Package_RootZone\VERSION_4.12\RootZone_v412.f90"/>
+					</Filter>
+					<Filter Name="RootZone_v4.13">
+						<File RelativePath="..\SourceCode\IWFM-kernel\Package_RootZone\VERSION_4.13\RootZone_v413.f90"/>
+					</Filter>
+					<Filter Name="RootZone_v5.0">
+						<File RelativePath="..\SourceCode\IWFM-kernel\Package_RootZone\VERSION_5.0\Class_AgLandUse_v50.f90"/>
+						<File RelativePath="..\SourceCode\IWFM-kernel\Package_RootZone\VERSION_5.0\Class_NativeRiparianLandUse_v50.f90"/>
+						<File RelativePath="..\SourceCode\IWFM-kernel\Package_RootZone\VERSION_5.0\Class_UrbanLandUse_v50.f90"/>
+						<File RelativePath="..\SourceCode\IWFM-kernel\Package_RootZone\VERSION_5.0\RootZone_v50.f90"/>
+					</Filter>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_RootZone\Class_BaseRootZone.f90"/>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_RootZone\Class_GenericLandUse.f90"/>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_RootZone\Class_GenericMoistureData.f90"/>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_RootZone\Class_LandUseDataFile.f90"/>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_RootZone\Package_RootZone.f90"/>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_RootZone\Util_Package_RootZone.f90"/>
+				</Filter>
+				<Filter Name="Package_Supply">
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_Supply\Class_IrigFracFile.f90"/>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_Supply\Package_Supply.f90"/>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_Supply\SupplyAdjustment.f90"/>
+				</Filter>
+				<Filter Name="Package_UnsatZone">
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_UnsatZone\Class_Soil.f90"/>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_UnsatZone\Package_UnsatZone.f90"/>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_UnsatZone\RainfallRunoff.f90"/>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_UnsatZone\UnsatZoneOps.f90"/>
+				</Filter>
+				<Filter Name="Package_ZBudget">
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_ZBudget\Class_SystemData.f90"/>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_ZBudget\Class_ZBudget.f90"/>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_ZBudget\Class_ZBudgetHeader.f90"/>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_ZBudget\Class_ZoneList.f90"/>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_ZBudget\Package_ZBudget.f90"/>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_ZBudget\ZBudget_Parameters.f90"/>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_ZBudget\ZBudget_Util.f90"/>
+				</Filter>
+			</Filter>
+			<Filter Name="IWFM_Version">
+				<File RelativePath="..\SourceCode\IWFM_Version\IWFM_Version.f90"/>
+				<File RelativePath="..\SourceCode\IWFM_Version\IWFMVersion.fi"/>
+			</Filter>
+			<Filter Name="Package_Model">
+				<File RelativePath="..\SourceCode\Package_Model\Class_Model_ForInquiry.f90"/>
+				<File RelativePath="..\SourceCode\Package_Model\Package_Model.f90"/>
+			</Filter>
+			<Filter Name="WSA_ANN">
+				<File RelativePath="..\SourceCode\WSA_ANN\WSA_ANN.f90"/>
+			</Filter>
+			<File RelativePath="..\SourceCode\Simulation\Iwfm_f2.f90"/>
+		</Filter>
+	</Files>
+	<Globals/>
+</VisualStudioProject>

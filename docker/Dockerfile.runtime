@@ -1,0 +1,139 @@
+#***********************************************************************
+#  IWFM Minimal Runtime Container
+#
+#  Multi-stage build that creates a minimal container with just the
+#  IWFM executables needed to run model simulations.
+#
+#  Stage 1: Build IWFM using Intel oneAPI compilers
+#  Stage 2: Create minimal runtime image (~310MB) with executables + Intel runtime libs
+#
+#  Build:
+#    docker build -t iwfm-runtime:2025.0 -f docker/Dockerfile.runtime .
+#
+#  Run:
+#    docker run --rm -v /path/to/model:/data iwfm-runtime:2025.0 \
+#        iwfm-simulation Simulation_MAIN.IN
+#***********************************************************************
+
+# =============================================================================
+# Stage 1: Builder - Compile IWFM with Intel oneAPI
+# =============================================================================
+# Note: Use a specific version tag for reproducible builds.
+# Check available tags at: https://hub.docker.com/r/intel/oneapi-hpckit/tags
+# The version should match or be compatible with your development environment.
+FROM intel/oneapi-hpckit:2025.3.0-0-devel-ubuntu22.04 AS builder
+
+LABEL stage="builder"
+
+# Install build tools
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ninja-build \
+    git \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy source code
+WORKDIR /build
+COPY CMakeLists.txt .
+COPY cmake/ cmake/
+COPY SourceCode/ SourceCode/
+
+# Build IWFM with static linking
+# Only build the core executables needed for running simulations
+# Note: Intel base image already has oneAPI environment configured, no need for setvars.sh
+RUN mkdir -p build && cd build && \
+    cmake .. -G Ninja \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_Fortran_COMPILER=ifx \
+        -DCMAKE_C_COMPILER=icx \
+        -DIWFM_BUILD_SIMULATION=ON \
+        -DIWFM_BUILD_PREPROCESSOR=ON \
+        -DIWFM_BUILD_BUDGET=ON \
+        -DIWFM_BUILD_ZBUDGET=ON \
+        -DIWFM_BUILD_DLL=OFF \
+        -DIWFM_BUILD_PARALLEL=OFF \
+        -DIWFM_BUILD_COARRAY=OFF \
+        -DIWFM_BUILD_TESTS=OFF && \
+    cmake --build . --parallel $(nproc)
+
+# Verify executables and check dependencies
+RUN ls -la /build/Bin/ && \
+    echo "=== Executable sizes ===" && \
+    du -h /build/Bin/* && \
+    echo "=== Checking library dependencies ===" && \
+    ldd /build/Bin/Simulation || true
+
+# =============================================================================
+# Stage 2: Minimal Runtime Image
+# =============================================================================
+FROM ubuntu:22.04 AS runtime
+
+# Labels following OCI image-spec annotations
+# See: https://github.com/opencontainers/image-spec/blob/main/annotations.md
+LABEL maintainer="IWFMtechsupport@water.ca.gov" \
+      org.opencontainers.image.title="IWFM Runtime" \
+      org.opencontainers.image.description="Integrated Water Flow Model - Minimal runtime container for hydrological simulations" \
+      org.opencontainers.image.version="2025.0.1747" \
+      org.opencontainers.image.vendor="California Department of Water Resources" \
+      org.opencontainers.image.licenses="GPL-2.0"
+
+# Install only essential runtime dependencies
+# Intel-compiled executables need Intel runtime libraries
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libgcc-s1 \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean \
+    && rm -rf /var/cache/apt/archives/*
+
+# Create directory for Intel runtime libraries
+RUN mkdir -p /opt/intel/lib
+
+# Create non-root user for security
+RUN groupadd -r iwfm && useradd -r -g iwfm -m -s /bin/bash iwfm
+
+# Create application directories
+RUN mkdir -p /opt/iwfm/bin /data && \
+    chown -R iwfm:iwfm /opt/iwfm /data
+
+# Copy Intel runtime libraries from builder stage
+# These are required for Intel-compiled executables
+COPY --from=builder /opt/intel/oneapi/compiler/latest/lib/libintlc.so* /opt/intel/lib/
+COPY --from=builder /opt/intel/oneapi/compiler/latest/lib/libirng.so* /opt/intel/lib/
+COPY --from=builder /opt/intel/oneapi/compiler/latest/lib/libimf.so* /opt/intel/lib/
+COPY --from=builder /opt/intel/oneapi/compiler/latest/lib/libsvml.so* /opt/intel/lib/
+
+# Copy executables from builder stage
+COPY --from=builder --chown=iwfm:iwfm /build/Bin/Simulation /opt/iwfm/bin/
+COPY --from=builder --chown=iwfm:iwfm /build/Bin/PreProcessor /opt/iwfm/bin/
+COPY --from=builder --chown=iwfm:iwfm /build/Bin/Budget /opt/iwfm/bin/
+COPY --from=builder --chown=iwfm:iwfm /build/Bin/ZBudget /opt/iwfm/bin/
+
+# Make executables accessible system-wide with iwfm- prefix
+RUN chmod +x /opt/iwfm/bin/* && \
+    ln -s /opt/iwfm/bin/Simulation /usr/local/bin/iwfm-simulation && \
+    ln -s /opt/iwfm/bin/PreProcessor /usr/local/bin/iwfm-preprocessor && \
+    ln -s /opt/iwfm/bin/Budget /usr/local/bin/iwfm-budget && \
+    ln -s /opt/iwfm/bin/ZBudget /usr/local/bin/iwfm-zbudget && \
+    # Also create short aliases
+    ln -s /opt/iwfm/bin/Simulation /usr/local/bin/Simulation && \
+    ln -s /opt/iwfm/bin/PreProcessor /usr/local/bin/PreProcessor && \
+    ln -s /opt/iwfm/bin/Budget /usr/local/bin/Budget && \
+    ln -s /opt/iwfm/bin/ZBudget /usr/local/bin/ZBudget
+
+# Add PATH and LD_LIBRARY_PATH for Intel runtime libraries
+ENV PATH="/opt/iwfm/bin:${PATH}"
+ENV LD_LIBRARY_PATH="/opt/intel/lib"
+
+# Set working directory for model data
+WORKDIR /data
+
+# Switch to non-root user
+USER iwfm
+
+# Health check - verify simulation executable works
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=1 \
+    CMD ["/opt/iwfm/bin/Simulation", "-about"]
+
+# Default: show version and usage information
+CMD ["sh", "-c", "echo 'IWFM Runtime Container' && echo '' && /opt/iwfm/bin/Simulation -about && echo '' && echo 'Available commands:' && echo '  iwfm-preprocessor <input_file>' && echo '  iwfm-simulation <input_file>' && echo '  iwfm-budget <input_file>' && echo '  iwfm-zbudget <input_file>' && echo '' && echo 'Mount your model directory to /data and run the appropriate command.'"]

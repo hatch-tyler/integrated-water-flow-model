@@ -1,0 +1,96 @@
+# Prerequisites
+*.d
+
+# Compiled Object files
+*.slo
+*.lo
+*.o
+*.obj
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Compiled Dynamic libraries
+*.so
+*.dylib
+*.dll
+
+# Fortran module files
+*.mod
+*.smod
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+*.lib
+
+# Executables
+*.exe
+*.out
+*.app
+
+# Build directories
+build/
+build-*/
+cmake-build-*/
+_deps/
+hdf5-install/
+HDF5_External-prefix/
+
+# IDE files
+.vs/
+.vscode/
+.idea/
+*.suo
+*.user
+*.ncb
+*.aps
+
+# Visual Studio intermediate files
+x64/
+Debug/
+Release/
+ipch/
+
+# Build artifacts
+*.pdb
+*.ilk
+*.idb
+*.ipdb
+*.iobj
+*.ninja*
+CMakeCache.txt
+CMakeFiles/
+Makefile
+
+# Output binaries (tracked via releases, not in repo)
+Bin/*.exe
+Bin/*.dll
+Bin/*.so
+Bin/*.pdb
+Bin/*.ilk
+Bin/Budget
+Bin/ZBudget
+Bin/Simulation*
+Bin/PreProcessor
+Bin/libiwfm*
+
+# Temp files
+*~
+*.swp
+*.bak
+*.tmp
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Log/output files
+*Messages.out
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db

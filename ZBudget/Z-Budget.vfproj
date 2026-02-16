@@ -1,0 +1,139 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<VisualStudioProject ProjectCreator="Intel Fortran" Keyword="Console Application" Version="11.0" ProjectIdGuid="{4809B0AA-D77B-4827-8F2F-49F55D92C753}">
+	<Platforms>
+		<Platform Name="x64"/>
+	</Platforms>
+	<Configurations>
+		<Configuration Name="Debug|x64" UseCompiler="ifxCompiler" IntermediateDirectory="$(ProjectDir)$(PlatformName)\$(ConfigurationName)" TargetName="ZBudget_x64_D">
+			<Tool Name="VFFortranCompilerTool" AdditionalOptions="/fp:consistent /assume:norealloc_lhs /assume:noieee_compares /Qdiag-disable:10448" SuppressStartupBanner="true" DebugInformationFormat="debugEnabled" Optimization="optimizeDisabled" Preprocess="preprocessYes" AdditionalIncludeDirectories="$(ProjectDir)\..\SourceCode\IWFM-kernel\HDF5\$(PlatformName)\$(ConfigurationName)" F2003Semantics="true" DisableSpecificDiagnostics="5462" WarnUnusedVariables="true" WarnUncalled="true" Traceback="true" BoundsCheck="true" RuntimeLibrary="rtMultiThreadedDebug" Interfaces="true"/>
+			<Tool Name="VFLinkerTool" LinkIncremental="linkIncrementalNo" SuppressStartupBanner="true" AdditionalLibraryDirectories="$(ProjectDir)\..\SourceCode\IWFM-kernel\HDF5\$(PlatformName)\$(ConfigurationName);$(ProjectDir)\..\SourceCode\IWFM-kernel\heclib" GenerateDebugInformation="true" SubSystem="subSystemConsole" StackReserveSize="256000000" AdditionalDependencies="heclib_x64_D.lib libhdf5_fortran_D.lib libhdf5_D.lib libhdf5_f90cstub_D.lib"/>
+			<Tool Name="VFResourceCompilerTool"/>
+			<Tool Name="VFMidlTool" SuppressStartupBanner="true" TargetEnvironment="midlTargetAMD64"/>
+			<Tool Name="VFCustomBuildTool"/>
+			<Tool Name="VFPreLinkEventTool"/>
+			<Tool Name="VFPreBuildEventTool"/>
+			<Tool Name="VFPostBuildEventTool" CommandLine="copy /Y $(OutDir)\$(TargetName)$(TargetExt) $(ProjectDir)..\Bin"/>
+			<Tool Name="VFManifestTool" SuppressStartupBanner="true" EmbedManifest="false"/>
+		</Configuration>
+		<Configuration Name="Release|x64" UseCompiler="ifxCompiler" IntermediateDirectory="$(ProjectDir)$(PlatformName)\$(ConfigurationName)" TargetName="ZBudget_x64">
+			<Tool Name="VFFortranCompilerTool" AdditionalOptions="/fp:consistent /assume:norealloc_lhs /assume:noieee_compares /Qdiag-disable:10448" SuppressStartupBanner="true" Preprocess="preprocessYes" AdditionalIncludeDirectories="$(ProjectDir)\..\SourceCode\IWFM-kernel\HDF5\$(PlatformName)\$(ConfigurationName)" F2003Semantics="true" DisableSpecificDiagnostics="5462"/>
+			<Tool Name="VFLinkerTool" SuppressStartupBanner="true" AdditionalLibraryDirectories="$(ProjectDir)\..\SourceCode\IWFM-kernel\HDF5\$(PlatformName)\$(ConfigurationName);$(ProjectDir)\..\SourceCode\IWFM-kernel\heclib" SubSystem="subSystemConsole" StackReserveSize="256000000" AdditionalDependencies="heclib_x64.lib libhdf5_fortran.lib libhdf5.lib libhdf5_f90cstub.lib "/>
+			<Tool Name="VFResourceCompilerTool"/>
+			<Tool Name="VFMidlTool" SuppressStartupBanner="true" TargetEnvironment="midlTargetAMD64"/>
+			<Tool Name="VFCustomBuildTool"/>
+			<Tool Name="VFPreLinkEventTool"/>
+			<Tool Name="VFPreBuildEventTool"/>
+			<Tool Name="VFPostBuildEventTool" CommandLine="copy /Y $(OutDir)\$(TargetName)$(TargetExt) $(ProjectDir)..\Bin"/>
+			<Tool Name="VFManifestTool" SuppressStartupBanner="true" EmbedManifest="false"/>
+		</Configuration>
+	</Configurations>
+	<Files>
+		<Filter Name="Header Files" Filter="fi;fd"/>
+		<Filter Name="Resource Files" Filter="rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe"/>
+		<Filter Name="Source Files" Filter="f90;for;f;fpp;ftn;def;odl;idl">
+			<Filter Name="IWFM-kernel">
+				<Filter Name="IWFM_Kernel_Version">
+					<File RelativePath="..\SourceCode\IWFM-kernel\IWFM_Kernel_Version\IWFM_Kernel_Version.f90">
+					</File>
+					<File RelativePath="..\SourceCode\IWFM-kernel\IWFM_Kernel_Version\IWFMKernelVersion.fi">
+					</File>
+				</Filter>
+				<Filter Name="IWFM_Util">
+					<Filter Name="IOInterface">
+						<File RelativePath="..\SourceCode\IWFM-kernel\IWFM_Util\IOInterface\Class_AsciiFileType.f90">
+						</File>
+						<File RelativePath="..\SourceCode\IWFM-kernel\IWFM_Util\IOInterface\Class_BaseFileType.f90">
+						</File>
+						<File RelativePath="..\SourceCode\IWFM-kernel\IWFM_Util\IOInterface\Class_DSSFileType.f90">
+						</File>
+						<File RelativePath="..\SourceCode\IWFM-kernel\IWFM_Util\IOInterface\Class_FortBinaryFileType.f90">
+						</File>
+						<File RelativePath="..\SourceCode\IWFM-kernel\IWFM_Util\IOInterface\Class_HDF5FileType.f90">
+						</File>
+						<File RelativePath="..\SourceCode\IWFM-kernel\IWFM_Util\IOInterface\IOInterface.f90">
+						</File>
+						<File RelativePath="..\SourceCode\IWFM-kernel\IWFM_Util\IOInterface\IOInterface_Local.f90">
+						</File>
+						<File RelativePath="..\SourceCode\IWFM-kernel\IWFM_Util\IOInterface\TSDFileHandler.f90">
+						</File>
+					</Filter>
+					<Filter Name="Utilities">
+						<File RelativePath="..\SourceCode\IWFM-kernel\IWFM_Util\Utilities\Class_BinaryTree.f90">
+						</File>
+						<File RelativePath="..\SourceCode\IWFM-kernel\IWFM_Util\Utilities\Class_Version.f90">
+						</File>
+						<File RelativePath="..\SourceCode\IWFM-kernel\IWFM_Util\Utilities\GeneralUtilities.f90">
+						</File>
+						<File RelativePath="..\SourceCode\IWFM-kernel\IWFM_Util\Utilities\GenericLinkedList.f90">
+						</File>
+						<File RelativePath="..\SourceCode\IWFM-kernel\IWFM_Util\Utilities\MessageLogger.f90">
+						</File>
+						<File RelativePath="..\SourceCode\IWFM-kernel\IWFM_Util\Utilities\ProgramTimer.f90">
+						</File>
+						<File RelativePath="..\SourceCode\IWFM-kernel\IWFM_Util\Utilities\TimeSeriesUtilities.f90">
+						</File>
+					</Filter>
+				</Filter>
+				<Filter Name="Package_ZBudget">
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_ZBudget\Class_SystemData.f90"/>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_ZBudget\Class_ZBudget.f90"/>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_ZBudget\Class_ZBudgetHeader.f90"/>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_ZBudget\Class_ZoneList.f90"/>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_ZBudget\Package_ZBudget.f90"/>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_ZBudget\ZBudget_Parameters.f90"/>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_ZBudget\ZBudget_Util.f90"/>
+				</Filter>
+				<Filter Name="Package_Budget">
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_Budget\Budget_Parameters.f90">
+					</File>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_Budget\Class_Budget.f90">
+					</File>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_Budget\Class_BudgetInputFile.f90">
+					</File>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_Budget\Package_Budget.f90">
+					</File>
+				</Filter>
+				<Filter Name="Package_Discretization">
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_Discretization\Class_AppFace.f90">
+					</File>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_Discretization\Class_AppGrid.f90">
+					</File>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_Discretization\Class_Grid.f90">
+					</File>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_Discretization\Class_Stratigraphy.f90">
+					</File>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_Discretization\Package_Discretization.f90">
+					</File>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_Discretization\ParametricGrid.f90">
+					</File>
+				</Filter>
+				<Filter Name="Package_Misc">
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_Miscellaneous\AbstractFunction.f90">
+					</File>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_Miscellaneous\Class_BaseHydrograph.f90">
+					</File>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_Miscellaneous\Class_PairedData.f90">
+					</File>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_Miscellaneous\Class_SolverData.f90">
+					</File>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_Miscellaneous\Class_TecplotOutput.f90">
+					</File>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_Miscellaneous\Opening_screen_WINDOWS.f90">
+					</File>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_Miscellaneous\Package_Misc.f90">
+					</File>
+				</Filter>
+			</Filter>
+			<Filter Name="IWFM_Version">
+				<File RelativePath="..\SourceCode\IWFM_Version\IWFM_Version.f90">
+				</File>
+				<File RelativePath="..\SourceCode\IWFM_Version\IWFMVersion.fi">
+				</File>
+			</Filter>
+			<File RelativePath="..\SourceCode\ZBudget\ZBudget_Main.f90">
+			</File>
+			<File RelativePath="..\SourceCode\ZBudget\ZBudgetControls.f90"/>
+		</Filter>
+	</Files>
+	<Globals/>
+</VisualStudioProject>
