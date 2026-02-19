@@ -1,5 +1,5 @@
 # PowerShell script to build IWFM in Linux Docker container
-# Usage: .\docker\build-linux.ps1
+# Usage: .\docker\build-linux.ps1 [-IWFM2OBS] [-CalcTypeHyd]
 
 $ErrorActionPreference = "Stop"
 

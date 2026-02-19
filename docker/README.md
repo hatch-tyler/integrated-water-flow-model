@@ -64,6 +64,8 @@ The runtime container includes these executables:
 | `iwfm-simulation` | `Simulation` | Run main simulation |
 | `iwfm-budget` | `Budget` | Run budget post-processor |
 | `iwfm-zbudget` | `ZBudget` | Run zone budget post-processor |
+| `iwfm-iwfm2obs` | `IWFM2OBS` | Hydrograph to PEST SMP converter with multi-layer target |
+| `iwfm-calctyphyd` | `CalcTypeHyd` | Cluster type hydrograph computation |
 
 ## Usage Examples
 
@@ -109,7 +111,25 @@ docker run --rm \
     iwfm-zbudget ZBudget.in
 ```
 
-### 6. Run Complete Pipeline
+### 6. Run IWFM2OBS Post-Processor
+
+```bash
+docker run --rm \
+    -v /path/to/model/PostProcessing:/data \
+    iwfm-runtime:2025.0 \
+    iwfm-iwfm2obs iwfm2obs.in
+```
+
+### 7. Run CalcTypeHyd Post-Processor
+
+```bash
+docker run --rm \
+    -v /path/to/model/PostProcessing:/data \
+    iwfm-runtime:2025.0 \
+    iwfm-calctyphyd CalcTypeHyd.in
+```
+
+### 8. Run Complete Pipeline
 
 ```bash
 # Using docker compose
@@ -127,7 +147,7 @@ docker run --rm \
     "
 ```
 
-### 7. Interactive Shell in Runtime Container
+### 9. Interactive Shell in Runtime Container
 
 ```bash
 docker run --rm -it \
@@ -151,6 +171,8 @@ docker compose run --rm iwfm-preprocessor
 docker compose run --rm iwfm-simulation
 docker compose run --rm iwfm-budget
 docker compose run --rm iwfm-zbudget
+docker compose run --rm iwfm-iwfm2obs
+docker compose run --rm iwfm-calctyphyd
 
 # Run complete pipeline
 docker compose run --rm iwfm-pipeline

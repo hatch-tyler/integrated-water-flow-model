@@ -46,7 +46,9 @@ CMD ["/bin/bash", "-c", "\
     cmake .. -G Ninja \
         -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_Fortran_COMPILER=ifx \
-        -DCMAKE_C_COMPILER=icx && \
+        -DCMAKE_C_COMPILER=icx \
+        -DIWFM_BUILD_IWFM2OBS=ON \
+        -DIWFM_BUILD_CALCTYPHYD=ON && \
     echo '=== Building IWFM ===' && \
     cmake --build . --parallel $(nproc) && \
     echo '=== Build Complete ===' && \

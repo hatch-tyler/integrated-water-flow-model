@@ -42,7 +42,9 @@ services:
         cmake .. -G Ninja
           -DCMAKE_BUILD_TYPE=Release
           -DCMAKE_Fortran_COMPILER=ifx
-          -DCMAKE_C_COMPILER=icx &&
+          -DCMAKE_C_COMPILER=icx
+          -DIWFM_BUILD_IWFM2OBS=ON
+          -DIWFM_BUILD_CALCTYPHYD=ON &&
         cmake --build . --parallel $$(nproc) &&
         echo 'Build complete! Executables in /src/Bin/'
       "
@@ -125,6 +127,30 @@ services:
       - ${MODEL_DIR:-../samplemodel/ZBudget}:/data
     working_dir: /data
     command: ["iwfm-zbudget", "${INPUT_FILE:-ZBudget.in}"]
+    depends_on:
+      - iwfm-runtime
+
+  # ===========================================================================
+  # IWFM2OBS - Hydrograph to PEST SMP converter with multi-layer target
+  # ===========================================================================
+  iwfm-iwfm2obs:
+    image: iwfm-runtime:2025.0
+    volumes:
+      - ${MODEL_DIR:-.}:/data
+    working_dir: /data
+    command: ["iwfm-iwfm2obs", "${INPUT_FILE:-iwfm2obs.in}"]
+    depends_on:
+      - iwfm-runtime
+
+  # ===========================================================================
+  # CalcTypeHyd - Cluster type hydrograph computation
+  # ===========================================================================
+  iwfm-calctyphyd:
+    image: iwfm-runtime:2025.0
+    volumes:
+      - ${MODEL_DIR:-.}:/data
+    working_dir: /data
+    command: ["iwfm-calctyphyd", "${INPUT_FILE:-CalcTypeHyd.in}"]
     depends_on:
       - iwfm-runtime
 
