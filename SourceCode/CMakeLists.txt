@@ -152,6 +152,44 @@ if(IWFM_BUILD_ZBUDGET)
 endif()
 
 # =============================================================================
+# IWFM2OBS Executable (Hydrograph to PEST SMP converter with multi-layer target)
+# =============================================================================
+if(IWFM_BUILD_IWFM2OBS)
+    add_executable(IWFM2OBS
+        IWFM2OBS/Class_SMP2SMP.f90
+        IWFM2OBS/Class_PESTOutput.f90
+        IWFM2OBS/Class_HeadDifference.f90
+        IWFM2OBS/Class_MultiLayerTarget.f90
+        IWFM2OBS/Class_IWFM2OBS.f90
+        IWFM2OBS/IWFM2OBS_Main.f90
+    )
+    target_link_libraries(IWFM2OBS PRIVATE iwfm_kernel iwfm_version)
+    iwfm_set_output_name(IWFM2OBS "IWFM2OBS")
+    if(UNIX)
+        iwfm_link_hdf5(IWFM2OBS)
+    endif()
+
+    install(TARGETS IWFM2OBS RUNTIME DESTINATION bin)
+endif()
+
+# =============================================================================
+# CalcTypeHyd Executable (Cluster type hydrograph computation)
+# =============================================================================
+if(IWFM_BUILD_CALCTYPHYD)
+    add_executable(CalcTypeHyd
+        CalcTypeHyd/Class_CalcTypeHyd.f90
+        CalcTypeHyd/CalcTypeHyd_Main.f90
+    )
+    target_link_libraries(CalcTypeHyd PRIVATE iwfm_kernel iwfm_version)
+    iwfm_set_output_name(CalcTypeHyd "CalcTypeHyd")
+    if(UNIX)
+        iwfm_link_hdf5(CalcTypeHyd)
+    endif()
+
+    install(TARGETS CalcTypeHyd RUNTIME DESTINATION bin)
+endif()
+
+# =============================================================================
 # IWFM C DLL / Shared Library
 # =============================================================================
 if(IWFM_BUILD_DLL)

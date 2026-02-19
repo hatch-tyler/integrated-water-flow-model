@@ -65,7 +65,7 @@ param(
     [ValidateSet("Build", "Clean", "Configure", "Test", "Package", "All")]
     [string]$Action = "Build",
 
-    [ValidateSet("Simulation", "Simulation_Parallel", "Simulation_MM", "PreProcessor", "Budget", "ZBudget", "IWFM_C_DLL", "all")]
+    [ValidateSet("Simulation", "Simulation_Parallel", "Simulation_MM", "PreProcessor", "Budget", "ZBudget", "IWFM_C_DLL", "IWFM2OBS", "CalcTypeHyd", "all")]
     [string]$Target = "all",
 
     [ValidateSet("Release", "Debug", "RelWithDebInfo")]
@@ -75,7 +75,11 @@ param(
 
     [switch]$Parallel,
 
-    [switch]$Coarray
+    [switch]$Coarray,
+
+    [switch]$IWFM2OBS,
+
+    [switch]$CalcTypeHyd
 )
 
 $ErrorActionPreference = "Stop"
@@ -230,6 +234,14 @@ function Invoke-Configure {
             $CMakeArgs += "-DIWFM_BUILD_COARRAY=ON"
             Write-Host "  Coarray Multi-Model: Enabled" -ForegroundColor Yellow
         }
+        if ($IWFM2OBS) {
+            $CMakeArgs += "-DIWFM_BUILD_IWFM2OBS=ON"
+            Write-Host "  IWFM2OBS: Enabled" -ForegroundColor Yellow
+        }
+        if ($CalcTypeHyd) {
+            $CMakeArgs += "-DIWFM_BUILD_CALCTYPHYD=ON"
+            Write-Host "  CalcTypeHyd: Enabled" -ForegroundColor Yellow
+        }
 
         Write-Host "Running: cmake $($CMakeArgs -join ' ')" -ForegroundColor Gray
         & cmake @CMakeArgs
@@ -294,6 +306,8 @@ function Invoke-Build {
             "Budget" = "Budget_x64*.exe"
             "ZBudget" = "ZBudget_x64*.exe"
             "IWFM_C_DLL" = "IWFM_C_x64*.dll"
+            "IWFM2OBS" = "IWFM2OBS_x64*.exe"
+            "CalcTypeHyd" = "CalcTypeHyd_x64*.exe"
         }
 
         if ($Target -eq "all") {

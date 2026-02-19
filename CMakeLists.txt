@@ -45,6 +45,8 @@ option(IWFM_BUILD_ZBUDGET "Build ZBudget post-processor" ON)
 option(IWFM_BUILD_DLL "Build IWFM C-interface DLL/shared library" ON)
 option(IWFM_BUILD_PARALLEL "Build OpenMP parallel simulation" OFF)
 option(IWFM_BUILD_COARRAY "Build Coarray Fortran multi-model simulation (Intel only)" OFF)
+option(IWFM_BUILD_IWFM2OBS "Build IWFM2OBS hydrograph-to-PEST converter" OFF)
+option(IWFM_BUILD_CALCTYPHYD "Build CalcTypeHyd cluster type hydrograph tool" OFF)
 option(IWFM_USE_SYSTEM_HDF5 "Use system-installed HDF5 instead of FetchContent" OFF)
 option(IWFM_USE_SYSTEM_HECLIB "Use system-installed heclib instead of FetchContent" OFF)
 
@@ -53,7 +55,8 @@ option(IWFM_USE_SYSTEM_HECLIB "Use system-installed heclib instead of FetchConte
 # =============================================================================
 # Only fetch heavy dependencies if building targets that actually need them
 if(IWFM_BUILD_SIMULATION OR IWFM_BUILD_PREPROCESSOR OR IWFM_BUILD_BUDGET OR
-   IWFM_BUILD_ZBUDGET OR IWFM_BUILD_DLL OR IWFM_BUILD_PARALLEL OR IWFM_BUILD_COARRAY)
+   IWFM_BUILD_ZBUDGET OR IWFM_BUILD_DLL OR IWFM_BUILD_PARALLEL OR IWFM_BUILD_COARRAY OR
+   IWFM_BUILD_IWFM2OBS OR IWFM_BUILD_CALCTYPHYD)
     set(IWFM_NEED_DEPENDENCIES TRUE)
 else()
     set(IWFM_NEED_DEPENDENCIES FALSE)
@@ -361,6 +364,8 @@ message(STATUS "  Build ZBudget:          ${IWFM_BUILD_ZBUDGET}")
 message(STATUS "  Build DLL:              ${IWFM_BUILD_DLL}")
 message(STATUS "  Build Parallel (OpenMP):${IWFM_BUILD_PARALLEL}")
 message(STATUS "  Build Coarray:          ${IWFM_BUILD_COARRAY}")
+message(STATUS "  Build IWFM2OBS:         ${IWFM_BUILD_IWFM2OBS}")
+message(STATUS "  Build CalcTypeHyd:      ${IWFM_BUILD_CALCTYPHYD}")
 message(STATUS "  Use System HDF5:        ${IWFM_USE_SYSTEM_HDF5}")
 message(STATUS "  Use System HECLIB:      ${IWFM_USE_SYSTEM_HECLIB}")
 message(STATUS "  Fetch Dependencies:     ${IWFM_NEED_DEPENDENCIES}")
