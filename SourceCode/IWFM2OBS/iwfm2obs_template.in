@@ -1,0 +1,76 @@
+C  IWFM2OBS Input File
+C  ==================
+C  Comment lines start with C, c, *, or #
+C  Inline comments use / delimiter
+C
+C  DATE FORMAT
+C  1 = dd/mm/yyyy
+C  2 = mm/dd/yyyy
+2                                              / Date format
+C
+C  ===========================================================================
+C  GROUNDWATER HEAD HYDROGRAPH (6 lines)
+C  Leave the first line blank to skip this hydrograph type.
+C  ===========================================================================
+..\Simulation\Results\GW_Hydrographs.smp       / Model hydrograph SMP file
+GW_obs.smp                                      / Observation SMP file
+GW_sim.smp                                      / Output SMP file
+1.0                                             / Extrapolation threshold (days)
+GW_sim.ins                                      / PEST instruction file (blank=skip)
+pcf_GW_sim.dat                                  / PEST PCF file (blank=skip)
+C
+C  ===========================================================================
+C  STREAM HYDROGRAPH (6 lines)
+C  ===========================================================================
+..\Simulation\Results\Stream_Hydrographs.smp    / Model hydrograph SMP file
+ST_obs.smp                                      / Observation SMP file
+ST_sim.smp                                      / Output SMP file
+1.0                                             / Extrapolation threshold (days)
+ST_sim.ins                                      / PEST instruction file (blank=skip)
+pcf_ST_sim.dat                                  / PEST PCF file (blank=skip)
+C
+C  ===========================================================================
+C  TILE DRAIN HYDROGRAPH (6 lines, blank first line = skip)
+C  ===========================================================================
+                                                / Model hydrograph SMP file
+                                                / Observation SMP file
+                                                / Output SMP file
+                                                / Extrapolation threshold (days)
+                                                / PEST instruction file
+                                                / PEST PCF file
+C
+C  ===========================================================================
+C  SUBSIDENCE HYDROGRAPH (6 lines, blank first line = skip)
+C  ===========================================================================
+                                                / Model hydrograph SMP file
+                                                / Observation SMP file
+                                                / Output SMP file
+                                                / Extrapolation threshold (days)
+                                                / PEST instruction file
+                                                / PEST PCF file
+C
+C  ===========================================================================
+C  HEAD DIFFERENCES
+C  Y = compute head differences (reads file path on next line)
+C  N = skip head differences
+C  ===========================================================================
+N                                               / Head differences (Y/N)
+C  head_diff_pairs.dat                          / (Example) Head difference pair file
+C
+C  ===========================================================================
+C  MULTI-LAYER TARGET
+C  Y = enable transmissivity-weighted depth averaging for GW heads
+C  N = skip multi-layer processing
+C  If Y, provide 5 file paths:
+C    1. Observation well file (Name, X, Y, Element, BOS, TOS)
+C    2. IWFM element connectivity file
+C    3. IWFM node coordinates file
+C    4. IWFM stratigraphy file
+C    5. IWFM groundwater main file (for hydraulic conductivity)
+C  ===========================================================================
+N                                               / Multi-layer target (Y/N)
+C  obs_wells.dat                                / Observation well locations + screen intervals
+C  ..\PreProcessor\Elements.dat                 / IWFM element connectivity
+C  ..\PreProcessor\Nodes.dat                    / IWFM node coordinates
+C  ..\PreProcessor\Stratigraphy.dat             / Layer elevations
+C  ..\Simulation\Groundwater.dat                / GW main file (for HK values)

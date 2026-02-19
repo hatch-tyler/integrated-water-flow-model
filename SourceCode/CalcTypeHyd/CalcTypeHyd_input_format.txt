@@ -1,0 +1,75 @@
+CalcTypeHyd Input File Format
+=============================
+
+NOTE: CalcTypeHyd uses list-directed Fortran reads. Comment lines are NOT
+supported in the input file. Every line is data.
+
+Line-by-line format:
+--------------------
+
+Line 1:  WATER_LEVEL_FILE     Path to simulated water level data file
+Line 2:  CLUSTER_WEIGHTS_FILE Path to pre-computed cluster weights file
+Line 3:  NCLUS                Number of clusters in the weights file
+Line 4:  NCLUSWELLS           Number of wells in the weights file
+Line 5:  NHYDRO               Number of type hydrographs to generate
+
+Lines 6..5+NHYDRO:
+         CLUSTER_ID           One cluster ID per line (which clusters to generate)
+
+Next 2 lines:
+         START_DATE           Start date (MM/DD/YYYY format, read as A10)
+         END_DATE             End date (MM/DD/YYYY format, read as A10)
+
+Next line:
+         PEST_PARAM_BASE      Base name for PEST parameters (e.g., typ_hyd)
+
+Next line:
+         NAVGPER              Number of averaging periods
+
+For each averaging period (3 lines per period):
+         NMON                 Number of months in this averaging period
+         MON1 MON2 ...        Month numbers (space-separated, NMON values)
+         REP_MONTH REP_DAY    Representative month and day for output dates
+
+
+Averaging Period Example
+------------------------
+
+4 averaging periods mapping 12 months:
+
+  Period 1 (Fall):  Months 10, 11, 12 -> represented as 11/15
+  Period 2 (Winter): Months 1, 2, 3   -> represented as 02/15
+  Period 3 (Spring): Months 4, 5, 6   -> represented as 05/15
+  Period 4 (Summer): Months 7, 8, 9   -> represented as 08/15
+
+Months not assigned to any period are skipped during data reading.
+
+
+Water Level File Format
+-----------------------
+
+SMP-style columns (fixed-width):
+  Col 1-25:  Well name (A25)
+  Col 26-37: Date string (A12), MM/DD/YYYY format
+  Col 38-49: Time string (A12), ignored
+  Col 50-60: Water level value (A11), parsed as real
+
+First line is a header (skipped).
+
+
+Cluster Weights File Format
+---------------------------
+
+First line is a header (skipped).
+Subsequent lines: WELL_NAME  WT_1  WT_2  ...  WT_NCLUS
+  - Space/tab delimited
+  - NCLUSWELLS data lines
+  - NCLUS weight columns per line
+
+
+Output Files
+------------
+
+For each requested cluster, two files are created:
+  sim_{weightsbasename}_cls{N}.out  - Type hydrograph values
+  sim_{weightsbasename}_cls{N}.ins  - PEST instruction file
