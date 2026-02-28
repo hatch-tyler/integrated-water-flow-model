@@ -21,9 +21,10 @@ MODULE Class_SMP2SMP
   IMPLICIT NONE
 
   PRIVATE
-  PUBLIC :: SMP2SMPType    , &
-            SMPRecordType  , &
-            SMPIDGroupType
+  PUBLIC :: SMP2SMPType      , &
+            SMPRecordType    , &
+            SMPIDGroupType   , &
+            TokenizeSMPLine
 
   ! =====================================================================
   ! SMPRecordType - one record in an SMP file (ID + time + value)
@@ -65,6 +66,43 @@ MODULE Class_SMP2SMP
   CHARACTER(LEN=25), PARAMETER :: cModName = 'Class_SMP2SMP'
 
 CONTAINS
+
+  ! =====================================================================
+  ! TokenizeSMPLine - Split a line into whitespace-delimited tokens
+  !   Unlike list-directed READ, treats '/' and ':' as normal characters
+  ! =====================================================================
+  SUBROUTINE TokenizeSMPLine(cLine, cTokens, iNTokens)
+    CHARACTER(LEN=*), INTENT(IN)    :: cLine
+    CHARACTER(LEN=*), INTENT(OUT)   :: cTokens(5)
+    INTEGER,          INTENT(OUT)   :: iNTokens
+
+    INTEGER :: iLen, iPos, iTok, iStart
+
+    cTokens = ' '
+    iNTokens = 0
+    iLen = LEN_TRIM(cLine)
+    iPos = 1
+
+    DO iTok = 1, 5
+      ! Skip whitespace (spaces and tabs)
+      DO WHILE (iPos <= iLen)
+        IF (cLine(iPos:iPos) /= ' ' .AND. ICHAR(cLine(iPos:iPos)) /= 9) EXIT
+        iPos = iPos + 1
+      END DO
+      IF (iPos > iLen) RETURN
+
+      ! Find end of token
+      iStart = iPos
+      DO WHILE (iPos <= iLen)
+        IF (cLine(iPos:iPos) == ' ' .OR. ICHAR(cLine(iPos:iPos)) == 9) EXIT
+        iPos = iPos + 1
+      END DO
+
+      iNTokens = iTok
+      cTokens(iTok) = cLine(iStart:iPos-1)
+    END DO
+
+  END SUBROUTINE TokenizeSMPLine
 
   ! =====================================================================
   ! Init - Initialize the SMP2SMP processor
@@ -341,6 +379,7 @@ CONTAINS
     CHARACTER(LEN=500) :: cLine
     CHARACTER(LEN=25)  :: cTemp, cPrev
     CHARACTER(LEN=30)  :: cDateStr, cTimeStr, cValStr, cFlagStr
+    CHARACTER(LEN=30)  :: cTokens(5)
     INTEGER            :: iLine, i, iErr, iObs, iInd
     INTEGER            :: iDay, iMon, iYear, iHH, iMM, iSS, iJulian
     INTEGER            :: iCols
@@ -436,15 +475,17 @@ CONTAINS
       IF (iErr /= 0) EXIT
       IF (LEN_TRIM(cLine) == 0) CYCLE
 
-      ! Try reading 5 columns first, then 4
-      READ(cLine, *, IOSTAT=iErr) cTemp, cDateStr, cTimeStr, cValStr, cFlagStr
-      IF (iErr /= 0) THEN
-        cFlagStr = ' '
-        READ(cLine, *, IOSTAT=iErr) cTemp, cDateStr, cTimeStr, cValStr
-        IF (iErr /= 0) CYCLE
-        iCols = 4
+      ! Tokenize line by whitespace (avoids '/' being treated as Fortran separator)
+      CALL TokenizeSMPLine(cLine, cTokens, iCols)
+      IF (iCols < 4) CYCLE
+      cTemp    = cTokens(1)
+      cDateStr = cTokens(2)
+      cTimeStr = cTokens(3)
+      cValStr  = cTokens(4)
+      IF (iCols >= 5) THEN
+        cFlagStr = cTokens(5)
       ELSE
-        iCols = 5
+        cFlagStr = ' '
       END IF
 
       cTemp = ADJUSTL(cTemp)
@@ -660,6 +701,7 @@ CONTAINS
     CHARACTER(LEN=500) :: cLine
     CHARACTER(LEN=25)  :: cTemp, cPrev
     CHARACTER(LEN=30)  :: cDateStr, cTimeStr, cValStr, cFlagStr
+    CHARACTER(LEN=30)  :: cTokens(5)
     INTEGER            :: iNObsIDs, iTotalMod
     INTEGER            :: iLine, i, iErr, iObs, iOut, iID
     INTEGER            :: iDay, iMon, iYear, iHH, iMM, iSS, iJulian
@@ -740,15 +782,17 @@ CONTAINS
       IF (iErr /= 0) EXIT
       IF (LEN_TRIM(cLine) == 0) CYCLE
 
-      ! Parse line (try 5 cols then 4)
-      READ(cLine, *, IOSTAT=iErr) cTemp, cDateStr, cTimeStr, cValStr, cFlagStr
-      IF (iErr /= 0) THEN
-        cFlagStr = ' '
-        READ(cLine, *, IOSTAT=iErr) cTemp, cDateStr, cTimeStr, cValStr
-        IF (iErr /= 0) CYCLE
-        iCols = 4
+      ! Tokenize line by whitespace (avoids '/' being treated as Fortran separator)
+      CALL TokenizeSMPLine(cLine, cTokens, iCols)
+      IF (iCols < 4) CYCLE
+      cTemp    = cTokens(1)
+      cDateStr = cTokens(2)
+      cTimeStr = cTokens(3)
+      cValStr  = cTokens(4)
+      IF (iCols >= 5) THEN
+        cFlagStr = cTokens(5)
       ELSE
-        iCols = 5
+        cFlagStr = ' '
       END IF
 
       cTemp = ADJUSTL(cTemp)

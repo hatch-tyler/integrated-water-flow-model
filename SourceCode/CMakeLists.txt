@@ -159,6 +159,7 @@ if(IWFM_BUILD_IWFM2OBS)
         IWFM2OBS/Class_SMP2SMP.f90
         IWFM2OBS/Class_PESTOutput.f90
         IWFM2OBS/Class_HeadDifference.f90
+        IWFM2OBS/Class_HydrographReader.f90
         IWFM2OBS/Class_MultiLayerTarget.f90
         IWFM2OBS/Class_IWFM2OBS.f90
         IWFM2OBS/IWFM2OBS_Main.f90

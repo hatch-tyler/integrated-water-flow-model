@@ -47,6 +47,9 @@ MODULE Class_MultiLayerTarget
     REAL(8), ALLOCATABLE               :: rElevation(:,:)  ! (nnodes, nlayers+1)
     REAL(8), ALLOCATABLE               :: rHK(:,:)         ! (nnodes, nlayers)
     REAL(8), ALLOCATABLE               :: rWeight(:,:)     ! (nobs, nlayers) normalized T-weights
+    REAL(8), ALLOCATABLE               :: rRawT(:,:)       ! (nobs, nlayers) raw transmissivity per layer
+    REAL(8), ALLOCATABLE               :: rScreenTOS(:)    ! (nobs) effective screen top (clipped to model)
+    REAL(8), ALLOCATABLE               :: rScreenBOS(:)    ! (nobs) effective screen bottom (clipped to model)
     TYPE(ObsWellType), ALLOCATABLE     :: ObsWells(:)
     INTEGER                            :: iNObs    = 0
     INTEGER                            :: iNNodes  = 0
@@ -60,6 +63,7 @@ MODULE Class_MultiLayerTarget
     PROCEDURE, PASS :: GetNLayers
     PROCEDURE, PASS :: GetObsName
     PROCEDURE, PASS :: WeightedAverage
+    PROCEDURE, PASS :: GetWellLayerTransmissivities
   END TYPE MultiLayerTargetType
 
 CONTAINS
@@ -432,7 +436,10 @@ CONTAINS
              rInterpElev(This%iNObs, This%iNLayers+1), &
              rInterpT(This%iNObs, This%iNLayers), &
              rObsTrans(This%iNObs), &
-             This%rWeight(This%iNObs, This%iNLayers), STAT=iErr)
+             This%rWeight(This%iNObs, This%iNLayers), &
+             This%rRawT(This%iNObs, This%iNLayers), &
+             This%rScreenTOS(This%iNObs), &
+             This%rScreenBOS(This%iNObs), STAT=iErr)
     IF (iErr /= 0) THEN
       CALL SetLastMessage('Cannot allocate interpolation arrays', &
            f_iFatal, cModName)
@@ -480,8 +487,16 @@ CONTAINS
     END DO
 
     ! Compute transmissivity weights per layer per well
+    This%rRawT      = 0.0D0
+    This%rScreenTOS = 0.0D0
+    This%rScreenBOS = 0.0D0
+
     DO i = 1, This%iNObs
       IF (This%ObsWells(i)%iOverwriteLayer == -1) THEN
+        ! Compute effective screen TOS/BOS clipped to model extent
+        This%rScreenTOS(i) = MIN(This%ObsWells(i)%rTOS, rInterpElev(i, 1))
+        This%rScreenBOS(i) = MAX(This%ObsWells(i)%rBOS, rInterpElev(i, This%iNLayers+1))
+
         ! Use screen interval to determine layer intersection
         DO k = 1, This%iNLayers
           rTope = MIN(This%ObsWells(i)%rTOS, rInterpElev(i, k))
@@ -500,6 +515,8 @@ CONTAINS
       ELSE
         ! Single layer override
         k = This%ObsWells(i)%iOverwriteLayer
+        This%rScreenTOS(i) = rInterpElev(i, k)
+        This%rScreenBOS(i) = rInterpElev(i, k+1)
         rTempThick = rInterpElev(i, k) - rInterpElev(i, k+1)
         rInterpT(i, k) = rTempThick * rInterpHK(i, k)
         rObsTrans(i) = rInterpT(i, k)
@@ -509,8 +526,9 @@ CONTAINS
         END IF
       END IF
 
-      ! Normalize weights
+      ! Store raw transmissivities and normalize weights
       DO k = 1, This%iNLayers
+        This%rRawT(i, k) = rInterpT(i, k)
         This%rWeight(i, k) = rInterpT(i, k) / rObsTrans(i)
       END DO
     END DO
@@ -529,14 +547,17 @@ CONTAINS
   SUBROUTINE Kill(This)
     CLASS(MultiLayerTargetType), INTENT(INOUT) :: This
 
-    IF (ALLOCATED(This%rElevation)) DEALLOCATE(This%rElevation)
-    IF (ALLOCATED(This%rHK))        DEALLOCATE(This%rHK)
-    IF (ALLOCATED(This%rWeight))    DEALLOCATE(This%rWeight)
-    IF (ALLOCATED(This%ObsWells))   DEALLOCATE(This%ObsWells)
-    IF (ALLOCATED(This%Grid%X))     DEALLOCATE(This%Grid%X)
-    IF (ALLOCATED(This%Grid%Y))     DEALLOCATE(This%Grid%Y)
-    IF (ALLOCATED(This%Grid%Vertex))  DEALLOCATE(This%Grid%Vertex)
-    IF (ALLOCATED(This%Grid%NVertex)) DEALLOCATE(This%Grid%NVertex)
+    IF (ALLOCATED(This%rElevation))  DEALLOCATE(This%rElevation)
+    IF (ALLOCATED(This%rHK))         DEALLOCATE(This%rHK)
+    IF (ALLOCATED(This%rWeight))     DEALLOCATE(This%rWeight)
+    IF (ALLOCATED(This%rRawT))       DEALLOCATE(This%rRawT)
+    IF (ALLOCATED(This%rScreenTOS))  DEALLOCATE(This%rScreenTOS)
+    IF (ALLOCATED(This%rScreenBOS))  DEALLOCATE(This%rScreenBOS)
+    IF (ALLOCATED(This%ObsWells))    DEALLOCATE(This%ObsWells)
+    IF (ALLOCATED(This%Grid%X))      DEALLOCATE(This%Grid%X)
+    IF (ALLOCATED(This%Grid%Y))      DEALLOCATE(This%Grid%Y)
+    IF (ALLOCATED(This%Grid%Vertex)) DEALLOCATE(This%Grid%Vertex)
+    IF (ALLOCATED(This%Grid%NVertex))DEALLOCATE(This%Grid%NVertex)
     This%iNObs   = 0
     This%iNNodes = 0
     This%iNLayers = 0
@@ -572,6 +593,27 @@ CONTAINS
     CHARACTER(LEN=25) :: cName
     cName = This%ObsWells(iWell)%cName
   END FUNCTION GetObsName
+
+  ! =====================================================================
+  ! GetWellLayerTransmissivities - Return per-layer T and effective screen
+  !   Used by ApplyMultiLayerTarget to write GW_MultiLayer.out extended cols
+  ! =====================================================================
+  SUBROUTINE GetWellLayerTransmissivities(This, iWell, rLayerT, rTOS, rBOS)
+    CLASS(MultiLayerTargetType), INTENT(IN)  :: This
+    INTEGER,                     INTENT(IN)  :: iWell
+    REAL(8),                     INTENT(OUT) :: rLayerT(:)
+    REAL(8),                     INTENT(OUT) :: rTOS, rBOS
+
+    INTEGER :: k
+
+    rLayerT = 0.0D0
+    DO k = 1, MIN(This%iNLayers, SIZE(rLayerT))
+      rLayerT(k) = This%rRawT(iWell, k)
+    END DO
+    rTOS = This%rScreenTOS(iWell)
+    rBOS = This%rScreenBOS(iWell)
+
+  END SUBROUTINE GetWellLayerTransmissivities
 
   ! =====================================================================
   ! WeightedAverage - Compute T-weighted average from per-layer values
