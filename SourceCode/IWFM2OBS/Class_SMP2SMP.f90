@@ -21,10 +21,12 @@ MODULE Class_SMP2SMP
   IMPLICIT NONE
 
   PRIVATE
-  PUBLIC :: SMP2SMPType      , &
-            SMPRecordType    , &
-            SMPIDGroupType   , &
-            TokenizeSMPLine
+  PUBLIC :: SMP2SMPType          , &
+            SMPRecordType        , &
+            SMPIDGroupType       , &
+            TokenizeSMPLine      , &
+            ExpandObsIDsToLayers , &
+            ExpandSMPDataToLayers
 
   ! =====================================================================
   ! SMPRecordType - one record in an SMP file (ID + time + value)
@@ -54,6 +56,7 @@ MODULE Class_SMP2SMP
   CONTAINS
     PROCEDURE, PASS :: Init
     PROCEDURE, PASS :: Interpolate
+    PROCEDURE, PASS :: InterpolateDirect
     PROCEDURE, PASS :: ReadSMPIDs
     PROCEDURE, PASS :: ReadSMPData
     PROCEDURE, PASS :: WriteSMPLine
@@ -586,7 +589,7 @@ CONTAINS
     REAL(8),  INTENT(OUT)              :: rValInterp
     INTEGER,  INTENT(OUT)              :: iStat
 
-    INTEGER  :: i
+    INTEGER  :: i, iLo, iHi, iMid
     REAL(8)  :: rSecFac, rDiff, rDiff1, rDenTime
 
     iStat   = 0
@@ -616,58 +619,71 @@ CONTAINS
       END IF
     END DO
 
-    ! Find bracketing samples and interpolate
-    DO i = 1, iNBore
-      rDiff = DBLE(iNDays(i) - iIntDay) + DBLE(iNSecs(i) - iIntSec) * rSecFac
-
+    ! Binary search for first sample at or after target time
+    ! (replaces linear scan for O(log N) instead of O(N))
+    iLo = 1
+    iHi = iNBore
+    DO WHILE (iLo < iHi)
+      iMid = (iLo + iHi) / 2
+      rDiff = DBLE(iNDays(iMid) - iIntDay) + DBLE(iNSecs(iMid) - iIntSec) * rSecFac
       IF (rDiff >= 0.0D0) THEN
-        ! Target is before or at sample i
-        IF (i == 1) THEN
-          ! Before first sample
-          IF (rDiff <= rConst) THEN
-            rValInterp = rValue(1)
-          ELSE
-            rValInterp = -8.1D37
-          END IF
-          RETURN
-        END IF
-
-        ! Default interpolation (direction = 'med')
-        rDenTime = DBLE(iNDays(i) - iNDays(i-1)) + &
-                   DBLE(iNSecs(i) - iNSecs(i-1)) * rSecFac
-        IF (rDenTime <= 0.0D0) THEN
-          iStat = -1
-          RETURN
-        END IF
-
-        rDiff1 = rDenTime - rDiff
-
-        IF (rDiff1 > rNear .AND. rDiff > rNear) THEN
-          rValInterp = -7.1D37
-        ELSE
-          rValInterp = rValue(i-1) + (rValue(i) - rValue(i-1)) / rDenTime * rDiff1
-        END IF
-
-        ! Handle "no data" sentinel values
-        IF (rValue(i) < -1.0D38) THEN
-          IF (rDiff1 <= rConst) THEN
-            rValInterp = rValue(i-1)
-          ELSE
-            rValInterp = -1.1D38
-          END IF
-        ELSE IF (rValue(i-1) < -1.0D38) THEN
-          IF (rDiff <= rConst) THEN
-            rValInterp = rValue(i)
-          ELSE
-            rValInterp = -1.1D38
-          END IF
-        END IF
-
-        RETURN
+        iHi = iMid
+      ELSE
+        iLo = iMid + 1
       END IF
     END DO
 
-    ! After last sample
+    ! iLo is the candidate — check if it's actually at or after target
+    i = iLo
+    rDiff = DBLE(iNDays(i) - iIntDay) + DBLE(iNSecs(i) - iIntSec) * rSecFac
+
+    IF (rDiff >= 0.0D0) THEN
+      ! Target is before or at sample i
+      IF (i == 1) THEN
+        ! Before first sample
+        IF (rDiff <= rConst) THEN
+          rValInterp = rValue(1)
+        ELSE
+          rValInterp = -8.1D37
+        END IF
+        RETURN
+      END IF
+
+      ! Default interpolation (direction = 'med')
+      rDenTime = DBLE(iNDays(i) - iNDays(i-1)) + &
+                 DBLE(iNSecs(i) - iNSecs(i-1)) * rSecFac
+      IF (rDenTime <= 0.0D0) THEN
+        iStat = -1
+        RETURN
+      END IF
+
+      rDiff1 = rDenTime - rDiff
+
+      IF (rDiff1 > rNear .AND. rDiff > rNear) THEN
+        rValInterp = -7.1D37
+      ELSE
+        rValInterp = rValue(i-1) + (rValue(i) - rValue(i-1)) / rDenTime * rDiff1
+      END IF
+
+      ! Handle "no data" sentinel values
+      IF (rValue(i) < -1.0D38) THEN
+        IF (rDiff1 <= rConst) THEN
+          rValInterp = rValue(i-1)
+        ELSE
+          rValInterp = -1.1D38
+        END IF
+      ELSE IF (rValue(i-1) < -1.0D38) THEN
+        IF (rDiff <= rConst) THEN
+          rValInterp = rValue(i)
+        ELSE
+          rValInterp = -1.1D38
+        END IF
+      END IF
+
+      RETURN
+    END IF
+
+    ! After last sample (all samples before target)
     rDiff1 = DBLE(iIntDay - iNDays(iNBore)) + DBLE(iIntSec - iNSecs(iNBore)) * rSecFac
     IF (rDiff1 <= rConst) THEN
       rValInterp = rValue(iNBore)
@@ -887,5 +903,631 @@ CONTAINS
     iStat = 0
 
   END SUBROUTINE Interpolate
+
+  ! =====================================================================
+  ! InterpolateDirect - Interpolate using in-memory model data
+  !   Phase A optimization: no temp SMP file needed.
+  !   Reads observation SMP streaming, looks up model data by ID using
+  !   binary search (Phase B), interpolates, and writes output.
+  ! =====================================================================
+  SUBROUTINE InterpolateDirect(This, cObsFile, cOutFile, rThreshold, &
+                                cInsFile, cPCFFile, lWriteIns, &
+                                cFilteredIDs, iNFiltered, &
+                                rModelData, iModelDays, iModelSecs, iNTimes, &
+                                iStat, iExpandLayers)
+    CLASS(SMP2SMPType), INTENT(INOUT) :: This
+    CHARACTER(LEN=*),   INTENT(IN)    :: cObsFile, cOutFile
+    REAL(8),            INTENT(IN)    :: rThreshold
+    CHARACTER(LEN=*),   INTENT(IN)    :: cInsFile, cPCFFile
+    LOGICAL,            INTENT(IN)    :: lWriteIns
+    CHARACTER(LEN=25),  INTENT(IN)    :: cFilteredIDs(:)
+    INTEGER,            INTENT(IN)    :: iNFiltered
+    REAL(8),            INTENT(IN)    :: rModelData(:,:)  ! (iNTimes, iNFiltered)
+    INTEGER,            INTENT(IN)    :: iModelDays(:)
+    INTEGER,            INTENT(IN)    :: iModelSecs(:)
+    INTEGER,            INTENT(IN)    :: iNTimes
+    INTEGER,            INTENT(OUT)   :: iStat
+    INTEGER, OPTIONAL,  INTENT(IN)    :: iExpandLayers  ! >0: auto-expand base IDs
+
+    INTEGER, PARAMETER :: iObsUnit = 101, iOutUnit = 103
+    INTEGER, PARAMETER :: iInsUnit = 104, iPCFUnit = 105
+    INTEGER, PARAMETER :: iMaxExpand = 20  ! Max supported layers for expansion
+
+    CHARACTER(LEN=500) :: cLine
+    CHARACTER(LEN=25)  :: cTemp, cPrev, cLayerID
+    CHARACTER(LEN=30)  :: cTokens(5)
+    CHARACTER(LEN=30)  :: cDateStr, cTimeStr, cValStr, cFlagStr
+    INTEGER            :: iErr, iObs, iOut, iID, iCol
+    INTEGER            :: iDay, iMon, iYear, iHH, iMM, iSS
+    INTEGER            :: iIntDays, iIntSecs, iCols, k
+    REAL(8)            :: rObsValue, rIntValue
+    ! Sorted index for binary search
+    CHARACTER(LEN=25), ALLOCATABLE :: cSorted(:)
+    INTEGER, ALLOCATABLE           :: iSortIdx(:)
+    INTEGER            :: iNMatched, iNUnmatched
+    ! Expansion support: when a base obs ID maps to multiple %N model columns
+    INTEGER            :: iNExpCols                    ! Number of expanded columns found
+    INTEGER            :: iExpCols(iMaxExpand)         ! Column indices for expanded IDs
+    CHARACTER(LEN=25)  :: cExpIDs(iMaxExpand)          ! Expanded ID strings
+    INTEGER            :: iNExpandLayers, iLyr
+    LOGICAL            :: lExpanding
+    ! Buffer for contiguous-by-layer output during expansion
+    INTEGER, PARAMETER :: iMaxBuf = 2000               ! Max timesteps per bore
+    INTEGER            :: iBufDays(iMaxBuf)
+    INTEGER            :: iBufSecs(iMaxBuf)
+    REAL(8)            :: rBufObs(iMaxBuf)
+    REAL(8)            :: rBufInterp(iMaxBuf, iMaxExpand)
+    LOGICAL            :: lBufValid(iMaxBuf, iMaxExpand)
+    INTEGER            :: iBufCount
+
+    iStat = 0
+    iNExpandLayers = 0
+    lExpanding = .FALSE.
+    IF (PRESENT(iExpandLayers)) THEN
+      IF (iExpandLayers > 0) iNExpandLayers = MIN(iExpandLayers, iMaxExpand)
+    END IF
+
+    IF (iNFiltered == 0 .OR. iNTimes == 0) THEN
+      CALL SetLastMessage('No model data available for direct interpolation', &
+           f_iWarn, cModName)
+      iStat = -1; RETURN
+    END IF
+
+    ! ---- Build sorted index of filtered IDs for O(log N) lookup ----
+    ALLOCATE(cSorted(iNFiltered), iSortIdx(iNFiltered), STAT=iErr)
+    IF (iErr /= 0) THEN
+      CALL SetLastMessage('Cannot allocate sort arrays', f_iFatal, cModName)
+      iStat = -1; RETURN
+    END IF
+    DO k = 1, iNFiltered
+      cSorted(k) = cFilteredIDs(k)
+      iSortIdx(k) = k
+    END DO
+    IF (iNFiltered > 1) CALL SortStringsIndexSMP(cSorted, iSortIdx, 1, iNFiltered)
+
+    ! ---- Open files ----
+    OPEN(UNIT=iObsUnit, FILE=cObsFile, STATUS='OLD', IOSTAT=iErr)
+    IF (iErr /= 0) THEN
+      CALL SetLastMessage('Cannot open observation file: '//TRIM(cObsFile), &
+           f_iFatal, cModName)
+      DEALLOCATE(cSorted, iSortIdx)
+      iStat = -1; RETURN
+    END IF
+
+    OPEN(UNIT=iOutUnit, FILE=cOutFile, STATUS='REPLACE', IOSTAT=iErr)
+    IF (iErr /= 0) THEN
+      CALL SetLastMessage('Cannot open output file: '//TRIM(cOutFile), &
+           f_iFatal, cModName)
+      CLOSE(iObsUnit); DEALLOCATE(cSorted, iSortIdx)
+      iStat = -1; RETURN
+    END IF
+
+    IF (lWriteIns) THEN
+      OPEN(UNIT=iInsUnit, FILE=cInsFile, STATUS='REPLACE', IOSTAT=iErr)
+      IF (iErr /= 0) THEN
+        CLOSE(iObsUnit); CLOSE(iOutUnit); DEALLOCATE(cSorted, iSortIdx)
+        iStat = -1; RETURN
+      END IF
+      WRITE(iInsUnit, '(A)') 'pif #'
+
+      OPEN(UNIT=iPCFUnit, FILE=cPCFFile, STATUS='REPLACE', IOSTAT=iErr)
+      IF (iErr /= 0) THEN
+        CLOSE(iObsUnit); CLOSE(iOutUnit); CLOSE(iInsUnit)
+        DEALLOCATE(cSorted, iSortIdx)
+        iStat = -1; RETURN
+      END IF
+    END IF
+
+    ! ---- Process observation file line by line ----
+    iObs = 0
+    iOut = 0
+    iNMatched   = 0
+    iNUnmatched = 0
+    cPrev = ' '
+    iID   = 0
+    iCol  = 0
+    iBufCount = 0
+
+    DO
+      READ(iObsUnit, '(A)', IOSTAT=iErr) cLine
+      IF (iErr /= 0) EXIT
+      IF (LEN_TRIM(cLine) == 0) CYCLE
+
+      CALL TokenizeSMPLine(cLine, cTokens, iCols)
+      IF (iCols < 4) CYCLE
+      cTemp    = cTokens(1)
+      cDateStr = cTokens(2)
+      cTimeStr = cTokens(3)
+      cValStr  = cTokens(4)
+      IF (iCols >= 5) THEN
+        cFlagStr = cTokens(5)
+      ELSE
+        cFlagStr = ' '
+      END IF
+
+      cTemp = ADJUSTL(cTemp)
+      cTemp = UpperCase(cTemp)
+
+      ! When ID changes, look up the new model column
+      IF (cTemp /= cPrev) THEN
+        ! Flush any buffered expansion records from the previous bore
+        IF (iBufCount > 0 .AND. lExpanding) THEN
+          DO iLyr = 1, iNExpCols
+            DO k = 1, iBufCount
+              IF (lBufValid(k, iLyr)) THEN
+                iOut = iOut + 1
+                CALL This%WriteSMPLine(iOutUnit, cExpIDs(iLyr), &
+                     iBufDays(k), iBufSecs(k), rBufInterp(k, iLyr))
+                IF (lWriteIns) THEN
+                  WRITE(iInsUnit, 200) TRIM(cExpIDs(iLyr)), iID
+                  WRITE(iPCFUnit, 210) TRIM(cExpIDs(iLyr)), iID, rBufObs(k)
+                  iID = iID + 1
+                END IF
+              END IF
+            END DO
+          END DO
+        END IF
+        iBufCount = 0
+        iObs = iObs + 1
+        iID  = 1
+        cPrev = cTemp
+        lExpanding = .FALSE.
+        iNExpCols = 0
+        ! Binary search for model column (direct match)
+        k = BinarySearchStrSMP(cSorted, iNFiltered, cTemp)
+        IF (k > 0) THEN
+          iCol = iSortIdx(k)
+          iNMatched = iNMatched + 1
+        ELSE
+          iCol = 0
+          ! If expansion is active, try ID%1 through ID%N
+          IF (iNExpandLayers > 0) THEN
+            DO iLyr = 1, iNExpandLayers
+              WRITE(cLayerID, '(A,A1,I0)') TRIM(cTemp), '%', iLyr
+              cLayerID = UpperCase(cLayerID)
+              k = BinarySearchStrSMP(cSorted, iNFiltered, cLayerID)
+              IF (k > 0) THEN
+                iNExpCols = iNExpCols + 1
+                iExpCols(iNExpCols) = iSortIdx(k)
+                cExpIDs(iNExpCols) = cLayerID
+              END IF
+            END DO
+            IF (iNExpCols > 0) THEN
+              lExpanding = .TRUE.
+              iNMatched = iNMatched + 1
+            ELSE
+              iNUnmatched = iNUnmatched + 1
+            END IF
+          ELSE
+            iNUnmatched = iNUnmatched + 1
+          END IF
+        END IF
+      END IF
+
+      IF (iCol == 0 .AND. .NOT. lExpanding) CYCLE  ! No model data for this obs ID
+
+      ! Parse observation date/time
+      CALL This%ParseDateStr(cDateStr, iDay, iMon, iYear, iStat)
+      IF (iStat /= 0) THEN
+        iStat = 0; CYCLE
+      END IF
+      CALL DayMonthYearToJulianDate(iDay, iMon, iYear, iIntDays, iStat)
+      IF (iStat /= 0) THEN
+        iStat = 0; CYCLE
+      END IF
+      CALL This%ParseTimeStr(cTimeStr, iHH, iMM, iSS, iStat)
+      IF (iStat /= 0) THEN
+        iStat = 0; CYCLE
+      END IF
+      iIntSecs = iHH*3600 + iMM*60 + iSS
+
+      ! Parse observation value
+      READ(cValStr, *, IOSTAT=iErr) rObsValue
+      IF (iErr /= 0) CYCLE
+      IF (rObsValue < -1.0D38) CYCLE
+
+      ! Check for x flag
+      IF (iCols == 5) THEN
+        IF (UpperCase(ADJUSTL(cFlagStr)) == 'X') CYCLE
+      END IF
+
+      ! Time-interpolate and write output
+      IF (lExpanding) THEN
+        ! Buffer this record; flush contiguously by layer when bore changes
+        IF (iBufCount < iMaxBuf) THEN
+          iBufCount = iBufCount + 1
+          iBufDays(iBufCount) = iIntDays
+          iBufSecs(iBufCount) = iIntSecs
+          rBufObs(iBufCount)  = rObsValue
+          DO iLyr = 1, iNExpCols
+            CALL TimeInterpOneSeries(iNTimes, iModelDays, iModelSecs, &
+                                     rModelData(:, iExpCols(iLyr)), &
+                                     iIntDays, iIntSecs, 1.0D30, rThreshold, &
+                                     rIntValue, iStat)
+            IF (iStat /= 0) THEN
+              CALL SetLastMessage('Problem interpolating for '//TRIM(cExpIDs(iLyr)), &
+                   f_iFatal, cModName)
+              GOTO 900
+            END IF
+            rBufInterp(iBufCount, iLyr) = rIntValue
+            lBufValid(iBufCount, iLyr) = (rIntValue > -1.0D30)
+          END DO
+        END IF
+      ELSE
+        ! Direct mode: single column match
+        CALL TimeInterpOneSeries(iNTimes, iModelDays, iModelSecs, &
+                                 rModelData(:, iCol), &
+                                 iIntDays, iIntSecs, 1.0D30, rThreshold, &
+                                 rIntValue, iStat)
+        IF (iStat /= 0) THEN
+          CALL SetLastMessage('Problem interpolating for '//TRIM(cTemp), &
+               f_iFatal, cModName)
+          GOTO 900
+        END IF
+        IF (rIntValue > -1.0D30) THEN
+          iOut = iOut + 1
+          CALL This%WriteSMPLine(iOutUnit, cTemp, iIntDays, iIntSecs, rIntValue)
+          IF (lWriteIns) THEN
+            WRITE(iInsUnit, 200) TRIM(cTemp), iID
+            WRITE(iPCFUnit, 210) TRIM(cTemp), iID, rObsValue
+            iID = iID + 1
+          END IF
+        END IF
+      END IF
+200   FORMAT('l1  [',A,'_',I4.4,']37:56')
+210   FORMAT(A,'_',I4.4,'    ',1PG15.8)
+    END DO
+
+    ! Flush remaining buffer after last bore
+    IF (iBufCount > 0 .AND. lExpanding) THEN
+      DO iLyr = 1, iNExpCols
+        DO k = 1, iBufCount
+          IF (lBufValid(k, iLyr)) THEN
+            iOut = iOut + 1
+            CALL This%WriteSMPLine(iOutUnit, cExpIDs(iLyr), &
+                 iBufDays(k), iBufSecs(k), rBufInterp(k, iLyr))
+            IF (lWriteIns) THEN
+              WRITE(iInsUnit, 200) TRIM(cExpIDs(iLyr)), iID
+              WRITE(iPCFUnit, 210) TRIM(cExpIDs(iLyr)), iID, rBufObs(k)
+              iID = iID + 1
+            END IF
+          END IF
+        END DO
+      END DO
+    END IF
+
+    ! Report results
+900 CONTINUE
+    CALL LogMessage(TRIM(IntToText(iOut))//' lines written to '//TRIM(cOutFile), &
+                    f_iInfo, cModName)
+    IF (iNUnmatched > 0) THEN
+      CALL LogMessage('  '//TRIM(IntToText(iNUnmatched))// &
+           ' observation IDs not found in model data', f_iWarn, cModName)
+    END IF
+
+    ! Clean up
+    CLOSE(iObsUnit)
+    CLOSE(iOutUnit)
+    IF (lWriteIns) THEN
+      CLOSE(iInsUnit)
+      CLOSE(iPCFUnit)
+    END IF
+    DEALLOCATE(cSorted, iSortIdx)
+
+    iStat = 0
+
+  END SUBROUTINE InterpolateDirect
+
+  ! =====================================================================
+  ! BinarySearchStrSMP - Binary search a sorted CHARACTER(25) array
+  !   Returns position if found, 0 if not found
+  ! =====================================================================
+  FUNCTION BinarySearchStrSMP(cArr, iN, cTarget) RESULT(iPos)
+    CHARACTER(LEN=25), INTENT(IN) :: cArr(:)
+    INTEGER,           INTENT(IN) :: iN
+    CHARACTER(LEN=25), INTENT(IN) :: cTarget
+    INTEGER :: iPos
+
+    INTEGER :: iLo, iHi, iMid
+
+    iPos = 0
+    iLo = 1
+    iHi = iN
+    DO WHILE (iLo <= iHi)
+      iMid = (iLo + iHi) / 2
+      IF (cArr(iMid) == cTarget) THEN
+        iPos = iMid
+        RETURN
+      ELSE IF (cArr(iMid) < cTarget) THEN
+        iLo = iMid + 1
+      ELSE
+        iHi = iMid - 1
+      END IF
+    END DO
+  END FUNCTION BinarySearchStrSMP
+
+  ! =====================================================================
+  ! SortStringsIndexSMP - Quicksort CHARACTER(25) array with index array
+  !   Sorts cArr(iLo:iHi) in ascending order, reordering iIdx in parallel
+  ! =====================================================================
+  RECURSIVE SUBROUTINE SortStringsIndexSMP(cArr, iIdx, iLo, iHi)
+    CHARACTER(LEN=25), INTENT(INOUT) :: cArr(:)
+    INTEGER,           INTENT(INOUT) :: iIdx(:)
+    INTEGER,           INTENT(IN)    :: iLo, iHi
+
+    CHARACTER(LEN=25) :: cPivot, cTemp
+    INTEGER :: i, j, iTemp
+
+    IF (iLo >= iHi) RETURN
+
+    cPivot = cArr((iLo + iHi) / 2)
+    i = iLo
+    j = iHi
+
+    DO WHILE (i <= j)
+      DO WHILE (cArr(i) < cPivot)
+        i = i + 1
+      END DO
+      DO WHILE (cArr(j) > cPivot)
+        j = j - 1
+      END DO
+      IF (i <= j) THEN
+        cTemp = cArr(i); cArr(i) = cArr(j); cArr(j) = cTemp
+        iTemp = iIdx(i); iIdx(i) = iIdx(j); iIdx(j) = iTemp
+        i = i + 1
+        j = j - 1
+      END IF
+    END DO
+
+    IF (iLo < j) CALL SortStringsIndexSMP(cArr, iIdx, iLo, j)
+    IF (i < iHi) CALL SortStringsIndexSMP(cArr, iIdx, i, iHi)
+  END SUBROUTINE SortStringsIndexSMP
+
+  ! =====================================================================
+  ! ExpandObsIDsToLayers - Expand base observation IDs to per-layer IDs
+  !   If obs IDs lack %N suffixes, duplicate each ID as ID%1..ID%NL.
+  !   Backward compatible: if all IDs already have %N, no expansion.
+  !
+  !   Detection: scan for '%' followed by digits at end of each ID.
+  !   If ALL IDs have such suffixes, return unchanged (iStat=0).
+  !   Otherwise, expand base IDs to per-layer variants.
+  !
+  !   Optionally filter against cModelIDs to only keep expanded IDs
+  !   that exist in the model output.
+  ! =====================================================================
+  SUBROUTINE ExpandObsIDsToLayers(cIDs, iNIDs, iNLayers, &
+                                   cModelIDs, iNModelIDs, iStat)
+    CHARACTER(LEN=25), ALLOCATABLE,    INTENT(INOUT) :: cIDs(:)
+    INTEGER,                           INTENT(INOUT) :: iNIDs
+    INTEGER,                           INTENT(IN)    :: iNLayers
+    CHARACTER(LEN=25), OPTIONAL,       INTENT(IN)    :: cModelIDs(:)
+    INTEGER,           OPTIONAL,       INTENT(IN)    :: iNModelIDs
+    INTEGER,                           INTENT(OUT)   :: iStat
+
+    CHARACTER(LEN=25), ALLOCATABLE :: cNewIDs(:)
+    CHARACTER(LEN=25) :: cBase, cExpanded
+    INTEGER :: i, k, iErr, iLen, iPos
+    INTEGER :: iNSuffixed, iNBase, iNewCount, iMaxNew
+    LOGICAL :: lHasSuffix, lUseFilter
+
+    iStat = 0
+
+    IF (iNIDs == 0 .OR. iNLayers <= 0) RETURN
+
+    lUseFilter = PRESENT(cModelIDs) .AND. PRESENT(iNModelIDs)
+
+    ! Count how many IDs already have %N suffixes
+    iNSuffixed = 0
+    DO i = 1, iNIDs
+      IF (HasLayerSuffix(cIDs(i))) iNSuffixed = iNSuffixed + 1
+    END DO
+
+    ! If all have suffixes, no expansion needed (backward compat)
+    IF (iNSuffixed == iNIDs) RETURN
+
+    iNBase = iNIDs - iNSuffixed
+
+    ! Allocate new array: base IDs * layers + already-suffixed IDs
+    iMaxNew = iNBase * iNLayers + iNSuffixed
+    ALLOCATE(cNewIDs(iMaxNew), STAT=iErr)
+    IF (iErr /= 0) THEN
+      CALL SetLastMessage('Cannot allocate expanded ID array', f_iFatal, cModName)
+      iStat = -1
+      RETURN
+    END IF
+
+    iNewCount = 0
+    DO i = 1, iNIDs
+      IF (HasLayerSuffix(cIDs(i))) THEN
+        ! Already has suffix — keep as-is
+        iNewCount = iNewCount + 1
+        cNewIDs(iNewCount) = cIDs(i)
+      ELSE
+        ! Expand to ID%1 .. ID%NLayers
+        cBase = TRIM(cIDs(i))
+        DO k = 1, iNLayers
+          WRITE(cExpanded, '(A,A1,I0)') TRIM(cBase), '%', k
+          cExpanded = UpperCase(cExpanded)
+          ! Optional filtering against model IDs
+          IF (lUseFilter) THEN
+            IF (.NOT. IDExistsIn(cExpanded, cModelIDs, iNModelIDs)) CYCLE
+          END IF
+          iNewCount = iNewCount + 1
+          IF (iNewCount > iMaxNew) EXIT
+          cNewIDs(iNewCount) = cExpanded
+        END DO
+      END IF
+    END DO
+
+    ! Replace original array
+    DEALLOCATE(cIDs)
+    ALLOCATE(cIDs(iNewCount), STAT=iErr)
+    IF (iErr /= 0) THEN
+      CALL SetLastMessage('Cannot allocate replacement ID array', f_iFatal, cModName)
+      iStat = -1
+      DEALLOCATE(cNewIDs)
+      RETURN
+    END IF
+    cIDs(1:iNewCount) = cNewIDs(1:iNewCount)
+
+    CALL LogMessage('Expanded '//TRIM(IntToText(iNBase))//' base obs IDs to '// &
+         TRIM(IntToText(iNewCount))//' per-layer IDs ('// &
+         TRIM(IntToText(iNLayers))//' layers)', f_iInfo, cModName)
+
+    iNIDs = iNewCount
+    DEALLOCATE(cNewIDs)
+
+  CONTAINS
+
+    ! Check if an ID ends with %<digits>
+    FUNCTION HasLayerSuffix(cID) RESULT(lResult)
+      CHARACTER(LEN=25), INTENT(IN) :: cID
+      LOGICAL :: lResult
+      INTEGER :: iPct, iL, ic
+
+      lResult = .FALSE.
+      iL = LEN_TRIM(cID)
+      IF (iL < 3) RETURN
+      ! Find last '%'
+      iPct = INDEX(cID(1:iL), '%', BACK=.TRUE.)
+      IF (iPct == 0 .OR. iPct == iL) RETURN
+      ! Check all chars after '%' are digits
+      DO ic = iPct + 1, iL
+        IF (ICHAR(cID(ic:ic)) < ICHAR('0') .OR. ICHAR(cID(ic:ic)) > ICHAR('9')) RETURN
+      END DO
+      lResult = .TRUE.
+    END FUNCTION HasLayerSuffix
+
+    ! Check if an ID exists in a list
+    FUNCTION IDExistsIn(cTarget, cList, iN) RESULT(lFound)
+      CHARACTER(LEN=25), INTENT(IN) :: cTarget
+      CHARACTER(LEN=25), INTENT(IN) :: cList(:)
+      INTEGER,           INTENT(IN) :: iN
+      LOGICAL :: lFound
+      INTEGER :: j
+
+      lFound = .FALSE.
+      DO j = 1, iN
+        IF (cList(j) == cTarget) THEN
+          lFound = .TRUE.
+          RETURN
+        END IF
+      END DO
+    END FUNCTION IDExistsIn
+
+  END SUBROUTINE ExpandObsIDsToLayers
+
+  ! =====================================================================
+  ! ExpandSMPDataToLayers - Expand SMP data arrays to per-layer copies
+  !   After ReadSMPData reads data with base IDs, this duplicates the
+  !   data arrays for each layer so that ID%1..ID%N all have records.
+  !
+  !   cOrigIDs/iNOrigIDs: the original (base) IDs from ReadSMPIDs
+  !   cExpandedIDs/iNExpandedIDs: the expanded IDs from ExpandObsIDsToLayers
+  !   Groups, iDays, iSecs, rValues: data from ReadSMPData (base IDs)
+  !   Output: new Groups/iDays/iSecs/rValues arrays for expanded IDs
+  ! =====================================================================
+  SUBROUTINE ExpandSMPDataToLayers(cOrigIDs, iNOrigIDs, iNLayers, &
+                                    GroupsIn, iDaysIn, iSecsIn, rValuesIn, iTotalRecIn, &
+                                    cExpandedIDs, iNExpandedIDs, &
+                                    GroupsOut, iDaysOut, iSecsOut, rValuesOut, iTotalRecOut, &
+                                    iStat)
+    CHARACTER(LEN=25),                 INTENT(IN)  :: cOrigIDs(:)
+    INTEGER,                           INTENT(IN)  :: iNOrigIDs
+    INTEGER,                           INTENT(IN)  :: iNLayers
+    TYPE(SMPIDGroupType),              INTENT(IN)  :: GroupsIn(:)
+    INTEGER,                           INTENT(IN)  :: iDaysIn(:)
+    INTEGER,                           INTENT(IN)  :: iSecsIn(:)
+    REAL(8),                           INTENT(IN)  :: rValuesIn(:)
+    INTEGER,                           INTENT(IN)  :: iTotalRecIn
+    CHARACTER(LEN=25),                 INTENT(IN)  :: cExpandedIDs(:)
+    INTEGER,                           INTENT(IN)  :: iNExpandedIDs
+    TYPE(SMPIDGroupType), ALLOCATABLE, INTENT(OUT) :: GroupsOut(:)
+    INTEGER,              ALLOCATABLE, INTENT(OUT) :: iDaysOut(:)
+    INTEGER,              ALLOCATABLE, INTENT(OUT) :: iSecsOut(:)
+    REAL(8),              ALLOCATABLE, INTENT(OUT) :: rValuesOut(:)
+    INTEGER,                           INTENT(OUT) :: iTotalRecOut
+    INTEGER,                           INTENT(OUT) :: iStat
+
+    CHARACTER(LEN=25) :: cBase, cExpID
+    INTEGER :: i, j, k, iErr, iOff, iSrcOff, iNRec, iPct, iLen
+
+    iStat = 0
+
+    ! Compute total output records: each expanded ID maps to its base's records
+    iTotalRecOut = 0
+    DO i = 1, iNExpandedIDs
+      ! Find base ID for this expanded ID (strip %N suffix)
+      cExpID = cExpandedIDs(i)
+      iLen = LEN_TRIM(cExpID)
+      iPct = INDEX(cExpID(1:iLen), '%', BACK=.TRUE.)
+      IF (iPct > 0) THEN
+        cBase = cExpID(1:iPct-1)
+      ELSE
+        cBase = cExpID
+      END IF
+      cBase = UpperCase(cBase)
+
+      ! Find base in original IDs
+      DO j = 1, iNOrigIDs
+        IF (TRIM(UpperCase(cOrigIDs(j))) == TRIM(cBase)) THEN
+          iTotalRecOut = iTotalRecOut + GroupsIn(j)%iNRec
+          EXIT
+        END IF
+      END DO
+    END DO
+
+    ! Allocate output arrays
+    ALLOCATE(GroupsOut(iNExpandedIDs), STAT=iErr)
+    IF (iErr /= 0) THEN
+      iStat = -1; RETURN
+    END IF
+    IF (iTotalRecOut > 0) THEN
+      ALLOCATE(iDaysOut(iTotalRecOut), iSecsOut(iTotalRecOut), &
+               rValuesOut(iTotalRecOut), STAT=iErr)
+      IF (iErr /= 0) THEN
+        iStat = -1; RETURN
+      END IF
+    END IF
+
+    ! Copy data: for each expanded ID, copy base ID's data
+    iOff = 0
+    DO i = 1, iNExpandedIDs
+      cExpID = cExpandedIDs(i)
+      iLen = LEN_TRIM(cExpID)
+      iPct = INDEX(cExpID(1:iLen), '%', BACK=.TRUE.)
+      IF (iPct > 0) THEN
+        cBase = cExpID(1:iPct-1)
+      ELSE
+        cBase = cExpID
+      END IF
+      cBase = UpperCase(cBase)
+
+      GroupsOut(i)%cID = cExpID
+      GroupsOut(i)%iNRec = 0
+      GroupsOut(i)%iLocOff = iOff
+      GroupsOut(i)%iNOut = 0
+
+      DO j = 1, iNOrigIDs
+        IF (TRIM(UpperCase(cOrigIDs(j))) == TRIM(cBase)) THEN
+          iNRec = GroupsIn(j)%iNRec
+          GroupsOut(i)%iNRec = iNRec
+          IF (iNRec > 0) THEN
+            iSrcOff = GroupsIn(j)%iLocOff
+            DO k = 1, iNRec
+              iDaysOut(iOff + k)   = iDaysIn(iSrcOff + k)
+              iSecsOut(iOff + k)   = iSecsIn(iSrcOff + k)
+              rValuesOut(iOff + k) = rValuesIn(iSrcOff + k)
+            END DO
+            iOff = iOff + iNRec
+          END IF
+          EXIT
+        END IF
+      END DO
+    END DO
+
+    iTotalRecOut = iOff
+
+  END SUBROUTINE ExpandSMPDataToLayers
 
 END MODULE Class_SMP2SMP

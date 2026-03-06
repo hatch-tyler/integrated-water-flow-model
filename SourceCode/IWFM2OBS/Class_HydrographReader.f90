@@ -12,12 +12,12 @@ MODULE Class_HydrographReader
   USE MessageLogger      , ONLY: SetLastMessage   , &
                                  LogMessage        , &
                                  f_iFatal          , &
+                                 f_iWarn           , &
                                  f_iInfo
   USE GeneralUtilities   , ONLY: IntToText         , &
                                  UpperCase         , &
                                  EstablishAbsolutePathFileName
-  USE TimeSeriesUtilities, ONLY: DayMonthYearToJulianDate , &
-                                 JulianDateAndMinutesToJulianDate
+  USE TimeSeriesUtilities, ONLY: DayMonthYearToJulianDate
 
   IMPLICIT NONE
 
@@ -50,6 +50,7 @@ MODULE Class_HydrographReader
   TYPE :: HydrographReaderType
     CHARACTER(LEN=500)  :: cSimMainFile = ' '
     CHARACTER(LEN=500)  :: cWorkDir     = ' '
+    CHARACTER(LEN=500)  :: cSimDir      = ' '  ! Simulation main file directory
     CHARACTER(LEN=500)  :: cGWMainFile  = ' '
     CHARACTER(LEN=500)  :: cStreamMainFile = ' '
     CHARACTER(LEN=500)  :: cTileDrainFile = ' '
@@ -62,9 +63,17 @@ MODULE Class_HydrographReader
     INTEGER             :: iStartYr   = 0
     INTEGER             :: iDateSpec  = 2  ! 1=dd/mm, 2=mm/dd
     LOGICAL             :: lDiscovered = .FALSE.
+    ! In-memory model data (populated by ReadDotOutFileDirect)
+    REAL(8), ALLOCATABLE    :: rModelData(:,:)   ! (iNTimes, iNFiltered)
+    INTEGER, ALLOCATABLE    :: iModelDays(:)     ! Julian days per timestep
+    INTEGER, ALLOCATABLE    :: iModelSecs(:)     ! Seconds per timestep
+    INTEGER                 :: iNTimes = 0
+    CHARACTER(LEN=25), ALLOCATABLE :: cFilteredIDs(:) ! IDs of stored hydrographs
+    INTEGER                 :: iNFiltered = 0
   CONTAINS
     PROCEDURE, PASS :: DiscoverModelFiles
     PROCEDURE, PASS :: ReadDotOutFile
+    PROCEDURE, PASS :: ReadDotOutFileDirect
     PROCEDURE, PASS :: Kill
   END TYPE HydrographReaderType
 
@@ -92,6 +101,31 @@ CONTAINS
   END SUBROUTINE ReadNonComment
 
   ! =====================================================================
+  ! ReadSimDataLine - Read one data line from an IWFM simulation file
+  !   IWFM convention: comments have C/c/*/# in column 1 (no indentation).
+  !   Data lines are indented (column 1 is space). This differs from
+  !   ReadNonComment which does ADJUSTL first, causing indented filenames
+  !   starting with 'C' (e.g. C2VSimFG_...) to be misidentified as comments.
+  ! =====================================================================
+  SUBROUTINE ReadSimDataLine(iUnit, cLine, iStat)
+    INTEGER,          INTENT(IN)  :: iUnit
+    CHARACTER(LEN=*), INTENT(OUT) :: cLine
+    INTEGER,          INTENT(OUT) :: iStat
+
+    iStat = 0
+    DO
+      READ(iUnit, '(A)', IOSTAT=iStat) cLine
+      IF (iStat /= 0) RETURN
+      IF (LEN_TRIM(cLine) == 0) CYCLE
+      ! Check column 1 BEFORE ADJUSTL — IWFM comments start in column 1
+      IF (cLine(1:1) == 'C' .OR. cLine(1:1) == 'c' .OR. &
+          cLine(1:1) == '*' .OR. cLine(1:1) == '#') CYCLE
+      cLine = ADJUSTL(cLine)
+      EXIT
+    END DO
+  END SUBROUTINE ReadSimDataLine
+
+  ! =====================================================================
   ! StripInlineComment - Remove text after '/' delimiter
   ! =====================================================================
   SUBROUTINE StripInlineComment(cLine, cResult)
@@ -108,6 +142,23 @@ CONTAINS
     END IF
     cResult = ADJUSTL(TRIM(cResult))
   END SUBROUTINE StripInlineComment
+
+  ! =====================================================================
+  ! ResolveAbsPath - Wrapper for EstablishAbsolutePathFileName that
+  !   accepts fixed-length CHARACTER output instead of ALLOCATABLE
+  ! =====================================================================
+  SUBROUTINE ResolveAbsPath(cFileName, cDefaultPath, cResult)
+    CHARACTER(LEN=*), INTENT(IN)  :: cFileName, cDefaultPath
+    CHARACTER(LEN=*), INTENT(OUT) :: cResult
+    CHARACTER(:), ALLOCATABLE :: cAbsPath
+
+    CALL EstablishAbsolutePathFileName(cFileName, cDefaultPath, cAbsPath)
+    IF (ALLOCATED(cAbsPath)) THEN
+      cResult = cAbsPath
+    ELSE
+      cResult = cFileName
+    END IF
+  END SUBROUTINE ResolveAbsPath
 
   ! =====================================================================
   ! ExtractFilePath - Read non-comment line, strip inline comment, resolve
@@ -127,7 +178,7 @@ CONTAINS
       cPath = ' '
       RETURN
     END IF
-    CALL EstablishAbsolutePathFileName(TRIM(cClean), TRIM(cBaseDir), cPath)
+    CALL ResolveAbsPath(TRIM(cClean), TRIM(cBaseDir), cPath)
   END SUBROUTINE ExtractFilePath
 
   ! =====================================================================
@@ -173,6 +224,7 @@ CONTAINS
     ELSE
       cSimDir = cWorkDir
     END IF
+    This%cSimDir = cSimDir
 
     ! ==================================================================
     ! 1. Parse simulation main file
@@ -184,34 +236,45 @@ CONTAINS
       iStat = -1; RETURN
     END IF
 
-    ! Skip 4 lines to reach GW main file path (line 5)
-    DO i = 1, 4
-      CALL ReadNonComment(iUnit, cLine, iErr)
-      IF (iErr /= 0) THEN
-        CALL SetLastMessage('Unexpected end of simulation main file', &
-             f_iFatal, cModName)
-        CLOSE(iUnit); iStat = -1; RETURN
-      END IF
-    END DO
+    ! --- Title lines ---
+    ! IWFM main file has exactly 3 title lines after the comment header.
+    ! Title lines may start with 'C' (e.g. "Central Valley"), so we
+    ! cannot use ReadNonComment (which skips C-prefixed lines).
+    ! Strategy: find first non-comment line (title 1), then read 2 more raw.
+    CALL ReadSimDataLine(iUnit, cLine, iErr)  ! title 1
+    IF (iErr /= 0) THEN
+      CALL SetLastMessage('Unexpected end of simulation main file', &
+           f_iFatal, cModName)
+      CLOSE(iUnit); iStat = -1; RETURN
+    END IF
+    READ(iUnit, '(A)', IOSTAT=iErr) cLine    ! title 2 (raw, may start with C)
+    READ(iUnit, '(A)', IOSTAT=iErr) cLine    ! title 3 (raw, may start with C)
 
-    ! Line 5: GW main file
-    CALL ReadNonComment(iUnit, cLine, iErr)
+    ! --- File paths: 11 entries (preprocessor, GW, stream, lake, ..., ET) ---
+    ! File 1: preprocessor output (skip)
+    CALL ReadSimDataLine(iUnit, cLine, iErr)
+
+    ! File 2: GW main file
+    CALL ReadSimDataLine(iUnit, cLine, iErr)
     CALL StripInlineComment(cLine, cClean)
-    CALL EstablishAbsolutePathFileName(TRIM(cClean), TRIM(cSimDir), This%cGWMainFile)
+    CALL ResolveAbsPath(TRIM(cClean), TRIM(cSimDir), This%cGWMainFile)
 
-    ! Line 6: Stream main file
-    CALL ReadNonComment(iUnit, cLine, iErr)
+    ! File 3: Stream main file
+    CALL ReadSimDataLine(iUnit, cLine, iErr)
     CALL StripInlineComment(cLine, cClean)
-    CALL EstablishAbsolutePathFileName(TRIM(cClean), TRIM(cSimDir), This%cStreamMainFile)
+    CALL ResolveAbsPath(TRIM(cClean), TRIM(cSimDir), This%cStreamMainFile)
 
-    ! Skip to start date (8 lines to skip, then read start date)
+    ! Files 4-11: skip remaining 8 file entries
     DO i = 1, 8
-      CALL ReadNonComment(iUnit, cLine, iErr)
+      CALL ReadSimDataLine(iUnit, cLine, iErr)
     END DO
 
-    ! Read start date
-    CALL ReadNonComment(iUnit, cLine, iErr)
-    CALL StripInlineComment(cLine, cClean)
+    ! --- Simulation timing ---
+    ! BDT (start date) — extract first token only (date contains '/')
+    CALL ReadSimDataLine(iUnit, cLine, iErr)
+    cClean = ADJUSTL(TRIM(cLine))
+    iPos = INDEX(cClean, ' ')
+    IF (iPos > 1) cClean = cClean(1:iPos-1)
     ! Extract date portion before the '_' separator
     iPos = SCAN(cClean, '_')
     IF (iPos > 0) cClean = cClean(1:iPos-1)
@@ -225,8 +288,8 @@ CONTAINS
     END IF
 
     ! Skip 1 line, then read time unit
-    CALL ReadNonComment(iUnit, cLine, iErr)
-    CALL ReadNonComment(iUnit, cLine, iErr)
+    CALL ReadSimDataLine(iUnit, cLine, iErr)
+    CALL ReadSimDataLine(iUnit, cLine, iErr)
     CALL StripInlineComment(cLine, cClean)
     cClean = ADJUSTL(TRIM(cClean))
     CALL UpperCaseLocal(cClean)
@@ -323,28 +386,28 @@ CONTAINS
     END IF
 
     ! Line 1: Version/debug flag (skip)
-    CALL ReadNonComment(iUnit, cLine, iErr)
+    CALL ReadSimDataLine(iUnit, cLine, iErr)
 
     ! Line 2: Tile drain main file path
-    CALL ReadNonComment(iUnit, cLine, iErr)
+    CALL ReadSimDataLine(iUnit, cLine, iErr)
     CALL StripInlineComment(cLine, cClean)
     IF (LEN_TRIM(cClean) > 0) THEN
-      CALL EstablishAbsolutePathFileName(TRIM(cClean), TRIM(cGWDir), This%cTileDrainFile)
+      CALL ResolveAbsPath(TRIM(cClean), TRIM(cGWDir), This%cTileDrainFile)
     END IF
 
     ! Line 3: Pumping file (skip)
-    CALL ReadNonComment(iUnit, cLine, iErr)
+    CALL ReadSimDataLine(iUnit, cLine, iErr)
 
     ! Line 4: Subsidence file path
-    CALL ReadNonComment(iUnit, cLine, iErr)
+    CALL ReadSimDataLine(iUnit, cLine, iErr)
     CALL StripInlineComment(cLine, cClean)
     IF (LEN_TRIM(cClean) > 0) THEN
-      CALL EstablishAbsolutePathFileName(TRIM(cClean), TRIM(cGWDir), This%cSubsidenceFile)
+      CALL ResolveAbsPath(TRIM(cClean), TRIM(cGWDir), This%cSubsidenceFile)
     END IF
 
     ! Skip 16 more non-comment lines (lines 5-20 in GW main), then line 21 = NOUTH
     DO i = 1, 17
-      CALL ReadNonComment(iUnit, cLine, iErr)
+      CALL ReadSimDataLine(iUnit, cLine, iErr)
       IF (iErr /= 0) THEN
         CALL SetLastMessage('Unexpected end of GW main file at skip line '// &
              TRIM(IntToText(i)), f_iFatal, cModName)
@@ -361,20 +424,21 @@ CONTAINS
     END IF
 
     ! FACTXY
-    CALL ReadNonComment(iUnit, cLine, iErr)
+    CALL ReadSimDataLine(iUnit, cLine, iErr)
 
     ! GWHYDOUTFL (hydrograph output file path)
-    CALL ReadNonComment(iUnit, cLine, iErr)
+    ! Resolve relative to simulation directory (IWFM CWD), not GW file directory
+    CALL ReadSimDataLine(iUnit, cLine, iErr)
     CALL StripInlineComment(cLine, cClean)
     IF (LEN_TRIM(cClean) > 0 .AND. iNOUTH > 0) THEN
-      CALL EstablishAbsolutePathFileName(TRIM(cClean), TRIM(cGWDir), cPath)
+      CALL ResolveAbsPath(TRIM(cClean), TRIM(This%cSimDir), cPath)
       This%HydInfo(iHR_GWHEAD)%cOutFilePath = cPath
       This%HydInfo(iHR_GWHEAD)%iNHyd = iNOUTH
       This%HydInfo(iHR_GWHEAD)%lActive = .TRUE.
     END IF
 
     ! Skip header line, then read NOUTH hydrograph entries
-    CALL ReadNonComment(iUnit, cLine, iErr)
+    CALL ReadSimDataLine(iUnit, cLine, iErr)
     BACKSPACE(iUnit)
 
     IF (iNOUTH > 0) THEN
@@ -382,7 +446,7 @@ CONTAINS
                This%HydInfo(iHR_GWHEAD)%iLayers(iNOUTH))
 
       DO i = 1, iNOUTH
-        CALL ReadNonComment(iUnit, cLine, iErr)
+        CALL ReadSimDataLine(iUnit, cLine, iErr)
         IF (iErr /= 0) EXIT
         ! Parse: ID HYDTYP IOUTHL X Y NAME  or  ID HYDTYP IOUTHL IOUTH NAME
         READ(cLine, *, IOSTAT=iErr) iID, iHydTyp, iOutHL
@@ -451,7 +515,7 @@ CONTAINS
 
     ! Skip to NOUTR (7 non-comment lines)
     DO i = 1, 7
-      CALL ReadNonComment(iUnit, cLine, iErr)
+      CALL ReadSimDataLine(iUnit, cLine, iErr)
       IF (iErr /= 0) THEN
         CLOSE(iUnit); RETURN
       END IF
@@ -466,16 +530,17 @@ CONTAINS
 
     ! Skip 5 lines, then read output file name
     DO i = 1, 6
-      CALL ReadNonComment(iUnit, cLine, iErr)
+      CALL ReadSimDataLine(iUnit, cLine, iErr)
       IF (iErr /= 0) THEN
         CLOSE(iUnit); RETURN
       END IF
     END DO
 
     ! Current line is the stream hydrograph output file path
+    ! Resolve relative to simulation directory (IWFM CWD)
     CALL StripInlineComment(cLine, cClean)
     IF (LEN_TRIM(cClean) > 0) THEN
-      CALL EstablishAbsolutePathFileName(TRIM(cClean), TRIM(cStrDir), cPath)
+      CALL ResolveAbsPath(TRIM(cClean), TRIM(This%cSimDir), cPath)
       This%HydInfo(iHR_STREAM)%cOutFilePath = cPath
       This%HydInfo(iHR_STREAM)%iNHyd = iNOUTR
       This%HydInfo(iHR_STREAM)%lActive = .TRUE.
@@ -483,14 +548,14 @@ CONTAINS
 
     ! Skip to hydrograph location data, read names
     ! Skip to 'next section header' then read entries
-    CALL ReadNonComment(iUnit, cLine, iErr)
+    CALL ReadSimDataLine(iUnit, cLine, iErr)
     BACKSPACE(iUnit)
 
     IF (iNOUTR > 0) THEN
       ALLOCATE(This%HydInfo(iHR_STREAM)%cHydIDs(iNOUTR))
 
       DO i = 1, iNOUTR
-        CALL ReadNonComment(iUnit, cLine, iErr)
+        CALL ReadSimDataLine(iUnit, cLine, iErr)
         IF (iErr /= 0) EXIT
         ! Stream format: ID NAME NODE or ID HYDTYP NAME
         ! Extract name (second token for streams)
@@ -535,7 +600,7 @@ CONTAINS
     IF (iErr /= 0) RETURN
 
     ! First non-comment line has NTD
-    CALL ReadNonComment(iUnit, cLine, iErr)
+    CALL ReadSimDataLine(iUnit, cLine, iErr)
     CALL StripInlineComment(cLine, cClean)
     READ(cClean, *, IOSTAT=iErr) iNTD
     IF (iErr /= 0 .OR. iNTD <= 0) THEN
@@ -544,7 +609,7 @@ CONTAINS
 
     ! Skip 3+NTD lines, then read NSI
     DO i = 1, iNTD + 4
-      CALL ReadNonComment(iUnit, cLine, iErr)
+      CALL ReadSimDataLine(iUnit, cLine, iErr)
       IF (iErr /= 0) THEN
         CLOSE(iUnit); RETURN
       END IF
@@ -558,29 +623,30 @@ CONTAINS
 
     ! Skip 6+NSI lines to get hydrograph file name
     DO i = 1, iNSI + 7
-      CALL ReadNonComment(iUnit, cLine, iErr)
+      CALL ReadSimDataLine(iUnit, cLine, iErr)
       IF (iErr /= 0) THEN
         CLOSE(iUnit); RETURN
       END IF
     END DO
 
     ! Current line is tile drain hydrograph output file path
+    ! Resolve relative to simulation directory (IWFM CWD)
     CALL StripInlineComment(cLine, cClean)
     IF (LEN_TRIM(cClean) > 0) THEN
-      CALL EstablishAbsolutePathFileName(TRIM(cClean), TRIM(cTDDir), cPath)
+      CALL ResolveAbsPath(TRIM(cClean), TRIM(This%cSimDir), cPath)
       This%HydInfo(iHR_TILEDR)%cOutFilePath = cPath
       This%HydInfo(iHR_TILEDR)%iNHyd = iNTD
       This%HydInfo(iHR_TILEDR)%lActive = .TRUE.
     END IF
 
     ! Read hydrograph IDs
-    CALL ReadNonComment(iUnit, cLine, iErr)
+    CALL ReadSimDataLine(iUnit, cLine, iErr)
     BACKSPACE(iUnit)
 
     IF (iNTD > 0 .AND. This%HydInfo(iHR_TILEDR)%lActive) THEN
       ALLOCATE(This%HydInfo(iHR_TILEDR)%cHydIDs(iNTD))
       DO i = 1, iNTD
-        CALL ReadNonComment(iUnit, cLine, iErr)
+        CALL ReadSimDataLine(iUnit, cLine, iErr)
         IF (iErr /= 0) EXIT
         cName = ' '
         READ(cLine, *, IOSTAT=iErr) iID, cName
@@ -623,7 +689,7 @@ CONTAINS
 
     ! Skip 5 lines, then read NOUTS
     DO i = 1, 6
-      CALL ReadNonComment(iUnit, cLine, iErr)
+      CALL ReadSimDataLine(iUnit, cLine, iErr)
       IF (iErr /= 0) THEN
         CLOSE(iUnit); RETURN
       END IF
@@ -636,20 +702,21 @@ CONTAINS
     END IF
 
     ! FACTXY
-    CALL ReadNonComment(iUnit, cLine, iErr)
+    CALL ReadSimDataLine(iUnit, cLine, iErr)
 
     ! Skip 1 line, then read subsidence hydrograph output file path
-    CALL ReadNonComment(iUnit, cLine, iErr)
+    ! Resolve relative to simulation directory (IWFM CWD)
+    CALL ReadSimDataLine(iUnit, cLine, iErr)
     CALL StripInlineComment(cLine, cClean)
     IF (LEN_TRIM(cClean) > 0) THEN
-      CALL EstablishAbsolutePathFileName(TRIM(cClean), TRIM(cSBDir), cPath)
+      CALL ResolveAbsPath(TRIM(cClean), TRIM(This%cSimDir), cPath)
       This%HydInfo(iHR_SUBSID)%cOutFilePath = cPath
       This%HydInfo(iHR_SUBSID)%iNHyd = iNOUTS
       This%HydInfo(iHR_SUBSID)%lActive = .TRUE.
     END IF
 
     ! Read hydrograph IDs (same format as GW: ID HYDTYP IOUTHL ...)
-    CALL ReadNonComment(iUnit, cLine, iErr)
+    CALL ReadSimDataLine(iUnit, cLine, iErr)
     BACKSPACE(iUnit)
 
     IF (iNOUTS > 0 .AND. This%HydInfo(iHR_SUBSID)%lActive) THEN
@@ -657,7 +724,7 @@ CONTAINS
                This%HydInfo(iHR_SUBSID)%iLayers(iNOUTS))
 
       DO i = 1, iNOUTS
-        CALL ReadNonComment(iUnit, cLine, iErr)
+        CALL ReadSimDataLine(iUnit, cLine, iErr)
         IF (iErr /= 0) EXIT
         READ(cLine, *, IOSTAT=iErr) iID, iHydTyp, iOutHL
         IF (iErr /= 0) THEN
@@ -802,6 +869,262 @@ CONTAINS
   END SUBROUTINE ReadDotOutFile
 
   ! =====================================================================
+  ! ReadDotOutFileDirect - Read .out file directly into memory
+  !   Phase A optimization: only stores columns matching observation IDs.
+  !   Eliminates the 2+ GB temp SMP file entirely.
+  !
+  !   On return, This%rModelData, This%iModelDays, This%iModelSecs,
+  !   This%cFilteredIDs, This%iNTimes, This%iNFiltered are populated.
+  ! =====================================================================
+  SUBROUTINE ReadDotOutFileDirect(This, iHydType, cObsIDs, iNObsIDs, iStat)
+    CLASS(HydrographReaderType), INTENT(INOUT) :: This
+    INTEGER,                     INTENT(IN)    :: iHydType
+    CHARACTER(LEN=25),           INTENT(IN)    :: cObsIDs(:)
+    INTEGER,                     INTENT(IN)    :: iNObsIDs
+    INTEGER,                     INTENT(OUT)   :: iStat
+
+    INTEGER, PARAMETER :: iInUnit = 198
+    REAL(4), ALLOCATABLE :: rVal(:)
+    INTEGER, ALLOCATABLE :: iColMap(:)
+    CHARACTER(LEN=25), ALLOCATABLE :: cObsSorted(:)
+    INTEGER, ALLOCATABLE :: iObsOrder(:)
+    CHARACTER(LEN=25) :: cID
+    CHARACTER(LEN=120) :: cJunk
+    CHARACTER(LEN=1000) :: cLine
+    INTEGER :: iErr, iNHyd, j, k, iTime, iNTimes
+    INTEGER :: iDay, iMon, iYr, iJulian
+
+    iStat = 0
+    This%iNTimes    = 0
+    This%iNFiltered = 0
+
+    IF (.NOT. This%HydInfo(iHydType)%lActive) RETURN
+    IF (This%HydInfo(iHydType)%iNHyd <= 0) RETURN
+
+    iNHyd = This%HydInfo(iHydType)%iNHyd
+
+    ! Deallocate any previous data
+    IF (ALLOCATED(This%rModelData))   DEALLOCATE(This%rModelData)
+    IF (ALLOCATED(This%iModelDays))   DEALLOCATE(This%iModelDays)
+    IF (ALLOCATED(This%iModelSecs))   DEALLOCATE(This%iModelSecs)
+    IF (ALLOCATED(This%cFilteredIDs)) DEALLOCATE(This%cFilteredIDs)
+
+    ! ---- Step 1: Build sorted obs ID list for binary search ----
+    ALLOCATE(cObsSorted(iNObsIDs), iObsOrder(iNObsIDs), STAT=iErr)
+    IF (iErr /= 0) THEN
+      CALL SetLastMessage('Cannot allocate obs ID sort arrays', f_iFatal, cModName)
+      iStat = -1; RETURN
+    END IF
+    DO j = 1, iNObsIDs
+      cObsSorted(j) = UpperCase(ADJUSTL(cObsIDs(j)))
+      iObsOrder(j) = j
+    END DO
+    IF (iNObsIDs > 1) CALL SortStringsIndexHR(cObsSorted, iObsOrder, 1, iNObsIDs)
+
+    ! ---- Step 2: Map model columns to filtered indices ----
+    ALLOCATE(iColMap(iNHyd), STAT=iErr)
+    IF (iErr /= 0) THEN
+      CALL SetLastMessage('Cannot allocate column map', f_iFatal, cModName)
+      DEALLOCATE(cObsSorted, iObsOrder)
+      iStat = -1; RETURN
+    END IF
+    iColMap = 0
+    This%iNFiltered = 0
+    DO j = 1, iNHyd
+      IF (.NOT. ALLOCATED(This%HydInfo(iHydType)%cHydIDs)) EXIT
+      cID = UpperCase(ADJUSTL(TRIM(This%HydInfo(iHydType)%cHydIDs(j))))
+      k = BinarySearchStrHR(cObsSorted, iNObsIDs, cID)
+      IF (k > 0) THEN
+        This%iNFiltered = This%iNFiltered + 1
+        iColMap(j) = This%iNFiltered
+      END IF
+    END DO
+
+    DEALLOCATE(cObsSorted, iObsOrder)
+
+    IF (This%iNFiltered == 0) THEN
+      CALL LogMessage('  No matching IDs between model and obs for direct read', &
+           f_iWarn, cModName)
+      DEALLOCATE(iColMap)
+      RETURN
+    END IF
+
+    ! Build filtered ID list
+    ALLOCATE(This%cFilteredIDs(This%iNFiltered), STAT=iErr)
+    DO j = 1, iNHyd
+      IF (iColMap(j) > 0) THEN
+        This%cFilteredIDs(iColMap(j)) = &
+             UpperCase(ADJUSTL(TRIM(This%HydInfo(iHydType)%cHydIDs(j))))
+      END IF
+    END DO
+
+    CALL LogMessage('  Matched '//TRIM(IntToText(This%iNFiltered))//' of '// &
+         TRIM(IntToText(iNHyd))//' model hydrographs to observation IDs', &
+         f_iInfo, cModName)
+
+    ! ---- Step 3: Count data lines in .out file ----
+    OPEN(UNIT=iInUnit, FILE=This%HydInfo(iHydType)%cOutFilePath, &
+         STATUS='OLD', IOSTAT=iErr)
+    IF (iErr /= 0) THEN
+      CALL SetLastMessage('Cannot open .out file: '// &
+           TRIM(This%HydInfo(iHydType)%cOutFilePath), f_iFatal, cModName)
+      DEALLOCATE(iColMap)
+      iStat = -1; RETURN
+    END IF
+
+    iNTimes = 0
+    DO
+      READ(iInUnit, '(A)', IOSTAT=iErr) cLine
+      IF (iErr /= 0) EXIT
+      cLine = ADJUSTL(cLine)
+      IF (LEN_TRIM(cLine) == 0) CYCLE
+      IF (cLine(1:1) == '*') CYCLE
+      iNTimes = iNTimes + 1
+    END DO
+    REWIND(iInUnit)
+
+    This%iNTimes = iNTimes
+
+    ! ---- Step 4: Allocate model data arrays ----
+    ALLOCATE(rVal(iNHyd), STAT=iErr)
+    IF (iErr /= 0) THEN
+      CLOSE(iInUnit); DEALLOCATE(iColMap)
+      CALL SetLastMessage('Cannot allocate value array for '// &
+           TRIM(IntToText(iNHyd))//' hydrographs', f_iFatal, cModName)
+      iStat = -1; RETURN
+    END IF
+
+    ALLOCATE(This%rModelData(iNTimes, This%iNFiltered), &
+             This%iModelDays(iNTimes), &
+             This%iModelSecs(iNTimes), STAT=iErr)
+    IF (iErr /= 0) THEN
+      CLOSE(iInUnit); DEALLOCATE(iColMap, rVal)
+      CALL SetLastMessage('Cannot allocate model data ('// &
+           TRIM(IntToText(iNTimes))//' x '// &
+           TRIM(IntToText(This%iNFiltered))//')', f_iFatal, cModName)
+      iStat = -1; RETURN
+    END IF
+    This%iModelSecs = 0
+
+    ! ---- Step 5: Skip header lines and read data ----
+    DO
+      READ(iInUnit, '(A)', IOSTAT=iErr) cLine
+      IF (iErr /= 0) EXIT
+      cLine = ADJUSTL(cLine)
+      IF (cLine(1:1) /= '*') THEN
+        BACKSPACE(iInUnit)
+        EXIT
+      END IF
+    END DO
+
+    iTime = 0
+    DO
+      rVal = 0.0
+      SELECT CASE (iHydType)
+      CASE (iHR_GWHEAD)
+        READ(iInUnit, '(A22,60000F12.4)', IOSTAT=iErr) cJunk, (rVal(j), j=1,iNHyd)
+      CASE (iHR_STREAM)
+        READ(iInUnit, '(A22,60000F14.2)', IOSTAT=iErr) cJunk, (rVal(j), j=1,iNHyd)
+      CASE DEFAULT
+        READ(iInUnit, '(A22,60000F12.2)', IOSTAT=iErr) cJunk, (rVal(j), j=1,iNHyd)
+      END SELECT
+
+      IF (iErr /= 0) EXIT
+      iTime = iTime + 1
+      IF (iTime > iNTimes) EXIT
+
+      ! Compute date from time step
+      CALL ComputeDate(This%cTimeUnit, iTime, This%iStartDay, This%iStartMon, &
+           This%iStartYr, iDay, iMon, iYr)
+      CALL DayMonthYearToJulianDate(iDay, iMon, iYr, iJulian, iErr)
+      This%iModelDays(iTime) = iJulian
+      This%iModelSecs(iTime) = 0
+
+      ! Copy only matching columns to in-memory array
+      DO j = 1, iNHyd
+        IF (iColMap(j) > 0) THEN
+          This%rModelData(iTime, iColMap(j)) = DBLE(rVal(j))
+        END IF
+      END DO
+    END DO
+
+    This%iNTimes = iTime
+
+    CLOSE(iInUnit)
+    DEALLOCATE(rVal, iColMap)
+
+    CALL LogMessage('  Direct read: '//TRIM(IntToText(This%iNTimes))// &
+         ' timesteps x '//TRIM(IntToText(This%iNFiltered))// &
+         ' hydrographs loaded to memory', f_iInfo, cModName)
+
+  END SUBROUTINE ReadDotOutFileDirect
+
+  ! =====================================================================
+  ! BinarySearchStrHR - Binary search a sorted CHARACTER(25) array
+  !   Returns position if found, 0 if not found
+  ! =====================================================================
+  FUNCTION BinarySearchStrHR(cArr, iN, cTarget) RESULT(iPos)
+    CHARACTER(LEN=25), INTENT(IN) :: cArr(:)
+    INTEGER,           INTENT(IN) :: iN
+    CHARACTER(LEN=25), INTENT(IN) :: cTarget
+    INTEGER :: iPos
+
+    INTEGER :: iLo, iHi, iMid
+
+    iPos = 0
+    iLo = 1
+    iHi = iN
+    DO WHILE (iLo <= iHi)
+      iMid = (iLo + iHi) / 2
+      IF (cArr(iMid) == cTarget) THEN
+        iPos = iMid
+        RETURN
+      ELSE IF (cArr(iMid) < cTarget) THEN
+        iLo = iMid + 1
+      ELSE
+        iHi = iMid - 1
+      END IF
+    END DO
+  END FUNCTION BinarySearchStrHR
+
+  ! =====================================================================
+  ! SortStringsIndexHR - Quicksort CHARACTER(25) array with index array
+  !   Sorts cArr(iLo:iHi) in ascending order, reordering iIdx in parallel
+  ! =====================================================================
+  RECURSIVE SUBROUTINE SortStringsIndexHR(cArr, iIdx, iLo, iHi)
+    CHARACTER(LEN=25), INTENT(INOUT) :: cArr(:)
+    INTEGER,           INTENT(INOUT) :: iIdx(:)
+    INTEGER,           INTENT(IN)    :: iLo, iHi
+
+    CHARACTER(LEN=25) :: cPivot, cTemp
+    INTEGER :: i, j, iTemp
+
+    IF (iLo >= iHi) RETURN
+
+    cPivot = cArr((iLo + iHi) / 2)
+    i = iLo
+    j = iHi
+
+    DO WHILE (i <= j)
+      DO WHILE (cArr(i) < cPivot)
+        i = i + 1
+      END DO
+      DO WHILE (cArr(j) > cPivot)
+        j = j - 1
+      END DO
+      IF (i <= j) THEN
+        cTemp = cArr(i); cArr(i) = cArr(j); cArr(j) = cTemp
+        iTemp = iIdx(i); iIdx(i) = iIdx(j); iIdx(j) = iTemp
+        i = i + 1
+        j = j - 1
+      END IF
+    END DO
+
+    IF (iLo < j) CALL SortStringsIndexHR(cArr, iIdx, iLo, j)
+    IF (i < iHi) CALL SortStringsIndexHR(cArr, iIdx, i, iHi)
+  END SUBROUTINE SortStringsIndexHR
+
+  ! =====================================================================
   ! Kill - Deallocate
   ! =====================================================================
   SUBROUTINE Kill(This)
@@ -812,6 +1135,12 @@ CONTAINS
       IF (ALLOCATED(This%HydInfo(i)%cHydIDs)) DEALLOCATE(This%HydInfo(i)%cHydIDs)
       IF (ALLOCATED(This%HydInfo(i)%iLayers)) DEALLOCATE(This%HydInfo(i)%iLayers)
     END DO
+    IF (ALLOCATED(This%rModelData))   DEALLOCATE(This%rModelData)
+    IF (ALLOCATED(This%iModelDays))   DEALLOCATE(This%iModelDays)
+    IF (ALLOCATED(This%iModelSecs))   DEALLOCATE(This%iModelSecs)
+    IF (ALLOCATED(This%cFilteredIDs)) DEALLOCATE(This%cFilteredIDs)
+    This%iNTimes    = 0
+    This%iNFiltered = 0
     This%lDiscovered = .FALSE.
   END SUBROUTINE Kill
 

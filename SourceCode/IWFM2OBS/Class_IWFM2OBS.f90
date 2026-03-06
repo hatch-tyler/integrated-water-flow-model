@@ -23,10 +23,12 @@ MODULE Class_IWFM2OBS
                                  f_iInfo
   USE GeneralUtilities   , ONLY: IntToText         , &
                                  UpperCase
-  USE Class_SMP2SMP      , ONLY: SMP2SMPType       , &
-                                 SMPRecordType     , &
-                                 SMPIDGroupType    , &
-                                 TokenizeSMPLine
+  USE Class_SMP2SMP      , ONLY: SMP2SMPType           , &
+                                 SMPRecordType         , &
+                                 SMPIDGroupType        , &
+                                 TokenizeSMPLine       , &
+                                 ExpandObsIDsToLayers  , &
+                                 ExpandSMPDataToLayers
   USE Class_PESTOutput   , ONLY: PESTOutputType
   USE Class_HeadDifference, ONLY: HeadDifferenceType, &
                                   HeadDiffPairType
@@ -300,7 +302,7 @@ CONTAINS
 
     CLOSE(iUnit)
 
-    ! ---- Model discovery mode: convert .out files to temp SMP ----
+    ! ---- Model discovery mode: discover .out files (reading deferred to Run) ----
     IF (This%lModelMode) THEN
       CALL LogMessage('Model discovery mode: parsing simulation main file...', &
            f_iInfo, cModName)
@@ -313,22 +315,11 @@ CONTAINS
         RETURN
       END IF
 
-      ! Convert each discovered .out file to temp SMP and override HydConfig
+      ! Log discovered .out files (direct in-memory reading happens in Run)
       DO iHyd = 1, iNUMHYD
         IF (This%HydReader%HydInfo(iHyd)%lActive) THEN
-          CALL This%HydReader%ReadDotOutFile(iHyd, cTempSMP(iHyd), iStat)
-          IF (iStat /= 0) THEN
-            CALL LogLastMessage()
-            CALL LogMessage('  Warning: failed to read .out for '// &
-                 TRIM(cHydName(iHyd)), f_iWarn, cModName)
-            iStat = 0
-            CYCLE
-          END IF
-          ! Override model SMP path with temp file
-          This%HydConfig(iHyd)%cHydFile = cTempSMP(iHyd)
-          This%HydConfig(iHyd)%lActive  = .TRUE.
-          CALL LogMessage('  '//TRIM(cHydName(iHyd))//': .out → '// &
-               TRIM(cTempSMP(iHyd)), f_iInfo, cModName)
+          CALL LogMessage('  '//TRIM(cHydName(iHyd))//': .out = '// &
+               TRIM(This%HydReader%HydInfo(iHyd)%cOutFilePath), f_iInfo, cModName)
         END IF
       END DO
     END IF
@@ -381,16 +372,22 @@ CONTAINS
       CALL LogMessage('Processing '//TRIM(cHydName(iHyd))//' hydrographs...', &
            f_iInfo, cModName)
 
-      ! Call SMP2SMP interpolation
-      CALL This%Interp%Interpolate( &
-           This%HydConfig(iHyd)%cObsFile, &
-           This%HydConfig(iHyd)%cHydFile, &
-           This%HydConfig(iHyd)%cOutFile, &
-           This%HydConfig(iHyd)%rThreshold, &
-           This%HydConfig(iHyd)%cInsFile, &
-           This%HydConfig(iHyd)%cPCFFile, &
-           This%HydConfig(iHyd)%lWriteIns, &
-           iStat)
+      IF (This%lModelMode .AND. This%HydReader%HydInfo(iHyd)%lActive) THEN
+        ! Direct path: .out -> memory -> interpolation (no temp SMP file)
+        CALL ProcessDirect(This, iHyd, iStat)
+      ELSE
+        ! Standard path: SMP-to-SMP file interpolation
+        CALL This%Interp%Interpolate( &
+             This%HydConfig(iHyd)%cObsFile, &
+             This%HydConfig(iHyd)%cHydFile, &
+             This%HydConfig(iHyd)%cOutFile, &
+             This%HydConfig(iHyd)%rThreshold, &
+             This%HydConfig(iHyd)%cInsFile, &
+             This%HydConfig(iHyd)%cPCFFile, &
+             This%HydConfig(iHyd)%lWriteIns, &
+             iStat)
+      END IF
+
       IF (iStat /= 0) THEN
         CALL LogLastMessage()
         CALL LogMessage('  Error processing '//TRIM(cHydName(iHyd)), &
@@ -669,8 +666,8 @@ CONTAINS
                (0.0D0, k=iNLayers+1,4), &
                rTOS, rBOS
         END IF
-100     FORMAT(A25,1X,I2.2,'/',I2.2,'/',I4.4,2X,I2.2,':',I2.2,':',I2.2, &
-             F11.2,4F12.2,2F12.2)
+100     FORMAT(A25,I2.2,'/',I2.2,'/',I4.4,2X,I2.2,':',I2.2,':',I2.2, &
+             4X,F11.2,4F12.2,2F12.2)
 
         ! Write PEST instruction and PCF files (WLT naming, columns 50:60)
         IF (lWriteIns) THEN
@@ -704,6 +701,106 @@ CONTAINS
     IF (ALLOCATED(iIDCount)) DEALLOCATE(iIDCount)
 
   END SUBROUTINE ApplyMultiLayerTarget
+
+  ! =====================================================================
+  ! ProcessDirect - Direct .out -> memory -> interpolation for one type
+  !   Phase A optimization: eliminates the multi-GB temp SMP file.
+  !   1. Pre-loads observation IDs from the obs SMP file
+  !   2. Reads the .out file directly into memory (only matching columns)
+  !   3. Interpolates in-memory model data against observation times
+  ! =====================================================================
+  SUBROUTINE ProcessDirect(This, iHyd, iStat)
+    CLASS(IWFM2OBSType), INTENT(INOUT) :: This
+    INTEGER,             INTENT(IN)    :: iHyd
+    INTEGER,             INTENT(OUT)   :: iStat
+
+    INTEGER, PARAMETER :: iObsUnit = 106
+    CHARACTER(LEN=25), ALLOCATABLE :: cObsIDs(:)
+    INTEGER :: iNObsIDs, iErr
+
+    iStat = 0
+
+    ! Step 1: Pre-load observation IDs from the obs SMP file
+    OPEN(UNIT=iObsUnit, FILE=This%HydConfig(iHyd)%cObsFile, &
+         STATUS='OLD', IOSTAT=iErr)
+    IF (iErr /= 0) THEN
+      CALL SetLastMessage('Cannot open observation file: '// &
+           TRIM(This%HydConfig(iHyd)%cObsFile), f_iFatal, cModName)
+      iStat = -1; RETURN
+    END IF
+
+    CALL This%Interp%ReadSMPIDs(This%HydConfig(iHyd)%cObsFile, iObsUnit, &
+         cObsIDs, iNObsIDs, iStat)
+    CLOSE(iObsUnit)
+    IF (iStat /= 0) RETURN
+
+    CALL LogMessage('  Loaded '//TRIM(IntToText(iNObsIDs))// &
+         ' observation IDs from '//TRIM(This%HydConfig(iHyd)%cObsFile), &
+         f_iInfo, cModName)
+
+    ! Auto-expand base obs IDs to per-layer IDs for GW matching
+    IF (iHyd == iGWHEAD .AND. This%lMultiLayer) THEN
+      CALL ExpandObsIDsToLayers(cObsIDs, iNObsIDs, &
+           This%MultiLayer%GetNLayers(), iStat=iStat)
+      IF (iStat /= 0) THEN
+        IF (ALLOCATED(cObsIDs)) DEALLOCATE(cObsIDs)
+        RETURN
+      END IF
+    END IF
+
+    ! Step 2: Read .out file directly into memory (only matching columns)
+    CALL This%HydReader%ReadDotOutFileDirect(iHyd, cObsIDs, iNObsIDs, iStat)
+    IF (iStat /= 0) THEN
+      IF (ALLOCATED(cObsIDs)) DEALLOCATE(cObsIDs)
+      RETURN
+    END IF
+
+    IF (This%HydReader%iNFiltered == 0 .OR. This%HydReader%iNTimes == 0) THEN
+      CALL LogMessage('  No matching data found, skipping interpolation', &
+           f_iWarn, cModName)
+      IF (ALLOCATED(cObsIDs)) DEALLOCATE(cObsIDs)
+      RETURN
+    END IF
+
+    ! Step 3: Interpolate directly from in-memory data
+    ! Pass iExpandLayers for GW so InterpolateDirect can map base obs IDs
+    ! (no %N suffix in the deduplicated file) to per-layer model columns
+    IF (iHyd == iGWHEAD .AND. This%lMultiLayer) THEN
+      CALL This%Interp%InterpolateDirect( &
+           This%HydConfig(iHyd)%cObsFile, &
+           This%HydConfig(iHyd)%cOutFile, &
+           This%HydConfig(iHyd)%rThreshold, &
+           This%HydConfig(iHyd)%cInsFile, &
+           This%HydConfig(iHyd)%cPCFFile, &
+           This%HydConfig(iHyd)%lWriteIns, &
+           This%HydReader%cFilteredIDs, &
+           This%HydReader%iNFiltered, &
+           This%HydReader%rModelData, &
+           This%HydReader%iModelDays, &
+           This%HydReader%iModelSecs, &
+           This%HydReader%iNTimes, &
+           iStat, &
+           iExpandLayers=This%MultiLayer%GetNLayers())
+    ELSE
+      CALL This%Interp%InterpolateDirect( &
+           This%HydConfig(iHyd)%cObsFile, &
+           This%HydConfig(iHyd)%cOutFile, &
+           This%HydConfig(iHyd)%rThreshold, &
+           This%HydConfig(iHyd)%cInsFile, &
+           This%HydConfig(iHyd)%cPCFFile, &
+           This%HydConfig(iHyd)%lWriteIns, &
+           This%HydReader%cFilteredIDs, &
+           This%HydReader%iNFiltered, &
+           This%HydReader%rModelData, &
+           This%HydReader%iModelDays, &
+           This%HydReader%iModelSecs, &
+           This%HydReader%iNTimes, &
+           iStat)
+    END IF
+
+    IF (ALLOCATED(cObsIDs)) DEALLOCATE(cObsIDs)
+
+  END SUBROUTINE ProcessDirect
 
   ! =====================================================================
   ! Kill - Clean up
