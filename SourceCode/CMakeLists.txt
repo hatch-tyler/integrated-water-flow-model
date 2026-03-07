@@ -191,6 +191,23 @@ if(IWFM_BUILD_CALCTYPHYD)
 endif()
 
 # =============================================================================
+# GWHydExtract Executable (Groundwater hydrograph extractor from all-heads file)
+# =============================================================================
+if(IWFM_BUILD_GWHYDEXTRACT)
+    add_executable(GWHydExtract
+        GWHydExtract/Class_GWHydExtract.f90
+        GWHydExtract/GWHydExtract_Main.f90
+    )
+    target_link_libraries(GWHydExtract PRIVATE iwfm_kernel iwfm_version)
+    iwfm_set_output_name(GWHydExtract "GWHydExtract")
+    if(UNIX)
+        iwfm_link_hdf5(GWHydExtract)
+    endif()
+
+    install(TARGETS GWHydExtract RUNTIME DESTINATION bin)
+endif()
+
+# =============================================================================
 # IWFM C DLL / Shared Library
 # =============================================================================
 if(IWFM_BUILD_DLL)

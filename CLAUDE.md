@@ -97,6 +97,7 @@ A standalone DSS diagnostic test exists at `SourceCode/tests/test_dss_read.f90` 
 | `IWFM_BUILD_COARRAY` | OFF | Coarray multi-model (Intel only) |
 | `IWFM_BUILD_IWFM2OBS` | OFF | PEST hydrograph converter |
 | `IWFM_BUILD_CALCTYPHYD` | OFF | Cluster type hydrograph tool |
+| `IWFM_BUILD_GWHYDEXTRACT` | OFF | GW hydrograph extractor from all-heads file |
 | `IWFM_BUILD_TESTS` | ON | Integration tests (requires sample model) |
 | `IWFM_USE_SYSTEM_HDF5` | OFF | Use system HDF5 instead of building from source |
 | `IWFM_USE_SYSTEM_HECLIB` | OFF | Use system heclib |
@@ -126,6 +127,7 @@ See `BUILD.md` for exhaustive build instructions, dependency management details,
 - `SourceCode/ZBudget/ZBudget_Main.f90` → Zone budget post-processor
 - `SourceCode/IWFM2OBS/IWFM2OBS_Main.f90` → PEST hydrograph converter (optional)
 - `SourceCode/CalcTypeHyd/CalcTypeHyd_Main.f90` → Cluster type hydrograph tool (optional)
+- `SourceCode/GWHydExtract/GWHydExtract_Main.f90` → GW hydrograph extractor from all-heads file (optional)
 
 ### Central Orchestrator: ModelType
 
@@ -274,7 +276,7 @@ docker build -t iwfm-runtime:2025.0 -f docker/Dockerfile.runtime .
 docker run --rm -v /path/to/model/Simulation:/data iwfm-runtime:2025.0 iwfm-simulation Simulation_MAIN.IN
 ```
 
-Runtime commands: `iwfm-preprocessor`, `iwfm-simulation`, `iwfm-budget`, `iwfm-zbudget`, `iwfm-iwfm2obs`, `iwfm-calctyphyd`. Full pipeline via `docker compose` — see `docker/README.md`.
+Runtime commands: `iwfm-preprocessor`, `iwfm-simulation`, `iwfm-budget`, `iwfm-zbudget`, `iwfm-iwfm2obs`, `iwfm-calctyphyd`, `iwfm-gwhydextract`. Full pipeline via `docker compose` — see `docker/README.md`.
 
 ## Technical Support
 

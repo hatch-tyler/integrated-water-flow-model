@@ -55,7 +55,8 @@ RUN mkdir -p build && cd build && \
         -DIWFM_BUILD_COARRAY=OFF \
         -DIWFM_BUILD_TESTS=OFF \
         -DIWFM_BUILD_IWFM2OBS=ON \
-        -DIWFM_BUILD_CALCTYPHYD=ON && \
+        -DIWFM_BUILD_CALCTYPHYD=ON \
+        -DIWFM_BUILD_GWHYDEXTRACT=ON && \
     cmake --build . --parallel $(nproc)
 
 # Verify executables and check dependencies
@@ -112,6 +113,7 @@ COPY --from=builder --chown=iwfm:iwfm /build/Bin/Budget /opt/iwfm/bin/
 COPY --from=builder --chown=iwfm:iwfm /build/Bin/ZBudget /opt/iwfm/bin/
 COPY --from=builder --chown=iwfm:iwfm /build/Bin/IWFM2OBS /opt/iwfm/bin/
 COPY --from=builder --chown=iwfm:iwfm /build/Bin/CalcTypeHyd /opt/iwfm/bin/
+COPY --from=builder --chown=iwfm:iwfm /build/Bin/GWHydExtract /opt/iwfm/bin/
 
 # Make executables accessible system-wide with iwfm- prefix
 RUN chmod +x /opt/iwfm/bin/* && \
@@ -121,13 +123,15 @@ RUN chmod +x /opt/iwfm/bin/* && \
     ln -s /opt/iwfm/bin/ZBudget /usr/local/bin/iwfm-zbudget && \
     ln -s /opt/iwfm/bin/IWFM2OBS /usr/local/bin/iwfm-iwfm2obs && \
     ln -s /opt/iwfm/bin/CalcTypeHyd /usr/local/bin/iwfm-calctyphyd && \
+    ln -s /opt/iwfm/bin/GWHydExtract /usr/local/bin/iwfm-gwhydextract && \
     # Also create short aliases
     ln -s /opt/iwfm/bin/Simulation /usr/local/bin/Simulation && \
     ln -s /opt/iwfm/bin/PreProcessor /usr/local/bin/PreProcessor && \
     ln -s /opt/iwfm/bin/Budget /usr/local/bin/Budget && \
     ln -s /opt/iwfm/bin/ZBudget /usr/local/bin/ZBudget && \
     ln -s /opt/iwfm/bin/IWFM2OBS /usr/local/bin/IWFM2OBS && \
-    ln -s /opt/iwfm/bin/CalcTypeHyd /usr/local/bin/CalcTypeHyd
+    ln -s /opt/iwfm/bin/CalcTypeHyd /usr/local/bin/CalcTypeHyd && \
+    ln -s /opt/iwfm/bin/GWHydExtract /usr/local/bin/GWHydExtract
 
 # Add PATH and LD_LIBRARY_PATH for Intel runtime libraries
 ENV PATH="/opt/iwfm/bin:${PATH}"
@@ -144,4 +148,4 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=1 \
     CMD ["/opt/iwfm/bin/Simulation", "-about"]
 
 # Default: show version and usage information
-CMD ["sh", "-c", "echo 'IWFM Runtime Container' && echo '' && /opt/iwfm/bin/Simulation -about && echo '' && echo 'Available commands:' && echo '  iwfm-preprocessor <input_file>' && echo '  iwfm-simulation <input_file>' && echo '  iwfm-budget <input_file>' && echo '  iwfm-zbudget <input_file>' && echo '  iwfm-iwfm2obs <input_file>' && echo '  iwfm-calctyphyd <input_file>' && echo '' && echo 'Mount your model directory to /data and run the appropriate command.'"]
+CMD ["sh", "-c", "echo 'IWFM Runtime Container' && echo '' && /opt/iwfm/bin/Simulation -about && echo '' && echo 'Available commands:' && echo '  iwfm-preprocessor <input_file>' && echo '  iwfm-simulation <input_file>' && echo '  iwfm-budget <input_file>' && echo '  iwfm-zbudget <input_file>' && echo '  iwfm-iwfm2obs <input_file>' && echo '  iwfm-calctyphyd <input_file>' && echo '  iwfm-gwhydextract <input_file>' && echo '' && echo 'Mount your model directory to /data and run the appropriate command.'"]
