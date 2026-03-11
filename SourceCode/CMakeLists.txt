@@ -191,20 +191,20 @@ if(IWFM_BUILD_CALCTYPHYD)
 endif()
 
 # =============================================================================
-# GWHydExtract Executable (Groundwater hydrograph extractor from all-heads file)
+# ResultsExtract Executable (Generalized hydrograph extractor: HEAD/SUBSIDENCE)
 # =============================================================================
-if(IWFM_BUILD_GWHYDEXTRACT)
-    add_executable(GWHydExtract
-        GWHydExtract/Class_GWHydExtract.f90
-        GWHydExtract/GWHydExtract_Main.f90
+if(IWFM_BUILD_RESULTSEXTRACT)
+    add_executable(ResultsExtract
+        ResultsExtract/Class_ResultsExtract.f90
+        ResultsExtract/ResultsExtract_Main.f90
     )
-    target_link_libraries(GWHydExtract PRIVATE iwfm_kernel iwfm_version)
-    iwfm_set_output_name(GWHydExtract "GWHydExtract")
+    target_link_libraries(ResultsExtract PRIVATE iwfm_kernel iwfm_version)
+    iwfm_set_output_name(ResultsExtract "ResultsExtract")
     if(UNIX)
-        iwfm_link_hdf5(GWHydExtract)
+        iwfm_link_hdf5(ResultsExtract)
     endif()
 
-    install(TARGETS GWHydExtract RUNTIME DESTINATION bin)
+    install(TARGETS ResultsExtract RUNTIME DESTINATION bin)
 endif()
 
 # =============================================================================

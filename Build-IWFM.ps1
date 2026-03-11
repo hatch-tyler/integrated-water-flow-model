@@ -65,7 +65,7 @@ param(
     [ValidateSet("Build", "Clean", "Configure", "Test", "Package", "All")]
     [string]$Action = "Build",
 
-    [ValidateSet("Simulation", "Simulation_Parallel", "Simulation_MM", "PreProcessor", "Budget", "ZBudget", "IWFM_C_DLL", "IWFM2OBS", "CalcTypeHyd", "GWHydExtract", "all")]
+    [ValidateSet("Simulation", "Simulation_Parallel", "Simulation_MM", "PreProcessor", "Budget", "ZBudget", "IWFM_C_DLL", "IWFM2OBS", "CalcTypeHyd", "ResultsExtract", "all")]
     [string]$Target = "all",
 
     [ValidateSet("Release", "Debug", "RelWithDebInfo")]
@@ -81,7 +81,7 @@ param(
 
     [switch]$CalcTypeHyd,
 
-    [switch]$GWHydExtract
+    [switch]$ResultsExtract
 )
 
 $ErrorActionPreference = "Stop"
@@ -244,9 +244,9 @@ function Invoke-Configure {
             $CMakeArgs += "-DIWFM_BUILD_CALCTYPHYD=ON"
             Write-Host "  CalcTypeHyd: Enabled" -ForegroundColor Yellow
         }
-        if ($GWHydExtract) {
-            $CMakeArgs += "-DIWFM_BUILD_GWHYDEXTRACT=ON"
-            Write-Host "  GWHydExtract: Enabled" -ForegroundColor Yellow
+        if ($ResultsExtract) {
+            $CMakeArgs += "-DIWFM_BUILD_RESULTSEXTRACT=ON"
+            Write-Host "  ResultsExtract: Enabled" -ForegroundColor Yellow
         }
 
         Write-Host "Running: cmake $($CMakeArgs -join ' ')" -ForegroundColor Gray
@@ -314,7 +314,7 @@ function Invoke-Build {
             "IWFM_C_DLL" = "IWFM_C_x64*.dll"
             "IWFM2OBS" = "IWFM2OBS_x64*.exe"
             "CalcTypeHyd" = "CalcTypeHyd_x64*.exe"
-            "GWHydExtract" = "GWHydExtract_x64*.exe"
+            "ResultsExtract" = "ResultsExtract_x64*.exe"
         }
 
         if ($Target -eq "all") {
