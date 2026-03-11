@@ -29,7 +29,6 @@ MODULE Class_IWFM2OBS
                                  TokenizeSMPLine       , &
                                  ExpandObsIDsToLayers  , &
                                  ExpandSMPDataToLayers
-  USE Class_PESTOutput   , ONLY: PESTOutputType
   USE Class_HeadDifference, ONLY: HeadDifferenceType, &
                                   HeadDiffPairType
   USE Class_MultiLayerTarget, ONLY: MultiLayerTargetType
@@ -68,10 +67,7 @@ MODULE Class_IWFM2OBS
     CHARACTER(LEN=500) :: cObsFile  = ' '   ! Observation SMP file
     CHARACTER(LEN=500) :: cOutFile  = ' '   ! Output SMP file
     REAL(8)            :: rThreshold = 1.0D0 ! Extrapolation threshold (days)
-    CHARACTER(LEN=500) :: cInsFile  = ' '   ! PEST instruction file
-    CHARACTER(LEN=500) :: cPCFFile  = ' '   ! PEST PCF file
     LOGICAL            :: lActive   = .FALSE.
-    LOGICAL            :: lWriteIns = .FALSE.
   END TYPE HydTypeConfigType
 
   ! =====================================================================
@@ -262,14 +258,11 @@ CONTAINS
       READ(cClean, *, IOSTAT=iErr) This%HydConfig(iHyd)%rThreshold
       IF (iErr /= 0) This%HydConfig(iHyd)%rThreshold = 1.0D0
 
-      ! Line 5: Instruction file
+      ! Line 5: Instruction file (ignored — INS generation moved to pyiwfm)
       CALL ReadNonComment(iUnit, cLine, iErr)
-      CALL StripComment(cLine, This%HydConfig(iHyd)%cInsFile)
-      This%HydConfig(iHyd)%lWriteIns = (LEN_TRIM(This%HydConfig(iHyd)%cInsFile) > 0)
 
-      ! Line 6: PCF file
+      ! Line 6: PCF file (ignored — INS generation moved to pyiwfm)
       CALL ReadNonComment(iUnit, cLine, iErr)
-      CALL StripComment(cLine, This%HydConfig(iHyd)%cPCFFile)
     END DO
 
     ! ---- Head differences (Y/N, then file path if Y) ----
@@ -382,9 +375,6 @@ CONTAINS
              This%HydConfig(iHyd)%cHydFile, &
              This%HydConfig(iHyd)%cOutFile, &
              This%HydConfig(iHyd)%rThreshold, &
-             This%HydConfig(iHyd)%cInsFile, &
-             This%HydConfig(iHyd)%cPCFFile, &
-             This%HydConfig(iHyd)%lWriteIns, &
              iStat)
       END IF
 
@@ -409,6 +399,19 @@ CONTAINS
       END IF
     END IF
 
+    ! Multi-layer target: post-process subsidence output (sum across layers)
+    IF (This%lMultiLayer .AND. This%HydConfig(iSUBSID)%lActive) THEN
+      CALL LogMessage('Applying multi-layer subsidence summation...', &
+           f_iInfo, cModName)
+      CALL ApplyMultiLayerSubsidence(This, iStat)
+      IF (iStat /= 0) THEN
+        CALL LogLastMessage()
+        CALL LogMessage('  Error in multi-layer subsidence processing', &
+             f_iWarn, cModName)
+        iStat = 0
+      END IF
+    END IF
+
   END SUBROUTINE Run
 
   ! =====================================================================
@@ -429,16 +432,14 @@ CONTAINS
     INTEGER,             INTENT(OUT)   :: iStat
 
     INTEGER, PARAMETER :: iInUnit = 192, iOutUnit = 193
-    INTEGER, PARAMETER :: iInsUnit = 194, iPCFUnit = 195
-    CHARACTER(LEN=500) :: cOutFile, cInsFile, cPCFFile, cLine
+    CHARACTER(LEN=500) :: cOutFile, cLine
     CHARACTER(LEN=25)  :: cBaseID, cLayerID, cPrevID
     CHARACTER(LEN=30)  :: cTokens(5)
     INTEGER            :: iErr, iWell, iNLayers, iPos, iNCols
-    INTEGER            :: iNAll, iRec, i, k, iSeqNum, iWellSeq
+    INTEGER            :: iNAll, iRec, i, k, iWellSeq
     REAL(8), ALLOCATABLE :: rLayerVals(:)
     REAL(8), ALLOCATABLE :: rLayerT(:)
     REAL(8)            :: rTOS, rBOS
-    LOGICAL            :: lWriteIns
     ! In-memory record storage
     CHARACTER(LEN=25), ALLOCATABLE :: cAllIDs(:)
     CHARACTER(LEN=30), ALLOCATABLE :: cAllDates(:), cAllTimes(:)
@@ -469,24 +470,6 @@ CONTAINS
       cOutFile = cOutFile(1:iPos-1)//'_ml'//cOutFile(iPos:)
     ELSE
       cOutFile = TRIM(cOutFile)//'_ml'
-    END IF
-
-    lWriteIns = This%HydConfig(iGWHEAD)%lWriteIns
-    IF (lWriteIns) THEN
-      cInsFile = TRIM(This%HydConfig(iGWHEAD)%cInsFile)
-      iPos = SCAN(cInsFile, '.', BACK=.TRUE.)
-      IF (iPos > 0) THEN
-        cInsFile = cInsFile(1:iPos-1)//'_ml'//cInsFile(iPos:)
-      ELSE
-        cInsFile = TRIM(cInsFile)//'_ml'
-      END IF
-      cPCFFile = TRIM(This%HydConfig(iGWHEAD)%cPCFFile)
-      iPos = SCAN(cPCFFile, '.', BACK=.TRUE.)
-      IF (iPos > 0) THEN
-        cPCFFile = cPCFFile(1:iPos-1)//'_ml'//cPCFFile(iPos:)
-      ELSE
-        cPCFFile = TRIM(cPCFFile)//'_ml'
-      END IF
     END IF
 
     ! ---- Step 1: Read entire per-layer SMP into memory ----
@@ -553,147 +536,125 @@ CONTAINS
       END IF
     END DO
 
-    ALLOCATE(cUniqIDs(iNUniq), iIDStart(iNUniq), iIDCount(iNUniq), STAT=iErr)
-    IF (iErr /= 0) THEN
-      iStat = -1; GOTO 900
-    END IF
+    DO  ! Single-pass block for structured error exit
 
-    iNUniq = 0
-    cPrevID = ' '
-    DO iRec = 1, iNAll
-      IF (cAllIDs(iRec) /= cPrevID) THEN
-        IF (iNUniq > 0) iIDCount(iNUniq) = iRec - iIDStart(iNUniq)
-        iNUniq = iNUniq + 1
-        cUniqIDs(iNUniq) = cAllIDs(iRec)
-        iIDStart(iNUniq) = iRec
-        cPrevID = cAllIDs(iRec)
-      END IF
-    END DO
-    IF (iNUniq > 0) iIDCount(iNUniq) = iNAll - iIDStart(iNUniq) + 1
-
-    CALL LogMessage('  '//TRIM(IntToText(iNUniq))//' unique IDs in index', &
-         f_iInfo, cModName)
-
-    ! ---- Step 3: Open output files ----
-    OPEN(UNIT=iOutUnit, FILE=cOutFile, STATUS='REPLACE', IOSTAT=iErr)
-    IF (iErr /= 0) THEN
-      CALL SetLastMessage('Cannot open multi-layer output: '// &
-           TRIM(cOutFile), f_iFatal, cModName)
-      iStat = -1; GOTO 900
-    END IF
-    ! Header matching GW_MultiLayer.out format
-    WRITE(iOutUnit, '(A)') &
-         'Name                     Date        Time        Simulated' // &
-         '         T1          T2          T3          T4' // &
-         '      NewTOS      NewBOS'
-
-    IF (lWriteIns) THEN
-      OPEN(UNIT=iInsUnit, FILE=cInsFile, STATUS='REPLACE', IOSTAT=iErr)
+      ALLOCATE(cUniqIDs(iNUniq), iIDStart(iNUniq), iIDCount(iNUniq), STAT=iErr)
       IF (iErr /= 0) THEN
-        CLOSE(iOutUnit); iStat = -1; GOTO 900
+        iStat = -1; EXIT
       END IF
-      WRITE(iInsUnit, '(A)') 'pif #'
-      WRITE(iInsUnit, '(A)') 'l1'
 
-      OPEN(UNIT=iPCFUnit, FILE=cPCFFile, STATUS='REPLACE', IOSTAT=iErr)
-      IF (iErr /= 0) THEN
-        CLOSE(iOutUnit); CLOSE(iInsUnit); iStat = -1; GOTO 900
-      END IF
-    END IF
-
-    ! ---- Step 4: Process each observation well ----
-    ALLOCATE(iLayerStart(iNLayers), iLayerCount(iNLayers))
-
-    iWellSeq = 0
-    DO iWell = 1, This%MultiLayer%GetNObs()
-      cBaseID = This%MultiLayer%GetObsName(iWell)
-      iWellSeq = iWellSeq + 1
-
-      ! Find each layer's records in the index
-      iLayerStart = 0
-      iLayerCount = 0
-      DO k = 1, iNLayers
-        WRITE(cLayerID, '(A,A1,I0)') TRIM(cBaseID), '%', k
-        cLayerID = UpperCase(cLayerID)
-        DO i = 1, iNUniq
-          IF (cUniqIDs(i) == cLayerID) THEN
-            iLayerStart(k) = iIDStart(i)
-            iLayerCount(k) = iIDCount(i)
-            EXIT
-          END IF
-        END DO
-      END DO
-
-      ! Use layer 1's record count as the time step count
-      iNRec = iLayerCount(1)
-      IF (iNRec == 0) CYCLE
-
-      ! Get layer transmissivities and screen TOS/BOS for this well
-      CALL This%MultiLayer%GetWellLayerTransmissivities(iWell, rLayerT, rTOS, rBOS)
-
-      ! Compute weighted averages for each time step
-      iSeqNum = 0
-      DO iRec = 1, iNRec
-        ! Gather layer values at this time step
-        DO k = 1, iNLayers
-          IF (iLayerStart(k) > 0 .AND. iRec <= iLayerCount(k)) THEN
-            rLayerVals(k) = rAllVals(iLayerStart(k) + iRec - 1)
-          ELSE
-            rLayerVals(k) = 0.0D0
-          END IF
-        END DO
-        rWeighted = This%MultiLayer%WeightedAverage(iWell, rLayerVals)
-
-        ! Parse date/time from layer 1 records
-        CALL This%Interp%ParseDateStr(cAllDates(iLayerStart(1) + iRec - 1), &
-             iDay, iMon, iYear, iErr)
-        IF (iErr /= 0) CYCLE
-        CALL This%Interp%ParseTimeStr(cAllTimes(iLayerStart(1) + iRec - 1), &
-             iHH, iMM, iSS, iErr)
-        IF (iErr /= 0) CYCLE
-
-        ! Write GW_MultiLayer.out format line
-        IF (This%Interp%iDateSpec == 1) THEN
-          WRITE(iOutUnit, 100) cBaseID, iDay, iMon, iYear, &
-               iHH, iMM, iSS, rWeighted, &
-               (rLayerT(k), k=1,MIN(iNLayers,4)), &
-               (0.0D0, k=iNLayers+1,4), &
-               rTOS, rBOS
-        ELSE
-          WRITE(iOutUnit, 100) cBaseID, iMon, iDay, iYear, &
-               iHH, iMM, iSS, rWeighted, &
-               (rLayerT(k), k=1,MIN(iNLayers,4)), &
-               (0.0D0, k=iNLayers+1,4), &
-               rTOS, rBOS
-        END IF
-100     FORMAT(A25,I2.2,'/',I2.2,'/',I4.4,2X,I2.2,':',I2.2,':',I2.2, &
-             4X,F11.2,4F12.2,2F12.2)
-
-        ! Write PEST instruction and PCF files (WLT naming, columns 50:60)
-        IF (lWriteIns) THEN
-          iSeqNum = iSeqNum + 1
-          WRITE(iInsUnit, 200) iWellSeq, iSeqNum
-200       FORMAT('l1 [WLT',I5.5,'_',I5.5,']50:60')
-          WRITE(iPCFUnit, 210) iWellSeq, iSeqNum, rWeighted
-210       FORMAT('WLT',I5.5,'_',I5.5,'    ',1PG15.8)
+      iNUniq = 0
+      cPrevID = ' '
+      DO iRec = 1, iNAll
+        IF (cAllIDs(iRec) /= cPrevID) THEN
+          IF (iNUniq > 0) iIDCount(iNUniq) = iRec - iIDStart(iNUniq)
+          iNUniq = iNUniq + 1
+          cUniqIDs(iNUniq) = cAllIDs(iRec)
+          iIDStart(iNUniq) = iRec
+          cPrevID = cAllIDs(iRec)
         END IF
       END DO
-    END DO
+      IF (iNUniq > 0) iIDCount(iNUniq) = iNAll - iIDStart(iNUniq) + 1
 
-    CLOSE(iOutUnit)
-    IF (lWriteIns) THEN
-      CLOSE(iInsUnit)
-      CLOSE(iPCFUnit)
-    END IF
-
-    IF (iStat == 0) THEN
-      CALL LogMessage('  Multi-layer output written to: '//TRIM(cOutFile), &
+      CALL LogMessage('  '//TRIM(IntToText(iNUniq))//' unique IDs in index', &
            f_iInfo, cModName)
-    END IF
+
+      ! ---- Step 3: Open output files ----
+      OPEN(UNIT=iOutUnit, FILE=cOutFile, STATUS='REPLACE', IOSTAT=iErr)
+      IF (iErr /= 0) THEN
+        CALL SetLastMessage('Cannot open multi-layer output: '// &
+             TRIM(cOutFile), f_iFatal, cModName)
+        iStat = -1; EXIT
+      END IF
+      ! Header matching GW_MultiLayer.out format
+      WRITE(iOutUnit, '(A)') &
+           'Name                     Date        Time        Simulated' // &
+           '         T1          T2          T3          T4' // &
+           '      NewTOS      NewBOS'
+
+      ! ---- Step 4: Process each observation well ----
+      ALLOCATE(iLayerStart(iNLayers), iLayerCount(iNLayers))
+
+      iWellSeq = 0
+      DO iWell = 1, This%MultiLayer%GetNObs()
+        cBaseID = This%MultiLayer%GetObsName(iWell)
+        iWellSeq = iWellSeq + 1
+
+        ! Find each layer's records in the index
+        iLayerStart = 0
+        iLayerCount = 0
+        DO k = 1, iNLayers
+          WRITE(cLayerID, '(A,A1,I0)') TRIM(cBaseID), '%', k
+          cLayerID = UpperCase(cLayerID)
+          DO i = 1, iNUniq
+            IF (cUniqIDs(i) == cLayerID) THEN
+              iLayerStart(k) = iIDStart(i)
+              iLayerCount(k) = iIDCount(i)
+              EXIT
+            END IF
+          END DO
+        END DO
+
+        ! Use layer 1's record count as the time step count
+        iNRec = iLayerCount(1)
+        IF (iNRec == 0) CYCLE
+
+        ! Get layer transmissivities and screen TOS/BOS for this well
+        CALL This%MultiLayer%GetWellLayerTransmissivities(iWell, rLayerT, rTOS, rBOS)
+
+        ! Compute weighted averages for each time step
+        DO iRec = 1, iNRec
+          ! Gather layer values at this time step
+          DO k = 1, iNLayers
+            IF (iLayerStart(k) > 0 .AND. iRec <= iLayerCount(k)) THEN
+              rLayerVals(k) = rAllVals(iLayerStart(k) + iRec - 1)
+            ELSE
+              rLayerVals(k) = 0.0D0
+            END IF
+          END DO
+          rWeighted = This%MultiLayer%WeightedAverage(iWell, rLayerVals)
+
+          ! Parse date/time from layer 1 records
+          CALL This%Interp%ParseDateStr(cAllDates(iLayerStart(1) + iRec - 1), &
+               iDay, iMon, iYear, iErr)
+          IF (iErr /= 0) CYCLE
+          CALL This%Interp%ParseTimeStr(cAllTimes(iLayerStart(1) + iRec - 1), &
+               iHH, iMM, iSS, iErr)
+          IF (iErr /= 0) CYCLE
+
+          ! Write GW_MultiLayer.out format line
+          IF (This%Interp%iDateSpec == 1) THEN
+            WRITE(iOutUnit, 100) cBaseID, iDay, iMon, iYear, &
+                 iHH, iMM, iSS, rWeighted, &
+                 (rLayerT(k), k=1,MIN(iNLayers,4)), &
+                 (0.0D0, k=iNLayers+1,4), &
+                 rTOS, rBOS
+          ELSE
+            WRITE(iOutUnit, 100) cBaseID, iMon, iDay, iYear, &
+                 iHH, iMM, iSS, rWeighted, &
+                 (rLayerT(k), k=1,MIN(iNLayers,4)), &
+                 (0.0D0, k=iNLayers+1,4), &
+                 rTOS, rBOS
+          END IF
+100       FORMAT(A25,I2.2,'/',I2.2,'/',I4.4,2X,I2.2,':',I2.2,':',I2.2, &
+               4X,F11.2,4F12.2,2F12.2)
+
+        END DO
+      END DO
+
+      CLOSE(iOutUnit)
+
+      IF (iStat == 0) THEN
+        CALL LogMessage('  Multi-layer output written to: '//TRIM(cOutFile), &
+             f_iInfo, cModName)
+      END IF
+
+      EXIT  ! Normal exit from single-pass block
+    END DO
 
     ! Cleanup
-900 CONTINUE
-    DEALLOCATE(iLayerStart, iLayerCount)
+    IF (ALLOCATED(iLayerStart)) DEALLOCATE(iLayerStart)
+    IF (ALLOCATED(iLayerCount)) DEALLOCATE(iLayerCount)
     DEALLOCATE(rLayerVals, rLayerT)
     DEALLOCATE(cAllIDs, cAllDates, cAllTimes, rAllVals)
     IF (ALLOCATED(cUniqIDs)) DEALLOCATE(cUniqIDs)
@@ -701,6 +662,234 @@ CONTAINS
     IF (ALLOCATED(iIDCount)) DEALLOCATE(iIDCount)
 
   END SUBROUTINE ApplyMultiLayerTarget
+
+  ! =====================================================================
+  ! ApplyMultiLayerSubsidence - Post-process subsidence with layer summation
+  !
+  !   Same structure as ApplyMultiLayerTarget but uses SUM instead of
+  !   T-weighted averaging.  Subsidence (compaction) is additive across
+  !   layers, so the composite value is simply the sum of per-layer values.
+  !
+  !   Output format (simpler than GW — no T columns):
+  !     Name(25)  Date(MM/DD/YYYY)  Time(HH:MM:SS)  Summed(F11.4)
+  !
+  !   PEST .ins format: SBT{well:05d}_{timestep:05d} columns 50:60
+  ! =====================================================================
+  SUBROUTINE ApplyMultiLayerSubsidence(This, iStat)
+    CLASS(IWFM2OBSType), INTENT(INOUT) :: This
+    INTEGER,             INTENT(OUT)   :: iStat
+
+    INTEGER, PARAMETER :: iInUnit = 194, iOutUnit = 195
+    CHARACTER(LEN=500) :: cOutFile, cLine
+    CHARACTER(LEN=25)  :: cBaseID, cLayerID, cPrevID
+    CHARACTER(LEN=30)  :: cTokens(5)
+    INTEGER            :: iErr, iWell, iNLayers, iPos, iNCols
+    INTEGER            :: iNAll, iRec, i, k
+    REAL(8), ALLOCATABLE :: rLayerVals(:)
+    REAL(8)            :: rSummed
+    ! In-memory record storage
+    CHARACTER(LEN=25), ALLOCATABLE :: cAllIDs(:)
+    CHARACTER(LEN=30), ALLOCATABLE :: cAllDates(:), cAllTimes(:)
+    REAL(8),           ALLOCATABLE :: rAllVals(:)
+    ! Contiguous ID index
+    INTEGER            :: iNUniq
+    CHARACTER(LEN=25), ALLOCATABLE :: cUniqIDs(:)
+    INTEGER,           ALLOCATABLE :: iIDStart(:), iIDCount(:)
+    ! Per-well layer lookup
+    INTEGER,           ALLOCATABLE :: iLayerStart(:), iLayerCount(:)
+    INTEGER            :: iNRec, iDay, iMon, iYear, iHH, iMM, iSS
+
+    iStat = 0
+    iNLayers = This%MultiLayer%GetNLayers()
+    ALLOCATE(rLayerVals(iNLayers), STAT=iErr)
+    IF (iErr /= 0) THEN
+      CALL SetLastMessage('Cannot allocate layer values array', &
+           f_iFatal, cModName)
+      iStat = -1; RETURN
+    END IF
+
+    ! Build output file path (_ml suffix on subsidence output)
+    cOutFile = TRIM(This%HydConfig(iSUBSID)%cOutFile)
+    iPos = SCAN(cOutFile, '.', BACK=.TRUE.)
+    IF (iPos > 0) THEN
+      cOutFile = cOutFile(1:iPos-1)//'_ml'//cOutFile(iPos:)
+    ELSE
+      cOutFile = TRIM(cOutFile)//'_ml'
+    END IF
+
+    ! ---- Step 1: Read entire per-layer SMP into memory ----
+    OPEN(UNIT=iInUnit, FILE=This%HydConfig(iSUBSID)%cOutFile, &
+         STATUS='OLD', IOSTAT=iErr)
+    IF (iErr /= 0) THEN
+      CALL SetLastMessage('Cannot open per-layer subsidence SMP: '// &
+           TRIM(This%HydConfig(iSUBSID)%cOutFile), f_iFatal, cModName)
+      iStat = -1; RETURN
+    END IF
+
+    ! Count lines
+    iNAll = 0
+    DO
+      READ(iInUnit, '(A)', IOSTAT=iErr) cLine
+      IF (iErr /= 0) EXIT
+      IF (LEN_TRIM(cLine) > 0) iNAll = iNAll + 1
+    END DO
+
+    IF (iNAll == 0) THEN
+      CLOSE(iInUnit)
+      CALL SetLastMessage('Per-layer subsidence SMP file is empty', &
+           f_iFatal, cModName)
+      iStat = -1; RETURN
+    END IF
+
+    ALLOCATE(cAllIDs(iNAll), cAllDates(iNAll), cAllTimes(iNAll), &
+             rAllVals(iNAll), STAT=iErr)
+    IF (iErr /= 0) THEN
+      CLOSE(iInUnit)
+      CALL SetLastMessage('Cannot allocate memory for subsidence SMP records ('// &
+           TRIM(IntToText(iNAll))//' lines)', f_iFatal, cModName)
+      iStat = -1; RETURN
+    END IF
+
+    ! Read all records
+    REWIND(iInUnit)
+    iRec = 0
+    DO
+      READ(iInUnit, '(A)', IOSTAT=iErr) cLine
+      IF (iErr /= 0) EXIT
+      IF (LEN_TRIM(cLine) == 0) CYCLE
+      CALL TokenizeSMPLine(cLine, cTokens, iNCols)
+      IF (iNCols < 4) CYCLE
+      iRec = iRec + 1
+      cAllIDs(iRec) = UpperCase(ADJUSTL(cTokens(1)))
+      cAllDates(iRec) = cTokens(2)
+      cAllTimes(iRec) = cTokens(3)
+      READ(cTokens(4), *, IOSTAT=iErr) rAllVals(iRec)
+      IF (iErr /= 0) rAllVals(iRec) = 0.0D0
+    END DO
+    iNAll = iRec
+    CLOSE(iInUnit)
+
+    CALL LogMessage('  Read '//TRIM(IntToText(iNAll))// &
+         ' records from per-layer subsidence SMP', f_iInfo, cModName)
+
+    ! ---- Step 2: Build contiguous ID index ----
+    iNUniq = 0
+    cPrevID = ' '
+    DO iRec = 1, iNAll
+      IF (cAllIDs(iRec) /= cPrevID) THEN
+        iNUniq = iNUniq + 1
+        cPrevID = cAllIDs(iRec)
+      END IF
+    END DO
+
+    DO  ! Single-pass block for structured error exit
+
+      ALLOCATE(cUniqIDs(iNUniq), iIDStart(iNUniq), iIDCount(iNUniq), STAT=iErr)
+      IF (iErr /= 0) THEN
+        iStat = -1; EXIT
+      END IF
+
+      iNUniq = 0
+      cPrevID = ' '
+      DO iRec = 1, iNAll
+        IF (cAllIDs(iRec) /= cPrevID) THEN
+          IF (iNUniq > 0) iIDCount(iNUniq) = iRec - iIDStart(iNUniq)
+          iNUniq = iNUniq + 1
+          cUniqIDs(iNUniq) = cAllIDs(iRec)
+          iIDStart(iNUniq) = iRec
+          cPrevID = cAllIDs(iRec)
+        END IF
+      END DO
+      IF (iNUniq > 0) iIDCount(iNUniq) = iNAll - iIDStart(iNUniq) + 1
+
+      ! ---- Step 3: Open output file ----
+      OPEN(UNIT=iOutUnit, FILE=cOutFile, STATUS='REPLACE', IOSTAT=iErr)
+      IF (iErr /= 0) THEN
+        CALL SetLastMessage('Cannot open multi-layer subsidence output: '// &
+             TRIM(cOutFile), f_iFatal, cModName)
+        iStat = -1; EXIT
+      END IF
+      WRITE(iOutUnit, '(A)') &
+           'Name                     Date        Time        Summed'
+
+      ! ---- Step 4: Process each observation well ----
+      ALLOCATE(iLayerStart(iNLayers), iLayerCount(iNLayers))
+
+      DO iWell = 1, This%MultiLayer%GetNObs()
+        cBaseID = This%MultiLayer%GetObsName(iWell)
+
+        ! Find each layer's records in the index
+        iLayerStart = 0
+        iLayerCount = 0
+        DO k = 1, iNLayers
+          WRITE(cLayerID, '(A,A1,I0)') TRIM(cBaseID), '%', k
+          cLayerID = UpperCase(cLayerID)
+          DO i = 1, iNUniq
+            IF (cUniqIDs(i) == cLayerID) THEN
+              iLayerStart(k) = iIDStart(i)
+              iLayerCount(k) = iIDCount(i)
+              EXIT
+            END IF
+          END DO
+        END DO
+
+        ! Use layer 1's record count as the time step count
+        iNRec = iLayerCount(1)
+        IF (iNRec == 0) CYCLE
+
+        ! Sum layer values for each time step
+        DO iRec = 1, iNRec
+          DO k = 1, iNLayers
+            IF (iLayerStart(k) > 0 .AND. iRec <= iLayerCount(k)) THEN
+              rLayerVals(k) = rAllVals(iLayerStart(k) + iRec - 1)
+            ELSE
+              rLayerVals(k) = 0.0D0
+            END IF
+          END DO
+          rSummed = SUM(rLayerVals(1:iNLayers))
+
+          ! Parse date/time from layer 1 records
+          CALL This%Interp%ParseDateStr(cAllDates(iLayerStart(1) + iRec - 1), &
+               iDay, iMon, iYear, iErr)
+          IF (iErr /= 0) CYCLE
+          CALL This%Interp%ParseTimeStr(cAllTimes(iLayerStart(1) + iRec - 1), &
+               iHH, iMM, iSS, iErr)
+          IF (iErr /= 0) CYCLE
+
+          ! Write summed subsidence line
+          IF (This%Interp%iDateSpec == 1) THEN
+            WRITE(iOutUnit, 200) cBaseID, iDay, iMon, iYear, &
+                 iHH, iMM, iSS, rSummed
+          ELSE
+            WRITE(iOutUnit, 200) cBaseID, iMon, iDay, iYear, &
+                 iHH, iMM, iSS, rSummed
+          END IF
+200       FORMAT(A25,I2.2,'/',I2.2,'/',I4.4,2X,I2.2,':',I2.2,':',I2.2, &
+               4X,F11.4)
+
+        END DO
+      END DO
+
+      CLOSE(iOutUnit)
+
+      IF (iStat == 0) THEN
+        CALL LogMessage('  Multi-layer subsidence output written to: '// &
+             TRIM(cOutFile), f_iInfo, cModName)
+      END IF
+
+      EXIT  ! Normal exit from single-pass block
+    END DO
+
+    ! Cleanup
+    IF (ALLOCATED(iLayerStart)) DEALLOCATE(iLayerStart)
+    IF (ALLOCATED(iLayerCount)) DEALLOCATE(iLayerCount)
+    DEALLOCATE(rLayerVals)
+    DEALLOCATE(cAllIDs, cAllDates, cAllTimes, rAllVals)
+    IF (ALLOCATED(cUniqIDs)) DEALLOCATE(cUniqIDs)
+    IF (ALLOCATED(iIDStart)) DEALLOCATE(iIDStart)
+    IF (ALLOCATED(iIDCount)) DEALLOCATE(iIDCount)
+
+  END SUBROUTINE ApplyMultiLayerSubsidence
 
   ! =====================================================================
   ! ProcessDirect - Direct .out -> memory -> interpolation for one type
@@ -738,8 +927,8 @@ CONTAINS
          ' observation IDs from '//TRIM(This%HydConfig(iHyd)%cObsFile), &
          f_iInfo, cModName)
 
-    ! Auto-expand base obs IDs to per-layer IDs for GW matching
-    IF (iHyd == iGWHEAD .AND. This%lMultiLayer) THEN
+    ! Auto-expand base obs IDs to per-layer IDs for GW/subsidence matching
+    IF ((iHyd == iGWHEAD .OR. iHyd == iSUBSID) .AND. This%lMultiLayer) THEN
       CALL ExpandObsIDsToLayers(cObsIDs, iNObsIDs, &
            This%MultiLayer%GetNLayers(), iStat=iStat)
       IF (iStat /= 0) THEN
@@ -763,16 +952,13 @@ CONTAINS
     END IF
 
     ! Step 3: Interpolate directly from in-memory data
-    ! Pass iExpandLayers for GW so InterpolateDirect can map base obs IDs
+    ! Pass iExpandLayers for GW/subsidence so InterpolateDirect can map base obs IDs
     ! (no %N suffix in the deduplicated file) to per-layer model columns
-    IF (iHyd == iGWHEAD .AND. This%lMultiLayer) THEN
+    IF ((iHyd == iGWHEAD .OR. iHyd == iSUBSID) .AND. This%lMultiLayer) THEN
       CALL This%Interp%InterpolateDirect( &
            This%HydConfig(iHyd)%cObsFile, &
            This%HydConfig(iHyd)%cOutFile, &
            This%HydConfig(iHyd)%rThreshold, &
-           This%HydConfig(iHyd)%cInsFile, &
-           This%HydConfig(iHyd)%cPCFFile, &
-           This%HydConfig(iHyd)%lWriteIns, &
            This%HydReader%cFilteredIDs, &
            This%HydReader%iNFiltered, &
            This%HydReader%rModelData, &
@@ -786,9 +972,6 @@ CONTAINS
            This%HydConfig(iHyd)%cObsFile, &
            This%HydConfig(iHyd)%cOutFile, &
            This%HydConfig(iHyd)%rThreshold, &
-           This%HydConfig(iHyd)%cInsFile, &
-           This%HydConfig(iHyd)%cPCFFile, &
-           This%HydConfig(iHyd)%lWriteIns, &
            This%HydReader%cFilteredIDs, &
            This%HydReader%iNFiltered, &
            This%HydReader%rModelData, &

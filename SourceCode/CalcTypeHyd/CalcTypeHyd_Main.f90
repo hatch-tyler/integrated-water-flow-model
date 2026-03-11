@@ -29,48 +29,52 @@ PROGRAM CalcTypeHyd_Main
   ! Start timer
   CALL StartTimer()
 
-  ! Open log file
-  CALL SetLogFileName('CalcTypeHyd_Messages.out', iStat)
-  IF (iStat == -1) THEN
-    CALL LogLastMessage()
-    GO TO 999
-  END IF
+  DO  ! Single-pass block for structured error exit
 
-  ! Banner
-  CALL LogMessage(' ', f_iInfo, 'CalcTypeHyd')
-  CALL LogMessage('Program CalcTypeHyd - Cluster type hydrograph computation', &
-                  f_iInfo, 'CalcTypeHyd')
-  CALL LogMessage(' ', f_iInfo, 'CalcTypeHyd')
+    ! Open log file
+    CALL SetLogFileName('CalcTypeHyd_Messages.out', iStat)
+    IF (iStat == -1) THEN
+      CALL LogLastMessage()
+      EXIT
+    END IF
 
-  ! Get input file from command line or use default
-  iNArgs = COMMAND_ARGUMENT_COUNT()
-  IF (iNArgs >= 1) THEN
-    CALL GET_COMMAND_ARGUMENT(1, cInputFile)
-  ELSE
-    cInputFile = 'CalcTypeHyd.in'
-  END IF
-  cInputFile = ADJUSTL(TRIM(cInputFile))
+    ! Banner
+    CALL LogMessage(' ', f_iInfo, 'CalcTypeHyd')
+    CALL LogMessage('Program CalcTypeHyd - Cluster type hydrograph computation', &
+                    f_iInfo, 'CalcTypeHyd')
+    CALL LogMessage(' ', f_iInfo, 'CalcTypeHyd')
 
-  ! Initialize
-  CALL App%New(cInputFile, iStat)
-  IF (iStat == -1) THEN
-    CALL LogLastMessage()
-    GO TO 999
-  END IF
+    ! Get input file from command line or use default
+    iNArgs = COMMAND_ARGUMENT_COUNT()
+    IF (iNArgs >= 1) THEN
+      CALL GET_COMMAND_ARGUMENT(1, cInputFile)
+    ELSE
+      cInputFile = 'CalcTypeHyd.in'
+    END IF
+    cInputFile = ADJUSTL(TRIM(cInputFile))
 
-  ! Run type hydrograph generation
-  CALL App%Run(iStat)
-  IF (iStat == -1) THEN
-    CALL LogLastMessage()
-  END IF
+    ! Initialize
+    CALL App%New(cInputFile, iStat)
+    IF (iStat == -1) THEN
+      CALL LogLastMessage()
+      EXIT
+    END IF
 
-  ! Clean up
-  CALL App%Kill()
+    ! Run type hydrograph generation
+    CALL App%Run(iStat)
+    IF (iStat == -1) THEN
+      CALL LogLastMessage()
+    END IF
 
-  CALL LogMessage(' ', f_iInfo, 'CalcTypeHyd')
-  CALL LogMessage('NORMAL TERMINATION - CalcTypeHyd', f_iInfo, 'CalcTypeHyd')
+    ! Clean up
+    CALL App%Kill()
 
-999 CONTINUE
+    CALL LogMessage(' ', f_iInfo, 'CalcTypeHyd')
+    CALL LogMessage('NORMAL TERMINATION - CalcTypeHyd', f_iInfo, 'CalcTypeHyd')
+
+    EXIT  ! Normal exit from single-pass block
+  END DO
+
   CALL StopTimer()
   CALL PrintRunTime()
   CALL KillLogFile()

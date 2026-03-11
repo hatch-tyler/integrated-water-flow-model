@@ -697,17 +697,13 @@ CONTAINS
   ! Interpolate - Full SMP-to-SMP interpolation workflow
   !   Reads obs SMP, reads model SMP, time-interpolates, writes output
   ! =====================================================================
-  SUBROUTINE Interpolate(This, cObsFile, cModFile, cOutFile, rThreshold, &
-                          cInsFile, cPCFFile, lWriteIns, iStat)
+  SUBROUTINE Interpolate(This, cObsFile, cModFile, cOutFile, rThreshold, iStat)
     CLASS(SMP2SMPType), INTENT(INOUT) :: This
     CHARACTER(LEN=*),   INTENT(IN)    :: cObsFile, cModFile, cOutFile
     REAL(8),            INTENT(IN)    :: rThreshold
-    CHARACTER(LEN=*),   INTENT(IN)    :: cInsFile, cPCFFile
-    LOGICAL,            INTENT(IN)    :: lWriteIns
     INTEGER,            INTENT(OUT)   :: iStat
 
     INTEGER, PARAMETER :: iObsUnit = 101, iModUnit = 102, iOutUnit = 103
-    INTEGER, PARAMETER :: iInsUnit = 104, iPCFUnit = 105
 
     CHARACTER(LEN=25), ALLOCATABLE :: cObsIDs(:)
     TYPE(SMPIDGroupType), ALLOCATABLE :: ModGroups(:)
@@ -765,26 +761,6 @@ CONTAINS
       iStat = -1
       CLOSE(iObsUnit)
       RETURN
-    END IF
-
-    ! Open instruction/PCF files if requested
-    IF (lWriteIns) THEN
-      OPEN(UNIT=iInsUnit, FILE=cInsFile, STATUS='REPLACE', IOSTAT=iErr)
-      IF (iErr /= 0) THEN
-        CALL SetLastMessage('Cannot open instruction file: '//TRIM(cInsFile), f_iFatal, cModName)
-        iStat = -1
-        CLOSE(iObsUnit); CLOSE(iOutUnit)
-        RETURN
-      END IF
-      WRITE(iInsUnit, '(A)') 'pif #'
-
-      OPEN(UNIT=iPCFUnit, FILE=cPCFFile, STATUS='REPLACE', IOSTAT=iErr)
-      IF (iErr /= 0) THEN
-        CALL SetLastMessage('Cannot open PCF file: '//TRIM(cPCFFile), f_iFatal, cModName)
-        iStat = -1
-        CLOSE(iObsUnit); CLOSE(iOutUnit); CLOSE(iInsUnit)
-        RETURN
-      END IF
     END IF
 
     ! Process observation file line by line
@@ -859,15 +835,6 @@ CONTAINS
         iOut = iOut + 1
         CALL This%WriteSMPLine(iOutUnit, cTemp, iIntDays, iIntSecs, rIntValue)
         ModGroups(iObs)%iNOut = ModGroups(iObs)%iNOut + 1
-
-        ! Write instruction and PCF files
-        IF (lWriteIns) THEN
-          WRITE(iInsUnit, 200) TRIM(cTemp), iID
-200       FORMAT('l1  [',A,'_',I4.4,']37:56')
-          WRITE(iPCFUnit, 210) TRIM(cTemp), iID, rObsValue
-210       FORMAT(A,'_',I4.4,'    ',1PG15.8)
-          iID = iID + 1
-        END IF
       END IF
     END DO
 
@@ -889,10 +856,6 @@ CONTAINS
     ! Clean up
     CLOSE(iObsUnit)
     CLOSE(iOutUnit)
-    IF (lWriteIns) THEN
-      CLOSE(iInsUnit)
-      CLOSE(iPCFUnit)
-    END IF
 
     IF (ALLOCATED(cObsIDs))   DEALLOCATE(cObsIDs)
     IF (ALLOCATED(ModGroups)) DEALLOCATE(ModGroups)
@@ -911,15 +874,12 @@ CONTAINS
   !   binary search (Phase B), interpolates, and writes output.
   ! =====================================================================
   SUBROUTINE InterpolateDirect(This, cObsFile, cOutFile, rThreshold, &
-                                cInsFile, cPCFFile, lWriteIns, &
                                 cFilteredIDs, iNFiltered, &
                                 rModelData, iModelDays, iModelSecs, iNTimes, &
                                 iStat, iExpandLayers)
     CLASS(SMP2SMPType), INTENT(INOUT) :: This
     CHARACTER(LEN=*),   INTENT(IN)    :: cObsFile, cOutFile
     REAL(8),            INTENT(IN)    :: rThreshold
-    CHARACTER(LEN=*),   INTENT(IN)    :: cInsFile, cPCFFile
-    LOGICAL,            INTENT(IN)    :: lWriteIns
     CHARACTER(LEN=25),  INTENT(IN)    :: cFilteredIDs(:)
     INTEGER,            INTENT(IN)    :: iNFiltered
     REAL(8),            INTENT(IN)    :: rModelData(:,:)  ! (iNTimes, iNFiltered)
@@ -930,7 +890,6 @@ CONTAINS
     INTEGER, OPTIONAL,  INTENT(IN)    :: iExpandLayers  ! >0: auto-expand base IDs
 
     INTEGER, PARAMETER :: iObsUnit = 101, iOutUnit = 103
-    INTEGER, PARAMETER :: iInsUnit = 104, iPCFUnit = 105
     INTEGER, PARAMETER :: iMaxExpand = 20  ! Max supported layers for expansion
 
     CHARACTER(LEN=500) :: cLine
@@ -1002,22 +961,6 @@ CONTAINS
       iStat = -1; RETURN
     END IF
 
-    IF (lWriteIns) THEN
-      OPEN(UNIT=iInsUnit, FILE=cInsFile, STATUS='REPLACE', IOSTAT=iErr)
-      IF (iErr /= 0) THEN
-        CLOSE(iObsUnit); CLOSE(iOutUnit); DEALLOCATE(cSorted, iSortIdx)
-        iStat = -1; RETURN
-      END IF
-      WRITE(iInsUnit, '(A)') 'pif #'
-
-      OPEN(UNIT=iPCFUnit, FILE=cPCFFile, STATUS='REPLACE', IOSTAT=iErr)
-      IF (iErr /= 0) THEN
-        CLOSE(iObsUnit); CLOSE(iOutUnit); CLOSE(iInsUnit)
-        DEALLOCATE(cSorted, iSortIdx)
-        iStat = -1; RETURN
-      END IF
-    END IF
-
     ! ---- Process observation file line by line ----
     iObs = 0
     iOut = 0
@@ -1058,11 +1001,6 @@ CONTAINS
                 iOut = iOut + 1
                 CALL This%WriteSMPLine(iOutUnit, cExpIDs(iLyr), &
                      iBufDays(k), iBufSecs(k), rBufInterp(k, iLyr))
-                IF (lWriteIns) THEN
-                  WRITE(iInsUnit, 200) TRIM(cExpIDs(iLyr)), iID
-                  WRITE(iPCFUnit, 210) TRIM(cExpIDs(iLyr)), iID, rBufObs(k)
-                  iID = iID + 1
-                END IF
               END IF
             END DO
           END DO
@@ -1147,7 +1085,7 @@ CONTAINS
             IF (iStat /= 0) THEN
               CALL SetLastMessage('Problem interpolating for '//TRIM(cExpIDs(iLyr)), &
                    f_iFatal, cModName)
-              GOTO 900
+              EXIT
             END IF
             rBufInterp(iBufCount, iLyr) = rIntValue
             lBufValid(iBufCount, iLyr) = (rIntValue > -1.0D30)
@@ -1162,42 +1100,29 @@ CONTAINS
         IF (iStat /= 0) THEN
           CALL SetLastMessage('Problem interpolating for '//TRIM(cTemp), &
                f_iFatal, cModName)
-          GOTO 900
+          EXIT
         END IF
         IF (rIntValue > -1.0D30) THEN
           iOut = iOut + 1
           CALL This%WriteSMPLine(iOutUnit, cTemp, iIntDays, iIntSecs, rIntValue)
-          IF (lWriteIns) THEN
-            WRITE(iInsUnit, 200) TRIM(cTemp), iID
-            WRITE(iPCFUnit, 210) TRIM(cTemp), iID, rObsValue
-            iID = iID + 1
-          END IF
         END IF
       END IF
-200   FORMAT('l1  [',A,'_',I4.4,']37:56')
-210   FORMAT(A,'_',I4.4,'    ',1PG15.8)
     END DO
 
-    ! Flush remaining buffer after last bore
-    IF (iBufCount > 0 .AND. lExpanding) THEN
+    ! Flush remaining buffer after last bore (only if no error)
+    IF (iStat == 0 .AND. iBufCount > 0 .AND. lExpanding) THEN
       DO iLyr = 1, iNExpCols
         DO k = 1, iBufCount
           IF (lBufValid(k, iLyr)) THEN
             iOut = iOut + 1
             CALL This%WriteSMPLine(iOutUnit, cExpIDs(iLyr), &
                  iBufDays(k), iBufSecs(k), rBufInterp(k, iLyr))
-            IF (lWriteIns) THEN
-              WRITE(iInsUnit, 200) TRIM(cExpIDs(iLyr)), iID
-              WRITE(iPCFUnit, 210) TRIM(cExpIDs(iLyr)), iID, rBufObs(k)
-              iID = iID + 1
-            END IF
           END IF
         END DO
       END DO
     END IF
 
     ! Report results
-900 CONTINUE
     CALL LogMessage(TRIM(IntToText(iOut))//' lines written to '//TRIM(cOutFile), &
                     f_iInfo, cModName)
     IF (iNUnmatched > 0) THEN
@@ -1208,13 +1133,7 @@ CONTAINS
     ! Clean up
     CLOSE(iObsUnit)
     CLOSE(iOutUnit)
-    IF (lWriteIns) THEN
-      CLOSE(iInsUnit)
-      CLOSE(iPCFUnit)
-    END IF
     DEALLOCATE(cSorted, iSortIdx)
-
-    iStat = 0
 
   END SUBROUTINE InterpolateDirect
 
