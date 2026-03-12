@@ -645,13 +645,17 @@ CONTAINS
   ! =====================================================================
   ! ParseSubsidenceFile - Parse subsidence data file to find AllSubsOut
   !
-  ! v4.1 subsidence file data line order:
+  ! v4.1/v5.1 subsidence file data line order:
   !   Version #4.1 (auto-skipped as '#' comment)
-  !   Line 1: IC file
-  !   Line 2: Tecplot output file
-  !   Line 3: AllSubsOut HDF5 file   <-- what we need
+  !   Line 1: AllSubsOut HDF5 file   <-- what we need
+  !   Line 2: IC file
+  !   Line 3: Tecplot output file
   !   Line 4: Final Results file
   !   ... (remaining lines)
+  !
+  ! In the kernel (Class_AppSubsidence_v41/v51), AllSubsOut is read
+  ! FIRST (data line 1), then IC/Tecplot/etc follow via the v40/v50
+  ! config reader.
   ! =====================================================================
   SUBROUTINE ParseSubsidenceFile(This, cSubsFile, iStat)
     CLASS(ResultsExtractType), INTENT(INOUT) :: This
@@ -681,22 +685,8 @@ CONTAINS
       iStat = -1; RETURN
     END IF
 
-    ! Skip 2 data lines: IC file, Tecplot output
-    ! (Version '#4.1' is auto-skipped as comment)
-    CALL ReadSimDataLine(iUnit, cLine, iErr)  ! IC file
-    IF (iErr /= 0) THEN
-      CALL SetLastMessage('Unexpected end of subsidence file (IC line)', &
-           f_iFatal, ThisProcedure)
-      CLOSE(iUnit); iStat = -1; RETURN
-    END IF
-    CALL ReadSimDataLine(iUnit, cLine, iErr)  ! Tecplot
-    IF (iErr /= 0) THEN
-      CALL SetLastMessage('Unexpected end of subsidence file (Tecplot line)', &
-           f_iFatal, ThisProcedure)
-      CLOSE(iUnit); iStat = -1; RETURN
-    END IF
-
-    ! Data line 3: AllSubsOut HDF5 file
+    ! Data line 1: AllSubsOut HDF5 file (first data line after version comment)
+    ! In v4.1/v5.1, AllSubsOut is inserted before the v4.0/v5.0 config lines.
     CALL ReadSimDataLine(iUnit, cLine, iErr)
     IF (iErr /= 0) THEN
       CALL SetLastMessage('Cannot read AllSubsOut file path from subsidence file. '// &
