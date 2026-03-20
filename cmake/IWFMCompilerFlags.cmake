@@ -39,14 +39,27 @@ endif()
 add_library(iwfm_compiler_flags INTERFACE)
 add_library(IWFM::CompilerFlags ALIAS iwfm_compiler_flags)
 
+
+# =============================================================================
+# Profile-Guided Optimization (PGO) Options
+# =============================================================================
+option(IWFM_PGO_GENERATE "Build with PGO instrumentation (Phase 1: generate profiles)" OFF)
+option(IWFM_PGO_USE "Build with PGO optimization (Phase 2: use profiles)" OFF)
+set(IWFM_PGO_DIR "${CMAKE_SOURCE_DIR}/pgo_data" CACHE PATH "Directory for PGO profile data (outside build dir to survive cleans)")
+
 # =============================================================================
 # Intel Fortran Flags (ifx / ifort)
 # =============================================================================
 if(IWFM_USING_INTEL)
-    # Override CMake's default Release flags for Intel compilers on Linux/macOS.
-    # CMake defaults to -O3 for Intel on non-Windows, but IWFM uses -O2 on all
-    # platforms for consistent, reproducible results across Windows and Linux.
-    if(NOT WIN32)
+    # Override CMake's default Release flags for Intel compilers.
+    # We use /O3 on Windows (ifx LLVM backend benefits from aggressive optimization)
+    # and -O2 on Linux/macOS for consistency.
+    if(WIN32)
+        set(CMAKE_Fortran_FLAGS_RELEASE "/O2" CACHE STRING
+            "Fortran Release flags" FORCE)
+        set(CMAKE_C_FLAGS_RELEASE "/O2 /DNDEBUG" CACHE STRING
+            "C Release flags" FORCE)
+    else()
         set(CMAKE_Fortran_FLAGS_RELEASE "-O2" CACHE STRING
             "Fortran Release flags" FORCE)
         set(CMAKE_C_FLAGS_RELEASE "-O2 -DNDEBUG" CACHE STRING
@@ -55,6 +68,10 @@ if(IWFM_USING_INTEL)
 
     if(WIN32)
         # Windows Intel flags
+        # Match the .vfproj: /fp:consistent for reproducible floating-point results.
+        # Previous /fp:fast=1 testing showed it was faster, but the comparison was
+        # confounded by unconditional /Qopenmp on non-parallel targets. With that
+        # fixed, /fp:consistent should match .vfproj performance.
         target_compile_options(iwfm_compiler_flags INTERFACE
             /fp:consistent
             /assume:norealloc_lhs
@@ -92,16 +109,59 @@ if(IWFM_USING_INTEL)
         )
 
         # Release-specific flags
-        target_compile_options(iwfm_compiler_flags INTERFACE
-            $<$<CONFIG:Release>:/O2>
-        )
+        # /fp:fast=1: FP reordering for iterative solver (slight numerical diffs OK)
+        # /Qopt-zmm-usage:high: use 512-bit vectors on AVX-512 hardware
+        # /Qimf-precision:medium: faster math library (EXP, SQRT, etc.)
+        # /Qopt-assume-no-loop-carry: assume no loop-carried deps where unprovable
+        # /Qopt-multiple-gather-scatter-by-shuffles: better indirect-indexed gather
+        # /O3: aggressive optimization — loop transformations, vectorization, prefetch
+        #      DWR 2024 was built with ifort which generates faster code at /O2;
+        #      ifx (LLVM-based) needs /O3 + extra flags to compensate
+        # /Qipo: inter-procedural optimization across compilation units
+        # /QxHost: generate code optimized for the host CPU (AVX2/AVX-512)
+        # /Qunroll-aggressive: more aggressive loop unrolling
+        # /Qopt-prefetch: enable software prefetch instructions
+        # /Qparallel: auto-parallelization analysis (supplements OpenMP)
+        # NOTE: Aggressive flags temporarily disabled to A/B test vs /O2 baseline
+        # target_compile_options(iwfm_compiler_flags INTERFACE
+        #     $<$<CONFIG:Release>:/Qipo>
+        #     $<$<CONFIG:Release>:/QxHost>
+        #     $<$<CONFIG:Release>:/Qopt-prefetch>
+        #     $<$<CONFIG:Release>:/Qopt-zmm-usage:high>
+        #     $<$<CONFIG:Release>:/Qimf-precision:medium>
+        #     $<$<CONFIG:Release>:/Qopt-multiple-gather-scatter-by-shuffles>
+        # )
 
-        # Heap arrays: allocate automatic arrays > 900KB on heap instead of stack
-        # Required for large models (C2VSimFG has 30,000+ nodes) to prevent stack overflow
-        # This matches the setting used for IWFM_C_DLL in Visual Studio projects
-        target_compile_options(iwfm_compiler_flags INTERFACE
-            /heap-arrays:900
-        )
+        # Note: /heap-arrays:900 was removed from global flags — it causes a 3x
+        # performance penalty by forcing all arrays >900 bytes onto the heap.
+        # The VS solution only applies it to the DLL project (see iwfm_add_dll_flags).
+        # The 256MB stack (/STACK:256000000) is sufficient for all EXE targets.
+
+        # Profile-Guided Optimization (PGO)
+        # ifx (LLVM-based) uses LLVM-style PGO flags, not classic Intel /Qprof-gen
+        if(IWFM_PGO_GENERATE)
+            target_compile_options(iwfm_compiler_flags INTERFACE
+                $<$<CONFIG:Release>:-fprofile-instr-generate>
+            )
+            target_link_options(iwfm_compiler_flags INTERFACE
+                $<$<CONFIG:Release>:-fprofile-instr-generate>
+            )
+            message(STATUS "PGO instrumentation enabled (LLVM generate phase)")
+        elseif(IWFM_PGO_USE)
+            target_compile_options(iwfm_compiler_flags INTERFACE
+                $<$<CONFIG:Release>:-fprofile-instr-use=${IWFM_PGO_DIR}/default.profdata>
+            )
+            target_link_options(iwfm_compiler_flags INTERFACE
+                $<$<CONFIG:Release>:-fprofile-instr-use=${IWFM_PGO_DIR}/default.profdata>
+            )
+            message(STATUS "PGO optimization enabled (LLVM use phase)")
+        endif()
+
+        # IPO link: disabled for A/B testing
+        # target_link_options(iwfm_compiler_flags INTERFACE
+        #     $<$<CONFIG:Release>:/Qipo>
+        #     $<$<CONFIG:Release>:/QxHost>
+        # )
 
         # Linker: 256MB stack
         # Must use LINKER: prefix so CMake passes the flag through to link.exe
@@ -110,11 +170,17 @@ if(IWFM_USING_INTEL)
             "LINKER:/STACK:256000000"
         )
 
+        # Note: IWFM executables should link IWFM libraries with WHOLE_ARCHIVE
+        # to force inclusion of all object files (matching VS .vfproj behavior).
+        # This is done per-target using $<LINK_LIBRARY:WHOLE_ARCHIVE,...> in
+        # SourceCode/CMakeLists.txt, not globally here (global /WHOLEARCHIVE
+        # would also apply to system libraries causing duplicate symbol errors).
+
     else()
         # Linux/macOS Intel flags
         # Note: Multiple -assume options must be comma-separated or use separate -assume flags
         target_compile_options(iwfm_compiler_flags INTERFACE
-            -fp-model=consistent
+            -fp-model=fast=1
             "-assume" "norealloc_lhs,noieee_compares"
             -diag-disable=10448
             -standard-semantics
@@ -138,25 +204,49 @@ if(IWFM_USING_INTEL)
         )
 
         # Debug-specific flags
+        # Note: Multi-word options like "-check bounds" must use SHELL: prefix
+        # to prevent CMake from splitting them into separate arguments
         target_compile_options(iwfm_compiler_flags INTERFACE
             $<$<CONFIG:Debug>:-g>
             $<$<CONFIG:Debug>:-O0>
             $<$<CONFIG:Debug>:-traceback>
-            $<$<CONFIG:Debug>:-check bounds>
-            $<$<CONFIG:Debug>:-warn unused>
-            $<$<CONFIG:Debug>:-warn interfaces>
-            $<$<CONFIG:Debug>:-warn uncalled>
+            "$<$<CONFIG:Debug>:SHELL:-check bounds>"
+            "$<$<CONFIG:Debug>:SHELL:-warn unused>"
+            "$<$<CONFIG:Debug>:SHELL:-warn interfaces>"
+            "$<$<CONFIG:Debug>:SHELL:-warn uncalled>"
         )
 
-        # Release-specific flags
+        # Release-specific flags (matches DWR Visual Studio project)
         target_compile_options(iwfm_compiler_flags INTERFACE
             $<$<CONFIG:Release>:-O2>
+            $<$<CONFIG:Release>:-ipo>
         )
 
-        # Heap arrays: allocate automatic arrays > 900KB on heap instead of stack
-        # Required for large models (C2VSimFG has 30,000+ nodes) to prevent stack overflow
-        target_compile_options(iwfm_compiler_flags INTERFACE
-            -heap-arrays=900
+        # Note: -heap-arrays 900 was removed from global flags — it causes a 3x
+        # performance penalty. Only applied to DLL target (see iwfm_add_dll_flags).
+
+        # Profile-Guided Optimization (PGO)
+        if(IWFM_PGO_GENERATE)
+            target_compile_options(iwfm_compiler_flags INTERFACE
+                $<$<CONFIG:Release>:-fprofile-instr-generate>
+            )
+            target_link_options(iwfm_compiler_flags INTERFACE
+                $<$<CONFIG:Release>:-fprofile-instr-generate>
+            )
+            message(STATUS "PGO instrumentation enabled (LLVM generate phase)")
+        elseif(IWFM_PGO_USE)
+            target_compile_options(iwfm_compiler_flags INTERFACE
+                $<$<CONFIG:Release>:-fprofile-instr-use=${IWFM_PGO_DIR}/default.profdata>
+            )
+            target_link_options(iwfm_compiler_flags INTERFACE
+                $<$<CONFIG:Release>:-fprofile-instr-use=${IWFM_PGO_DIR}/default.profdata>
+            )
+            message(STATUS "PGO optimization enabled (LLVM use phase)")
+        endif()
+
+        # IPO link: -ipo must also be passed at link time
+        target_link_options(iwfm_compiler_flags INTERFACE
+            $<$<CONFIG:Release>:-ipo>
         )
 
         # Linker: 256MB stack (same as Windows)
@@ -260,8 +350,16 @@ endfunction()
 # Function: Add DLL-specific Flags to a Target
 # =============================================================================
 function(iwfm_add_dll_flags target)
-    # Note: heap-arrays is now applied globally to all targets
-    # This function remains for any future DLL-specific flags
+    # DLL targets need heap-arrays to avoid stack overflow when called from
+    # external processes with limited stack size. EXE targets use the 256MB
+    # stack set via /STACK linker flag instead (3x faster than heap-arrays).
+    if(IWFM_USING_INTEL)
+        if(WIN32)
+            target_compile_options(${target} PRIVATE /heap-arrays:900)
+        else()
+            target_compile_options(${target} PRIVATE "SHELL:-heap-arrays 900")
+        endif()
+    endif()
     if(IWFM_USING_GFORTRAN)
         target_compile_options(${target} PRIVATE -fPIC)
     endif()

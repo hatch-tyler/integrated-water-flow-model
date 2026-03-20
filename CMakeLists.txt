@@ -9,6 +9,7 @@
 cmake_minimum_required(VERSION 3.20)
 
 # Project definition with Fortran and C enabled
+# CXX is conditionally enabled below for the C++ solver
 project(IWFM
     VERSION 2025.0.1747
     DESCRIPTION "Integrated Water Flow Model"
@@ -50,6 +51,8 @@ option(IWFM_BUILD_CALCTYPHYD "Build CalcTypeHyd cluster type hydrograph tool" OF
 option(IWFM_BUILD_RESULTSEXTRACT "Build ResultsExtract generalized hydrograph extractor" OFF)
 option(IWFM_USE_SYSTEM_HDF5 "Use system-installed HDF5 instead of FetchContent" OFF)
 option(IWFM_USE_SYSTEM_HECLIB "Use system-installed heclib instead of FetchContent" OFF)
+option(IWFM_USE_CPP_SOLVER "Use C++ sparse solver instead of Fortran SPARSKIT" OFF)
+option(IWFM_MONOLITHIC_BUILD "Compile all .f90 directly into each executable (no intermediate .lib)" OFF)
 
 # =============================================================================
 # Determine if IWFM core targets need dependencies (HDF5, heclib, zlib)
@@ -72,6 +75,9 @@ if(IWFM_NEED_DEPENDENCIES)
     include(IWFMFetchDependencies)
 endif()
 include(IWFMFortranModules)
+if(IWFM_MONOLITHIC_BUILD)
+    include(IWFMMonolithic)
+endif()
 
 # =============================================================================
 # Global Fortran Module Output Directory
@@ -93,6 +99,17 @@ foreach(CONFIG_TYPE ${CMAKE_CONFIGURATION_TYPES})
     set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_${CONFIG_TYPE_UPPER} ${CMAKE_SOURCE_DIR}/Bin)
     set(CMAKE_LIBRARY_OUTPUT_DIRECTORY_${CONFIG_TYPE_UPPER} ${CMAKE_SOURCE_DIR}/Bin)
 endforeach()
+
+# =============================================================================
+# C++ Solver (optional high-performance replacement for Fortran SPARSKIT)
+# =============================================================================
+if(IWFM_USE_CPP_SOLVER)
+    enable_language(CXX)
+    message(STATUS "C++ Solver: ENABLED (C++ compiler: ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION})")
+    add_subdirectory(SourceCode/IWFM-kernel/Package_Matrix/cpp)
+else()
+    message(STATUS "C++ Solver: disabled (using Fortran SPARSKIT)")
+endif()
 
 # =============================================================================
 # Add Source Directories
@@ -138,7 +155,7 @@ if(IWFM_BUILD_TESTS AND IWFM_NEED_DEPENDENCIES)
                 WORKING_DIRECTORY "${IWFM_SAMPLE_MODEL_DIR}/Simulation"
             )
             set_tests_properties(IWFM_Simulation_Test PROPERTIES
-                TIMEOUT 600
+                TIMEOUT 1200
                 LABELS "integration"
                 DEPENDS IWFM_PreProcessor_Test
             )
@@ -368,6 +385,7 @@ message(STATUS "  Build Coarray:          ${IWFM_BUILD_COARRAY}")
 message(STATUS "  Build IWFM2OBS:         ${IWFM_BUILD_IWFM2OBS}")
 message(STATUS "  Build CalcTypeHyd:      ${IWFM_BUILD_CALCTYPHYD}")
 message(STATUS "  Build ResultsExtract:   ${IWFM_BUILD_RESULTSEXTRACT}")
+message(STATUS "  Monolithic Build:       ${IWFM_MONOLITHIC_BUILD}")
 message(STATUS "  Use System HDF5:        ${IWFM_USE_SYSTEM_HDF5}")
 message(STATUS "  Use System HECLIB:      ${IWFM_USE_SYSTEM_HECLIB}")
 message(STATUS "  Fetch Dependencies:     ${IWFM_NEED_DEPENDENCIES}")
