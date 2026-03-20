@@ -12,7 +12,8 @@ $releaseFiles = @(
     "ZBudget_x64.exe",
     "IWFM_C_x64.dll",
     "IWFM2OBS_x64.exe",
-    "CalcTypeHyd_x64.exe"
+    "CalcTypeHyd_x64.exe",
+    "ResultsExtract_x64.exe"
 )
 
 $debugFiles = @(
@@ -24,7 +25,8 @@ $debugFiles = @(
     "ZBudget_x64_D.exe",
     "IWFM_C_x64_D.dll",
     "IWFM2OBS_x64_D.exe",
-    "CalcTypeHyd_x64_D.exe"
+    "CalcTypeHyd_x64_D.exe",
+    "ResultsExtract_x64_D.exe"
 )
 
 function Package-Files($fileList, $zipName) {

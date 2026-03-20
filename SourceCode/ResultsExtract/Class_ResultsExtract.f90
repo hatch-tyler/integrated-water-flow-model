@@ -75,6 +75,7 @@ MODULE Class_ResultsExtract
     CHARACTER(LEN=30)  :: cName    = ' '
     REAL(8)            :: X        = 0d0
     REAL(8)            :: Y        = 0d0
+    LOGICAL            :: lSkip    = .FALSE.  ! True if outside grid
     INTEGER, ALLOCATABLE :: iNodes(:)
     REAL(8), ALLOCATABLE :: rFactors(:)
   END TYPE RE_HydAtXYType
@@ -775,10 +776,11 @@ CONTAINS
       CALL This%AppGrid%FEInterpolate(This%Hyd_AtXY(i)%X, This%Hyd_AtXY(i)%Y, &
                                        iElem, iNodes, rCoeff)
       IF (iElem == 0) THEN
-        CALL SetLastMessage('Hydrograph '//TRIM(IntToText(This%Hyd_AtXY(i)%ID))// &
-             ' ('//TRIM(This%Hyd_AtXY(i)%cName)//') is outside the model grid.', &
-             f_iFatal, ThisProcedure)
-        iStat = -1; RETURN
+        CALL LogMessage('  WARNING: Hydrograph '//TRIM(IntToText(This%Hyd_AtXY(i)%ID))// &
+             ' ('//TRIM(This%Hyd_AtXY(i)%cName)//') is outside the model grid - skipping.', &
+             f_iWarn, ThisProcedure)
+        This%Hyd_AtXY(i)%lSkip = .TRUE.
+        CYCLE
       END IF
       This%Hyd_AtXY(i)%iElement = iElem
       This%Hyd_AtXY(i)%iNodes   = iNodes
@@ -1061,6 +1063,10 @@ CONTAINS
             END IF
 
           CASE (f_iHyd_AtXY)
+            IF (This%Hyd_AtXY(indx)%lSkip) THEN
+              rHydValues(indxHyd) = 0d0
+              CYCLE
+            END IF
             iHydLayer = This%Hyd_AtXY(indx)%iLayer
             nVertex   = SIZE(This%Hyd_AtXY(indx)%iNodes)
             iNodes(1:nVertex)   = This%Hyd_AtXY(indx)%iNodes

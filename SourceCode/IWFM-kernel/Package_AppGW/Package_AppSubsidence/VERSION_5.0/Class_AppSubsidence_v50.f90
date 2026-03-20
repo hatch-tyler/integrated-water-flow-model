@@ -70,7 +70,8 @@ MODULE Class_AppSubsidence_v50
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: AppSubsidence_v50_Type          
+  PUBLIC :: AppSubsidence_v50_Type              , &
+            ReadSubsidenceConfig_v50
 
  
   ! -------------------------------------------------------------
@@ -129,7 +130,7 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- INSTANTIATE SUBSIDENCE COMPONENT
   ! -------------------------------------------------------------
-  SUBROUTINE AppSubsidence_v50_New(AppSubsidence,IsForInquiry,cFileName,cWorkingDirectory,iGWNodeIDs,AppGrid,Stratigraphy,StrmConnectivity,TimeStep,iStat,SubsICFile) 
+  SUBROUTINE AppSubsidence_v50_New(AppSubsidence,IsForInquiry,cFileName,cWorkingDirectory,iGWNodeIDs,AppGrid,Stratigraphy,StrmConnectivity,TimeStep,iStat,SubsICFile,NTIME) 
     CLASS(AppSubsidence_v50_Type),INTENT(OUT) :: AppSubsidence
     LOGICAL,INTENT(IN)                        :: IsForInquiry
     CHARACTER(LEN=*),INTENT(IN)               :: cFileName,cWorkingDirectory
@@ -140,43 +141,83 @@ CONTAINS
     TYPE(TimeStepType),INTENT(IN)             :: TimeStep
     INTEGER,INTENT(OUT)                       :: iStat
     TYPE(GenericFileType),OPTIONAL            :: SubsICFile
+    INTEGER,OPTIONAL,INTENT(IN)               :: NTIME
     
-    !Local data type for data compilation
-    TYPE SubLayerDataType
-        REAL(8),ALLOCATABLE :: PreCompactHead(:)  !Preconsolidation head array
-        REAL(8),ALLOCATABLE :: HSUB(:)            !Interbed head array
-        REAL(8),ALLOCATABLE :: HSUBOLD(:)         !Interbed head array from previous time step
-    END TYPE SubLayerDataType
-
     !Local variables
-    CHARACTER(LEN=ModNameLen+3) :: ThisProcedure = ModName // 'AppSubsidence_v50_New'
-    INTEGER                     :: ErrorCode,NNodes,NLayers,NRegn,indxLayer,NN,indxNode,iCount,indx_L
-    REAL(8)                     :: Factors(Stratigraphy%NLayers),THK,NN1,THKMIN,rInterbedDZ, &
-                                   rInitHeads(AppGrid%NNodes,Stratigraphy%NLayers),          &
-                                   rPreCompactHead(AppGrid%NNodes,Stratigraphy%NLayers)
-    CHARACTER                   :: cErrorMsg*300,cICFileName*1200,ALine*1200,cVarNames(Stratigraphy%NLayers)*15
+    CHARACTER                   :: ALine*1200
     TYPE(GenericFileType)       :: SubsMainFile
-    CHARACTER(:),ALLOCATABLE    :: cAbsPathFileName
-    TYPE(SubLayerDataType)      :: LayerData(AppGrid%NNodes,Stratigraphy%NLayers)
-    
+
     !Initialize
     iStat = 0
-    
+
     !Return if no filename is given
     IF (cFileName .EQ. '') RETURN
-    
+
     !Inform user
     CALL EchoProgress('   Instantiating subsidence component ...')
-    
-    !Initialize
-    NNodes  = AppGrid%NNodes
-    NRegn   = AppGrid%NSubregions
-    NLayers = Stratigraphy%NLayers
-    
+
     !Open file
     CALL SubsMainFile%New(FileName=cFileName,InputFile=.TRUE.,IsTSFile=.FALSE.,Descriptor='subsidence data main input',iStat=iStat)
     IF (iStat .EQ. -1) RETURN
-    
+
+    !Read away the version line
+    CALL SubsMainFile%ReadData(ALine,iStat)  ;  IF (iStat .EQ. -1) RETURN
+
+    !Allocate, initialize, and read configuration
+    CALL ReadSubsidenceConfig_v50(AppSubsidence,SubsMainFile,IsForInquiry,cWorkingDirectory,iGWNodeIDs,AppGrid,Stratigraphy,StrmConnectivity,TimeStep,iStat,SubsICFile)
+    IF (iStat .EQ. -1) RETURN
+
+    !Close file
+    CALL SubsMainFile%Kill()
+
+  END SUBROUTINE AppSubsidence_v50_New
+
+
+  ! -------------------------------------------------------------
+  ! --- READ SUBSIDENCE CONFIGURATION (IC file through sublayer processing)
+  ! --- Shared helper called by v5.0 and v5.1 constructors.
+  ! --- File must be positioned after the version line.
+  ! -------------------------------------------------------------
+  SUBROUTINE ReadSubsidenceConfig_v50(AppSubsidence,SubsMainFile,IsForInquiry,cWorkingDirectory,iGWNodeIDs,AppGrid,Stratigraphy,StrmConnectivity,TimeStep,iStat,SubsICFile)
+    CLASS(AppSubsidence_v50_Type)           :: AppSubsidence
+    TYPE(GenericFileType)                   :: SubsMainFile
+    LOGICAL,INTENT(IN)                      :: IsForInquiry
+    CHARACTER(LEN=*),INTENT(IN)             :: cWorkingDirectory
+    INTEGER,INTENT(IN)                      :: iGWNodeIDs(:)
+    TYPE(AppGridType),INTENT(IN)            :: AppGrid
+    TYPE(StratigraphyType),INTENT(IN)       :: Stratigraphy
+    COMPLEX,INTENT(IN)                      :: StrmConnectivity(:)
+    TYPE(TimeStepType),INTENT(IN)           :: TimeStep
+    INTEGER,INTENT(OUT)                     :: iStat
+    TYPE(GenericFileType),OPTIONAL          :: SubsICFile
+
+    !Local data type for data compilation
+    TYPE SubLayerDataType
+        REAL(8),ALLOCATABLE :: PreCompactHead(:)
+        REAL(8),ALLOCATABLE :: HSUB(:)
+        REAL(8),ALLOCATABLE :: HSUBOLD(:)
+    END TYPE SubLayerDataType
+
+    !Local variables
+    CHARACTER(LEN=ModNameLen+24) :: ThisProcedure = ModName // 'ReadSubsidenceConfig_v50'
+    INTEGER                      :: ErrorCode,NNodes,NLayers,indxLayer,NN,indxNode,iCount,indx_L
+    REAL(8)                      :: Factors(Stratigraphy%NLayers),THK,NN1,THKMIN,rInterbedDZ, &
+                                    rInitHeads(AppGrid%NNodes,Stratigraphy%NLayers),           &
+                                    rPreCompactHead(AppGrid%NNodes,Stratigraphy%NLayers)
+    CHARACTER                    :: cErrorMsg*300,cICFileName*1200,ALine*1200,cVarNames(Stratigraphy%NLayers)*15
+    CHARACTER(:),ALLOCATABLE     :: cAbsPathFileName
+    TYPE(SubLayerDataType)       :: LayerData(AppGrid%NNodes,Stratigraphy%NLayers)
+
+    !Local variables (for allocation)
+    INTEGER                      :: NRegn
+
+    !Initialize
+    iStat           = 0
+    NNodes          = AppGrid%NNodes
+    NRegn           = AppGrid%NSubregions
+    NLayers         = Stratigraphy%NLayers
+    rPreCompactHead = HUGE(0d0)
+
     !Allocate memory
     ALLOCATE (AppSubsidence%ElasticSC(NNodes,NLayers)        ,  &
               AppSubsidence%InelasticSC(NNodes,NLayers)      ,  &
@@ -198,30 +239,26 @@ CONTAINS
         iStat = -1
         RETURN
     END IF
-    
+
     !Initialize values
-    AppSubsidence%InterbedThick_P         = 0d0 
-    AppSubsidence%InterbedThick           = 0d0 
-    AppSubsidence%InterbedThickMin        = 0d0 
-    AppSubsidence%Subsidence              = 0d0 
+    AppSubsidence%InterbedThick_P         = 0d0
+    AppSubsidence%InterbedThick           = 0d0
+    AppSubsidence%InterbedThickMin        = 0d0
+    AppSubsidence%Subsidence              = 0d0
     AppSubsidence%CumSubsidence_P         = 0d0
     AppSubsidence%CumSubsidence           = 0d0
     AppSubsidence%RegionalCumSubsidence_P = 0d0
-    rPreCompactHead                       = HUGE(0d0)
-    
-    !Read away the version line
-    CALL SubsMainFile%ReadData(ALine,iStat)  ;  IF (iStat .EQ. -1) RETURN
-    
+
     !Initial conditions file
-    CALL SubsMainFile%ReadData(cICFileName,iStat)  ;  IF (iStat .EQ. -1) RETURN  
-    cICFileName = StripTextUntilCharacter(cICFileName,f_cInlineCommentChar)  
+    CALL SubsMainFile%ReadData(cICFileName,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    cICFileName = StripTextUntilCharacter(cICFileName,f_cInlineCommentChar)
     CALL CleanSpecialCharacters(cICFileName)
     CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(cICFileName)),cWorkingDirectory,cAbsPathFileName)
     cICFileName = cAbsPathFileName
 
     !Tecplot output file
-    CALL SubsMainFile%ReadData(ALine,iStat)  ;  IF (iStat .EQ. -1) RETURN  
-    ALine = StripTextUntilCharacter(ALine,f_cInlineCommentChar)  
+    CALL SubsMainFile%ReadData(ALine,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    ALine = StripTextUntilCharacter(ALine,f_cInlineCommentChar)
     CALL CleanSpecialCharacters(ALine)
     IF (ALine .NE. '') THEN
         ALLOCATE (AppSubsidence%TecplotFile , STAT=ErrorCode , ERRMSG=cErrorMsg)
@@ -233,7 +270,7 @@ CONTAINS
         CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(ALine)),cWorkingDirectory,cAbsPathFileName)
         CALL AppSubsidence%TecplotFile%New(IsForInquiry,cAbsPathFileName,'subsidence print-out for Tecplot',iStat)  ;  IF (iStat .EQ. -1) RETURN
         AppSubsidence%lTecplotFile_Defined = .TRUE.
-        
+
         !Print zero subsidence as initial values
         IF (.NOT. IsForInquiry) THEN
             cVarNames = [('SUBSIDENCE'//TRIM(IntToText(indxLayer)) , indxLayer=1,NLayers)]
@@ -241,7 +278,7 @@ CONTAINS
             CALL AppSubsidence%TecplotFile%PrintInitialValues(AppGrid,StrmConnectivity,AppSubsidence%Subsidence,Factors,'(2(F16.3,2X),*(G16.3E2,2X))',cVarNames,TimeStep)
         END IF
     END IF
-    
+
     !Final results output file
     CALL SubsMainFile%ReadData(ALine,iStat)  ;  IF (iStat .EQ. -1) RETURN  ;  ALine = StripTextUntilCharacter(ALine,f_cInlineCommentChar)  ;  CALL CleanSpecialCharacters(ALine)
     IF (ALine .NE. '') THEN
@@ -265,15 +302,15 @@ CONTAINS
         END IF
         AppSubsidence%lFinalSubsFile_Defined = .TRUE.
     END IF
-    
+
     !Output unit and conversion factor
-    CALL SubsMainFile%ReadData(AppSubsidence%FactorLen,iStat)  ;  IF (iStat .EQ. -1) RETURN 
+    CALL SubsMainFile%ReadData(AppSubsidence%FactorLen,iStat)  ;  IF (iStat .EQ. -1) RETURN
     CALL SubsMainFile%ReadData(ALine,iStat)  ;  IF (iStat .EQ. -1) RETURN  ;  CALL CleanSpecialCharacters(ALine)  ;  ALine = StripTextUntilCharacter(ALine,f_cInlineCommentChar)
     AppSubsidence%cUnitLen = ADJUSTL(TRIM(ALine))
-    
+
     !Preferred initial discretization
-    CALL SubsMainFile%ReadData(rInterbedDZ,iStat)  ;  IF (iStat .EQ. -1) RETURN 
-    
+    CALL SubsMainFile%ReadData(rInterbedDZ,iStat)  ;  IF (iStat .EQ. -1) RETURN
+
     !Subsidence hydrograph output data
     ALLOCATE (AppSubsidence%SubsHydOutput ,STAT=ErrorCode , ERRMSG=cErrorMsg)
     IF (ErrorCode .NE. 0) THEN
@@ -289,7 +326,7 @@ CONTAINS
     ELSE
         DEALLOCATE (AppSubsidence%SubsHydOutput , STAT=ErrorCode)
     END IF
-    
+
     !Read subsidence parameters
     CALL ReadSubsidenceParameters(NLayers                        , &
                                   iGWNodeIDs                     , &
@@ -304,20 +341,20 @@ CONTAINS
                                   AppSubsidence%rNEQ             , &
                                   iStat                          )
     IF (iStat .EQ. -1) RETURN
-    
+
     !Read initial interbed heads, if defined
     CALL ReadInitialHeads(SubsMainFile,iGWNodeIDs,AppSubsidence%lInitHeadsFromGW,rInitHeads,iStat)
     IF (iStat .EQ. -1) RETURN
-    
+
     !Read initial interbed thickness, pre-compaction head and initial interbed heads to overwrite the previous values
     IF (PRESENT(SubsICFile)) THEN
-        CALL ReadOverwriteICData_FromOpenedFile(SubsICFile,iGWNodeIDs,AppSubsidence%InterbedThick,rPreCompactHead,AppSubsidence%lInitHeadsFromGW,rInitHeads,iStat)  
+        CALL ReadOverwriteICData_FromOpenedFile(SubsICFile,iGWNodeIDs,AppSubsidence%InterbedThick,rPreCompactHead,AppSubsidence%lInitHeadsFromGW,rInitHeads,iStat)
     ELSE
-        CALL ReadOverwriteICData_OpenFile(cICFileName,iGWNodeIDs,AppSubsidence%InterbedThick,rPreCompactHead,AppSubsidence%lInitHeadsFromGW,rInitHeads,iStat)  
+        CALL ReadOverwriteICData_OpenFile(cICFileName,iGWNodeIDs,AppSubsidence%InterbedThick,rPreCompactHead,AppSubsidence%lInitHeadsFromGW,rInitHeads,iStat)
     END IF
     IF (iStat .EQ. -1) RETURN
     AppSubsidence%InterbedThick_P = AppSubsidence%InterbedThick
-    
+
     !Process and organize interbed data arrays
     iCount                      = 0
     AppSubsidence%iNSubLayerMax = 0
@@ -332,21 +369,21 @@ CONTAINS
                 NN  = NINT(NN1)
                 IF (NN .LT. 2) NN = 2
             END IF
-            iCount = iCount + NN 
+            iCount = iCount + NN
             ALLOCATE (LayerData(indxNode,indxLayer)%PreCompactHead(NN) , &
                       LayerData(indxNode,indxLayer)%HSUB(NN)           , &
                       LayerData(indxNode,indxLayer)%HSUBOLD(NN)        )
-            
+
             !Max number of layers that a given interbed is divided into
             IF (NN .GT. AppSubsidence%iNSubLayerMax) AppSubsidence%iNSubLayerMax = NN
-            
+
             !Initial data
             LayerData(indxNode,indxLayer)%PreCompactHead = rPreCompactHead(indxNode,indxLayer)
             LayerData(indxNode,indxLayer)%HSUB           = rInitHeads(indxNode,indxLayer)
             LayerData(indxNode,indxLayer)%HSUBOLD        = rInitHeads(indxNode,indxLayer)
         END DO
     END DO
-    
+
     !Copy layer data into 1-D arrays
     ALLOCATE (AppSubsidence%PreCompactHead(iCount) , AppSubsidence%HSUB(iCount) , AppSubsidence%HSUBOLD(iCount))
     indx_L = 0
@@ -362,15 +399,11 @@ CONTAINS
             AppSubsidence%HSUBOLD(iCount:indx_L)           = LayerData(indxNode,indxLayer)%HSUBOLD
         END DO
     END DO
-    
-    !Close file
-    CALL SubsMainFile%Kill()
 
-  END SUBROUTINE AppSubsidence_v50_New
-  
-  
- 
-  
+  END SUBROUTINE ReadSubsidenceConfig_v50
+
+
+
 ! ******************************************************************
 ! ******************************************************************
 ! ******************************************************************

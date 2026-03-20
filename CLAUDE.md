@@ -40,6 +40,9 @@ Coarray multi-model (`Simulation_MM`) requires Intel compilers. See `BUILD.md` f
 
 # Other actions: Configure, Test, Package, All
 # Additional targets: Simulation_Parallel, Simulation_MM, IWFM_C_DLL, IWFM2OBS, CalcTypeHyd
+
+# Build with C++ solver (replaces Fortran SPARSKIT for GMRES/ILUT/SpMV)
+.\build-iwfm.ps1 -CppSolver
 ```
 
 ### Windows (batch file, must use cmd.exe not Git Bash)
@@ -101,6 +104,7 @@ A standalone DSS diagnostic test exists at `SourceCode/tests/test_dss_read.f90` 
 | `IWFM_BUILD_TESTS` | ON | Integration tests (requires sample model) |
 | `IWFM_USE_SYSTEM_HDF5` | OFF | Use system HDF5 instead of building from source |
 | `IWFM_USE_SYSTEM_HECLIB` | OFF | Use system heclib |
+| `IWFM_USE_CPP_SOLVER` | OFF | Use C++ sparse solver instead of Fortran SPARSKIT |
 | `IWFM_HDF5_USE_BUNDLED` | OFF | Use pre-built HDF5 in `IWFM-kernel/HDF5/` (Windows only) |
 | `IWFM_HDF5_VERSION` | 1.14.3 | HDF5 version to download when building from source |
 
@@ -168,7 +172,7 @@ Packages with versions:
 
 **Infrastructure:**
 - `Package_Discretization` — Finite element grid, stratigraphy, node/element management
-- `Package_Matrix` — Sparse matrix solver (GMRES via `pgmres.f90`, LU via `Ludcmp.f90`/`Lubksb.f90`). Key arrays: `COEFF()`, `RHS()`, `HDelta()` (solution), `NJD()`/`JND()` (sparse structure)
+- `Package_Matrix` — Sparse matrix solver (GMRES via `pgmres.f90`, LU via `Ludcmp.f90`/`Lubksb.f90`). Key arrays: `COEFF()`, `RHS()`, `HDelta()` (solution), `NJD()`/`JND()` (sparse structure). Optional C++ solver replacement in `cpp/` subdir (enabled with `IWFM_USE_CPP_SOLVER=ON`): `iwfm_solver.h`, `gmres.cpp`, `ilut.cpp`, `spmv.cpp`, `lusol.cpp`, `blas.cpp`. Uses `#ifdef IWFM_CPP_SOLVER` preprocessor guards in `Package_Matrix.f90`.
 - `Package_ComponentConnectors` — Stream-GW, Lake-GW, Stream-Lake inter-component connectors
 - `Package_Supply` — Water supply management and allocation
 - `Package_PrecipitationET` — Climate data handling

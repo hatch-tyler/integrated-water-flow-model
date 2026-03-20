@@ -24,7 +24,8 @@ MODULE Class_BaseAppSubsidence
   USE MessageLogger           , ONLY: LogMessage          , &
                                       f_iFILE             , &
                                       f_iMessage            
-  USE IOInterface             , ONLY: GenericFileType         
+  USE IOInterface             , ONLY: GenericFileType      , &
+                                      f_iHDF
   USE GeneralUtilities        , ONLY: IntToText           
   USE TimeSeriesUtilities     , ONLY: TimeStepType        
   USE Package_Discretization  , ONLY: AppGridType         , &
@@ -85,6 +86,8 @@ MODULE Class_BaseAppSubsidence
       LOGICAL                             :: lSubsHydOutput_Defined   = .FALSE.  !Flag to check if this output is defined
       LOGICAL                             :: lTecplotFile_Defined     = .FALSE.  !Flag to check if this output file is defined
       LOGICAL                             :: lFinalSubsFile_Defined   = .FALSE.  !Flag to check if this output is defined
+      TYPE(GenericFileType),ALLOCATABLE   :: AllSubsOutFile                      !HDF5 file for subsidence at all nodes and layers
+      LOGICAL                             :: lAllSubsOutFile_Defined  = .FALSE.  !Flag: is AllSubsOut output defined?
   CONTAINS
       PROCEDURE(Abstract_New),PASS,DEFERRED                         :: New                          
       PROCEDURE,PASS                                                :: Kill                         
@@ -127,7 +130,7 @@ MODULE Class_BaseAppSubsidence
   ! -------------------------------------------------------------
   ABSTRACT INTERFACE
 
-    SUBROUTINE Abstract_New(AppSubsidence,IsForInquiry,cFileName,cWorkingDirectory,iGWNodeIDs,AppGrid,Stratigraphy,StrmConnectivity,TimeStep,iStat,SubsICFile) 
+    SUBROUTINE Abstract_New(AppSubsidence,IsForInquiry,cFileName,cWorkingDirectory,iGWNodeIDs,AppGrid,Stratigraphy,StrmConnectivity,TimeStep,iStat,SubsICFile,NTIME) 
         IMPORT                                   :: BaseAppSubsidenceType,AppGridType,StratigraphyType,TimeStepType,GenericFileType
         CLASS(BaseAppSubsidenceType),INTENT(OUT) :: AppSubsidence
         LOGICAL,INTENT(IN)                       :: IsForInquiry
@@ -139,6 +142,7 @@ MODULE Class_BaseAppSubsidence
         TYPE(TimeStepType),INTENT(IN)            :: TimeStep
         INTEGER,INTENT(OUT)                      :: iStat
         TYPE(GenericFileType),OPTIONAL           :: SubsICFile
+        INTEGER,OPTIONAL,INTENT(IN)              :: NTIME
     END SUBROUTINE Abstract_New
     
     
@@ -272,12 +276,18 @@ CONTAINS
         
     IF (AppSubsidence%lFinalSubsFile_Defined) CALL AppSubsidence%FinalSubsFile%Kill()
     
+    IF (AppSubsidence%lAllSubsOutFile_Defined) THEN
+        CALL AppSubsidence%AllSubsOutFile%Kill()
+        DEALLOCATE (AppSubsidence%AllSubsOutFile , STAT=ErrorCode)
+    END IF
+    
     !Default values for arguments
     AppSubsidence%FactorLen              = 1.0
     AppSubsidence%cUnitLen               = ''
     AppSubsidence%lSubsHydOutput_Defined = .FALSE.  
     AppSubsidence%lTecplotFile_Defined   = .FALSE.  
     AppSubsidence%lFinalSubsFile_Defined = .FALSE.
+    AppSubsidence%lAllSubsOutFile_Defined = .FALSE.
       
 
     !Clean memory from any other implementation-specific variables
@@ -512,6 +522,10 @@ CONTAINS
     IF (AppSubsidence%lTecplotFile_Defined)  &
         CALL AppSubsidence%TecplotFile%PrintResults(AppSubsidence%CumSubsidence,AppSubsidence%FactorLen,'(*(G16.3E2,2X))',TimeStep)
     
+    !All-nodes output
+    IF (AppSubsidence%lAllSubsOutFile_Defined)  &
+        CALL AllSubsOutFile_PrintResults(AppSubsidence%CumSubsidence,AppSubsidence%FactorLen,TimeStep,lEndOfSimulation,AppSubsidence%AllSubsOutFile)
+
     !Final results
     IF (lEndOfSimulation) THEN
         IF (AppSubsidence%lFinalSubsFile_Defined) CALL AppSubsidence%PrintFinalSubs(AppGrid,TimeStep)
@@ -533,10 +547,40 @@ CONTAINS
     CALL SubsHydOutput%PrintResults(Stratigraphy,f_iHyd_Subsidence,CumSubsidence,rFactor,TimeStep,lEndOfSimulation) 
     
   END SUBROUTINE PrintSubsidenceHydrographs
-  
-  
-  
-  
+
+
+  ! -------------------------------------------------------------
+  ! --- PRINT SUBSIDENCE AT ALL NODES TO HDF5
+  ! -------------------------------------------------------------
+  SUBROUTINE AllSubsOutFile_PrintResults(CumSubsidence,rFactor,TimeStep,lEndOfSimulation,OutFile)
+    REAL(8),INTENT(IN)            :: CumSubsidence(:,:),rFactor
+    TYPE(TimeStepType),INTENT(IN) :: TimeStep
+    LOGICAL,INTENT(IN)            :: lEndOfSimulation
+    TYPE(GenericFileType)         :: OutFile
+    
+    !Local variables
+    INTEGER :: indxLayer,indxNode,NNodes,NLayers
+    
+    !Initialize
+    NNodes  = SIZE(CumSubsidence , DIM=1)
+    NLayers = SIZE(CumSubsidence , DIM=2)
+    
+    !Only HDF5 output is supported
+    IF (OutFile%iGetFileType() .EQ. f_iHDF) THEN
+        BLOCK
+            REAL(8) :: rHDFData(NNodes*NLayers, 1)
+            DO indxLayer=1,NLayers
+              DO indxNode=1,NNodes
+                rHDFData((indxLayer-1)*NNodes + indxNode, 1) = CumSubsidence(indxNode,indxLayer) * rFactor
+              END DO
+            END DO
+            CALL OutFile%WriteData(rHDFData)
+        END BLOCK
+    END IF
+    
+  END SUBROUTINE AllSubsOutFile_PrintResults
+
+
 ! ******************************************************************
 ! ******************************************************************
 ! ******************************************************************

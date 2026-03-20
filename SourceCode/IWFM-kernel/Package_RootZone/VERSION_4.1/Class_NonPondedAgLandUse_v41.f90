@@ -1514,7 +1514,7 @@ CONTAINS
                                                AchievedConv                           )
                 !Generate error if convergence is not achieved
                 IF (AchievedConv .NE. 0.0) THEN
-                    !$OMP CRITICAL
+                    !$OMP CRITICAL (CRIT_NONPONDED_CONV)
                     iElemID         = AppGrid%AppElement(indxElem)%ID
                     MessageArray(1) = 'Convergence error in soil moisture routing for non-ponded crops!'
                     MessageArray(2) = 'Element              = '//TRIM(IntToText(iElemID))
@@ -1523,7 +1523,7 @@ CONTAINS
                     WRITE (MessageArray(5),'(A,F11.8)') 'Achieved convergence = ',ABS(AchievedConv)
                     CALL SetLastMessage(MessageArray(1:5),f_iFatal,ThisProcedure)
                     iStat = -1
-                    !$OMP END CRITICAL
+                    !$OMP END CRITICAL (CRIT_NONPONDED_CONV)
                     EXIT
                 END IF
                 
@@ -1562,7 +1562,7 @@ CONTAINS
                 
                 !Make sure soil moisture is not less than zero
                 IF (ANY(SoilM_Array.LT.0.0)) THEN
-                    !$OMP CRITICAL
+                    !$OMP CRITICAL (CRIT_NONPONDED_SOILM)
                     iElemID         = AppGrid%AppElement(indxElem)%ID
                     MessageArray(1) = 'Soil moisture content becomes negative at element '//TRIM(IntToText(iElemID))//'.'
                     MessageArray(2) = 'This may be due to a too high convergence criteria set for the iterative solution.'
@@ -1570,7 +1570,7 @@ CONTAINS
                     MessageArray(4) = 'in the Root Zone Main Input File.'
                     CALL SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
                     iStat = -1
-                    !$OMP END CRITICAL
+                    !$OMP END CRITICAL (CRIT_NONPONDED_SOILM)
                     EXIT
                 END IF
                 
@@ -1729,7 +1729,7 @@ CONTAINS
                     
                     !Generate error if convergence is not achieved
                     IF (AchievedConv .NE. 0.0) THEN
-                        !$OMP CRITICAL
+                        !$OMP CRITICAL (CRIT_NONPONDED_WDCONV)
                         iElemID         = AppGrid%AppElement(indxElem)%ID
                         MessageArray(1) = 'Convergence error in water demand calculations for non-ponded crops!'
                         MessageArray(2) = 'Element              = '//TRIM(IntToText(iElemID))
@@ -1738,7 +1738,7 @@ CONTAINS
                         WRITE (MessageArray(5),'(A,F11.8)') 'Achieved convergence = ',ABS(AchievedConv)
                         CALL SetLastMessage(MessageArray(1:5),f_iFatal,ThisProcedure)
                         iStat = -1
-                        !$OMP END CRITICAL
+                        !$OMP END CRITICAL (CRIT_NONPONDED_WDCONV)
                         EXIT
                     END IF
                     
@@ -1778,7 +1778,7 @@ CONTAINS
                                      
             !Generate error if convergence is not achieved
             IF (AchievedConv .NE. 0.0) THEN
-                !$OMP CRITICAL
+                !$OMP CRITICAL (CRIT_NONPONDED_AGWD)
                 iElemID         = AppGrid%AppElement(indxElem)%ID
                 MessageArray(1) = 'Convergence error in calculating agricultural water demand '
                 MessageArray(2) = 'for crop '//TRIM(NonPondedAg%CropCodes(indxCrop))//' in element '//TRIM(IntToText(iElemID))//'!'
@@ -1786,7 +1786,7 @@ CONTAINS
                 WRITE (MessageArray(4),'(A,F11.8)') 'Achieved convergence = ',ABS(AchievedConv)
                 CALL SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
                 iStat = -1
-                !$OMP END CRITICAL
+                !$OMP END CRITICAL (CRIT_NONPONDED_AGWD)
                 EXIT
             END IF
         

@@ -32,7 +32,9 @@ MODULE Package_AppSubsidence
   USE Class_BaseAppSubsidence , ONLY: BaseAppSubsidenceType  , &
                                       f_cDescription_SubsHyd
   USE Class_AppSubsidence_v40 , ONLY: AppSubsidence_v40_Type
+  USE Class_AppSubsidence_v41 , ONLY: AppSubsidence_v41_Type
   USE Class_AppSubsidence_v50 , ONLY: AppSubsidence_v50_Type
+  USE Class_AppSubsidence_v51 , ONLY: AppSubsidence_v51_Type
   IMPLICIT NONE
 
   
@@ -118,7 +120,7 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- NEW SUBSIDENCE DATA
   ! -------------------------------------------------------------
-  SUBROUTINE New(AppSubsidence,IsForInquiry,cFileName,cWorkingDirectory,iGWNodeIDs,AppGrid,Stratigraphy,StrmConnectivity,TimeStep,iStat,SubsICFile)
+  SUBROUTINE New(AppSubsidence,IsForInquiry,cFileName,cWorkingDirectory,iGWNodeIDs,AppGrid,Stratigraphy,StrmConnectivity,TimeStep,iStat,SubsICFile,NTIME)
     CLASS(AppSubsidenceType),INTENT(OUT) :: AppSubsidence
     LOGICAL,INTENT(IN)                   :: IsForInquiry
     CHARACTER(LEN=*),INTENT(IN)          :: cFileName,cWorkingDirectory
@@ -129,6 +131,7 @@ CONTAINS
     TYPE(TimeStepType),INTENT(IN)        :: TimeStep
     INTEGER,INTENT(OUT)                  :: iStat 
     TYPE(GenericFileType),OPTIONAL       :: SubsICFile
+    INTEGER,OPTIONAL,INTENT(IN)          :: NTIME
     
     !Local variables
     CHARACTER(LEN=ModNameLen+3) :: ThisProcedure = ModName // 'New'
@@ -157,9 +160,15 @@ CONTAINS
         CASE ('4.0')
             ALLOCATE(AppSubsidence_v40_Type :: AppSubsidence%Me)
             AppSubsidence%iComponentVersion = 40
+        CASE ('4.1')
+            ALLOCATE(AppSubsidence_v41_Type :: AppSubsidence%Me)
+            AppSubsidence%iComponentVersion = 41
         CASE ('5.0')
             ALLOCATE(AppSubsidence_v50_Type :: AppSubsidence%Me)
             AppSubsidence%iComponentVersion = 50
+        CASE ('5.1')
+            ALLOCATE(AppSubsidence_v51_Type :: AppSubsidence%Me)
+            AppSubsidence%iComponentVersion = 51
         CASE DEFAULT
             CALL SetLastMessage('Subsidence Component version number is not recognized ('//TRIM(cVersion)//')!',f_iFatal,ThisProcedure)
             iStat = -1
@@ -167,7 +176,7 @@ CONTAINS
     END SELECT
         
     !Now, instantiate
-    CALL AppSubsidence%Me%New(IsForInquiry,cFileName,cWorkingDirectory,iGWNodeIDs,AppGrid,Stratigraphy,StrmConnectivity,TimeStep,iStat,SubsICFile)
+    CALL AppSubsidence%Me%New(IsForInquiry,cFileName,cWorkingDirectory,iGWNodeIDs,AppGrid,Stratigraphy,StrmConnectivity,TimeStep,iStat,SubsICFile,NTIME)
     
     !Set flag
     IF (iStat .EQ. 0) AppSubsidence%lDefined = .TRUE.

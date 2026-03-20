@@ -7874,12 +7874,27 @@ CONTAINS
         NLakes        = pAppLake%GetNLakes()
         lEndIteration = .TRUE.
         
-        !Compute L2-norm of the difference vector and rhs vector
-        DIFF_L2 = SQRT(SUM(pMatrix%HDelta*pMatrix%HDelta))
-        
-        !Find the maximum difference
+        !Compute L2-norm and find maximum difference in a single fused pass
+        !Avoids separate MAXLOC + SUM array traversals and bad ifx MAXLOC codegen
+        BLOCK
+          INTEGER :: iConv, nConv
+          REAL(8) :: valConv, absConv, sum_sq, max_abs
+          nConv = SIZE(pMatrix%HDelta)
+          sum_sq = 0.0D0
+          max_abs = 0.0D0
+          NODEMAX = 1
+          DO iConv = 1, nConv
+            valConv = pMatrix%HDelta(iConv)
+            sum_sq = sum_sq + valConv * valConv
+            absConv = ABS(valConv)
+            IF (absConv > max_abs) THEN
+              max_abs = absConv
+              NODEMAX = iConv
+            END IF
+          END DO
+          DIFF_L2 = SQRT(sum_sq)
+        END BLOCK
         IF (DIFF_L2 .NE. 0D0) THEN
-            NODEMAX = MAXLOC(ABS(pMatrix%HDelta) , DIM=1)
             DIFFMAX = pMatrix%HDelta(NODEMAX)
             CALL pMatrix%GlobalNode_To_LocalNode(NODEMAX,iNodeMax_CompID,iNodeMax_Local)
         ELSE

@@ -699,7 +699,7 @@ CONTAINS
 
     iSlashCount = 0
     DO i=1,LEN_TRIM(Text)
-      IF (Text(i:i) == ' ') EXIT
+      IF (IACHAR(Text(i:i)) <= 32) EXIT  !Stop at any whitespace (space, tab, etc.)
       IF (Text(i:i) == '/') iSlashCount = iSlashCount + 1
     END DO
 
@@ -735,9 +735,12 @@ CONTAINS
     DO i=iStart,iEnd,iStep
       IF (TextIn(i:i) /= '/') CYCLE
 
-      !Rule 1: Must be preceded by whitespace (or be position 1)
+      !Rule 1: Must be preceded by whitespace or be position 1.
+      !        Whitespace = space (32) or any control char (ASCII < 32, e.g. tab=9).
+      !        This is consistent with CleanSpecialCharacters which converts ASCII < 32
+      !        to space.  IWFM input files commonly use tabs as field separators.
       IF (i > 1) THEN
-        IF (TextIn(i-1:i-1) /= ' ') CYCLE
+        IF (IACHAR(TextIn(i-1:i-1)) > 32) CYCLE
       END IF
 
       !Rule 2: Must NOT be start of a DSS pathname
@@ -1386,6 +1389,22 @@ CONTAINS
     
     !Initialize
     n   = SIZE(a)
+    
+    !Fast path: insertion sort for small arrays (avoids GOTO overhead in LLVM/ifx)
+    IF (n <= 8) THEN
+      DO i = 2, n
+        va = a(i)
+        j = i - 1
+        DO WHILE (j >= 1)
+          IF (a(j) <= va) EXIT
+          a(j+1) = a(j)
+          j = j - 1
+        END DO
+        a(j+1) = va
+      END DO
+      RETURN
+    END IF
+    
     inc = 1
     
     DO
@@ -1423,6 +1442,25 @@ CONTAINS
     
     !Initialize
     n   = SIZE(a)
+    
+    !Fast path: insertion sort for small arrays (avoids GOTO overhead in LLVM/ifx)
+    IF (n <= 8) THEN
+      DO i = 2, n
+        va = a(i)
+        ib = b(i)
+        j = i - 1
+        DO WHILE (j >= 1)
+          IF (a(j) <= va) EXIT
+          a(j+1) = a(j)
+          b(j+1) = b(j)
+          j = j - 1
+        END DO
+        a(j+1) = va
+        b(j+1) = ib
+      END DO
+      RETURN
+    END IF
+    
     inc = 1
     
     DO
@@ -1465,6 +1503,25 @@ CONTAINS
     
     !Initialize
     n      = SIZE(a)
+    
+    !Fast path: insertion sort for small arrays (avoids GOTO overhead in LLVM/ifx)
+    IF (n <= 8) THEN
+      DO i = 2, n
+        va = a(i)
+        rb = b(i)
+        j = i - 1
+        DO WHILE (j >= 1)
+          IF (a(j) <= va) EXIT
+          a(j+1) = a(j)
+          b(j+1) = b(j)
+          j = j - 1
+        END DO
+        a(j+1) = va
+        b(j+1) = rb
+      END DO
+      RETURN
+    END IF
+    
     inc    = 1
     
     DO
@@ -2134,16 +2191,14 @@ CONTAINS
     
     !Local variables
     INTEGER(8) :: i8
-    REAL(8)    :: r8
-    EQUIVALENCE (r8,i8)
     
     IF (rArg .LT. -500d0) THEN
         rExp = 0d0
     ELSEIF (rArg .GT. 500d0) THEN
         rExp = HUGE(0d0)
     ELSE
-        i8   = 6497320848556798_8 * rArg + 4607182418800017408_8
-        rExp = r8
+        i8   = INT(6497320848556798_8 * rArg + 4607182418800017408_8, 8)
+        rExp = TRANSFER(i8, rExp)
     END IF
     
   END FUNCTION FEXP

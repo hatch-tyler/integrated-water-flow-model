@@ -100,6 +100,10 @@ MODULE Package_Matrix
       REAL(8),ALLOCATABLE,PUBLIC             :: RHSL2(:)                           !L2-norm of the RHS vector at each Newton-Raphson iteration
       TYPE(SolverType)                       :: Solver                             !Solver data to be used to invert matrix equation
       TYPE(ConnectivityListType),ALLOCATABLE :: ConnectivityList(:)                !Linked-list of connectivity at each global node
+      INTEGER,ALLOCATABLE                    :: NJD_CRS(:)                             !Pre-allocated CRS row pointers (reused across NR iterations)
+      INTEGER,ALLOCATABLE                    :: JND_CRS(:)                             !Pre-allocated CRS column indices (reused across NR iterations)
+      REAL(8),ALLOCATABLE                    :: COEFF_CRS(:)                           !Pre-allocated CRS coefficients (reused across NR iterations)
+      INTEGER                                :: nCRS_NNZ = 0                           !Actual number of non-zeros in CRS arrays
   CONTAINS
       PROCEDURE,PASS         :: AddComponent
       PROCEDURE,PASS,PRIVATE :: AddConnectivity_ToOne
@@ -130,6 +134,7 @@ MODULE Package_Matrix
       PROCEDURE,PASS         :: ResetRHSToZero
       PROCEDURE,PASS         :: ResetToZero
       PROCEDURE,PASS         :: UpdateCOEFF
+      PROCEDURE,PASS         :: UpdateCOEFF_SingleComp
       PROCEDURE,PASS         :: PrintCOEFF_In_MatrixForm
       PROCEDURE,PASS,PRIVATE :: UpdateRHS_Random
       PROCEDURE,PASS,PRIVATE :: UpdateRHS_StartAtRow
@@ -1192,9 +1197,7 @@ CONTAINS
     INTEGER,INTENT(OUT) :: iStat
     
     !Local variables
-    INTEGER              :: ErrorCode,NRow
-    INTEGER, ALLOCATABLE :: NJD_CRS(:),JND_CRS(:)                       ! INTERMEDIATE CRS FORMAT STORAGE ARRAYS
-    REAL(8), ALLOCATABLE :: COEFF_CRS(:)
+    INTEGER              :: NRow
     
     !Initialize
     IF (Matrix%Solver%ZeroReset) Matrix%HDelta = 0.0
@@ -1220,19 +1223,19 @@ CONTAINS
                          iStat               )
 
             CASE (iSolver_PGMRES)
-                !Convert matrix storage to CRS storage
-                CALL ConvertToCRSFormat(Matrix%COEFF , Matrix%NJD , Matrix%JND , COEFF_CRS , NJD_CRS , JND_CRS)
+                !Convert matrix storage to CRS storage (reuse pre-allocated arrays)
+                CALL ConvertToCRSFormat_Reuse(Matrix)
                 
                 CALL PGMRES(Matrix                          , &
                             iStrmNodeIDs                    , &
                             iLakeIDs                        , &
                             iGWNodeIDs                      , &
                             NRow                            , &
-                            SIZE(COEFF_CRS)                 , &
-                            NJD_CRS                         , &
-                            JND_CRS                         , &
+                            Matrix%nCRS_NNZ                 , &
+                            Matrix%NJD_CRS                  , &
+                            Matrix%JND_CRS                  , &
                             Matrix%RHSL2(NewtonRaphsonIter) , &
-                            COEFF_CRS                       , &
+                            Matrix%COEFF_CRS                , &
                             pSolver%IterMax                 , &
                             pSolver%Tolerance               , &
                             iStat                           )
@@ -1241,8 +1244,6 @@ CONTAINS
 
     END ASSOCIATE    
     
-    !Clear memory
-    DEALLOCATE(COEFF_CRS, NJD_CRS, JND_CRS , STAT=ErrorCode)
     
   END SUBROUTINE Solve
   
@@ -1290,6 +1291,55 @@ CONTAINS
     END DO DI
  
   END SUBROUTINE ConvertToCRSFormat
+
+
+  ! -------------------------------------------------------------
+  ! --- CONVERT TO CRS FORMAT REUSING PRE-ALLOCATED MATRIX ARRAYS
+  ! --- Avoids repeated ALLOCATE/DEALLOCATE of ~22MB per NR iteration
+  ! -------------------------------------------------------------
+  SUBROUTINE ConvertToCRSFormat_Reuse(Matrix)
+    TYPE(MatrixType) :: Matrix
+
+    INTEGER :: I, K, IM, IshftIDX, N, NJ, NJ_Max
+
+    N = SIZE(Matrix%NJD) - 1
+    NJ_Max = SIZE(Matrix%COEFF)
+
+    !Pre-allocate CRS arrays on first call (at max possible size)
+    IF (.NOT. ALLOCATED(Matrix%COEFF_CRS)) THEN
+        ALLOCATE(Matrix%COEFF_CRS(NJ_Max), Matrix%NJD_CRS(N+1), Matrix%JND_CRS(NJ_Max))
+    END IF
+
+    !Count non-zeros to skip
+    IshftIDX = 0
+    DO I = 1, N
+       DO K = Matrix%NJD(I),(Matrix%NJD(I+1)-1)
+         IF (Matrix%COEFF(K).EQ.0.D0 .OR. Matrix%JND(K).EQ.0) IshftIDX = IshftIDX + 1
+       ENDDO
+    ENDDO
+
+    NJ = NJ_Max - IshftIDX
+    Matrix%nCRS_NNZ = NJ
+
+    !Fill CRS arrays in place
+    IM = 1
+    Matrix%NJD_CRS(1) = 1
+    IshftIDX = 0
+
+    DO I = 1, N
+       DO K = Matrix%NJD(I),(Matrix%NJD(I+1)-1)
+         IF (Matrix%COEFF(K).EQ.0.D0 .OR. Matrix%JND(K).EQ.0) THEN
+           IshftIDX = IshftIDX + 1
+         ELSE
+           Matrix%COEFF_CRS(IM) = Matrix%COEFF(K)
+           Matrix%JND_CRS(IM) = Matrix%JND(K)
+           IM = IM + 1
+         ENDIF
+       ENDDO
+       Matrix%NJD_CRS(I+1) = Matrix%NJD(I+1) - IshftIDX
+    END DO
+
+  END SUBROUTINE ConvertToCRSFormat_Reuse
   
   
   ! -------------------------------------------------------------
@@ -1526,44 +1576,91 @@ CONTAINS
     !Initialize
     iStat = 0
 
-    ! ILUT PRECONDITIONER PARAMETERS    
+    ! ILUT PRECONDITIONER PARAMETERS
     LFIL        =       5                               ! THE LEVEL OF FILL-IN, TYPICALLY BETWEEN 5 AND 10
-    DROPTOL     =       0.01                            ! THE DROP TOLERANCE, TYPICALLY SET TO < 1.0    
+    DROPTOL     =       0.01                            ! THE DROP TOLERANCE, TYPICALLY SET TO < 1.0
     IWK         =       N*(2*LFIL + 1)                  ! WORKSPACE SIZE REQUIRED BY THE PRECONDITIONER
 
-    IM          =       20                              ! THE NUMBER OF ITERATIONS PERFORMED BEFORE RESTART OF GMRES(IM) 
+    IM          =       20                              ! THE NUMBER OF ITERATIONS PERFORMED BEFORE RESTART OF GMRES(IM)
     RES         =       0.0D0                           ! THE RESIDUAL ERROR USED TO ASSESS CONVERGENCE
 
-    
+#ifdef IWFM_CPP_SOLVER
+    ! ── C++ solver: single-call ILUT + GMRES(m) ──────────────────────────────
+    BLOCK
+        USE, INTRINSIC :: ISO_C_BINDING, ONLY: C_INT, C_DOUBLE, C_PTR, C_LOC
+        INTERFACE
+            FUNCTION iwfm_pgmres_solve(n, rhs, sol, coeff_c, jnd_c, njd_c, &
+                     lfil_c, droptol_c, im_c, maxiter, rtol, atol,         &
+                     iters_out, residual_out) BIND(C, NAME='iwfm_pgmres_solve')
+                USE, INTRINSIC :: ISO_C_BINDING, ONLY: C_INT, C_DOUBLE
+                INTEGER(C_INT), VALUE :: n, lfil_c, im_c, maxiter
+                REAL(C_DOUBLE), VALUE :: droptol_c, rtol, atol
+                REAL(C_DOUBLE), INTENT(INOUT) :: rhs(*), sol(*)
+                REAL(C_DOUBLE), INTENT(IN)    :: coeff_c(*)
+                INTEGER(C_INT), INTENT(IN)    :: jnd_c(*), njd_c(*)
+                INTEGER(C_INT), INTENT(OUT)   :: iters_out
+                REAL(C_DOUBLE), INTENT(OUT)   :: residual_out
+                INTEGER(C_INT)                :: iwfm_pgmres_solve
+            END FUNCTION
+        END INTERFACE
+
+        REAL(C_DOUBLE) :: rtol_c, residual_out
+        INTEGER(C_INT) :: iters_out, ierr_c
+
+        ! Compute relative tolerance (same as Fortran path)
+        IF (RHS_L2 .EQ. 0.0D0) THEN
+            rtol_c = 0.0D0
+        ELSE
+            rtol_c = MIN(Toler/RHS_L2, 0.9999D0)
+        END IF
+
+        ierr_c = iwfm_pgmres_solve(N, Matrix%RHS, Matrix%HDelta,     &
+                                    COEFF, JND, NJD,                   &
+                                    LFIL, DROPTOL, IM, MXITER,        &
+                                    rtol_c, EPSILON(0D0),              &
+                                    iters_out, residual_out)
+
+        IF (ierr_c .LT. 0) THEN
+            SELECT CASE (ierr_c)
+                CASE (-1)
+                    MessageArray(1) = 'Convergence problem in C++ PGMRES solver.'
+                    WRITE(MessageArray(2),'(A,I8)')     'Iteration =', iters_out
+                    WRITE(MessageArray(3),'(A,E12.3)')  'Residual  =', residual_out
+                    CALL SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+                CASE (-5)
+                    MessageArray(1) = 'Bad coefficient matrix! C++ ILUT failed.'
+                    MessageArray(2) = 'Please check input data.'
+                    CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                CASE (-6)
+                    MessageArray(1) = 'Insufficient storage for C++ ILUT factorization!'
+                    MessageArray(2) = 'Please contact IWFM technical support.'
+                    CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                CASE DEFAULT
+                    WRITE(MessageArray(1),'(A,I8)') 'C++ solver terminated. Code =', ierr_c
+                    CALL SetLastMessage(MessageArray(1:1),f_iFatal,ThisProcedure)
+            END SELECT
+            iStat = -1
+        END IF
+    END BLOCK
+#else
+    ! ── Fortran SPARSKIT path (original) ──────────────────────────────────────
+
     ! PARMETERS OF THE SOLVER
     IPAR(1)         =   0                               ! INITIALIZE THE SOLVER
     IPAR(2)     =       1                               ! CHOOSE LEFT PRECONDITIONING
-    IPAR(3)     =       2                               ! SPECIFY STOPPING CRITERIA BASED ON THE RESIDUAL   
+    IPAR(3)     =       2                               ! SPECIFY STOPPING CRITERIA BASED ON THE RESIDUAL
     IPAR(4)     =       (N+3)*(IM+2) + (IM+1)*IM/2      ! WORKSPACE SIZE NEED BY THE SOLVER
     IPAR(5)     =       IM
     IPAR(6)     =       MXITER
 
-    !! ADAPTIVE TOLERANCES FOR GMRES
-    !! HIEU NGUYEN 03/29/2011
-    !! *** Removed since tests showed a slow down of N-R convergence with the adaptive tolerance
-    !STOPCD=1.0d3*Toler
-    !rho1=2.0d0
-    !rho2=1.7d0
-    !if (NR_ITERX > 2) then
-    !   alpha=(1.0d0/real(NR_ITERX+1))**rho1*(min(1.0d0,(rhsl2(NR_ITERX)/min(rhsl2(NR_ITERX-1),rhsl2(1)))))**rho2
-    !   STOPCD=alpha*STOPCD
-    !endif
-    !STOPCD=min(1.0d3*Toler,max(STOPCD,Toler))
-    !! END ADAPTIVE TOLERANCES
     IF (RHS_L2 .EQ. 0.0) THEN
         FPAR(1) = 0.0
     ELSE
-        !FPAR(1) = STOPCD/rDiv                           ! NEW TOLERANCE CONDITION
         FPAR(1) = MIN(Toler/RHS_L2 , 0.9999d0)
     END IF
     FPAR(2)     = EPSILON(0d0)                           ! MACHINE PRECISION
-    
-    ALLOCATE(COEFFLU(IWK), JLU(IWK), W(IPAR(4)))   
+
+    ALLOCATE(COEFFLU(IWK), JLU(IWK), W(IPAR(4)))
 
 !   CALL SPARSKIT IMPLEMENTATION OF ILUT IN THE FILE pgmres.f
     CALL ILUT(N, COEFF, JND, NJD, LFIL, DROPTOL, COEFFLU, JLU, JU, IWK, W, IW, IERR)
@@ -1574,14 +1671,14 @@ CONTAINS
             CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
-         
+
         CASE (-3:-2)
             MessageArray(1) = 'Insufficent storage for LU factorization!'
             MessageArray(2) = 'Please contact IWFM techical support.'
             CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
-          
+
         CASE (:-5)
             iGlobalVar = -5-IERR
             CALL Matrix%GlobalNode_to_LocalNode(iGlobalVar,iCompID,iCompVar)
@@ -1620,44 +1717,44 @@ CONTAINS
     END SELECT
 
     Iter = 0                                           ! INITIALIZE THE NUMBER OF ITERATIONS
-   
+
     DO
         CALL GMRES(N, Matrix%RHS, Matrix%HDelta, IPAR, FPAR, W)                ! CALL SPARSKIT IMPLEMENTATION OF GMRES(M) IN THE FILE iters.f
-        
+
         IF (IPAR(7) .NE. Iter) THEN
              Iter = IPAR(7)
              !!write(80,'(a21,i4,E16.6)')'      PGMRES ITS,RES',Iter,FPAR(5)
         ENDIF
         RES = FPAR(5)
-!       
-        
+!
+
         IF (IPAR(1).EQ.1) THEN
             CALL AMUX(N, W(IPAR(8):), W(IPAR(9):), COEFF, JND, NJD)  !MATRIX-VECTOR MULTIPLICATION
         ELSE IF (IPAR(1).EQ.3 .OR. IPAR(1).EQ.5) THEN
             CALL LUSOL(N,W(IPAR(8)),W(IPAR(9)),COEFFLU,JLU,JU)         !LU SOLVE
         ELSE IF (IPAR(1).LT.0) THEN
             IF (IPAR(1).EQ.-1) THEN
-                MessageArray(1) = 'Convergence problem in the solution of equation system using PGMRES(M).'     
+                MessageArray(1) = 'Convergence problem in the solution of equation system using PGMRES(M).'
                 WRITE(MessageArray(2),'(A,I8)')     'Iteration =', Iter
                 WRITE (MessageArray(3),'(A,E12.3)') 'Residual  =', RES
                 CALL SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
                 iStat = -1
                 EXIT
-            
+
             ELSE IF (IPAR(1).EQ.-2) THEN
                 MessageArray(1)='ITERATIVE SOLVER WAS NOT GIVEN ENOUGH WORK SPACE.'
                 WRITE (MessageArray(2),'(A,I12,A)') 'THE WORK SPACE SHOULD AT LEAST HAVE ', IPAR(4),' ELEMENTS.'
                 CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                 iStat = -1
                 EXIT
-               
+
             ELSE IF (IPAR(1).EQ.-3) THEN
                 CALL SetLastMessage('ITERATIVE SOLVER IS FACING A BREAK-DOWN.',f_iFatal,ThisProcedure)
                 iStat = -1
                 EXIT
-              
+
             ELSE
-                WRITE(MessageArray(1),'(A,I8)') 'ITERATIVE SOLVER TERMINATED. CODE =', IPAR(1) 
+                WRITE(MessageArray(1),'(A,I8)') 'ITERATIVE SOLVER TERMINATED. CODE =', IPAR(1)
                 CALL SetLastMessage(MessageArray(1),f_iFatal,ThisProcedure)
                 iStat = -1
                 EXIT
@@ -1667,8 +1764,9 @@ CONTAINS
            EXIT
         END IF
     END DO
-    
+
     DEALLOCATE(COEFFLU, JLU, W)
+#endif
 
   END SUBROUTINE PGMRES
   
@@ -1778,6 +1876,47 @@ CONTAINS
     END DO
     
   END SUBROUTINE UpdateCOEFF
+
+
+  ! -------------------------------------------------------------
+  ! --- UPDATE COEFF FOR SINGLE-COMPONENT CASE
+  ! --- Avoids repeated LocateInList calls when all connected nodes
+  ! --- share the same component ID (e.g., all GW nodes).
+  ! -------------------------------------------------------------
+  SUBROUTINE UpdateCOEFF_SingleComp(Matrix,iCompID,iNodeID,nConn,iNodeIDs_Connect,rUpdateValues)
+    CLASS(MatrixType)  :: Matrix
+    INTEGER,INTENT(IN) :: iCompID,iNodeID,nConn,iNodeIDs_Connect(nConn)
+    REAL(8),INTENT(IN) :: rUpdateValues(nConn)
+
+    !Local variables
+    INTEGER :: iOffset,iGlobalNodeID,iGlobalNodeIDs_Connect(nConn),  &
+               indx,indx_S,indx_L,iCount
+
+    !Single LocateInList call for the shared component
+    iOffset = Matrix%iCompGlobalNodeStart(LocateInList(iCompID, Matrix%iComps)) - 1
+
+    !Convert all node IDs using the shared offset
+    iGlobalNodeID = iNodeID + iOffset
+    iGlobalNodeIDs_Connect(1:nConn) = iNodeIDs_Connect(1:nConn) + iOffset
+
+    !Sort the nodes along with update values
+    IF (nConn .GT. 1) CALL ShellSort(iGlobalNodeIDs_Connect,rUpdateValues)
+
+    !Get a pointer to the data for the matrix row that will be updated
+    indx_S = Matrix%NJD(iGlobalNodeID)
+    indx_L = Matrix%NJD(iGlobalNodeID+1) - 1
+
+    !Update values
+    iCount = 1
+    DO indx=indx_S,indx_L
+        IF (Matrix%JND(indx) .EQ. iGlobalNodeIDs_Connect(iCount)) THEN
+            Matrix%COEFF(indx) = Matrix%COEFF(indx) + rUpdateValues(iCount)
+            iCount             = iCount + 1
+            IF (iCount .GT. nConn) EXIT
+        END IF
+    END DO
+
+  END SUBROUTINE UpdateCOEFF_SingleComp
   
   
   ! -------------------------------------------------------------

@@ -4107,13 +4107,13 @@ CONTAINS
             !If this is a lake element, report that to the user
             IF (RootZone%Flags%lLakeElems(indxElem)) THEN
                 IF (rIrigSupply_Ag(indxElem)+rIrigSupply_Urb(indxElem) .GT. 0.0) THEN
-                    !$OMP CRITICAL
+                    !$OMP CRITICAL (CRIT_RZ_LAKE)
                     iElemID         = AppGrid%AppElement(indxElem)%ID
                     MessageArray(1) = 'Element '//TRIM(IntToText(iElemID))//' is a lake element.'
                     MessageArray(2) = 'Water supply for lake elements must be zero!'
                     CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                     iStat = -1
-                    !$OMP END CRITICAL
+                    !$OMP END CRITICAL (CRIT_RZ_LAKE)
                     CYCLE
                 END IF
             END IF
@@ -4123,13 +4123,13 @@ CONTAINS
                 IF (RootZone%Flags%lNonPondedAg_Defined) rArea = rArea + SUM(RootZone%NonPondedAgRootZone%Crops%Area(:,indxElem))
                 IF (RootZone%Flags%lPondedAg_Defined)    rArea = rArea + SUM(RootZone%PondedAgRootZone%Crops%Area(:,indxElem))
                 IF (rArea .EQ. 0.0) THEN
-                    !$OMP CRITICAL
+                    !$OMP CRITICAL (CRIT_RZ_AGAREA)
                     iElemID         = AppGrid%AppElement(indxElem)%ID
                     MessageArray(1) = 'Agricultural applied water at element '//TRIM(IntToText(iElemID))//' cannot be non-zero'
                     MessageArray(2) = 'when agricultural area is zero!'
                     CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                     iStat = -1
-                    !$OMP END CRITICAL
+                    !$OMP END CRITICAL (CRIT_RZ_AGAREA)
                     CYCLE
                 END IF
             END IF
@@ -4141,13 +4141,13 @@ CONTAINS
                     rArea = 0.0
                 END IF
                 IF (rArea .EQ. 0.0) THEN
-                    !$OMP CRITICAL
+                    !$OMP CRITICAL (CRIT_RZ_URBAREA)
                     iElemID         = AppGrid%AppElement(indxElem)%ID
                     MessageArray(1) = 'Urban applied water at element '//TRIM(IntToText(iElemID))//' cannot be non-zero'
                     MessageArray(2) = 'when urban area is zero!'
                     CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                     iStat = -1
-                    !$OMP END CRITICAL
+                    !$OMP END CRITICAL (CRIT_RZ_URBAREA)
                     CYCLE
                 END IF
             END IF
@@ -6364,11 +6364,11 @@ CONTAINS
         
         !Check for zero area
         IF (ALL(rLUArea(:,indxElem) .LE. 0.0)) THEN
-            !$OMP CRITICAL
+            !$OMP CRITICAL (CRIT_RZ_LUAREA)
             ID = AppGrid%AppElement(indxElem)%ID
             CALL SetLastMessage('Total land use area is zero at element ' // TRIM(IntToText(ID)) // '!',f_iFatal,ThisProcedure)
             iStat = -1
-            !$OMP END CRITICAL
+            !$OMP END CRITICAL (CRIT_RZ_LUAREA)
             CYCLE
         END IF
         

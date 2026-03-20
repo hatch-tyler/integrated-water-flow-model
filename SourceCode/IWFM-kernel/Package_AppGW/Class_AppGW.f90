@@ -709,7 +709,7 @@ CONTAINS
     AppGW%State%Head_P = AppGW%State%Head
     
     !Instantiate subsidence; this has to be done after AppGW initial conditions are processed
-    CALL AppGW%AppSubsidence%New(lIsForInquiry,cSubsidenceFileName,cWorkingDirectory,iGWNodeIDs,AppGrid,Stratigraphy,StrmConnectivity,TimeStep,iStat,SubsICFile)
+    CALL AppGW%AppSubsidence%New(lIsForInquiry,cSubsidenceFileName,cWorkingDirectory,iGWNodeIDs,AppGrid,Stratigraphy,StrmConnectivity,TimeStep,iStat,SubsICFile,NTIME)
     IF (iStat .EQ. -1) RETURN
     AppGW%lSubsidence_Defined = AppGW%AppSubsidence%IsDefined()
 
@@ -5663,7 +5663,7 @@ CONTAINS
                 rUpdateCOEFF(1)     = SUM(rUpdateCOEFF_Add) 
   
                 !Update Jacobian
-                CALL Matrix%UpdateCOEFF(f_iGWComp,iGWNode,NVertex,iCompIDs(1:NVertex),iNodes(1:NVertex),rUpdateCOEFF(1:NVertex))
+                CALL Matrix%UpdateCOEFF_SingleComp(f_iGWComp,iGWNode,NVertex,iNodes(1:NVertex),rUpdateCOEFF(1:NVertex))
                 
             END DO OUTER_VERTEX_LOOP
         END DO ELEMENT_LOOP
@@ -5759,7 +5759,7 @@ CONTAINS
             !Coefficient matrix
             iNodeIDs(1)      = iGWNode
             rUpdateValues(1) = Storativity(indxNode,indxLayer)
-            CALL Matrix%UpdateCOEFF(f_iGWComp,iGWNode,1,iCompIDs,iNodeIDs,rUpdateValues)
+            CALL Matrix%UpdateCOEFF_SingleComp(f_iGWComp,iGWNode,1,iNodeIDs,rUpdateValues)
 
         END DO
     END DO
@@ -5867,11 +5867,11 @@ CONTAINS
             rUpdateCOEFF_Keep(1) = -rdVertFlow_dH(indxNode)
             rUpdateCOEFF_Keep(2) = -rdVertFlow_dHb(indxNode)
             rUpdateCOEFF         = rUpdateCOEFF_Keep
-            CALL Matrix%UpdateCOEFF(f_iGWComp,iGWNode,2,iCompIDs,iNodeIDs,rUpdateCOEFF)
+            CALL Matrix%UpdateCOEFF_SingleComp(f_iGWComp,iGWNode,2,iNodeIDs,rUpdateCOEFF)
             
             !Update row of COEFF matrix for node below current node
             rUpdateCOEFF = -rUpdateCOEFF_Keep
-            CALL Matrix%UpdateCOEFF(f_iGWComp,iGWNode_Below,2,iCompIDs,iNodeIDs,rUpdateCOEFF)
+            CALL Matrix%UpdateCOEFF_SingleComp(f_iGWComp,iGWNode_Below,2,iNodeIDs,rUpdateCOEFF)
 
             !R.H.S. values
             rUpdateRHS(iGWNode)       = rUpdateRHS(iGWNode)       - VerticalFlow(indxNode)

@@ -64,7 +64,11 @@ MODULE Class_AppSubsidence_v40
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: AppSubsidence_v40_Type          
+  PUBLIC :: AppSubsidence_v40_Type              , &
+            ReadSubsidenceParameters             , &
+            ReadSubsidenceICData_OpenFile         , &
+            ReadSubsidenceICData_FromOpenedFile   , &
+            ReadSubsidenceConfig_v40
 
  
   ! -------------------------------------------------------------
@@ -113,7 +117,7 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- INSTANTIATE SUBSIDENCE COMPONENT
   ! -------------------------------------------------------------
-  SUBROUTINE AppSubsidence_v40_New(AppSubsidence,IsForInquiry,cFileName,cWorkingDirectory,iGWNodeIDs,AppGrid,Stratigraphy,StrmConnectivity,TimeStep,iStat,SubsICFile) 
+  SUBROUTINE AppSubsidence_v40_New(AppSubsidence,IsForInquiry,cFileName,cWorkingDirectory,iGWNodeIDs,AppGrid,Stratigraphy,StrmConnectivity,TimeStep,iStat,SubsICFile,NTIME) 
     CLASS(AppSubsidence_v40_Type),INTENT(OUT) :: AppSubsidence
     LOGICAL,INTENT(IN)                        :: IsForInquiry
     CHARACTER(LEN=*),INTENT(IN)               :: cFileName,cWorkingDirectory
@@ -124,6 +128,7 @@ CONTAINS
     TYPE(TimeStepType),INTENT(IN)             :: TimeStep
     INTEGER,INTENT(OUT)                       :: iStat
     TYPE(GenericFileType),OPTIONAL            :: SubsICFile
+    INTEGER,OPTIONAL,INTENT(IN)               :: NTIME
     
     !Local variables
     CHARACTER(LEN=ModNameLen+3) :: ThisProcedure = ModName // 'AppSubsidence_v40_New'
@@ -183,16 +188,56 @@ CONTAINS
     !Read away the version line
     CALL SubsMainFile%ReadData(ALine,iStat)  ;  IF (iStat .EQ. -1) RETURN
     
+    !Read configuration: IC file, output files, parameters, IC data
+    CALL ReadSubsidenceConfig_v40(AppSubsidence,SubsMainFile,IsForInquiry,cWorkingDirectory,iGWNodeIDs,AppGrid,Stratigraphy,StrmConnectivity,TimeStep,iStat,SubsICFile)
+    IF (iStat .EQ. -1) RETURN
+
+    !Close file
+    CALL SubsMainFile%Kill()
+
+  END SUBROUTINE AppSubsidence_v40_New
+
+
+  ! -------------------------------------------------------------
+  ! --- READ SUBSIDENCE CONFIGURATION (IC file through IC data)
+  ! --- Shared helper called by v4.0 and v4.1 constructors.
+  ! --- File must be positioned after the version line.
+  ! -------------------------------------------------------------
+  SUBROUTINE ReadSubsidenceConfig_v40(AppSubsidence,SubsMainFile,IsForInquiry,cWorkingDirectory,iGWNodeIDs,AppGrid,Stratigraphy,StrmConnectivity,TimeStep,iStat,SubsICFile)
+    CLASS(AppSubsidence_v40_Type)           :: AppSubsidence
+    TYPE(GenericFileType)                   :: SubsMainFile
+    LOGICAL,INTENT(IN)                      :: IsForInquiry
+    CHARACTER(LEN=*),INTENT(IN)             :: cWorkingDirectory
+    INTEGER,INTENT(IN)                      :: iGWNodeIDs(:)
+    TYPE(AppGridType),INTENT(IN)            :: AppGrid
+    TYPE(StratigraphyType),INTENT(IN)       :: Stratigraphy
+    COMPLEX,INTENT(IN)                      :: StrmConnectivity(:)
+    TYPE(TimeStepType),INTENT(IN)           :: TimeStep
+    INTEGER,INTENT(OUT)                     :: iStat
+    TYPE(GenericFileType),OPTIONAL          :: SubsICFile
+
+    !Local variables
+    CHARACTER(LEN=ModNameLen+24) :: ThisProcedure = ModName // 'ReadSubsidenceConfig_v40'
+    INTEGER                      :: ErrorCode,NNodes,NLayers,indxLayer
+    REAL(8)                      :: Factors(Stratigraphy%NLayers)
+    CHARACTER                    :: cErrorMsg*300,cICFileName*1200,ALine*1200,cVarNames(Stratigraphy%NLayers)*15
+    CHARACTER(:),ALLOCATABLE     :: cAbsPathFileName
+
+    !Initialize
+    iStat   = 0
+    NNodes  = AppGrid%NNodes
+    NLayers = Stratigraphy%NLayers
+
     !Initial conditions file
-    CALL SubsMainFile%ReadData(cICFileName,iStat)  ;  IF (iStat .EQ. -1) RETURN  
-    cICFileName = StripTextUntilCharacter(cICFileName,f_cInlineCommentChar)  
+    CALL SubsMainFile%ReadData(cICFileName,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    cICFileName = StripTextUntilCharacter(cICFileName,f_cInlineCommentChar)
     CALL CleanSpecialCharacters(cICFileName)
     CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(cICFileName)),cWorkingDirectory,cAbsPathFileName)
     cICFileName = cAbsPathFileName
 
     !Tecplot output file
-    CALL SubsMainFile%ReadData(ALine,iStat)  ;  IF (iStat .EQ. -1) RETURN  
-    ALine = StripTextUntilCharacter(ALine,f_cInlineCommentChar)  
+    CALL SubsMainFile%ReadData(ALine,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    ALine = StripTextUntilCharacter(ALine,f_cInlineCommentChar)
     CALL CleanSpecialCharacters(ALine)
     IF (ALine .NE. '') THEN
         ALLOCATE (AppSubsidence%TecplotFile , STAT=ErrorCode , ERRMSG=cErrorMsg)
@@ -204,7 +249,7 @@ CONTAINS
         CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(ALine)),cWorkingDirectory,cAbsPathFileName)
         CALL AppSubsidence%TecplotFile%New(IsForInquiry,cAbsPathFileName,'subsidence print-out for Tecplot',iStat)  ;  IF (iStat .EQ. -1) RETURN
         AppSubsidence%lTecplotFile_Defined = .TRUE.
-        
+
         !Print zero subsidence as initial values
         IF (.NOT. IsForInquiry) THEN
             cVarNames = [('SUBSIDENCE'//TRIM(IntToText(indxLayer)) , indxLayer=1,NLayers)]
@@ -212,7 +257,7 @@ CONTAINS
             CALL AppSubsidence%TecplotFile%PrintInitialValues(AppGrid,StrmConnectivity,AppSubsidence%Subsidence,Factors,'(2(F16.3,2X),*(G16.3E2,2X))',cVarNames,TimeStep)
         END IF
     END IF
-    
+
     !Final results output file
     CALL SubsMainFile%ReadData(ALine,iStat)  ;  IF (iStat .EQ. -1) RETURN  ;  ALine = StripTextUntilCharacter(ALine,f_cInlineCommentChar)  ;  CALL CleanSpecialCharacters(ALine)
     IF (ALine .NE. '') THEN
@@ -236,12 +281,12 @@ CONTAINS
         END IF
         AppSubsidence%lFinalSubsFile_Defined = .TRUE.
     END IF
-    
+
     !Output unit and conversion factor
-    CALL SubsMainFile%ReadData(AppSubsidence%FactorLen,iStat)  ;  IF (iStat .EQ. -1) RETURN 
+    CALL SubsMainFile%ReadData(AppSubsidence%FactorLen,iStat)  ;  IF (iStat .EQ. -1) RETURN
     CALL SubsMainFile%ReadData(ALine,iStat)  ;  IF (iStat .EQ. -1) RETURN  ;  CALL CleanSpecialCharacters(ALine)  ;  ALine = StripTextUntilCharacter(ALine,f_cInlineCommentChar)
     AppSubsidence%cUnitLen = ADJUSTL(TRIM(ALine))
-    
+
     !Subsidence hydrograph output data
     ALLOCATE (AppSubsidence%SubsHydOutput ,STAT=ErrorCode , ERRMSG=cErrorMsg)
     IF (ErrorCode .NE. 0) THEN
@@ -257,11 +302,11 @@ CONTAINS
     ELSE
         DEALLOCATE (AppSubsidence%SubsHydOutput , STAT=ErrorCode)
     END IF
-    
+
     !Read subsidence parameters
     CALL ReadSubsidenceParameters(NLayers,iGWNodeIDs,AppGrid,SubsMainFile,AppSubsidence%ElasticSC,AppSubsidence%InelasticSC,AppSubsidence%InterbedThick,AppSubsidence%InterbedThickMin,AppSubsidence%PreCompactHead,iStat)
     IF (iStat .EQ. -1) RETURN
-    
+
     !Read initial interbed thickness and pre-compaction head to overwrite the previous values
     IF (PRESENT(SubsICFile)) THEN
         CALL ReadSubsidenceICData_FromOpenedFile(SubsICFile,iGWNodeIDs,AppSubsidence%InterbedThick,AppSubsidence%PreCompactHead,iStat)
@@ -270,15 +315,11 @@ CONTAINS
     END IF
     IF (iStat .EQ. -1) RETURN
     AppSubsidence%InterbedThick_P = AppSubsidence%InterbedThick
-    
-    !Close file
-    CALL SubsMainFile%Kill()
 
-  END SUBROUTINE AppSubsidence_v40_New
-  
-  
-  
-   
+  END SUBROUTINE ReadSubsidenceConfig_v40
+
+
+
 ! ******************************************************************
 ! ******************************************************************
 ! ******************************************************************

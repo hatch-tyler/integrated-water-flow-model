@@ -165,7 +165,24 @@ CONTAINS
       iStat = -1; RETURN
     END IF
 
-    READ(iUnit, *, IOSTAT=iErr)  ! Skip header
+    ! Peek at first line: if second token is numeric, it's data (no header)
+    READ(iUnit, '(A)', IOSTAT=iErr) cLine
+    IF (iErr == 0) THEN
+      ! Try parsing: name weight1 weight2 ...
+      ! If second token is a number, this is data - rewind
+      BLOCK
+        CHARACTER(LEN=25) :: cDumNm
+        REAL(8)           :: rTest
+        INTEGER           :: iChk
+        READ(cLine, *, IOSTAT=iChk) cDumNm, rTest
+        IF (iChk == 0) THEN
+          BACKSPACE(iUnit)  ! No header - rewind to process as data
+          CALL LogMessage('  Weights file has no header line - reading from first line', f_iInfo, cModName)
+        ELSE
+          CALL LogMessage('  Skipped header line in weights file', f_iInfo, cModName)
+        END IF
+      END BLOCK
+    END IF
     DO i = 1, This%iNClusWells
       READ(iUnit, *, IOSTAT=iErr) This%cWellNames(i), &
            (This%rClusWt(i, j), j=1, This%iNClus)
@@ -258,8 +275,23 @@ CONTAINS
       iStat = -1; RETURN
     END IF
 
-    ! Skip header (simulated data format)
-    READ(iUnit, *, IOSTAT=iErr)
+    ! Peek at first line: if fourth token is numeric, it's data (no header)
+    READ(iUnit, '(A)', IOSTAT=iErr) cLine
+    IF (iErr == 0) THEN
+      BLOCK
+        CHARACTER(LEN=25) :: cDumNm
+        CHARACTER(LEN=12) :: cDumDt, cDumTm
+        REAL(8)           :: rTest
+        INTEGER           :: iChk
+        READ(cLine, *, IOSTAT=iChk) cDumNm, cDumDt, cDumTm, rTest
+        IF (iChk == 0) THEN
+          BACKSPACE(iUnit)  ! No header - rewind to process as data
+          CALL LogMessage('  SMP file has no header line - reading from first line', f_iInfo, cModName)
+        ELSE
+          CALL LogMessage('  Skipped header line in SMP file', f_iInfo, cModName)
+        END IF
+      END BLOCK
+    END IF
 
     ! Read data: well_name date time value
     DO
@@ -370,11 +402,11 @@ CONTAINS
     CLASS(CalcTypeHydType), INTENT(INOUT) :: This
     INTEGER,               INTENT(OUT)   :: iStat
 
-    INTEGER, PARAMETER :: iOutUnit = 181, iInsUnit = 182
+    INTEGER, PARAMETER :: iOutUnit = 181
     INTEGER :: iErr, n, i, j, k, iCls
     REAL(8) :: rSumProduct, rNzWtSum, rTypeHydro
     CHARACTER(LEN=2)  :: cClusStr
-    CHARACTER(LEN=50) :: cHeader, cOutFile, cInsFile
+    CHARACTER(LEN=50) :: cHeader, cOutFile
     CHARACTER(LEN=20) :: cPstNam
     CHARACTER(LEN=4)  :: cIdStr
     REAL(8), ALLOCATABLE :: rNonZeroWts(:,:), rDeMeaned(:,:)
@@ -431,9 +463,8 @@ CONTAINS
         cHeader = 'sim_cls'//TRIM(ADJUSTL(cClusStr))
       END IF
       cOutFile = TRIM(ADJUSTL(cHeader))//'.out'
-      cInsFile = TRIM(ADJUSTL(cHeader))//'.ins'
 
-      ! Open output files
+      ! Open output file
       OPEN(UNIT=iOutUnit, FILE=cOutFile, STATUS='REPLACE', IOSTAT=iErr)
       IF (iErr /= 0) THEN
         CALL SetLastMessage('Cannot open output file: '//TRIM(cOutFile), &
@@ -441,15 +472,6 @@ CONTAINS
         iStat = -1; RETURN
       END IF
       WRITE(iOutUnit, '(A14,A12,A40)') 'PEST_NAME', 'DATE', TRIM(cHeader)
-
-      OPEN(UNIT=iInsUnit, FILE=cInsFile, STATUS='REPLACE', IOSTAT=iErr)
-      IF (iErr /= 0) THEN
-        CALL SetLastMessage('Cannot open instruction file: '//TRIM(cInsFile), &
-             f_iFatal, cModName)
-        CLOSE(iOutUnit); iStat = -1; RETURN
-      END IF
-      WRITE(iInsUnit, '(A5)') 'pif #'
-      WRITE(iInsUnit, '(A2)') 'l1'
 
       ! Calculate and write type hydrograph
       DO i = 1, This%iNVal
@@ -477,14 +499,10 @@ CONTAINS
 
           ! Write to output file
           WRITE(iOutUnit, '(A14,A12,F20.6)') cPstNam, This%cDateStr(i), rTypeHydro
-
-          ! Write PEST instruction file line
-          WRITE(iInsUnit, '(A)') 'l1 ['//TRIM(ADJUSTL(cPstNam))//']34:46'
         END IF
       END DO
 
       CLOSE(iOutUnit)
-      CLOSE(iInsUnit)
     END DO
 
     DEALLOCATE(rNonZeroWts, rDeMeaned)

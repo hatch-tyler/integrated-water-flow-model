@@ -904,7 +904,7 @@ CONTAINS
                                          
             !Generate error if convergence is not achieved
             IF (rAchievedConv .NE. 0.0) THEN
-                !$OMP CRITICAL
+                !$OMP CRITICAL (CRIT_NATIVE_CONV)
                 iElemID         = AppGrid%AppElement(indxElem)%ID
                 MessageArray(1) = 'Convergence error in soil moisture routing for native vegetation!'
                 MessageArray(2) = 'Element              = '//TRIM(IntToText(iElemID))
@@ -912,7 +912,7 @@ CONTAINS
                 WRITE (MessageArray(4),'(A,F11.8)') 'Achieved convergence = ',ABS(rAchievedConv)
                 CALL SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
                 iStat = -1
-                !$OMP END CRITICAL
+                !$OMP END CRITICAL (CRIT_NATIVE_CONV)
                 CYCLE
             END IF
             
@@ -941,7 +941,7 @@ CONTAINS
             
             !Make sure soil moisture is not less than zero
             IF (ANY(rSoilM_Array.LT.0.0)) THEN
-                !$OMP CRITICAL
+                !$OMP CRITICAL (CRIT_NATIVE_SOILM)
                 iElemID         = AppGrid%AppElement(indxElem)%ID
                 MessageArray(1) = 'Soil moisture content becomes negative at element '//TRIM(IntToText(iElemID))//' for native vegetation.'
                 MessageArray(2) = 'This may be due to a too high convergence criteria set for the iterative solution.'
@@ -949,7 +949,7 @@ CONTAINS
                 MessageArray(4) = 'in the Root Zone Main Input File.'
                 CALL SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
                 iStat = -1
-                !$OMP END CRITICAL
+                !$OMP END CRITICAL (CRIT_NATIVE_SOILM)
                 CYCLE
             END IF
             
