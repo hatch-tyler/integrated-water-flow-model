@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2022  
+!  Copyright (C) 2005-2024  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -70,15 +70,15 @@ MODULE Class_BaseRootZone
             ComputeRegionalETPot                    , &
             CalculateUrbanFracDemand                , &
             ElementLU_InterpolateExtrapolate        , &
-            iMeasuredLUDataForSubregion             , &
-            iMeasuredLUDataForModelDomain           
+            f_iMeasuredLUDataForSubregion           , &
+            f_iMeasuredLUDataForModelDomain           
   
   
   ! -------------------------------------------------------------
   ! --- FLAGS USED FOR ELEMENT LAND USE INTERPLOATION
   ! -------------------------------------------------------------
-   INTEGER,PARAMETER :: iMeasuredLUDataForSubregion   = 0 , &
-                        iMeasuredLUDataForModelDomain = 1
+   INTEGER,PARAMETER :: f_iMeasuredLUDataForSubregion   = 0 , &
+                        f_iMeasuredLUDataForModelDomain = 1
    
    
   ! -------------------------------------------------------------
@@ -166,19 +166,32 @@ MODULE Class_BaseRootZone
       PROCEDURE(Abstract_GetBudget_ColumnTitles),PASS,DEFERRED                :: GetBudget_ColumnTitles
       PROCEDURE(Abstract_GetBudget_MonthlyFlows_GivenFile),NOPASS,DEFERRED    :: GetBudget_MonthlyFlows_GivenFile
       PROCEDURE(Abstract_GetBudget_MonthlyFlows_GivenRootZone),PASS,DEFERRED  :: GetBudget_MonthlyFlows_GivenRootZone
+      PROCEDURE(Abstract_GetBudget_AnnualFlows_GivenFile),NOPASS,DEFERRED     :: GetBudget_AnnualFlows_GivenFile
+      PROCEDURE(Abstract_GetBudget_AnnualFlows_GivenRootZone),PASS,DEFERRED   :: GetBudget_AnnualFlows_GivenRootZone
       PROCEDURE,PASS                                                          :: GetBudget_TSData
       PROCEDURE(Abstract_GetBudget_TSData_RZImplementation),PASS,DEFERRED     :: GetBudget_TSData_RZImplementation
       PROCEDURE,PASS                                                          :: GetZBudget_List
       PROCEDURE(Abstract_GetZBudget_NColumns),PASS,DEFERRED                   :: GetZBudget_NColumns
       PROCEDURE(Abstract_GetZBudget_ColumnTitles),PASS,DEFERRED               :: GetZBudget_ColumnTitles
+      PROCEDURE,PASS                                                          :: GetZBudget_AnnualFlows_GivenRootZone
+      PROCEDURE,NOPASS                                                        :: GetZBudget_AnnualFlows_GivenFile
       PROCEDURE,PASS                                                          :: GetZBudget_MonthlyFlows_GivenRootZone
       PROCEDURE,NOPASS                                                        :: GetZBudget_MonthlyFlows_GivenFile
       PROCEDURE,PASS                                                          :: GetZBudget_TSData
+      PROCEDURE(Abstract_GetLandUseAreasForTimePeriod),NOPASS,DEFERRED        :: GetLandUseAreasForTimePeriod
       PROCEDURE(Abstract_GetNAgCrops),PASS,DEFERRED                           :: GetNAgCrops
       PROCEDURE(Abstract_GetNDemandLocations),PASS,DEFERRED                   :: GetNDemandLocations
       PROCEDURE,PASS                                                          :: GetElementPrecip
+      PROCEDURE(Abstract_GetElementRunoff),PASS,DEFERRED                      :: GetElementRunoff
+      PROCEDURE(Abstract_GetElementAppliedWater),PASS,DEFERRED                :: GetElementAppliedWater
+      PROCEDURE(Abstract_GetElementAppliedWater_ForLUType),PASS,DEFERRED      :: GetElementAppliedWater_ForLUType
+      PROCEDURE(Abstract_GetElementReturnFlow),PASS,DEFERRED                  :: GetElementReturnFlow
+      PROCEDURE(Abstract_GetElementReturnFlow_ForLUType),PASS,DEFERRED        :: GetElementReturnFlow_ForLUType
       PROCEDURE(Abstract_GetElementPrecipInfilt),PASS,DEFERRED                :: GetElementPrecipInfilt
+      PROCEDURE(Abstract_GetElementInfilt),PASS,DEFERRED                      :: GetElementInfilt
       PROCEDURE(Abstract_GetElementActualET),PASS,DEFERRED                    :: GetElementActualET
+      PROCEDURE(Abstract_GetElementPondDrain),PASS,DEFERRED                   :: GetElementPondDrain
+      PROCEDURE(Abstract_GetElementPondDrain_ForLUType),PASS,DEFERRED         :: GetElementPondDrain_ForLUType
       PROCEDURE(Abstract_GetWaterDemandAll),PASS,DEFERRED                     :: GetWaterDemandAll
       PROCEDURE(Abstract_GetWaterDemandAtLocations),PASS,DEFERRED             :: GetWaterDemandAtLocations
       PROCEDURE(Abstract_GetWaterSupply),PASS,DEFERRED                        :: GetWaterSupply
@@ -193,7 +206,7 @@ MODULE Class_BaseRootZone
       PROCEDURE(Abstract_GetDemandAgAreas),PASS,DEFERRED                      :: GetDemandAgAreas
       PROCEDURE(Abstract_GetDemandUrbanAreas),PASS,DEFERRED                   :: GetDemandUrbanAreas
       PROCEDURE(Abstract_GetElementSoilMVolume),PASS,DEFERRED                 :: GetElementSoilMVolume
-      PROCEDURE(Abstract_GetPercAll),PASS,DEFERRED                            :: GetPercAll
+      PROCEDURE(Abstract_GetElementPerc),PASS,DEFERRED                        :: GetElementPerc
       PROCEDURE(Abstract_GetPercElement),PASS,DEFERRED                        :: GetPercElement
       PROCEDURE(Abstract_GetFlowsToStreams),PASS,DEFERRED                     :: GetFlowsToStreams
       PROCEDURE(Abstract_GetFlowsToLakes),PASS,DEFERRED                       :: GetFlowsToLakes
@@ -228,11 +241,11 @@ MODULE Class_BaseRootZone
   ! -------------------------------------------------------------
   ABSTRACT INTERFACE
   
-     SUBROUTINE Abstract_New(RootZone,IsForInquiry,cFileName,cWorkingDirectory,cPackageVersion,AppGrid,TimeStep,NTIME,ET,Precip,iStat,iStrmNodeIDs,iLakeIDs) 
+     SUBROUTINE Abstract_New(RootZone,IsForInquiry,cProjectNameForDSS,cFileName,cWorkingDirectory,cPackageVersion,AppGrid,TimeStep,NTIME,ET,Precip,iStat,iStrmNodeIDs,iLakeIDs) 
         IMPORT                             :: AppGridType,TimeStepType,BaseRootZoneType,ETType,PrecipitationType
         CLASS(BaseRootZoneType)            :: RootZone
         LOGICAL,INTENT(IN)                 :: IsForInquiry
-        CHARACTER(LEN=*),INTENT(IN)        :: cFileName,cWorkingDirectory,cPackageVersion
+        CHARACTER(LEN=*),INTENT(IN)        :: cProjectNameForDSS,cFileName,cWorkingDirectory,cPackageVersion
         TYPE(AppGridType),INTENT(IN)       :: AppGrid
         TYPE(TimeStepType),INTENT(IN)      :: TimeStep
         INTEGER,INTENT(IN)                 :: NTIME
@@ -291,11 +304,11 @@ MODULE Class_BaseRootZone
      END SUBROUTINE Abstract_GetBudget_ColumnTitles
      
      
-     SUBROUTINE Abstract_GetBudget_MonthlyFlows_GivenRootZone(RootZone,iBudgetType,iLUType,iSubregionID,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
+     SUBROUTINE Abstract_GetBudget_MonthlyFlows_GivenRootZone(RootZone,iBudgetType,iLUType,iSubregionIndex,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
        IMPORT                                    :: BaseRootZoneType
        CLASS(BaseRootZoneType),TARGET,INTENT(IN) :: RootZone
        CHARACTER(LEN=*),INTENT(IN)               :: cBeginDate,cEndDate
-       INTEGER,INTENT(IN)                        :: iBudgetType,iLUType,iSubregionID  
+       INTEGER,INTENT(IN)                        :: iBudgetType,iLUType,iSubregionIndex  
        REAL(8),INTENT(IN)                        :: rFactVL
        REAL(8),ALLOCATABLE,INTENT(OUT)           :: rFlows(:,:)  
        CHARACTER(LEN=*),ALLOCATABLE,INTENT(OUT)  :: cFlowNames(:)
@@ -303,11 +316,11 @@ MODULE Class_BaseRootZone
      END SUBROUTINE Abstract_GetBudget_MonthlyFlows_GivenRootZone
      
      
-     SUBROUTINE Abstract_GetBudget_MonthlyFlows_GivenFile(Budget,iBudgetType,iLUType,iSubregionID,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
+     SUBROUTINE Abstract_GetBudget_MonthlyFlows_GivenFile(Budget,iBudgetType,iLUType,iSubregionIndex,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
        IMPORT                                   :: BudgetType
        TYPE(BudgetType),INTENT(IN)              :: Budget      
        CHARACTER(LEN=*),INTENT(IN)              :: cBeginDate,cEndDate
-       INTEGER,INTENT(IN)                       :: iBudgetType,iLUType,iSubregionID  
+       INTEGER,INTENT(IN)                       :: iBudgetType,iLUType,iSubregionIndex  
        REAL(8),INTENT(IN)                       :: rFactVL
        REAL(8),ALLOCATABLE,INTENT(OUT)          :: rFlows(:,:)  
        CHARACTER(LEN=*),ALLOCATABLE,INTENT(OUT) :: cFlowNames(:)
@@ -315,10 +328,34 @@ MODULE Class_BaseRootZone
      END SUBROUTINE Abstract_GetBudget_MonthlyFlows_GivenFile
      
      
-     SUBROUTINE Abstract_GetBudget_TSData_RZImplementation(RootZone,iBudgetType,iSubregionID,iCols,cBeginDate,cEndDate,cInterval,rFactLT,rFactAR,rFactVL,rOutputDates,rOutputValues,iDataTypes,inActualOutput,iStat)
+     SUBROUTINE Abstract_GetBudget_AnnualFlows_GivenRootZone(RootZone,iBudgetType,iLUType,iSubregionIndex,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
+       IMPORT                                    :: BaseRootZoneType
+       CLASS(BaseRootZoneType),TARGET,INTENT(IN) :: RootZone
+       CHARACTER(LEN=*),INTENT(IN)               :: cBeginDate,cEndDate
+       INTEGER,INTENT(IN)                        :: iBudgetType,iLUType,iSubregionIndex  
+       REAL(8),INTENT(IN)                        :: rFactVL
+       REAL(8),ALLOCATABLE,INTENT(OUT)           :: rFlows(:,:)  
+       CHARACTER(LEN=*),ALLOCATABLE,INTENT(OUT)  :: cFlowNames(:)
+       INTEGER,INTENT(OUT)                       :: iStat
+     END SUBROUTINE Abstract_GetBudget_AnnualFlows_GivenRootZone
+     
+     
+     SUBROUTINE Abstract_GetBudget_AnnualFlows_GivenFile(Budget,iBudgetType,iLUType,iSubregionIndex,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
+       IMPORT                                   :: BudgetType
+       TYPE(BudgetType),INTENT(IN)              :: Budget      
+       CHARACTER(LEN=*),INTENT(IN)              :: cBeginDate,cEndDate
+       INTEGER,INTENT(IN)                       :: iBudgetType,iLUType,iSubregionIndex  
+       REAL(8),INTENT(IN)                       :: rFactVL
+       REAL(8),ALLOCATABLE,INTENT(OUT)          :: rFlows(:,:)  
+       CHARACTER(LEN=*),ALLOCATABLE,INTENT(OUT) :: cFlowNames(:)
+       INTEGER,INTENT(OUT)                      :: iStat
+     END SUBROUTINE Abstract_GetBudget_AnnualFlows_GivenFile
+     
+     
+     SUBROUTINE Abstract_GetBudget_TSData_RZImplementation(RootZone,iBudgetType,iSubregionIndex,iCols,cBeginDate,cEndDate,cInterval,rFactLT,rFactAR,rFactVL,rOutputDates,rOutputValues,iDataTypes,inActualOutput,iStat)
         IMPORT                             :: BaseRootZoneType
         CLASS(BaseRootZoneType),INTENT(IN) :: RootZone
-        INTEGER,INTENT(IN)                 :: iBudgetType,iSubregionID,iCols(:)
+        INTEGER,INTENT(IN)                 :: iBudgetType,iSubregionIndex,iCols(:)
         CHARACTER(LEN=*),INTENT(IN)        :: cBeginDate,cEndDate,cInterval
         REAL(8),INTENT(IN)                 :: rFactLT,rFactAR,rFactVL
         REAL(8),INTENT(OUT)                :: rOutputDates(:),rOutputValues(:,:)    
@@ -358,6 +395,46 @@ MODULE Class_BaseRootZone
      END FUNCTION Abstract_GetNDemandLocations
 
 
+     SUBROUTINE Abstract_GetElementRunoff(RootZone,iElemRegions,rRunoff)
+        IMPORT                             :: BaseRootZoneType
+        CLASS(BaseRootZoneType),INTENT(IN) :: RootZone
+        INTEGER,INTENT(IN)                 :: iElemRegions(:)
+        REAL(8),INTENT(OUT)                :: rRunoff(:)
+     END SUBROUTINE Abstract_GetElementRunoff
+
+
+     SUBROUTINE Abstract_GetElementAppliedWater(RootZone,iElemRegions,rAW)
+        IMPORT                             :: BaseRootZoneType
+        CLASS(BaseRootZoneType),INTENT(IN) :: RootZone
+        INTEGER,INTENT(IN)                 :: iElemRegions(:)
+        REAL(8),INTENT(OUT)                :: rAW(:)
+     END SUBROUTINE Abstract_GetElementAppliedWater
+
+
+     RECURSIVE SUBROUTINE Abstract_GetElementAppliedWater_ForLUType(RootZone,iElemRegions,iLUType,rAW)
+        IMPORT                             :: BaseRootZoneType
+        CLASS(BaseRootZoneType),INTENT(IN) :: RootZone
+        INTEGER,INTENT(IN)                 :: iElemRegions(:),iLUType
+        REAL(8),INTENT(OUT)                :: rAW(:)
+     END SUBROUTINE Abstract_GetElementAppliedWater_ForLUType
+
+
+     SUBROUTINE Abstract_GetElementReturnFlow(RootZone,iElemRegions,rReturn)
+        IMPORT                             :: BaseRootZoneType
+        CLASS(BaseRootZoneType),INTENT(IN) :: RootZone
+        INTEGER,INTENT(IN)                 :: iElemRegions(:)
+        REAL(8),INTENT(OUT)                :: rReturn(:)
+     END SUBROUTINE Abstract_GetElementReturnFlow
+
+
+     RECURSIVE SUBROUTINE Abstract_GetElementReturnFlow_ForLUType(RootZone,iElemRegions,iLUType,rReturn)
+        IMPORT                             :: BaseRootZoneType
+        CLASS(BaseRootZoneType),INTENT(IN) :: RootZone
+        INTEGER,INTENT(IN)                 :: iElemRegions(:),iLUType
+        REAL(8),INTENT(OUT)                :: rReturn(:)
+     END SUBROUTINE Abstract_GetElementReturnFlow_ForLUType
+
+
      SUBROUTINE Abstract_GetElementPrecipInfilt(RootZone,ElemRegion,PrecipInfilt)
         IMPORT                             :: BaseRootZoneType
         CLASS(BaseRootZoneType),INTENT(IN) :: RootZone
@@ -366,12 +443,36 @@ MODULE Class_BaseRootZone
      END SUBROUTINE Abstract_GetElementPrecipInfilt
 
 
+     SUBROUTINE Abstract_GetElementInfilt(RootZone,iElemRegion,rInfilt)
+        IMPORT                             :: BaseRootZoneType
+        CLASS(BaseRootZoneType),INTENT(IN) :: RootZone
+        INTEGER,INTENT(IN)                 :: iElemRegion(:)
+        REAL(8),INTENT(OUT)                :: rInfilt(:)
+     END SUBROUTINE Abstract_GetElementInfilt
+
+
      SUBROUTINE Abstract_GetElementActualET(RootZone,ElemRegion,ET)
         IMPORT                             :: BaseRootZoneType
         CLASS(BaseRootZoneType),INTENT(IN) :: RootZone
         INTEGER,INTENT(IN)                 :: ElemRegion(:)
         REAL(8)                            :: ET(:)
      END SUBROUTINE Abstract_GetElementActualET
+
+
+     SUBROUTINE Abstract_GetElementPondDrain(RootZone,iElemRegions,rDrain)
+        IMPORT                             :: BaseRootZoneType
+        CLASS(BaseRootZoneType),INTENT(IN) :: RootZone
+        INTEGER,INTENT(IN)                 :: iElemRegions(:)
+        REAL(8),INTENT(OUT)                :: rDrain(:)
+     END SUBROUTINE Abstract_GetElementPondDrain
+
+
+     SUBROUTINE Abstract_GetElementPondDrain_ForLUType(RootZone,iElemRegions,iLUType,rDrain)
+        IMPORT                             :: BaseRootZoneType
+        CLASS(BaseRootZoneType),INTENT(IN) :: RootZone
+        INTEGER,INTENT(IN)                 :: iElemRegions(:),iLUType
+        REAL(8),INTENT(OUT)                :: rDrain(:)
+     END SUBROUTINE Abstract_GetElementPondDrain_ForLUType
 
 
      SUBROUTINE Abstract_GetWaterDemandAll(RootZone,iDemandFor,rDemand)
@@ -401,6 +502,17 @@ MODULE Class_BaseRootZone
      END SUBROUTINE Abstract_GetWaterSupply
      
      
+    SUBROUTINE Abstract_GetLandUseAreasForTimePeriod(cRootZoneMainFileName,cWorkingDirectory,cBeginDate,cEndDate,TimeStep,AppGrid,iLUType,iLU,rLUAreas,iStat)
+      IMPORT                        :: TimeStepType,AppGridType
+      CHARACTER(LEN=*),INTENT(IN)   :: cRootZoneMainFileName,cWorkingDirectory,cBeginDate,cEndDate
+      TYPE(TimeStepType),INTENT(IN) :: TimeStep
+      TYPE(AppGridType),INTENT(IN)  :: AppGrid
+      INTEGER,INTENT(IN)            :: iLUType,iLU    !iLU is not used for urban lands
+      REAL(8),INTENT(OUT)           :: rLUAreas(:,:)  !For each (element,time)
+      INTEGER,INTENT(OUT)           :: iStat
+    END SUBROUTINE Abstract_GetLandUseAreasForTimePeriod
+
+  
     SUBROUTINE Abstract_GetElementAgAreas(RootZone,Areas)
         IMPORT                             :: BaseRootZoneType
         CLASS(BaseRootZoneType),INTENT(IN) :: RootZone
@@ -475,20 +587,21 @@ MODULE Class_BaseRootZone
      END SUBROUTINE Abstract_GetDemandUrbanAreas
      
      
-     SUBROUTINE Abstract_GetElementSoilMVolume(RootZone,AppGrid,SoilM)
-        IMPORT                             :: BaseRootZoneType,AppGridType
-        CLASS(BaseRootZoneType),INTENT(IN) :: RootZone
-        TYPE(AppGridType),INTENT(IN)       :: AppGrid
-        REAL(8),INTENT(OUT)                :: SoilM(:)
+     SUBROUTINE Abstract_GetElementSoilMVolume(RootZone,AppGrid,lBeginSoilM,SoilM)
+        IMPORT                                    :: BaseRootZoneType,AppGridType
+        CLASS(BaseRootZoneType),TARGET,INTENT(IN) :: RootZone
+        TYPE(AppGridType),INTENT(IN)              :: AppGrid
+        LOGICAL,INTENT(IN)                        :: lBeginSoilM
+        REAL(8),INTENT(OUT)                       :: SoilM(:)
      END SUBROUTINE Abstract_GetElementSoilMVolume
      
      
-     FUNCTION Abstract_GetPercAll(RootZone,AppGrid) RESULT(Perc)
-        IMPORT                             :: BaseRootZoneType,AppGridType
+     SUBROUTINE Abstract_GetElementPerc(RootZone,iElemRegions,rPerc)
+        IMPORT                             :: BaseRootZoneType
         CLASS(BaseRootZoneType),INTENT(IN) :: RootZone
-        TYPE(AppGRidType),INTENT(IN)       :: AppGrid
-        REAL(8)                            :: Perc(AppGrid%NElements)
-     END FUNCTION Abstract_GetPercAll
+        INTEGER,INTENT(IN)                 :: iElemRegions(:)
+        REAL(8),INTENT(OUT)                :: rPerc(:)
+     END SUBROUTINE Abstract_GetElementPerc
      
      
      FUNCTION Abstract_GetPercElement(RootZone,iElem,AppGrid) RESULT(Perc)
@@ -808,9 +921,9 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET BUDGET TIME SERIES DATA FOR A SET OF COLUMNS 
   ! -------------------------------------------------------------
-  SUBROUTINE GetBudget_TSData(RootZone,iBudgetType,iSubregionID,iCols,cBeginDate,cEndDate,cInterval,rFactLT,rFactAR,rFactVL,rOutputDates,rOutputValues,iDataTypes,inActualOutput,iStat)
+  SUBROUTINE GetBudget_TSData(RootZone,iBudgetType,iSubregionIndex,iCols,cBeginDate,cEndDate,cInterval,rFactLT,rFactAR,rFactVL,rOutputDates,rOutputValues,iDataTypes,inActualOutput,iStat)
     CLASS(BaseRootZoneType),TARGET,INTENT(IN) :: RootZone
-    INTEGER,INTENT(IN)                        :: iBudgetType,iSubregionID,iCols(:)
+    INTEGER,INTENT(IN)                        :: iBudgetType,iSubregionIndex,iCols(:)
     CHARACTER(LEN=*),INTENT(IN)               :: cBeginDate,cEndDate,cInterval
     REAL(8),INTENT(IN)                        :: rFactLT,rFactAR,rFactVL
     REAL(8),INTENT(OUT)                       :: rOutputDates(:),rOutputValues(:,:)    !rOutputValues is in (timestep,column) format
@@ -831,7 +944,7 @@ CONTAINS
             IF (RootZone%Flags%RootZoneBudRawFile_Defined) pBudget => RootZone%RootZoneBudRawFile
             
         CASE DEFAULT
-            CALL RootZone%GetBudget_TSData_RZImplementation(iBudgetType,iSubregionID,iCols,cBeginDate,cEndDate,cInterval,rFactLT,rFactAR,rFactVL,rOutputDates,rOutputValues,iDataTypes,inActualOutput,iStat)
+            CALL RootZone%GetBudget_TSData_RZImplementation(iBudgetType,iSubregionIndex,iCols,cBeginDate,cEndDate,cInterval,rFactLT,rFactAR,rFactVL,rOutputDates,rOutputValues,iDataTypes,inActualOutput,iStat)
             RETURN
     END SELECT
     
@@ -847,7 +960,7 @@ CONTAINS
         
     !Read data
     DO indx=1,SIZE(iCols)
-        CALL pBudget%ReadData(iSubregionID,iCols(indx),cInterval,cBeginDate,cEndDate,1d0,0d0,0d0,rFactLT,rFactAR,rFactVL,iDataTypes(indx),inActualOutput,rOutputDates,rOutputValues(:,indx),iStat)
+        CALL pBudget%ReadData(iSubregionIndex,iCols(indx),cInterval,cBeginDate,cEndDate,1d0,0d0,0d0,rFactLT,rFactAR,rFactVL,iDataTypes(indx),inActualOutput,rOutputDates,rOutputValues(:,indx),iStat)
     END DO
     
     !Clear memory
@@ -907,6 +1020,43 @@ CONTAINS
 
 
   ! -------------------------------------------------------------
+  ! --- GET ANNUAL FLOWS FROM ZBUGDET OUTPUT (THIS WILL BE OVERWRITTEN WITH VERSIONS THAT HAVE ZBUDGET OUTPUT)
+  ! -------------------------------------------------------------
+  SUBROUTINE GetZBudget_AnnualFlows_GivenFile(ZBudget,iZBudgetType,ZoneList,iZoneID,iLUType,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
+     TYPE(ZBudgetType),INTENT(IN)             :: ZBudget              
+     TYPE(ZoneListType),INTENT(IN)            :: ZoneList
+     INTEGER,INTENT(IN)                       :: iZBudgetType,iZoneID,iLUType
+     CHARACTER(LEN=*),INTENT(IN)              :: cBeginDate,cEndDate  
+     REAL(8),INTENT(IN)                       :: rFactVL
+     REAL(8),ALLOCATABLE,INTENT(OUT)          :: rFlows(:,:)          
+     CHARACTER(LEN=*),ALLOCATABLE,INTENT(OUT) :: cFlowNames(:)
+     INTEGER,INTENT(OUT)                      :: iStat
+     
+     iStat = 0
+     ALLOCATE (rFlows(0,0) , cFlowNames(0))
+     
+  END SUBROUTINE GetZBudget_AnnualFlows_GivenFile
+
+
+  ! -------------------------------------------------------------
+  ! --- GET ANNUAL FLOWS FROM RootZone OBJECT (THIS WILL BE OVERWRITTEN WITH VERSIONS THAT HAVE ZBUDGET OUTPUT)
+  ! -------------------------------------------------------------
+  SUBROUTINE GetZBudget_AnnualFlows_GivenRootZone(RootZone,iZBudgetType,iLUType,iZoneID,iZExtent,iElems,iLayers,iZoneIDs,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
+     CLASS(BaseRootZoneType),TARGET,INTENT(IN) :: RootZone              
+     INTEGER,INTENT(IN)                        :: iZBudgetType,iZoneID,iLUType,iZExtent,iElems(:),iLayers(:),iZoneIDs(:)
+     CHARACTER(LEN=*),INTENT(IN)               :: cBeginDate,cEndDate  
+     REAL(8),INTENT(IN)                        :: rFactVL
+     REAL(8),ALLOCATABLE,INTENT(OUT)           :: rFlows(:,:)          
+     CHARACTER(LEN=*),ALLOCATABLE,INTENT(OUT)  :: cFlowNames(:)
+     INTEGER,INTENT(OUT)                       :: iStat
+     
+     iStat = 0
+     ALLOCATE (rFlows(0,0) , cFlowNames(0))
+     
+  END SUBROUTINE GetZBudget_AnnualFlows_GivenRootZone
+
+
+  ! -------------------------------------------------------------
   ! --- GET TIME SERIES DATA FROM ZBUDGET FILE FOR A SELECTED ZONE AND SELECTED COLUMNS (THIS WILL BE OVERWRITTEN WITH VERSIONS THAT HAVE ZBUDGET OUTPUT)
   ! -------------------------------------------------------------
   SUBROUTINE GetZBudget_TSData(RootZone,iZBudgetType,iZoneID,iCols,iZExtent,iElems,iLayers,iZoneIDs,cBeginDate,cEndDate,cInterval,rFactAR,rFactVL,rOutputDates,rOutputValues,iDataTypes,inActualOutput,iStat)
@@ -929,10 +1079,10 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET ELEMENT PRECIPITATION
   ! -------------------------------------------------------------
-  SUBROUTINE GetElementPrecip(RootZone,rElemArea,rPrecip)
+  PURE SUBROUTINE GetElementPrecip(RootZone,rElemArea,rPrecip)
      CLASS(BaseRootZoneType),INTENT(IN) :: RootZone
      REAL(8),INTENT(IN)                 :: rElemArea(:)
-     REAL(8)                            :: rPrecip(:)
+     REAL(8),INTENT(OUT)                :: rPrecip(:)
      
      rPrecip = RootZone%ElemPrecipData%Precip * rElemArea
      
@@ -1089,7 +1239,7 @@ CONTAINS
     
     !Local variables
     CHARACTER(LEN=ModNameLen+16),PARAMETER :: ThisProcedure = ModName // 'GetFutureDemands'
-    INTEGER                                :: iDimElem,iDimTime,iCount,indxTime,indxRetrieve
+    INTEGER                                :: iDimElem,iDimTime,indxTime,indxRetrieve
     
     !If future demands are already calculated until the specified date...
     IF (ALLOCATED(RootZone%cFutureDemandDates)) THEN
@@ -1117,12 +1267,11 @@ CONTAINS
         END IF
     END IF
     
-    !Compute future demands if they are not yet computed until specified date
-    CALL RootZone%ComputeFutureWaterDemand(AppGrid,TimeStep,Precip,ET,cFutureDemandDate,iStat)  ;  IF (iStat .NE. 0) RETURN
-    iDimElem = SIZE(RootZone%rFutureAgElemDemand , DIM=1)
-    iDimTime = SIZE(RootZone%rFutureAgElemDemand , DIM=2)
-    rElemAgDemand  = RootZone%rFutureAgElemDemand(:,iDimTime)
-    rElemUrbDemand = RootZone%rFutureUrbElemDemand(:,iDimTime)
+    !Future demand for the specified date is not computed
+    rElemAgDemand  = -1.0
+    rElemUrbDemand = -1.0
+    iStat          = -1
+    CALL SetLastMessage('Future demands for '//TRIM(cFutureDemandDate)//' have not been computed!',f_iFatal,ThisProcedure)
 
   END SUBROUTINE GetFutureDemands
   
@@ -1327,7 +1476,7 @@ CONTAINS
     
     !Initialize
     iStat = 0
-    IF (iMeasuredLUDataFlag .EQ. iMeasuredLUDataForSubregion) THEN
+    IF (iMeasuredLUDataFlag .EQ. f_iMeasuredLUDataForSubregion) THEN
       iDim = AppGrid%NSubregions
     ELSE
       iDim = 1
@@ -1352,8 +1501,8 @@ CONTAINS
         END IF
         !If lake element; assume all native vegetation
         IF (lLakeElems(indxElem)) THEN
-            ExIntAreas(:,indxElem)         = 0.0
-            ExIntAreas(indxForNV,indxElem) = 1.0
+            ExIntAreas(:,indxElem)          = 0.0
+            ExIntAreas(indxForNV:,indxElem) = 1.0
         END IF
         !Normalize land use area fractions just in case to avoid round-off errors
         CALL NormalizeArray(ExIntAreas(:,indxElem))
@@ -1388,7 +1537,7 @@ CONTAINS
     !Now increase the element areas until subregional observed areas match sum of land use at elements
     DO
       !Exit if no more adjustment is necessary
-      IF (ALL(DiffArray .LE. 0.0)) EXIT
+      IF (ALL(DiffArray(:,1:iDim) .LE. 0.0)) EXIT
       
       !Adjust for all regions and land use types
       DO indxRegion=1,iDim
@@ -1428,7 +1577,7 @@ CONTAINS
     !Initialize
     NLandUse = SIZE(SubregionalLandUse,DIM=1)
    
-    IF (iMeasuredLUDataFlag .EQ. iMeasuredLUDataForSubregion) THEN
+    IF (iMeasuredLUDataFlag .EQ. f_iMeasuredLUDataForSubregion) THEN
       DO indxLU=1,NLandUse
         SubregionalLandUse(indxLU,:) = AppGrid%AccumElemValuesToSubregions(ElemAreas(indxLU,:))
       END DO
@@ -1456,7 +1605,7 @@ CONTAINS
     NLandUse = SIZE(ComputedLandUse,DIM=1)
     NRegions = SIZE(ComputedLandUse,DIM=2)
    
-    IF (iMeasuredLUDataFlag .EQ. iMeasuredLUDataForSubregion) THEN
+    IF (iMeasuredLUDataFlag .EQ. f_iMeasuredLUDataForSubregion) THEN
         DO indxRegion=1,NRegions
             DO indxLU=1,NLandUse
                 ASSOCIATE (pDiff            => DiffArray(indxLU,indxRegion)       , &
@@ -1523,7 +1672,7 @@ CONTAINS
     
     !Initialize
     iStat = 0
-    IF (iMeasuredLUDataFlag .EQ. iMeasuredLUDataForSubregion) THEN
+    IF (iMeasuredLUDataFlag .EQ. f_iMeasuredLUDataForSubregion) THEN
         pElems => AppGrid%AppSubregion(iRegion)%RegionElements
     ELSE
         IF (.NOT. ALLOCATED(iModelElements)) THEN
@@ -1618,7 +1767,7 @@ CONTAINS
     
     !Initialize
     iStat = 0
-    IF (iMeasuredLUDataFlag .EQ. iMeasuredLUDataForSubregion) THEN
+    IF (iMeasuredLUDataFlag .EQ. f_iMeasuredLUDataForSubregion) THEN
         pElems => AppGrid%AppSubregion(iRegion)%RegionElements
     ELSE
         IF (.NOT. ALLOCATED(iModelElements)) THEN

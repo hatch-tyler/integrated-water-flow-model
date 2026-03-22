@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2022  
+!  Copyright (C) 2005-2024  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -129,7 +129,7 @@ MODULE Package_AppLake
   ! --- LAKE PACKAGE FACADE VERSION RELATED DATA
   ! -------------------------------------------------------------
   INTEGER,PARAMETER                      :: f_iLenVersion = 11
-  CHARACTER(LEN=f_iLenVersion),PARAMETER :: f_cVersion    ='2022.0.0000'
+  CHARACTER(LEN=f_iLenVersion),PARAMETER :: f_cVersion    ='2024.0.0000'
   INCLUDE 'Package_AppLake_Revision.fi'
  
   
@@ -620,10 +620,10 @@ CONTAINS
   ! --- GET MONTHLY BUDGET FLOWS FROM A DEFINED BUDGET FILE FOR A SPECIFED LAKE
   ! --- (Assumes cBeginDate and cEndDate are adjusted properly)
   ! -------------------------------------------------------------
-  SUBROUTINE GetBudget_MonthlyFlows_GivenFile(Budget,iLakeID,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
+  SUBROUTINE GetBudget_MonthlyFlows_GivenFile(Budget,iLakeIndex,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
     TYPE(BudgetType),INTENT(IN)              :: Budget      !Assumes Budget file is already open
     CHARACTER(LEN=*),INTENT(IN)              :: cBeginDate,cEndDate
-    INTEGER,INTENT(IN)                       :: iLakeID
+    INTEGER,INTENT(IN)                       :: iLakeIndex
     REAL(8),INTENT(IN)                       :: rFactVL
     REAL(8),ALLOCATABLE,INTENT(OUT)          :: rFlows(:,:)  !In (column,month) format
     CHARACTER(LEN=*),ALLOCATABLE,INTENT(OUT) :: cFlowNames(:)
@@ -651,7 +651,7 @@ CONTAINS
     END SELECT
         
     !Get monthly data    
-    CALL AppLake%Me%GetBudget_MonthlyFlows_GivenFile(Budget,iLakeID,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
+    CALL AppLake%Me%GetBudget_MonthlyFlows_GivenFile(Budget,iLakeIndex,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
     
     !Clear memory
     DEALLOCATE (AppLake%Me , cVersion , STAT=iErrorCode)
@@ -666,7 +666,7 @@ CONTAINS
       CHARACTER(:),ALLOCATABLE,INTENT(OUT) :: cVersion
       
       !Local variables
-      INTEGER                      :: iNTitles,iLenTitles,indx,iLoc
+      INTEGER                      :: iNTitles,iLenTitles,indx,iLoc,iLoc1
       CHARACTER(LEN=:),ALLOCATABLE :: cTitles(:)
       CHARACTER(:),ALLOCATABLE     :: cTitlesConc
      
@@ -685,7 +685,8 @@ CONTAINS
       
       !Check for version 4.0
       CALL FindSubStringInString('v4.0.',TRIM(cTitlesConc),iLoc)
-      IF (iLoc .GT. 0) THEN
+      CALL FindSubStringInString('v4.0-',TRIM(cTitlesConc),iLoc1)
+      IF (iLoc.GT.0  .OR.  iLoc1.GT.0) THEN
           ALLOCATE (CHARACTER(3) :: cVersion)
           cVersion = '4.0'
           RETURN
@@ -693,7 +694,8 @@ CONTAINS
       
       !Check for version 5.0
       CALL FindSubStringInString('v5.0.',TRIM(cTitlesConc),iLoc)
-      IF (iLoc .GT. 0) THEN
+      CALL FindSubStringInString('v5.0-',TRIM(cTitlesConc),iLoc1)
+      IF (iLoc.GT.0  .OR.  iLoc1.GT.0) THEN
           ALLOCATE (CHARACTER(3) :: cVersion)
           cVersion = '5.0'
           RETURN

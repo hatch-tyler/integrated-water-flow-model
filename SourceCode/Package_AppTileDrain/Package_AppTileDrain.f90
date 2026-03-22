@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2022  
+!  Copyright (C) 2005-2024  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -273,10 +273,7 @@ CONTAINS
         TileDrains(indx)%iGWNode      = iGWNode
         TileDrains(indx)%rElevation   = DummyArray(3) * FactH
         TileDrains(indx)%rConductance = DummyArray(4) * FactCDC
-        TileDrains(indx)%iGWNodeLayer = Stratigraphy%GetLayerNumberForElevation(TileDrains(indx)%rElevation , &
-                                                                                AppGrid%X(iGWNode)          , &
-                                                                                AppGrid%Y(iGWNode)          , &
-                                                                                AppGrid                     )
+        TileDrains(indx)%iGWNodeLayer = Stratigraphy%GetLayerNumberForElevation(TileDrains(indx)%rElevation , iGWNode)
         TileDrains(indx)%iDestType    = INT(DummyArray(5))
         TileDrains(indx)%iDest        = INT(DummyArray(6))
         
@@ -372,10 +369,7 @@ CONTAINS
         SubIrigs(indx)%iGWNode      = iGWNode
         SubIrigs(indx)%rElevation   = DummyArray(3) * FactH
         SubIrigs(indx)%rConductance = DummyArray(4) * FactCDC
-        SubIrigs(indx)%iGWNodeLayer = Stratigraphy%GetLayerNumberForElevation(SubIrigs(indx)%rElevation   , &
-                                                                              AppGrid%X(iGWNode)          , &
-                                                                              AppGrid%Y(iGWNode)          , &
-                                                                              AppGrid                     )
+        SubIrigs(indx)%iGWNodeLayer = Stratigraphy%GetLayerNumberForElevation(SubIrigs(indx)%rElevation , iGWNode)          
               
         !Make sure subsurface irrigation IDs are not repeated
         DO indx1=1,indx-1

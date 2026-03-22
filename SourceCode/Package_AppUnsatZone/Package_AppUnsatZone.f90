@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2022  
+!  Copyright (C) 2005-2024  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -204,7 +204,7 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- INSTANTIATE AppUnsatZone OBJECT
   ! -------------------------------------------------------------
-  SUBROUTINE New(AppUnsatZone,IsForInquiry,cFileName,cWorkingDirectory,AppGrid,Stratigraphy,TimeStep,NTIME,cIWFMVersion,DepthToGW,iStat) 
+  SUBROUTINE New(AppUnsatZone,IsForInquiry,cFileName,cWorkingDirectory,AppGrid,Stratigraphy,TimeStep,NTIME,cIWFMVersion,DepthToGW,iStat,ICFile) 
     CLASS(AppUnsatZoneType),INTENT(OUT) :: AppUnsatZone
     LOGICAL,INTENT(IN)                  :: IsForInquiry
     CHARACTER(LEN=*),INTENT(IN)         :: cFileName,cWorkingDirectory
@@ -215,6 +215,7 @@ CONTAINS
     CHARACTER(LEN=*),INTENT(IN)         :: cIWFMVersion
     REAL(8),INTENT(IN)                  :: DepthToGW(:)
     INTEGER,INTENT(OUT)                 :: iStat
+    TYPE(GenericFileType),OPTIONAL      :: ICFile    
     
     !Local variables
     CHARACTER(LEN=ModNameLen+3) :: ThisProcedure = ModName // 'New'
@@ -322,7 +323,11 @@ CONTAINS
     AppUnsatZone%UnsatElems%SoilM_To_GW = 0.0  !Over-write the soil moisture contribution to rising groundwater for the initial case
     
     !Read initial conditions
-    CALL ReadInitialConditions(UnsatZoneFile,AppGrid%AppElement%ID,NUZLayers,AppUnsatZone%UnsatElems,iStat)
+    IF (PRESENT(ICFile)) THEN
+        CALL ReadInitialConditions(ICFile,AppGrid%AppElement%ID,NUZLayers,AppUnsatZone%UnsatElems,iStat)
+    ELSE
+        CALL ReadInitialConditions(UnsatZoneFile,AppGrid%AppElement%ID,NUZLayers,AppUnsatZone%UnsatElems,iStat)
+    END IF
     IF (iStat .EQ. -1) RETURN
     
     !Calculate initial regional storage
@@ -1375,7 +1380,7 @@ CONTAINS
     
     !Route moisture through unsat zone
     ASSOCIATE (pUnsatElems => AppUnsatZone%UnsatElems)
-        !$OMP PARALLEL DO DEFAULT(PRIVATE) SHARED(pUnsatElems,AppUnsatZone,AppGrid,NUZLayers,Area,Inflow) 
+        !$OMP PARALLEL DO DEFAULT(PRIVATE) SHARED(AppUnsatZone,AppGrid,NUZLayers,Area,Inflow) 
         DO indxElem=1,AppGrid%NElements
             DO indxLayer=1,NUZLayers
                 D       = pUnsatElems(indxLayer,indxElem)%Thickness
@@ -1571,17 +1576,17 @@ CONTAINS
   ! --- GET MONTHLY BUDGET FLOWS FROM AppUnsatZone OBJECT FOR A SPECIFED SUBREGION
   ! --- (Assumes cBeginDate and cEndDate are adjusted properly)
   ! -------------------------------------------------------------
-  SUBROUTINE GetBudget_MonthlyFlows_GivenAppUnsatZone(AppUnsatZone,iSubregionID,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
+  SUBROUTINE GetBudget_MonthlyFlows_GivenAppUnsatZone(AppUnsatZone,iSubregionIndex,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
     CLASS(AppUnsatZoneType),INTENT(IN)       :: AppUnsatZone      
     CHARACTER(LEN=*),INTENT(IN)              :: cBeginDate,cEndDate
-    INTEGER,INTENT(IN)                       :: iSubregionID
+    INTEGER,INTENT(IN)                       :: iSubregionIndex
     REAL(8),INTENT(IN)                       :: rFactVL
     REAL(8),ALLOCATABLE,INTENT(OUT)          :: rFlows(:,:)      !In (column,month) format
     CHARACTER(LEN=*),ALLOCATABLE,INTENT(OUT) :: cFlowNames(:)
     INTEGER,INTENT(OUT)                      :: iStat
     
     IF (ALLOCATED(AppUnsatZone%BudRawFile)) THEN
-        CALL GetBudget_MonthlyFlows_GivenFile(AppUnsatZone%BudRawFile,iSubregionID,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
+        CALL GetBudget_MonthlyFlows_GivenFile(AppUnsatZone%BudRawFile,iSubregionIndex,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
     ELSE
         ALLOCATE (rFlows(0,0) , cFlowNames(0))
         iStat = 0
@@ -1594,10 +1599,10 @@ CONTAINS
   ! --- GET MONTHLY BUDGET FLOWS FROM A DEFINED BUDGET FILE FOR A SPECIFED SUBREGION
   ! --- (Assumes cBeginDate and cEndDate are adjusted properly)
   ! -------------------------------------------------------------
-  SUBROUTINE GetBudget_MonthlyFlows_GivenFile(Budget,iSubregionID,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
+  SUBROUTINE GetBudget_MonthlyFlows_GivenFile(Budget,iSubregionIndex,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
     TYPE(BudgetType),INTENT(IN)              :: Budget      !Assumes Budget file is already open
     CHARACTER(LEN=*),INTENT(IN)              :: cBeginDate,cEndDate
-    INTEGER,INTENT(IN)                       :: iSubregionID
+    INTEGER,INTENT(IN)                       :: iSubregionIndex
     REAL(8),INTENT(IN)                       :: rFactVL
     REAL(8),ALLOCATABLE,INTENT(OUT)          :: rFlows(:,:)  !In (column,month) format
     CHARACTER(LEN=*),ALLOCATABLE,INTENT(OUT) :: cFlowNames(:)
@@ -1613,7 +1618,7 @@ CONTAINS
     ALLOCATE (rValues(5,iNTimeSteps)) !Adding 1 to the first dimension for Time column; it will be removed later
     
     !Read data
-    CALL Budget%ReadData(iSubregionID,iReadCols,'1MON',cBeginDate,cEndDate,0d0,0d0,0d0,1d0,1d0,rFactVL,iDimActual,rValues,iStat)
+    CALL Budget%ReadData(iSubregionIndex,iReadCols,'1MON',cBeginDate,cEndDate,0d0,0d0,0d0,1d0,1d0,rFactVL,iDimActual,rValues,iStat)
     IF (iStat .NE. 0) RETURN
     
     !Store values in return argument
@@ -1634,9 +1639,9 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET BUDGET TIME SERIES DATA FOR A SET OF COLUMNS 
   ! -------------------------------------------------------------
-  SUBROUTINE GetBudget_TSData(AppUnsatZone,iSubregionID,iCols,cBeginDate,cEndDate,cInterval,rFactLT,rFactAR,rFactVL,rOutputDates,rOutputValues,iDataTypes,inActualOutput,iStat)
+  SUBROUTINE GetBudget_TSData(AppUnsatZone,iSubregionIndex,iCols,cBeginDate,cEndDate,cInterval,rFactLT,rFactAR,rFactVL,rOutputDates,rOutputValues,iDataTypes,inActualOutput,iStat)
     CLASS(AppUnsatZoneType),INTENT(IN) :: AppUnsatZone
-    INTEGER,INTENT(IN)                 :: iSubregionID,iCols(:)
+    INTEGER,INTENT(IN)                 :: iSubregionIndex,iCols(:)
     CHARACTER(LEN=*),INTENT(IN)        :: cBeginDate,cEndDate,cInterval
     REAL(8),INTENT(IN)                 :: rFactLT,rFactAR,rFactVL
     REAL(8),INTENT(OUT)                :: rOutputDates(:),rOutputValues(:,:)    !rOutputValues is in (timestep,column) format
@@ -1648,7 +1653,7 @@ CONTAINS
     IF (ALLOCATED(AppUnsatZone%BudRawFile)) THEN
         !Read data
         DO indx=1,SIZE(iCols)
-            CALL AppUnsatZone%BudRawFile%ReadData(iSubregionID,iCols(indx),cInterval,cBeginDate,cEndDate,1d0,0d0,0d0,rFactLT,rFactAR,rFactVL,iDataTypes(indx),inActualOutput,rOutputDates,rOutputValues(:,indx),iStat)
+            CALL AppUnsatZone%BudRawFile%ReadData(iSubregionIndex,iCols(indx),cInterval,cBeginDate,cEndDate,1d0,0d0,0d0,rFactLT,rFactAR,rFactVL,iDataTypes(indx),inActualOutput,rOutputDates,rOutputValues(:,indx),iStat)
         END DO
     ELSE
         inActualOutput = 0

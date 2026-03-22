@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2022  
+!  Copyright (C) 2005-2024  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -501,10 +501,12 @@ CONTAINS
                     IF (TRIM(cColumnHeaders_Work(iCol)) .EQ. 'Inflow from adjacent zones (+)') THEN 
                         IF (lAdjZoneOutflow) THEN
                             DO indxAdjZone=1,pZone%NAdjacentZones
-                                iAdjZone                                     = pZone%AdjacentZoneNumbers(indxAdjZone)
-                                cDiversifiedColumnHeaders(iCount+1:iCount+2) = ['Inflow from zone '//TRIM(IntToText(iAdjZone))//' (+)' , 'Outflow to zone '//TRIM(IntToText(iAdjZone))//' (-)']
-                                iColumnListDivsfd_Local(iCount+1:iCount+2)   = [ZBudget%Header%iNData+1+2*(indxAdjZone-1)+1 , ZBudget%Header%iNData+1+2*indxAdjZone]
-                                iCount                                       = iCount + 2
+                                iAdjZone                            = pZone%AdjacentZoneNumbers(indxAdjZone)
+                                cDiversifiedColumnHeaders(iCount+1) = 'Inflow from zone '//TRIM(IntToText(iAdjZone))//' (+)' 
+                                cDiversifiedColumnHeaders(iCount+2) = 'Outflow to zone '//TRIM(IntToText(iAdjZone))//' (-)'
+                                iColumnListDivsfd_Local(iCount+1)   = ZBudget%Header%iNData+1+2*(indxAdjZone-1)+1
+                                iColumnListDivsfd_Local(iCount+2)   = ZBudget%Header%iNData+1+2*indxAdjZone
+                                iCount                              = iCount + 2
                             END DO
                         ELSE
                             DO indxAdjZone=1,pZone%NAdjacentZones
@@ -549,7 +551,7 @@ CONTAINS
             
         !Final number of columns and column headers
         iNColumns = iCount
-        DEALLOCATE (cColumnHeaders_Work ,STAT=ErrorCode)
+        DEALLOCATE (cColumnHeaders_Work , iColumnListDiversified , STAT=ErrorCode)
         ALLOCATE (cColumnHeaders_Work(iNColumns) , iColumnListDiversified(iNColumns))
         cColumnHeaders_Work    = cDiversifiedColumnHeaders(1:iCount)
         iColumnListDiversified = iColumnListDivsfd_Local(1:iCount)
@@ -1155,29 +1157,21 @@ CONTAINS
     ELSEIF (iFileType .EQ. f_iDSS) THEN
         !Data units
         DEALLOCATE (cDataUnits , STAT=ErrorCode)  ;  ALLOCATE (cDataUnits(NDataColumns))
+        cDataUnits = cUnit_VL
         WHERE (ZBudget%Header%iDataTypes .EQ. f_iAR)
             cDataUnits(1:ZBudget%Header%iNData) = cUnit_AR
-        ELSE WHERE (ZBudget%Header%iDataTypes .EQ. f_iVR  .OR.  &
-                    ZBudget%Header%iDataTypes .EQ. f_iVLE .OR.  &
-                    ZBudget%Header%iDataTypes .EQ. f_iVLB       )
-            cDataUnits(1:ZBudget%Header%iNData) = cUnit_VL
         END WHERE
-        IF (NDataColumns .GT. ZBudget%Header%iNData) cDataUnits(ZBudget%Header%iNData+1:) = cUnit_VL
         
         !Data types
         DEALLOCATE (cDataTypes , STAT=ErrorCode)  ;  ALLOCATE (cDataTypes(NDataColumns))
+        cDataTypes = 'PER-CUM'
         WHERE (ZBudget%Header%iDataTypes .EQ. f_iAR  .OR. &
                ZBudget%Header%iDataTypes .EQ. f_iVLE .OR. &
                ZBudget%Header%iDataTypes .EQ. f_iVLB      )
             cDataTypes(1:ZBudget%Header%iNData) = 'INST-VAL'
-        ELSE WHERE (ZBudget%Header%iDataTypes .EQ. f_iVR)
-            cDataTypes(1:ZBudget%Header%iNData) = 'PER-CUM'
         END WHERE
         IF (ZBudget%Header%lStorages_Defined) THEN
             cDataTypes(NDataColumns)   = 'INST-VAL'
-            IF (ZBudget%Header%lComputeError) cDataTypes(NDataColumns-1) = 'PER-CUM'
-        ELSE
-            IF (ZBudget%Header%lComputeError) cDataTypes(NDataColumns) = 'PER-CUM'
         END IF
         
         !Pathnames

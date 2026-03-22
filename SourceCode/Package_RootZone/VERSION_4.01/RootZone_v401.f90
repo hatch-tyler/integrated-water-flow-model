@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2022  
+!  Copyright (C) 2005-2024  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -123,6 +123,8 @@ MODULE RootZone_v401
       PROCEDURE,PASS   :: GetZBudget_ColumnTitles               => RootZone_v401_GetZBudget_ColumnTitles
       PROCEDURE,PASS   :: GetZBudget_MonthlyFlows_GivenRootZone => RootZone_v401_GetZBudget_MonthlyFlows_GivenRootZone
       PROCEDURE,NOPASS :: GetZBudget_MonthlyFlows_GivenFile     => RootZone_v401_GetZBudget_MonthlyFlows_GivenFile
+      PROCEDURE,PASS   :: GetZBudget_AnnualFlows_GivenRootZone  => RootZone_v401_GetZBudget_AnnualFlows_GivenRootZone
+      PROCEDURE,NOPASS :: GetZBudget_AnnualFlows_GivenFile      => RootZone_v401_GetZBudget_AnnualFlows_GivenFile
       PROCEDURE,PASS   :: GetZBudget_TSData                     => RootZone_v401_GetZBudget_TSData
   END TYPE RootZone_v401_Type 
 
@@ -132,42 +134,42 @@ MODULE RootZone_v401
   ! -------------------------------------------------------------
   INTEGER,PARAMETER           :: f_iNLWUseZBudColumns                                  = 36  , &
                                  f_iNRootZoneZBudColumns                               = 79   
-  CHARACTER(LEN=40),PARAMETER :: f_cLWUseZBudgetColumnTitles(f_iNLWUseZBudColumns)     = ['Non-ponded Ag. Area'                           , &   
+  CHARACTER(LEN=43),PARAMETER :: f_cLWUseZBudgetColumnTitles(f_iNLWUseZBudColumns)     = ['Non-ponded Ag. Area'                           , &   
                                                                                           'Non-ponded Potential CUAW'                     , &   
-                                                                                          'Non-ponded Ag. Supply Requirement'             , &   
-                                                                                          'Non-ponded Ag. Pumping'                        , &   
-                                                                                          'Non-ponded Ag. Deliveries'                     , &   
-                                                                                          'Non-ponded Ag. Inflow as Surface Runoff'       , &   
-                                                                                          'Non-ponded Ag. Shortage'                       , &   
+                                                                                          'Non-ponded Ag. Supply Requirement (+)'         , &   
+                                                                                          'Non-ponded Ag. Pumping (-)'                    , &   
+                                                                                          'Non-ponded Ag. Deliveries (-)'                 , &   
+                                                                                          'Non-ponded Ag. Inflow as Surface Runoff (-)'   , &   
+                                                                                          'Non-ponded Ag. Shortage (=)'                   , &   
                                                                                           'Non-ponded Ag. ETAW'                           , &   
                                                                                           'Non-ponded Ag. Effective Precipitation'        , &   
                                                                                           'Non-ponded Ag. ET from Other Sources'          , &  
                                                                                           'Rice Area'                                     , &
                                                                                           'Rice Potential CUAW'                           , &   
-                                                                                          'Rice Supply Requirement'                       , &   
-                                                                                          'Rice Pumping'                                  , &   
-                                                                                          'Rice Deliveries'                               , &   
-                                                                                          'Rice Inflow as Surface Runoff'                 , &   
-                                                                                          'Rice Shortage'                                 , &   
+                                                                                          'Rice Supply Requirement (+)'                   , &   
+                                                                                          'Rice Pumping (-)'                              , &   
+                                                                                          'Rice Deliveries (-)'                           , &   
+                                                                                          'Rice Inflow as Surface Runoff (-)'             , &   
+                                                                                          'Rice Shortage (=)'                             , &   
                                                                                           'Rice ETAW'                                     , &   
                                                                                           'Rice Effective Precipitation'                  , &   
                                                                                           'Rice ET from Other Sources'                    , &  
                                                                                           'Refuge Area'                                   , &
                                                                                           'Refuge Potential CUAW'                         , &   
-                                                                                          'Refuge Supply Requirement'                     , &   
-                                                                                          'Refuge Pumping'                                , &   
-                                                                                          'Refuge Deliveries'                             , &   
-                                                                                          'Refuge Inflow as Surface Runoff'               , &   
-                                                                                          'Refuge Shortage'                               , &   
+                                                                                          'Refuge Supply Requirement (+)'                 , &   
+                                                                                          'Refuge Pumping (-)'                            , &   
+                                                                                          'Refuge Deliveries (-)'                         , &   
+                                                                                          'Refuge Inflow as Surface Runoff (-)'           , &   
+                                                                                          'Refuge Shortage (=)'                           , &   
                                                                                           'Refuge ETAW'                                   , &   
                                                                                           'Refuge Effective Precipitation'                , &   
                                                                                           'Refuge ET from Other Sources'                  , &  
                                                                                           'Urban Area'                                    , &   
-                                                                                          'Urban Supply Requirement'                      , &   
-                                                                                          'Urban Pumping'                                 , &   
-                                                                                          'Urban Deliveries'                              , &   
-                                                                                          'Urban Inflow as Surface Runoff'                , &   
-                                                                                          'Urban Shortage'                                ]     
+                                                                                          'Urban Supply Requirement (+)'                  , &   
+                                                                                          'Urban Pumping (-)'                             , &   
+                                                                                          'Urban Deliveries (-)'                          , &   
+                                                                                          'Urban Inflow as Surface Runoff (-)'            , &   
+                                                                                          'Urban Shortage (=)'                            ]     
   CHARACTER(LEN=53),PARAMETER :: f_cRootZoneZBudgetColumnTitles(f_iNRootZoneZBudColumns) = ['Non-ponded Ag. Area'                                    , &     
                                                                                             'Non-ponded Ag. Potential ET'                            , &     
                                                                                             'Non-ponded Ag. Precipitation'                           , &     
@@ -274,10 +276,10 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- NEW ROOT ZONE DATA
   ! -------------------------------------------------------------
-  SUBROUTINE RootZone_v401_New(RootZone,IsForInquiry,cFileName,cWorkingDirectory,cPackageVersion,AppGrid,TimeStep,NTIME,ET,Precip,iStat,iStrmNodeIDs,iLakeIDs)
+  SUBROUTINE RootZone_v401_New(RootZone,IsForInquiry,cProjectNameForDSS,cFileName,cWorkingDirectory,cPackageVersion,AppGrid,TimeStep,NTIME,ET,Precip,iStat,iStrmNodeIDs,iLakeIDs)
     CLASS(RootZone_v401_Type)          :: RootZone
     LOGICAL,INTENT(IN)                 :: IsForInquiry
-    CHARACTER(LEN=*),INTENT(IN)        :: cFileName,cWorkingDirectory,cPackageVersion
+    CHARACTER(LEN=*),INTENT(IN)        :: cProjectNameForDSS,cFileName,cWorkingDirectory,cPackageVersion
     TYPE(AppGridType),INTENT(IN)       :: AppGrid
     TYPE(TimeStepType),INTENT(IN)      :: TimeStep
     INTEGER,INTENT(IN)                 :: NTIME
@@ -363,7 +365,7 @@ CONTAINS
     NonPondedCropFile = StripTextUntilCharacter(NonPondedCropFile,'/') 
     CALL CleanSpecialCharacters(NonPondedCropFile)
     CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(NonPondedCropFile)),cWorkingDirectory,cAbsPathFileName)
-    CALL RootZone%NonPondedAgRootZone%New(IsForInquiry,cAbsPathFileName,cWorkingDirectory,FactCN,AppGrid,iElemIDs,TimeStep,NTIME,TRIM(cVersionFull),iStat)
+    CALL RootZone%NonPondedAgRootZone%New(IsForInquiry,cProjectNameForDSS,cAbsPathFileName,cWorkingDirectory,FactCN,AppGrid,iElemIDs,TimeStep,NTIME,TRIM(cVersionFull),iStat)
     IF (iStat .EQ. -1) RETURN
     
     !Rice/refuge data file
@@ -371,7 +373,7 @@ CONTAINS
     RiceRefugeFile = StripTextUntilCharacter(RiceRefugeFile,'/') 
     CALL CleanSpecialCharacters(RiceRefugeFile)
     CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(RiceRefugeFile)),cWorkingDirectory,cAbsPathFileName)
-    CALL RootZone%PondedAgRootZone%New(IsForInquiry,cAbsPathFileName,cWorkingDirectory,FactCN,AppGrid,iElemIDs,TimeStep,NTIME,TRIM(cVersionFull),iStat)
+    CALL RootZone%PondedAgRootZone%New(IsForInquiry,cProjectNameForDSS,cAbsPathFileName,cWorkingDirectory,FactCN,AppGrid,iElemIDs,TimeStep,NTIME,TRIM(cVersionFull),iStat)
     IF (iStat .EQ. -1) RETURN
     
     !Urban data file
@@ -411,7 +413,11 @@ CONTAINS
     END ASSOCIATE
     
     !Total number of land uses
-    RootZone%NLands = RootZone%NonPondedAgRootZone%NCrops + f_iNPondedCrops + 3
+    RootZone%NLands = 0
+    IF (RootZone%Flags%lNonPondedAg_Defined) RootZone%NLands = RootZone%NonPondedAgRootZone%NCrops 
+    IF (RootZone%Flags%lPondedAg_Defined)    RootZone%NLands = RootZone%NLands + f_iNPondedCrops  
+    IF (RootZone%Flags%lUrban_Defined)       RootZone%NLands = RootZone%NLands + 1
+    IF (RootZone%Flags%lNVRV_Defined)        RootZone%NLands = RootZone%NLands + 2 
     
     !Return flow data file
     CALL RootZoneParamFile%ReadData(ALine,iStat)  ;  IF (iStat .EQ. -1) RETURN  
@@ -487,7 +493,7 @@ CONTAINS
     CALL CleanSpecialCharacters(ALine)
     IF (ALine .NE. '') THEN
         CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(ALine)),cWorkingDirectory,cAbsPathFileName)
-        CALL LWUseBudRawFile_New(IsForInquiry,cAbsPathFileName,TimeStep,NTIME,NRegion+1,RegionArea,RegionNames,'land and water use budget',TRIM(cVersionFull),RootZone%LWUseBudRawFile,iStat)
+        CALL LWUseBudRawFile_New(IsForInquiry,cProjectNameForDSS,cAbsPathFileName,TimeStep,NTIME,NRegion+1,RegionArea,RegionNames,'land and water use budget',TRIM(cVersionFull),RootZone%LWUseBudRawFile,iStat)
         IF (iStat .EQ. -1) RETURN
         RootZone%Flags%LWUseBudRawFile_Defined = .TRUE.      
     END IF
@@ -498,7 +504,7 @@ CONTAINS
     CALL CleanSpecialCharacters(ALine)
     IF (ALine .NE. '') THEN
         CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(ALine)),cWorkingDirectory,cAbsPathFileName)
-        CALL RootZoneBudRawFile_New(IsForInquiry,cAbsPathFileName,TimeStep,NTIME,NRegion+1,RegionArea,RegionNames,'root zone budget',TRIM(cVersionFull),RootZone%RootZoneBudRawFile,iStat)
+        CALL RootZoneBudRawFile_New(IsForInquiry,cProjectNameForDSS,cAbsPathFileName,TimeStep,NTIME,NRegion+1,RegionArea,RegionNames,'root zone budget',TRIM(cVersionFull),RootZone%RootZoneBudRawFile,iStat)
         IF (iStat .EQ. -1) RETURN
         RootZone%Flags%RootZoneBudRawFile_Defined = .TRUE.
     END IF
@@ -1547,6 +1553,236 @@ CONTAINS
      
      
   ! -------------------------------------------------------------
+  ! --- GET ANNUAL ZBUDGET FLOWS FROM RootZone OBJECT 
+  ! -------------------------------------------------------------
+  SUBROUTINE RootZone_v401_GetZBudget_AnnualFlows_GivenRootZone(RootZone,iZBudgetType,iLUType,iZoneID,iZExtent,iElems,iLayers,iZoneIDs,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
+    CLASS(RootZone_v401_Type),TARGET,INTENT(IN) :: RootZone              
+    INTEGER,INTENT(IN)                          :: iZBudgetType,iZoneID,iLUType,iZExtent,iElems(:),iLayers(:),iZoneIDs(:)
+    CHARACTER(LEN=*),INTENT(IN)                 :: cBeginDate,cEndDate  
+    REAL(8),INTENT(IN)                          :: rFactVL
+    REAL(8),ALLOCATABLE,INTENT(OUT)             :: rFlows(:,:)          
+    CHARACTER(LEN=*),ALLOCATABLE,INTENT(OUT)    :: cFlowNames(:)
+    INTEGER,INTENT(OUT)                         :: iStat
+    
+    !Local variables
+    INTEGER                   :: iZonesWithNames(0)
+    CHARACTER                 :: cZoneNames(0)*1 
+    TYPE(ZBudgetType),POINTER :: pZBudget
+    TYPE(ZoneListType)        :: ZoneList
+    
+    !Initialize
+    NULLIFY(pZBudget)
+    
+    !Get a pointer to ZBudget file
+    SELECT CASE (iZBudgetType)
+        CASE (f_iZBudgetType_LWU)
+            IF (RootZone%Flags%LWUseZoneBudRawFile_Defined) pZBudget => RootZone%LWUZoneBudRawFile
+        CASE (f_iZBudgetType_RootZone)
+            IF (RootZone%Flags%RootZoneZoneBudRawFile_Defined) pZBudget => RootZone%RootZoneZoneBudRawFile
+    END SELECT
+    
+    !Return if ZBudget file does not exist
+    IF (.NOT.ASSOCIATED(pZBudget)) THEN
+        iStat = 0
+        ALLOCATE (rFlows(0,0) , cFlowNames(0))
+        RETURN
+    END IF
+    
+    !Generate zone list
+    CALL ZoneList%New(pZBudget%Header%iNData,pZBudget%Header%lFaceFlows_Defined,pZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)
+    IF (iStat .NE. 0) RETURN
+    
+    !Retrieve data
+    CALL RootZone_v401_GetZBudget_AnnualFlows_GivenFile(pZBudget,iZBudgetType,ZoneList,iZoneID,iLUType,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
+
+    !Clear memory
+    CALL ZoneList%Kill()
+    NULLIFY(pZBudget)
+    
+  END SUBROUTINE RootZone_v401_GetZBudget_AnnualFlows_GivenRootZone
+     
+     
+  ! -------------------------------------------------------------
+  ! --- GET ANNUAL ZBUDGET FLOWS FROM ZBUDGET OUTPUT 
+  ! -------------------------------------------------------------
+  SUBROUTINE RootZone_v401_GetZBudget_AnnualFlows_GivenFile(ZBudget,iZBudgetType,ZoneList,iZoneID,iLUType,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
+     TYPE(ZBudgetType),INTENT(IN)             :: ZBudget              
+     TYPE(ZoneListType),INTENT(IN)            :: ZoneList
+     INTEGER,INTENT(IN)                       :: iZBudgetType,iZoneID,iLUType
+     CHARACTER(LEN=*),INTENT(IN)              :: cBeginDate,cEndDate  
+     REAL(8),INTENT(IN)                       :: rFactVL
+     REAL(8),ALLOCATABLE,INTENT(OUT)          :: rFlows(:,:)          
+     CHARACTER(LEN=*),ALLOCATABLE,INTENT(OUT) :: cFlowNames(:)
+     INTEGER,INTENT(OUT)                      :: iStat
+     
+     !Local variables
+     CHARACTER(LEN=ModNameLen+46),PARAMETER :: ThisProcedure = ModName // 'RootZone_v401_GetZBudget_AnnualFlows_GivenFile'
+     INTEGER                                :: iNTimeSteps,indx,ErrorCode,iNPopulatedValues,indxTime
+     TYPE(TimeStepType)                     :: TimeStep
+     INTEGER,ALLOCATABLE                    :: iColList(:),iDataUnitTypes(:)
+     REAL(8),ALLOCATABLE                    :: rValues(:,:)
+     
+    !Get number of time steps stored in the ZBudget file
+    CALL ZBudget%GetTimeStepRelatedData(iNTimeSteps,TimeStep)
+    
+    !Land and water use z-budget
+    IF (iZBudgetType .EQ. f_iZBudgetType_LWU) THEN
+        ALLOCATE (iColList(5) , iDataUnitTypes(5) , cFlowNames(5) , rValues(6,iNTimeSteps))
+        cFlowNames = ['Supply Requirement' , 'Pumping' , 'Deliveries' , 'Inflow as Surface Runoff' , 'Shortage']
+        SELECT CASE (iLUType)
+            CASE (f_iLandUse_NonPondedAg)
+                iColList = [(indx,indx=3,7)]
+                
+            CASE (f_iLandUse_Rice)
+                iColList = [(indx,indx=13,17)]
+                
+            CASE (f_iLandUse_Refuge)
+                iColList = [(indx,indx=23,27)]
+                
+            CASE (f_iLandUse_Urb)
+                iColList = [(indx,indx=32,36)]
+                
+            CASE DEFAULT
+                CALL SetLastMessage('Land&Water Use ZBudget is not available for the selected land use type!',f_iFatal,ThisProcedure)
+                DEALLOCATE (rFlows , cFlowNames , STAT=ErrorCode)
+                ALLOCATE (rFlows(0,0) , cFlowNames(0))
+                iStat = -1
+                RETURN
+        END SELECT
+        
+        !Read data for the interval
+        CALL ZBudget%ReadData(ZoneList,iZoneID,iColList,'1YEAR',cBeginDate,cEndDate,1d0,rFactVL,iDataUnitTypes,iNPopulatedValues,rValues,iStat)
+        IF (iStat .NE. 0) RETURN
+        
+        !Store annual values in return argument
+        ALLOCATE (rFlows(5,iNPopulatedValues))
+        DO indxTime=1,iNPopulatedValues
+            rFlows(1,indxTime) = -rValues(2,indxTime)
+            rFlows(2,indxTime) =  rValues(3,indxTime) 
+            rFlows(3,indxTime) =  rValues(4,indxTime)
+            rFlows(4,indxTime) =  rValues(5,indxTime)
+            rFlows(5,indxTime) =  rValues(6,indxTime)
+        END DO
+    
+    
+    !Root zone budget
+    ELSEIF (iZBudgetType .EQ. f_iZBudgetType_RootZone) THEN
+        SELECT CASE (iLUType)
+            CASE (f_iLandUse_NonPondedAg)
+                ALLOCATE (iColList(7) , iDataUnitTypes(7) , cFlowNames(6) , rValues(8,iNTimeSteps))
+                cFlowNames = ['Change in Storage' , 'Gain from Land Expansion' , 'Infiltration' , 'Other Inflow' , 'ET' , 'Percolation']
+                iColList   = [(indx,indx=9,15)]
+                    
+                !Read data for the interval
+                CALL ZBudget%ReadData(ZoneList,iZoneID,iColList,'1YEAR',cBeginDate,cEndDate,1d0,rFactVL,iDataUnitTypes,iNPopulatedValues,rValues,iStat)
+                IF (iStat .NE. 0) RETURN
+                
+                !Store annual values in return argument
+                ALLOCATE (rFlows(6,iNPopulatedValues))
+                DO indxTime=1,iNPopulatedValues
+                    rFlows(1,indxTime) =  rValues(2,indxTime) - rValues(8,indxTime)  !Change in storage
+                    rFlows(2,indxTime) =  rValues(3,indxTime)                        !Gain from land expansion
+                    rFlows(3,indxTime) =  rValues(4,indxTime)                        !Infiltration
+                    rFlows(4,indxTime) =  rValues(5,indxTime)                        !Other Inflow
+                    rFlows(5,indxTime) = -rValues(6,indxTime)                        !ET
+                    rFlows(6,indxTime) = -rValues(7,indxTime)                        !Percolation
+                END DO
+                
+            CASE (f_iLandUse_Rice)
+                ALLOCATE (iColList(8) , iDataUnitTypes(8) , cFlowNames(7) , rValues(9,iNTimeSteps))
+                cFlowNames = ['Change in Storage' , 'Gain from Land Expansion' , 'Infiltration' , 'Other Inflow' , 'Pond Drain' , 'ET' , 'Percolation']
+                iColList   = [(indx,indx=25,32)]
+                
+                !Read data for the interval
+                CALL ZBudget%ReadData(ZoneList,iZoneID,iColList,'1YEAR',cBeginDate,cEndDate,1d0,rFactVL,iDataUnitTypes,iNPopulatedValues,rValues,iStat)
+                IF (iStat .NE. 0) RETURN
+                
+                !Store annual values in return argument
+                ALLOCATE (rFlows(7,iNPopulatedValues))
+                DO indxTime=1,iNPopulatedValues
+                    rFlows(1,indxTime) =  rValues(2,indxTime) - rValues(9,indxTime)  !Change in storage
+                    rFlows(2,indxTime) =  rValues(3,indxTime)                        !Gain from land expansion
+                    rFlows(3,indxTime) =  rValues(4,indxTime)                        !Infiltration
+                    rFlows(4,indxTime) =  rValues(5,indxTime)                        !Other Inflow
+                    rFlows(5,indxTime) = -rValues(6,indxTime)                        !Pond drain
+                    rFlows(6,indxTime) = -rValues(7,indxTime)                        !ET
+                    rFlows(7,indxTime) = -rValues(8,indxTime)                        !Percolation
+                END DO
+                
+            CASE (f_iLandUse_Refuge)
+                ALLOCATE (iColList(8) , iDataUnitTypes(8) , cFlowNames(7) , rValues(9,iNTimeSteps))
+                cFlowNames = ['Change in Storage' , 'Gain from Land Expansion' , 'Infiltration' , 'GW Inflow' , 'Other Inflow' , 'Pond Drain' , 'ET' , 'Percolation']
+                iColList   = [(indx,indx=42,49)]
+                
+                !Read data for the interval
+                CALL ZBudget%ReadData(ZoneList,iZoneID,iColList,'1YEAR',cBeginDate,cEndDate,1d0,rFactVL,iDataUnitTypes,iNPopulatedValues,rValues,iStat)
+                IF (iStat .NE. 0) RETURN
+                
+                !Store annual values in return argument
+                ALLOCATE (rFlows(7,iNPopulatedValues))
+                DO indxTime=1,iNPopulatedValues
+                    rFlows(1,indxTime) =  rValues(2,indxTime) - rValues(9,indxTime)  !Change in storage
+                    rFlows(2,indxTime) =  rValues(3,indxTime)                        !Gain from land expansion
+                    rFlows(3,indxTime) =  rValues(4,indxTime)                        !Infiltration
+                    rFlows(4,indxTime) =  rValues(5,indxTime)                        !Other Inflow
+                    rFlows(5,indxTime) = -rValues(6,indxTime)                        !Pond drain
+                    rFlows(6,indxTime) = -rValues(7,indxTime)                        !ET
+                    rFlows(7,indxTime) = -rValues(8,indxTime)                        !Percolation
+                END DO
+                
+            CASE (f_iLandUse_Urb)
+                ALLOCATE (iColList(7) , iDataUnitTypes(7) , cFlowNames(6) , rValues(8,iNTimeSteps))
+                cFlowNames = ['Change in Storage' , 'Gain from Land Expansion' , 'Infiltration' , 'Other Inflow' , 'ET' , 'Percolation']
+                iColList   = [(indx,indx=59,65)]
+                
+                !Read data for the interval
+                CALL ZBudget%ReadData(ZoneList,iZoneID,iColList,'1YEAR',cBeginDate,cEndDate,1d0,rFactVL,iDataUnitTypes,iNPopulatedValues,rValues,iStat)
+                IF (iStat .NE. 0) RETURN
+                
+                !Store annual values in return argument
+                ALLOCATE (rFlows(6,iNPopulatedValues))
+                DO indxTime=1,iNPopulatedValues
+                    rFlows(1,indxTime) =  rValues(2,indxTime) - rValues(8,indxTime)  !Change in storage
+                    rFlows(2,indxTime) =  rValues(3,indxTime)                        !Gain from land expansion
+                    rFlows(3,indxTime) =  rValues(4,indxTime)                        !Infiltration
+                    rFlows(4,indxTime) =  rValues(5,indxTime)                        !Other Inflow
+                    rFlows(5,indxTime) = -rValues(6,indxTime)                        !ET
+                    rFlows(6,indxTime) = -rValues(7,indxTime)                        !Percolation
+                END DO
+                
+            CASE (f_iLandUse_NVRV)
+                ALLOCATE (iColList(7) , iDataUnitTypes(7) , cFlowNames(6) , rValues(8,iNTimeSteps))
+                cFlowNames = ['Change in Storage' , 'Gain from Land Expansion' , 'Infiltration' , 'Other Inflow' , 'Stream Inflow for ET' , 'ET' , 'Percolation']
+                iColList   = [(indx,indx=72,78)]
+                
+                !Read data for the interval
+                CALL ZBudget%ReadData(ZoneList,iZoneID,iColList,'1YEAR',cBeginDate,cEndDate,1d0,rFactVL,iDataUnitTypes,iNPopulatedValues,rValues,iStat)
+                IF (iStat .NE. 0) RETURN
+                
+                !Store annual values in return argument
+                ALLOCATE (rFlows(6,iNPopulatedValues))
+                DO indxTime=1,iNPopulatedValues
+                    rFlows(1,indxTime) =  rValues(2,indxTime) - rValues(8,indxTime)  !Change in storage
+                    rFlows(2,indxTime) =  rValues(3,indxTime)                        !Gain from land expansion
+                    rFlows(3,indxTime) =  rValues(4,indxTime)                        !Infiltration
+                    rFlows(4,indxTime) =  rValues(5,indxTime)                        !Other Inflow
+                    rFlows(5,indxTime) = -rValues(6,indxTime)                        !ET
+                    rFlows(6,indxTime) = -rValues(7,indxTime)                        !Percolation
+                END DO
+                
+            CASE DEFAULT
+                CALL SetLastMessage('Root Zone ZBudget is not available for the selected land use type!',f_iFatal,ThisProcedure)
+                DEALLOCATE (rFlows , cFlowNames , STAT=ErrorCode)
+                ALLOCATE (rFlows(0,0) , cFlowNames(0))
+                iStat = -1
+                RETURN
+        END SELECT        
+    END IF  
+    
+  END SUBROUTINE RootZone_v401_GetZBudget_AnnualFlows_GivenFile
+  
+  
+  ! -------------------------------------------------------------
   ! --- GET MONTHLY ZBUDGET FLOWS FROM RootZone OBJECT 
   ! -------------------------------------------------------------
   SUBROUTINE RootZone_v401_GetZBudget_MonthlyFlows_GivenRootZone(RootZone,iZBudgetType,iLUType,iZoneID,iZExtent,iElems,iLayers,iZoneIDs,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
@@ -1648,7 +1884,7 @@ CONTAINS
         CALL ZBudget%ReadData(ZoneList,iZoneID,iColList,'1MON',cBeginDate,cEndDate,1d0,rFactVL,iDataUnitTypes,iNPopulatedValues,rValues,iStat)
         IF (iStat .NE. 0) RETURN
         
-        !Calculate monthly averages
+        !Store flows in return argument
         ALLOCATE (rFlows(5,iNPopulatedValues))
         DO indxTime=1,iNPopulatedValues
             rFlows(1,indxTime) = -rValues(2,indxTime)
@@ -1671,7 +1907,7 @@ CONTAINS
                 CALL ZBudget%ReadData(ZoneList,iZoneID,iColList,'1MON',cBeginDate,cEndDate,1d0,rFactVL,iDataUnitTypes,iNPopulatedValues,rValues,iStat)
                 IF (iStat .NE. 0) RETURN
                 
-                !Calculate monthly averages
+                !Store flows in return argument
                 ALLOCATE (rFlows(6,iNPopulatedValues))
                 DO indxTime=1,iNPopulatedValues
                     rFlows(1,indxTime) =  rValues(2,indxTime) - rValues(8,indxTime)  !Change in storage
@@ -1691,7 +1927,7 @@ CONTAINS
                 CALL ZBudget%ReadData(ZoneList,iZoneID,iColList,'1MON',cBeginDate,cEndDate,1d0,rFactVL,iDataUnitTypes,iNPopulatedValues,rValues,iStat)
                 IF (iStat .NE. 0) RETURN
                 
-                !Calculate monthly averages
+                !Store flows in return argument
                 ALLOCATE (rFlows(7,iNPopulatedValues))
                 DO indxTime=1,iNPopulatedValues
                     rFlows(1,indxTime) =  rValues(2,indxTime) - rValues(9,indxTime)  !Change in storage
@@ -1712,7 +1948,7 @@ CONTAINS
                 CALL ZBudget%ReadData(ZoneList,iZoneID,iColList,'1MON',cBeginDate,cEndDate,1d0,rFactVL,iDataUnitTypes,iNPopulatedValues,rValues,iStat)
                 IF (iStat .NE. 0) RETURN
                 
-                !Calculate monthly averages
+                !Store flows in return argument
                 ALLOCATE (rFlows(7,iNPopulatedValues))
                 DO indxTime=1,iNPopulatedValues
                     rFlows(1,indxTime) =  rValues(2,indxTime) - rValues(9,indxTime)  !Change in storage
@@ -1733,7 +1969,7 @@ CONTAINS
                 CALL ZBudget%ReadData(ZoneList,iZoneID,iColList,'1MON',cBeginDate,cEndDate,1d0,rFactVL,iDataUnitTypes,iNPopulatedValues,rValues,iStat)
                 IF (iStat .NE. 0) RETURN
                 
-                !Calculate monthly averages
+                !Store flows in return argument
                 ALLOCATE (rFlows(6,iNPopulatedValues))
                 DO indxTime=1,iNPopulatedValues
                     rFlows(1,indxTime) =  rValues(2,indxTime) - rValues(8,indxTime)  !Change in storage
@@ -1753,7 +1989,7 @@ CONTAINS
                 CALL ZBudget%ReadData(ZoneList,iZoneID,iColList,'1MON',cBeginDate,cEndDate,1d0,rFactVL,iDataUnitTypes,iNPopulatedValues,rValues,iStat)
                 IF (iStat .NE. 0) RETURN
                 
-                !Calculate monthly averages
+                !Store flows in return argument
                 ALLOCATE (rFlows(6,iNPopulatedValues))
                 DO indxTime=1,iNPopulatedValues
                     rFlows(1,indxTime) =  rValues(2,indxTime) - rValues(8,indxTime)  !Change in storage
@@ -2171,7 +2407,7 @@ CONTAINS
         rUrbRunoff(:,1)    = RootZone%UrbanRootZone%UrbData%Runoff(:,1)                                                                        !Urban runoff
         rUrbAW             = rUrbDeli + rUrbPump                                                                                               !Urban prime appliaed water
         rUrbReuse(:,1)     = RootZone%UrbanRootZone%UrbData%Reuse(:,1)                                                                         !Urban reuse
-        rUrbReturn(:,1)    = RootZone%UrbanRootZone%UrbData%ReturnFlow(:,1)                                                                    !Urban return
+        rUrbReturn(:,1)    = RootZone%UrbanRootZone%UrbData%ReturnFlowIn(:,1) + RootZone%UrbanRootZone%UrbData%ReturnFlowOut(:,1)              !Urban return
         rUrbBeginStor(:,1) = (RootZone%UrbanRootZone%UrbData%SoilM_Precip_P_BeforeUpdate(:,1)  &                                               !Urban beginning storage
                             + RootZone%UrbanRootZone%UrbData%SoilM_AW_P_BeforeUpdate(:,1)      &
                             + RootZone%UrbanRootZone%UrbData%SoilM_Oth_P_BeforeUpdate(:,1)     ) * RootZone%UrbanRootZone%UrbData%Area_P(:,1) * RootZone%UrbanRootZone%UrbData%PerviousFrac(:,1)                                  

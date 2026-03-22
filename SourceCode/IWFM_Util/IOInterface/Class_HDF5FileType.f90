@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2022  
+!  Copyright (C) 2005-2024  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -154,10 +154,10 @@ MODULE Class_HDF5FileType
   ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
-  CHARACTER(LEN=1),PARAMETER          :: f_cHeaderDir = '/'
-  CHARACTER(LEN=11),PARAMETER         :: f_cHeaderDir1 = '/Attributes'
-  INTEGER,PARAMETER                   :: ModNameLen = 20
-  CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'Class_HDF5FileType::'
+  CHARACTER(LEN=1),PARAMETER          :: f_cHeaderDir_Root       = '/'
+  CHARACTER(LEN=11),PARAMETER         :: f_cHeaderDir_AttrFolder = '/Attributes'
+  INTEGER,PARAMETER                   :: ModNameLen              = 20
+  CHARACTER(LEN=ModNameLen),PARAMETER :: ModName                 = 'Class_HDF5FileType::'
 
   
 
@@ -191,7 +191,7 @@ CONTAINS
     !Local variables
     CHARACTER(LEN=ModNameLen+12),PARAMETER          :: ThisProcedure = ModName // 'New_HDF5File'
     INTEGER                                         :: ErrorCode,indx,iBytes,iChunkDims(2)
-    INTEGER(HID_T)                                  :: iDataAccessPropListID
+    INTEGER(HID_T)                                  :: iDataAccessPropListID,iFileAccessPropListID
     INTEGER(SIZE_T)                                 :: iChunkCacheSize
     CHARACTER(LEN=1000),ALLOCATABLE                 :: TempFileNames(:)
     CHARACTER(LEN=f_iMaxDatasetNameLen),ALLOCATABLE :: cDatasetNames(:)
@@ -226,16 +226,17 @@ CONTAINS
     !Instantiate the BaseFileType
     CALL ThisFile%NewBaseFile(FileName)
     
-    !Create dataset access property list
-    CALL H5PCREATE_F(H5P_DATASET_ACCESS_F,iDataAccessPropListID,ErrorCode)
-    IF (ErrorCode .NE. 0) THEN
-        CALL SetLastMessage('Error in creating dataset access property list!',f_iFatal,ThisProcedure)
-        iStat = -1
-        RETURN
-    END IF
-        
     !Open file
     IF (lInputFile) THEN
+        !Create dataset access property list
+        CALL H5PCREATE_F(H5P_DATASET_ACCESS_F,iDataAccessPropListID,ErrorCode)
+        IF (ErrorCode .NE. 0) THEN
+            CALL SetLastMessage('Error in creating dataset access property list!',f_iFatal,ThisProcedure)
+            iStat = -1
+            RETURN
+        END IF
+        
+        !Open file
         CALL H5FOPEN_F(FileName,H5F_ACC_RDONLY_F,ThisFile%FileID,ErrorCode)
         IF (ErrorCode .NE. 0) THEN
             IF (PRESENT(FileOpenCode)) THEN
@@ -249,11 +250,11 @@ CONTAINS
         END IF
         
         !Check where the general attributes are stored in the file
-        IF (ThisFile%DoesObjectExist(f_cHeaderDir1)) THEN
-            cAttributesDir       = f_cHeaderDir1
+        IF (ThisFile%DoesObjectExist(f_cHeaderDir_AttrFolder)) THEN
+            cAttributesDir       = f_cHeaderDir_AttrFolder
             lAttributesDirExists = .TRUE.
         ELSE
-            cAttributesDir       = f_cHeaderDir
+            cAttributesDir       = f_cHeaderDir_Root
             lAttributesDirExists = .FALSE.
         END IF
         
@@ -315,8 +316,16 @@ CONTAINS
         CALL H5SGET_SIMPLE_EXTENT_DIMS_F(ThisFile%Datasets(1)%iDataSpaceID,iDims,iMaxDims,ErrorCode)
         ThisFile%nTime = iDims(2)
         
+        !Close data access property list
+        CALL H5PCLOSE_F(iDataAccessPropListID,ErrorCode)
+            
     ELSE
-        CALL H5FCREATE_F(FileName,H5F_ACC_TRUNC_F,ThisFile%FileID,ErrorCode)  
+        !Set file close property to "strong close" (everthing about the file is cleared off the memory)
+        CALL H5PCREATE_F(H5P_FILE_ACCESS_F,iFileAccessPropListID,ErrorCode)
+        CALL H5PSET_FCLOSE_DEGREE_F(iFileAccessPropListID,H5F_CLOSE_STRONG_F,ErrorCode)
+        
+        !Create file
+        CALL H5FCREATE_F(FileName,H5F_ACC_TRUNC_F,ThisFile%FileID,ErrorCode,access_prp=iFileAccessPropListID)  
         IF (ErrorCode .NE. 0) THEN
             IF (PRESENT(FileOpenCode)) THEN
                 FileOpenCode = ErrorCode
@@ -328,6 +337,9 @@ CONTAINS
             END IF
         END IF
         
+        !Close file access property list
+        CALL H5PCLOSE_F(iFileAccessPropListID,ErrorCode)
+
     END IF
     
     !Add file to the open files list
@@ -339,9 +351,6 @@ CONTAINS
     TempFileIDs(nOpenHDFFiles)     = ThisFile%FileID
     CALL MOVE_ALLOC(TempFileNames , OpenFileNames)
     CALL MOVE_ALLOC(TempFileIDs , OpenFileIDs)
-    
-    !Close property lists
-    CALL H5PCLOSE_F(iDataAccessPropListID,ErrorCode)
     
     !Clear memeory
     DEALLOCATE (DummyArray , cDataSetNames , STAT=ErrorCode)
@@ -403,14 +412,10 @@ CONTAINS
     CALL ThisFile%KillBaseFile()
     
     !Restore default values
-    ThisFile%FileID             = Dummy%FileID
-    ThisFile%TimeStep           = Dummy%TimeStep
-    ThisFile%nTime              = Dummy%nTime
-    ThisFile%nDatasets          = Dummy%nDatasets
-    ThisFile%iIntegerTypeID     = Dummy%iIntegerTypeID
-    ThisFile%iReal8TypeID       = Dummy%iReal8TypeID
-    ThisFile%iCharacterTypeID   = Dummy%iCharacterTypeID
-    ThisFile%iScalarDataSpaceID = Dummy%iScalarDataSpaceID
+    SELECT TYPE (ThisFile)
+        TYPE IS (HDF5FileType)
+            ThisFile = Dummy
+    END SELECT
     
     !Close fortran interface if there are no open HDF5 files
     IF (nOpenHDFFiles .EQ. 0) CALL H5CLOSE_F(ErrorCode)
@@ -1144,6 +1149,9 @@ CONTAINS
     !Increment data pointer in file
     ThisFile%Datasets(indxDataset)%iDataPointer_File = ThisFile%Datasets(indxDataset)%iDataPointer_File + nRows
     
+    !Close and re-open file to keep the file metedata cache size under control
+    !CALL CloseOpenFile(ThisFile,iStat)
+       
   END SUBROUTINE WriteMatrixData_ToSpecifiedDataset
   
   
@@ -1189,6 +1197,9 @@ CONTAINS
         
     END DO
     
+    !Close and re-open file to keep the file metedata cache size under control
+    !CALL CloseOpenFile(ThisFile,iStat)
+       
   END SUBROUTINE WriteMatrixData
   
   
@@ -1269,9 +1280,9 @@ CONTAINS
             
     END SELECT
         
-    !Release resources    
-    CALL H5DCLOSE_F(iDataSetID,ErrorCode)
-    CALL H5SCLOSE_F(iDataSpaceID,ErrorCode)
+    !Release resources 
+    IF (IsIDValid(iDataSetID))   CALL H5DCLOSE_F(iDataSetID,ErrorCode)
+    IF (IsIDValid(iDataSpaceID)) CALL H5SCLOSE_F(iDataSpaceID,ErrorCode)
     
   END SUBROUTINE Write1DArrayData
   
@@ -1436,20 +1447,21 @@ CONTAINS
     iSize     = SIZE(cPathNames)
     nDatasets = ThisFile%nDatasets
     
-    !Create /Attributes group id it doesn't exist
-    IF (.NOT. ThisFile%DoesObjectExist(f_cHeaderDir1)) CALL ThisFile%CreateGroup(f_cHeaderDir1) 
+    !Create /Attributes group id if it doesn't exist
+    IF (.NOT. ThisFile%DoesObjectExist(f_cHeaderDir_AttrFolder)) CALL ThisFile%CreateGroup(f_cHeaderDir_AttrFolder) 
            
     !Allocate temporary work array
     ALLOCATE (TempDatasets(nDatasets+iSize),cTempDatasetNames(nDatasets+iSize))
     TempDatasets(1:nDatasets) = ThisFile%Datasets
     IF (nDatasets .GT. 0) THEN
-        CALL ThisFile%Read1DArrayDataSet(f_cHeaderDir1//'/cLocationNames',cTempDatasetNames(1:nDatasets),iStat=iStat)  
+        CALL ThisFile%Read1DArrayDataSet(f_cHeaderDir_AttrFolder//'/cLocationNames',cTempDatasetNames(1:nDatasets),iStat=iStat)  
         IF (iStat .EQ. -1) RETURN
     END IF
     cTempDatasetNames(nDatasets+1:) = cPathNames
     
-    !Store number of time steps
-    ThisFile%nTime = NTime
+    !Store number of time steps and timestep info
+    ThisFile%nTime    = NTime
+    ThisFile%TimeStep = TimeStep
     
     !Byte size of the data type
     iBytes = STORAGE_SIZE(DataType) / 8
@@ -1540,18 +1552,18 @@ CONTAINS
     
     !Write time related information
     IF (nDatasets .EQ. 0) THEN
-        CALL ThisFile%WriteAttribute(f_iGroup,f_cHeaderDir1,'NTimeSteps',ScalarAttrData=NTime)
-        CALL ThisFile%WriteAttribute(f_iGroup,f_cHeaderDir1,'TimeStep%TrackTime',ScalarAttrData=TimeStep%TrackTime)
-        CALL ThisFile%WriteAttribute(f_iGroup,f_cHeaderDir1,'TimeStep%DeltaT',ScalarAttrData=TimeStep%DeltaT)
-        CALL ThisFile%WriteAttribute(f_iGroup,f_cHeaderDir1,'TimeStep%DeltaT_InMinutes',ScalarAttrData=TimeStep%DeltaT_InMinutes)
-        CALL ThisFile%WriteAttribute(f_iGroup,f_cHeaderDir1,'TimeStep%Unit',ScalarAttrData=TimeStep%Unit)
-        CALL ThisFile%WriteAttribute(f_iGroup,f_cHeaderDir1,'TimeStep%BeginDateAndTime',ScalarAttrData=TimeStep%CurrentDateAndTime)
-        CALL ThisFile%WriteAttribute(f_iGroup,f_cHeaderDir1,'TimeStep%BeginTime',ScalarAttrData=TimeStep%CurrentTime)
+        CALL ThisFile%WriteAttribute(f_iGroup,f_cHeaderDir_AttrFolder,'NTimeSteps',ScalarAttrData=NTime)
+        CALL ThisFile%WriteAttribute(f_iGroup,f_cHeaderDir_AttrFolder,'TimeStep%TrackTime',ScalarAttrData=TimeStep%TrackTime)
+        CALL ThisFile%WriteAttribute(f_iGroup,f_cHeaderDir_AttrFolder,'TimeStep%DeltaT',ScalarAttrData=TimeStep%DeltaT)
+        CALL ThisFile%WriteAttribute(f_iGroup,f_cHeaderDir_AttrFolder,'TimeStep%DeltaT_InMinutes',ScalarAttrData=TimeStep%DeltaT_InMinutes)
+        CALL ThisFile%WriteAttribute(f_iGroup,f_cHeaderDir_AttrFolder,'TimeStep%Unit',ScalarAttrData=TimeStep%Unit)
+        CALL ThisFile%WriteAttribute(f_iGroup,f_cHeaderDir_AttrFolder,'TimeStep%BeginDateAndTime',ScalarAttrData=TimeStep%CurrentDateAndTime)
+        CALL ThisFile%WriteAttribute(f_iGroup,f_cHeaderDir_AttrFolder,'TimeStep%BeginTime',ScalarAttrData=TimeStep%CurrentTime)
     END IF
     
     !Write number of datasets and dataset names to root group
-    CALL ThisFile%WriteAttribute(f_iGroup,f_cHeaderDir1,'nLocations',ScalarAttrData=ThisFile%nDatasets)
-    CALL ThisFile%Write1DArrayData(f_cHeaderDir1//'/cLocationNames',cTempDatasetNames)                 
+    CALL ThisFile%WriteAttribute(f_iGroup,f_cHeaderDir_AttrFolder,'nLocations',ScalarAttrData=ThisFile%nDatasets)
+    CALL ThisFile%Write1DArrayData(f_cHeaderDir_AttrFolder//'/cLocationNames',cTempDatasetNames)                 
     
     !Delete dataset creation property list
     CALL H5PCLOSE_F(iChunkPropID,ErrorCode)
@@ -1829,5 +1841,179 @@ CONTAINS
     CALL H5ESET_AUTO_F(1,ErrorCode)
     
   END FUNCTION DoesObjectExist
+  
+  
+  ! -------------------------------------------------------------
+  ! --- CLOSE AND RE-OPEN AN HDF FILE TO CONTROL METADATA CACHE SIZE
+  ! -------------------------------------------------------------
+  SUBROUTINE CloseOpenFile(ThisFile,iStat)
+    TYPE(HDF5FileType)  :: ThisFile
+    INTEGER,INTENT(OUT) :: iStat
+    
+    !Local variables
+    CHARACTER(LEN=ModNameLen+13)                    :: ThisProcedure = ModName // 'CloseOpenFile'
+    INTEGER,PARAMETER                               :: f_iMaxMetaCacheSize = 3 * 1024 *1024  !3 MBytes
+    INTEGER(HID_T)                                  :: iDataAccessPropListID,iFileAccessPropListID
+    INTEGER                                         :: iErrorCode,indx,iBytes,iChunkDims(2)
+    INTEGER,ALLOCATABLE                             :: iDataPointer_File(:)
+    INTEGER(HID_T),ALLOCATABLE                      :: iTempFileIDs(:)
+    INTEGER(SIZE_T)                                 :: iChunkCacheSize
+    INTEGER(HSIZE_T)                                :: iDims(2),iMaxDims(2),i1DDim(1)
+    LOGICAL                                         :: lAttributesDirExists
+    CHARACTER(LEN=11)                               :: cAttributesDir
+    CHARACTER(LEN=1000),ALLOCATABLE                 :: cTempFileNames(:)
+    CHARACTER(LEN=f_iMaxDatasetNameLen),ALLOCATABLE :: cDatasetNames(:)
+    CHARACTER(:),ALLOCATABLE                        :: cFileName
+    INTEGER(SIZE_T)                                 :: iMaxSize,iMinCleanSize,iCurSize
+    INTEGER(C_INT)                                  :: iCurNumEntries
+    
+    !Interface to C function to retreive metadata cache size
+    INTERFACE 
+        FUNCTION H5Fget_mdc_size(iFileID,iMaxSize,iMinCleanSize,iCurSize,iCurNumEntries) RESULT(iErr) BIND(C,NAME="H5Fget_mdc_size")
+            IMPORT                          :: HID_T,SIZE_T,C_INT
+            INTEGER(HID_T),VALUE,INTENT(IN) :: iFileID
+            INTEGER(SIZE_T),INTENT(OUT)     :: iMaxSize,iMinCleanSize,iCurSize
+            INTEGER(C_INT),INTENT(OUT)      :: iCurNumEntries
+            INTEGER                         :: iErr
+        END FUNCTION H5Fget_mdc_size
+    END INTERFACE
+    
+    !Retrieve the metadata size
+    iErrorCode = H5Fget_mdc_size(ThisFile%FileID,iMaxSize,iMinCleanSize,iCurSize,iCurNumEntries)
+    IF (iCurSize .LT. f_iMaxMetaCacheSize) THEN
+        iStat = 0
+        RETURN
+    END IF
+    
+    !Retrieve filename
+    ALLOCATE (cFileName , SOURCE=ThisFile%Name)
+    
+    !Retrieve data pointers for each dataset
+    ALLOCATE (iDataPointer_File(ThisFile%nDatasets))
+    iDataPointer_File = ThisFile%Datasets%iDataPointer_File
+    
+    !Close file
+    CALL ThisFile%Kill()
+    
+    !Initiate HDF library if it was closed during Kill process
+    CALL H5OPEN_F(iErrorCode)
+    
+    !Re-open file
+    !-------------
+    
+    !If datatypes are not initialized, do so
+    CALL InitDataTypeIDs(ThisFile%iIntegerTypeID,ThisFile%iReal8TypeID,ThisFile%iCharacterTypeID,ThisFile%iScalarDataSpaceID)
+    
+    !Instantiate the BaseFileType
+    CALL ThisFile%NewBaseFile(cFileName)
+
+    !Create dataset access property list
+    CALL H5PCREATE_F(H5P_DATASET_ACCESS_F,iDataAccessPropListID,iErrorCode)
+    IF (iErrorCode .NE. 0) THEN
+        CALL SetLastMessage('Error in creating dataset access property list!',f_iFatal,ThisProcedure)
+        iStat = -1
+        RETURN
+    END IF
+    
+    !Set file close property to "strong close" (everthing about the file is cleared off the memory)
+    CALL H5PCREATE_F(H5P_FILE_ACCESS_F,iFileAccessPropListID,iErrorCode)
+    CALL H5PSET_FCLOSE_DEGREE_F(iFileAccessPropListID,H5F_CLOSE_STRONG_F,iErrorCode)
+
+    !Open file
+    CALL H5FOPEN_F(cFileName,H5F_ACC_RDWR_F,ThisFile%FileID,iErrorCode,iFileAccessPropListID)  
+    IF (iErrorCode .NE. 0) THEN
+        CALL SetLastMessage('Error in re-opening HDF5 file '//TRIM(cFileName)//'!',f_iFatal,ThisProcedure)
+        iStat = -1
+        RETURN
+    END IF
+
+    !Check where the general attributes are stored in the file
+    IF (ThisFile%DoesObjectExist(f_cHeaderDir_AttrFolder)) THEN
+        cAttributesDir       = f_cHeaderDir_AttrFolder
+        lAttributesDirExists = .TRUE.
+    ELSE
+        cAttributesDir       = f_cHeaderDir_Root
+        lAttributesDirExists = .FALSE.
+    END IF
+    
+    !Read dataset information
+    CALL ThisFile%ReadAttribute(cAttributesDir,'nLocations',ScalarAttrData=ThisFile%nDatasets,iStat=iStat)  ;  IF (iStat .EQ. -1) RETURN
+    ALLOCATE (ThisFile%Datasets(ThisFile%nDatasets) , cDatasetNames(ThisFile%nDatasets))
+    IF (lAttributesDirExists) THEN
+        CALL ThisFile%Read1DArrayDataSet(cAttributesDir//'/cLocationNames',cDatasetNames,iStat=iStat)  
+        IF (iStat .EQ. -1) RETURN
+    ELSE
+        DO indx=1,ThisFile%nDataSets
+            CALL ThisFile%ReadAttribute(cAttributesDir,'cLocationName_'//TRIM(IntToText(indx)),ScalarAttrData=cDatasetNames(indx),iStat=iStat)  
+            IF (iStat .EQ. -1) RETURN
+        END DO
+    END IF
+    DO indx=1,ThisFile%nDatasets
+        ASSOCIATE (pDataset => ThisFile%Datasets(indx))
+            !Read chunk size and byte size of each data piece in the dataset
+            CALL ThisFile%ReadAttribute(cDatasetNames(indx),'ChunkDims',ArrayAttrData=iChunkDims,iStat=iStat)  ;  IF (iStat .EQ. -1) RETURN
+            CALL ThisFile%ReadAttribute(cDatasetNames(indx),'DataByteSize',ScalarAttrData=iBytes,iStat=iStat)  ;  IF (iStat .EQ. -1) RETURN
+
+            !Chunk cache size equals the size of the chunk or maximum cache size, whichever is smaller 
+            iChunkCacheSize = MIN(PRODUCT(iChunkDims)*iBytes , f_iMaxCacheSize)
+            CALL H5PSET_CHUNK_CACHE_F(iDataAccessPropListID,101,iChunkCacheSize,1.0,iErrorCode)
+            IF (iErrorCode .NE. 0) THEN
+                CALL SetLastMessage('Error in setting chunk cache size for dataset '//TRIM(cDatasetNames(indx))//'!',f_iFatal,ThisProcedure) 
+                iStat = -1
+                RETURN
+            END IF
+        
+            !Open dataset
+            CALL H5DOPEN_F(ThisFile%FileID,cDatasetNames(indx),pDataset%iDataSetID,iErrorCode,iDataAccessPropListID)
+        
+            !Full array dataspace
+            CALL H5DGET_SPACE_F(pDataset%iDataSetID,pDataset%iDataSpaceID,iErrorCode)
+        
+            !Dimensions of the data array on file
+            CALL H5SGET_SIMPLE_EXTENT_DIMS_F(pDataset%iDataSpaceID,iDims,iMaxDims,iErrorCode)
+            pDataset%nColumns = iDims(1)
+            
+            !Partial data spaces (one column only and one timestep only)
+            i1DDim(1) = pDataset%nColumns
+            CALL H5SCREATE_SIMPLE_F(1,i1DDim,pDataset%iDataSpaceID_OneTimeStep,iErrorCode)
+            i1DDim(1) = iDims(2)
+            CALL H5SCREATE_SIMPLE_F(1,i1dDim,pDataset%iDataSpaceID_OneColumn,iErrorCode)  
+            
+            !Data pointer in file
+            pDataSet%iDataPointer_File = iDataPointer_File(indx)
+        END ASSOCIATE
+    END DO
+
+    !Add file to the open files list
+    ALLOCATE (cTempFileNames(nOpenHDFFiles+1) , iTempFileIDs(nOpenHDFFiles+1))
+    cTempFileNames(1:nOpenHDFFiles) = OpenFileNames
+    iTempFileIDs(1:nOpenHDFFiles)   = OpenFileIDs
+    nOpenHDFFiles                   = nOpenHDFFiles + 1
+    cTempFileNames(nOpenHDFFiles)   = UpperCase(ADJUSTL(cFileName))
+    iTempFileIDs(nOpenHDFFiles)     = ThisFile%FileID
+    CALL MOVE_ALLOC(cTempFileNames , OpenFileNames)
+    CALL MOVE_ALLOC(iTempFileIDs , OpenFileIDs)
+    
+    !Close property lists
+    CALL H5PCLOSE_F(iDataAccessPropListID,iErrorCode)
+    CALL H5PCLOSE_F(iFileAccessPropListID,iErrorCode)
+    
+  END SUBROUTINE CloseOpenFile
+  
+  
+  ! -------------------------------------------------------------
+  ! --- CHECK IF A HDF ID is VALID
+  ! -------------------------------------------------------------
+  FUNCTION IsIDValid(ID) RESULT(lValid)
+    INTEGER(HID_T),INTENT(IN) :: ID
+    LOGICAL                   :: lValid
+    
+    !Local varaibles
+    INTEGER :: iErrorCode
+    
+    CALL H5IIS_VALID_F(ID,lValid,iErrorCode)
+  
+  END FUNCTION IsIDValid
+  
   
 END MODULE

@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2022  
+!  Copyright (C) 2005-2024  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -96,7 +96,7 @@ MODULE Package_AppSubsidence
   ! --- SUBSIDENCE COMPONENT FACADE VERSION RELATED DATA
   ! -------------------------------------------------------------
   INTEGER,PARAMETER                    :: iLenVersion = 11
-  CHARACTER(LEN=iLenVersion),PARAMETER :: cVersion    ='2022.0.0000'
+  CHARACTER(LEN=iLenVersion),PARAMETER :: cVersion    ='2024.0.0000'
   INCLUDE 'Package_AppSubsidence_Revision.fi'
  
   
@@ -127,7 +127,7 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- NEW SUBSIDENCE DATA
   ! -------------------------------------------------------------
-  SUBROUTINE New(AppSubsidence,IsForInquiry,cFileName,cWorkingDirectory,iGWNodeIDs,AppGrid,Stratigraphy,StrmConnectivity,TimeStep,iStat)
+  SUBROUTINE New(AppSubsidence,IsForInquiry,cFileName,cWorkingDirectory,iGWNodeIDs,AppGrid,Stratigraphy,StrmConnectivity,TimeStep,iStat,SubsICFile)
     CLASS(AppSubsidenceType),INTENT(OUT) :: AppSubsidence
     LOGICAL,INTENT(IN)                   :: IsForInquiry
     CHARACTER(LEN=*),INTENT(IN)          :: cFileName,cWorkingDirectory
@@ -136,7 +136,8 @@ CONTAINS
     TYPE(StratigraphyType),INTENT(IN)    :: Stratigraphy
     COMPLEX,INTENT(IN)                   :: StrmConnectivity(:)
     TYPE(TimeStepType),INTENT(IN)        :: TimeStep
-    INTEGER,INTENT(OUT)                  :: iStat   
+    INTEGER,INTENT(OUT)                  :: iStat 
+    TYPE(GenericFileType),OPTIONAL       :: SubsICFile
     
     !Local variables
     CHARACTER(LEN=ModNameLen+3) :: ThisProcedure = ModName // 'New'
@@ -175,8 +176,8 @@ CONTAINS
     END SELECT
         
     !Now, instantiate
-    CALL AppSubsidence%Me%New(IsForInquiry,cFileName,cWorkingDirectory,iGWNodeIDs,AppGrid,Stratigraphy,StrmConnectivity,TimeStep,iStat)
-
+    CALL AppSubsidence%Me%New(IsForInquiry,cFileName,cWorkingDirectory,iGWNodeIDs,AppGrid,Stratigraphy,StrmConnectivity,TimeStep,iStat,SubsICFile)
+    
     !Set flag
     IF (iStat .EQ. 0) AppSubsidence%lDefined = .TRUE.
     
@@ -236,11 +237,11 @@ CONTAINS
     CLASS(AppSubsidenceType),INTENT(IN)  :: AppSubsidence
     CHARACTER(:),ALLOCATABLE,INTENT(OUT) :: cFileName
     
-    IF (AppSubsidence%lDefined) THEN
-        CALL AppSubsidence%Me%GetHydOutputFileName(cFileName)
-    ELSE
-        ALLOCATE(CHARACTER(0) :: cFileName)
-    END IF
+    !Local variables
+    INTEGER :: iErrorCode
+    
+    DEALLOCATE (cFileName , STAT=iErrorCode)
+    IF (AppSubsidence%lDefined) CALL AppSubsidence%Me%GetHydOutputFileName(cFileName)
     
   END SUBROUTINE GetHydOutputFileName
   
@@ -343,15 +344,16 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET INTERBED THICKNESS AT ALL NODES
   ! -------------------------------------------------------------
-  PURE SUBROUTINE GetInterbedThickAll(AppSubsidence,InterbedThick)
+  PURE SUBROUTINE GetInterbedThickAll(AppSubsidence,lPrevious,rInterbedThick)
     CLASS(AppSubsidenceType),INTENT(IN) :: AppSubsidence
-    REAL(8),INTENT(OUT)                 :: InterbedThick(:,:)
+    LOGICAL,INTENT(IN)                  :: lPrevious
+    REAL(8),INTENT(OUT)                 :: rInterbedThick(:,:)
     
-        IF (AppSubsidence%lDefined) THEN
-             CALL AppSubsidence%Me%GetInterbedThickAll(InterbedThick)
-        ELSE
-            InterbedThick = 0d0
-        END IF
+    IF (AppSubsidence%lDefined) THEN
+         CALL AppSubsidence%Me%GetInterbedThickAll(lPrevious,rInterbedThick)
+    ELSE
+        rInterbedThick = 0d0
+    END IF
     
   END SUBROUTINE GetInterbedThickAll
   
@@ -533,11 +535,12 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- OVERWRITE ELASTIC AND INELASTIC STORAGE COEFFICIENTS
   ! -------------------------------------------------------------
-  SUBROUTINE OverwriteParameters(AppSubsidence,ElasticSC,InelasticSC)
-    CLASS(AppSubsidenceType) :: AppSubsidence
-    REAL(8),INTENT(IN)       :: ElasticSC(:,:),InelasticSC(:,:)
+  SUBROUTINE OverwriteParameters(AppSubsidence,AppGrid,ElasticSC,InelasticSC)
+    CLASS(AppSubsidenceType)     :: AppSubsidence
+    TYPE(AppGridType),INTENT(IN) :: AppGrid
+    REAL(8),INTENT(IN)           :: ElasticSC(:,:),InelasticSC(:,:)
     
-    IF (AppSubsidence%lDefined) CALL AppSubsidence%Me%OverwriteParameters(ElasticSC,InelasticSC)
+    IF (AppSubsidence%lDefined) CALL AppSubsidence%Me%OverwriteParameters(AppGrid,ElasticSC,InelasticSC)
     
   END SUBROUTINE OverwriteParameters  
   

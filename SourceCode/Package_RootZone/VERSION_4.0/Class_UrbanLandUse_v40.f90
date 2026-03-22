@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2022  
+!  Copyright (C) 2005-2024  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -40,7 +40,10 @@ MODULE Class_UrbanLandUse_v40
                                       LocateInList                    , &
                                       EstablishAbsolutePathFileName   , &
                                       UpperCase
-  USE Package_Misc            , ONLY: SolverDataType                                       
+  USE Package_Misc            , ONLY: SolverDataType                  , &
+                                      f_iLandUse_Urb                  , &
+                                      f_iLandUse_UrbIn                , &
+                                      f_iLandUse_UrbOut
   USE Class_BaseRootZone      , ONLY: TrackMoistureDueToSource        , &
                                       CalculateUrbanFracDemand
   USE Class_GenericLandUse    , ONLY: GenericLandUseType
@@ -49,7 +52,8 @@ MODULE Class_UrbanLandUse_v40
   USE Package_PrecipitationET , ONLY: ETType
   USE Package_UnsatZone       , ONLY: RootZoneSoilType                , &
                                       NonPondedLUMoistureRouter               
-  USE Util_Package_RootZone   , ONLY: ReadRealData                   
+  USE Util_Package_RootZone   , ONLY: ReadRealData                    , &
+                                      ReadLandUseAreasForTimePeriod    
   IMPLICIT NONE
   
 
@@ -68,56 +72,59 @@ MODULE Class_UrbanLandUse_v40
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: UrbanDatabase_v40_Type                        
+  PUBLIC :: UrbanLandUse_v40_Type                        
   
   
   ! -------------------------------------------------------------
   ! --- URBAN LAND DATA TYPE
   ! -------------------------------------------------------------
   TYPE,EXTENDS(GenericLandUseType) :: Urban_v40_Type
-    INTEGER,ALLOCATABLE :: iColReturnFrac(:,:)           !Column number in the return flow fraction data file
-    INTEGER,ALLOCATABLE :: iColReuseFrac(:,:)            !Column number in the re-use fraction data file
-    INTEGER,ALLOCATABLE :: iColPopulation(:,:)           !Column number in the population data file
-    INTEGER,ALLOCATABLE :: iColPerCapitaWaterUse(:,:)    !Column number in the per capita water use data file
-    INTEGER,ALLOCATABLE :: iColWaterUseSpec(:,:)         !Column number in the urban water use specs data file
-    REAL(8),ALLOCATABLE :: FracDemand(:,:)               !Relative proportion of demand computed by multiplying popultaion with per capita water use to be applied to an element
-    REAL(8),ALLOCATABLE :: Demand(:,:)                   !Urban water demand
-    REAL(8),ALLOCATABLE :: PerviousFrac(:,:)             !Fraction of pervious area to total urban area
-    REAL(8),ALLOCATABLE :: IrigInfilt(:,:)               !Infiltration due to irrigation
-    REAL(8),ALLOCATABLE :: Reuse(:,:)                    !Reused return flow 
-    REAL(8),ALLOCATABLE :: ReturnFlow(:,:)               !Return flow
-    REAL(8),ALLOCATABLE :: ElemDemandFrac(:,:)           !Ratio of urban demand to the total demand at the element it is located at
+      INTEGER,ALLOCATABLE :: iColReturnFrac(:,:)           !Column number in the return flow fraction data file
+      INTEGER,ALLOCATABLE :: iColReuseFrac(:,:)            !Column number in the re-use fraction data file
+      INTEGER,ALLOCATABLE :: iColPopulation(:,:)           !Column number in the population data file
+      INTEGER,ALLOCATABLE :: iColPerCapitaWaterUse(:,:)    !Column number in the per capita water use data file
+      INTEGER,ALLOCATABLE :: iColWaterUseSpec(:,:)         !Column number in the urban water use specs data file
+      REAL(8),ALLOCATABLE :: FracDemand(:,:)               !Relative proportion of demand computed by multiplying popultaion with per capita water use to be applied to an element
+      REAL(8),ALLOCATABLE :: Demand(:,:)                   !Urban water demand
+      REAL(8),ALLOCATABLE :: PerviousFrac(:,:)             !Fraction of pervious area to total urban area
+      REAL(8),ALLOCATABLE :: IrigInfilt(:,:)               !Infiltration due to irrigation
+      REAL(8),ALLOCATABLE :: Reuse(:,:)                    !Reused return flow 
+      REAL(8),ALLOCATABLE :: ReturnFlowIn(:,:)             !Urban indoors return flow
+      REAL(8),ALLOCATABLE :: ReturnFlowOut(:,:)            !Urban outdoors return flow
+      REAL(8),ALLOCATABLE :: ElemDemandFrac(:,:)           !Ratio of urban demand to the total demand at the element it is located at
   END TYPE Urban_v40_Type
   
   
   ! -------------------------------------------------------------
   ! --- URBAN LAND DATABASE TYPE
   ! -------------------------------------------------------------
-  TYPE UrbanDatabase_v40_Type
-    TYPE(Urban_v40_Type)        :: UrbData                         !Urban data for each element
-    REAL(8)                     :: RootDepth               = 0.0   !Urban root depth
-    REAL(8)                     :: PerCapitaWaterUseFactor = 1.0   !Conversion factor for water demand
-    LOGICAL                     :: lFracDemand_wrt_Area = .FALSE.  !Flag to see if FracDemand is specified by the user as a constant or with respect to urban area in each element
-    REAL(8),ALLOCATABLE         :: RegionETPot(:)                  !Regional urban potential ET
-    TYPE(LandUseDataFileType)   :: LandUseDataFile                 !Land use data file
-    TYPE(RealTSDataInFileType)  :: PerCapitaWaterUseFile           !Urban per capita water use data file
-    TYPE(IntTSDataInFileType)   :: PopulationFile                  !Population data file
-    TYPE(RealTSDataInFileType)  :: WaterUseSpecsFile               !Urban water use specs data file
+  TYPE UrbanLandUse_v40_Type 
+      TYPE(Urban_v40_Type)        :: UrbData                         !Urban data for each element
+      REAL(8)                     :: RootDepth               = 0.0   !Urban root depth
+      REAL(8)                     :: PerCapitaWaterUseFactor = 1.0   !Conversion factor for water demand
+      LOGICAL                     :: lFracDemand_wrt_Area = .FALSE.  !Flag to see if FracDemand is specified by the user as a constant or with respect to urban area in each element
+      REAL(8),ALLOCATABLE         :: RegionETPot(:)                  !Regional urban potential ET
+      TYPE(LandUseDataFileType)   :: LandUseDataFile                 !Land use data file
+      TYPE(RealTSDataInFileType)  :: PerCapitaWaterUseFile           !Urban per capita water use data file
+      TYPE(IntTSDataInFileType)   :: PopulationFile                  !Population data file
+      TYPE(RealTSDataInFileType)  :: WaterUseSpecsFile               !Urban water use specs data file
   CONTAINS
-    PROCEDURE,PASS :: New                         
-    PROCEDURE,PASS :: Kill  
-    PROCEDURE,PASS :: GetMaxAndMinNetReturnFlowFrac
-    PROCEDURE,PASS :: SetAreas                    
-    PROCEDURE,PASS :: ReadRestartData
-    PROCEDURE,PASS :: ReadElemArea
-    PROCEDURE,PASS :: ReadTSData                  
-    PROCEDURE,PASS :: PrintRestartData
-    PROCEDURE,PASS :: AdvanceAreas                
-    PROCEDURE,PASS :: SoilMContent_To_Depth       
-    PROCEDURE,PASS :: Simulate                    
-    PROCEDURE,PASS :: ComputeWaterDemand          
-    PROCEDURE,PASS :: RewindTSInputFilesToTimeStamp          
-  END TYPE UrbanDatabase_v40_Type
+      PROCEDURE,PASS   :: New                         
+      PROCEDURE,PASS   :: Kill  
+      PROCEDURE,PASS   :: GetMaxAndMinNetReturnFlowFrac
+      PROCEDURE,NOPASS :: GetAreasForTimePeriod
+      PROCEDURE,PASS   :: GetElementAppliedWater
+      PROCEDURE,PASS   :: SetAreas                    
+      PROCEDURE,PASS   :: ReadRestartData
+      PROCEDURE,PASS   :: ReadElemArea
+      PROCEDURE,PASS   :: ReadTSData                  
+      PROCEDURE,PASS   :: PrintRestartData
+      PROCEDURE,PASS   :: AdvanceAreas                
+      PROCEDURE,PASS   :: SoilMContent_To_Depth       
+      PROCEDURE,PASS   :: Simulate                    
+      PROCEDURE,PASS   :: ComputeWaterDemand          
+      PROCEDURE,PASS   :: RewindTSInputFilesToTimeStamp          
+  END TYPE UrbanLandUse_v40_Type 
 
   
   
@@ -149,7 +156,7 @@ CONTAINS
   ! --- NEW URBAN LAND USE DATA
   ! -------------------------------------------------------------
   SUBROUTINE New(UrbLand,cFileName,cWorkingDirectory,FactCN,NElements,NSubregions,iElemIDs,TrackTime,iStat)
-    CLASS(UrbanDatabase_v40_Type) :: UrbLand
+    CLASS(UrbanLandUse_v40_Type ) :: UrbLand
     CHARACTER(LEN=*),INTENT(IN)   :: cFileName,cWorkingDirectory
     REAL(8),INTENT(IN)            :: FACTCN
     INTEGER,INTENT(IN)            :: NElements,NSubregions,iElemIDs(NElements)
@@ -188,7 +195,8 @@ CONTAINS
               UrbLand%UrbData%PerviousFrac(NElements,1)             , &
               UrbLand%UrbData%IrigInfilt(NElements,1)               , &
               UrbLand%UrbData%Reuse(NElements,1)                    , &
-              UrbLand%UrbData%ReturnFlow(NElements,1)               , &
+              UrbLand%UrbData%ReturnFlowIn(NElements,1)             , &
+              UrbLand%UrbData%ReturnFlowOut(NElements,1)            , &
               UrbLand%UrbData%ElemDemandFrac(NElements,1)           , &
               UrbLand%RegionETPot(NSubregions)                      , &
               STAT=ErrorCode                                        )
@@ -209,7 +217,8 @@ CONTAINS
     UrbLand%UrbData%PerviousFrac          = 0.0
     UrbLand%UrbData%IrigInfilt            = 0.0
     UrbLand%UrbData%Reuse                 = 0.0
-    UrbLand%UrbData%ReturnFlow            = 0.0
+    UrbLand%UrbData%ReturnFlowIn          = 0.0
+    UrbLand%UrbData%ReturnFlowOut         = 0.0
     UrbLand%UrbData%ElemDemandFrac        = 0.0
     UrbLand%RegionETPot                   = 0.0
     
@@ -363,11 +372,11 @@ CONTAINS
   ! --- KILL URBAN LAND USE DATA
   ! -------------------------------------------------------------
   SUBROUTINE Kill(UrbLand)
-    CLASS(UrbanDatabase_v40_Type) :: UrbLand
+    CLASS(UrbanLandUse_v40_Type ) :: UrbLand
 
     !Local variables
     INTEGER                      :: ErrorCode
-    TYPE(UrbanDatabase_v40_Type) :: Dummy
+    TYPE(UrbanLandUse_v40_Type ) :: Dummy
     
     !Deallocate arrays
     CALL UrbLand%UrbData%Kill()
@@ -381,7 +390,8 @@ CONTAINS
                 UrbLand%UrbData%PerviousFrac              , &
                 UrbLand%UrbData%IrigInfilt                , &
                 UrbLand%UrbData%Reuse                     , &
-                UrbLand%UrbData%ReturnFlow                , &
+                UrbLand%UrbData%ReturnFlowIn              , &
+                UrbLand%UrbData%ReturnFlowOut             , &
                 UrbLand%UrbData%ElemDemandFrac            , &
                 UrbLand%RegionETPot                       , & 
                 STAT = ErrorCode                          )
@@ -394,7 +404,7 @@ CONTAINS
     
     !Assign default values to components
     SELECT TYPE (UrbLand)
-        TYPE IS (UrbanDatabase_v40_Type)
+        TYPE IS (UrbanLandUse_v40_Type )
             UrbLand = Dummy
     END SELECT
         
@@ -414,10 +424,79 @@ CONTAINS
 ! ******************************************************************
 
   ! -------------------------------------------------------------
+  ! --- GET URBAN INDOORS OR OUTDOORS OR ALL APPLIED WATER AT EACH ELEMENT
+  ! -------------------------------------------------------------
+  SUBROUTINE GetElementAppliedWater(UrbLand,rElemSupply,iLUType,rAW)
+    CLASS(UrbanLandUse_v40_Type ),INTENT(IN) :: UrbLand
+    REAL(8),INTENT(IN)                       :: rElemSupply(:)
+    INTEGER,INTENT(IN)                       :: iLUType
+    REAL(8),INTENT(OUT)                      :: rAW(:)
+    
+    !Local variables
+    INTEGER :: indxElem
+    REAL(8) :: rArea,rArea_Indoors,rArea_Outdoors,rIndoorFrac
+    
+    SELECT CASE (iLUType)
+        CASE (f_iLandUse_Urb)
+            DO indxElem=1,SIZE(rAW)
+                rArea = UrbLand%UrbData%Area(indxElem,1)
+                IF (rArea .EQ. 0.0) THEN
+                    rAW(indxElem) = 0.0
+                    CYCLE
+                END IF
+                rAW (indxElem) = rElemSupply(indxElem)
+            END DO
+            
+            
+        CASE (f_iLandUse_UrbIn)
+            DO indxElem=1,SIZE(rAW)
+                rArea = UrbLand%UrbData%Area(indxElem,1)
+                IF (rArea .EQ. 0.0) THEN
+                    rAW(indxElem) = 0.0
+                    CYCLE
+                END IF
+                rArea_Outdoors = rArea * UrbLand%UrbData%PerviousFrac(indxElem,1)
+                rArea_Indoors  = rArea - rArea_Outdoors 
+                IF (rArea_Indoors .EQ. 0.0) THEN
+                    rAW(indxElem) = 0.0
+                ELSEIF (rArea_Outdoors .EQ. 0.0) THEN
+                    rAW(indxElem) = rElemSupply(indxElem) 
+                ELSE
+                    rIndoorFrac   = UrbLand%WaterUseSpecsFile%rValues(UrbLand%UrbData%iColWaterUseSpec(indxElem,1))
+                    rAW(indxElem) = rElemSupply(indxElem)*rIndoorFrac
+                END IF
+            END DO
+            
+            
+        CASE (f_iLandUse_UrbOut)
+            DO indxElem=1,SIZE(rAW)
+                rArea = UrbLand%UrbData%Area(indxElem,1)
+                IF (rArea .EQ. 0.0) THEN
+                    rAW(indxElem) = 0.0
+                    CYCLE
+                END IF
+                rArea_Outdoors = rArea * UrbLand%UrbData%PerviousFrac(indxElem,1)
+                rArea_Indoors  = rArea - rArea_Outdoors 
+                IF (rArea_Indoors .EQ. 0.0) THEN
+                    rAW(indxElem) = rElemSupply(indxElem)
+                ELSEIF (rArea_Outdoors .EQ. 0.0) THEN
+                    rAW(indxElem) = 0.0
+                ELSE
+                    rIndoorFrac   = UrbLand%WaterUseSpecsFile%rValues(UrbLand%UrbData%iColWaterUseSpec(indxElem,1))
+                    rAW(indxElem) = rElemSupply(indxElem)*(1d0-rIndoorFrac )
+                END IF
+            END DO
+            
+    END SELECT
+    
+  END SUBROUTINE GetElementAppliedWater
+  
+  
+  ! -------------------------------------------------------------
   ! --- GET MIN AND MAX NET RETURN FLOW FRACTIONS THROUGH THE ENTITE SIMULATION PERIOD
   ! -------------------------------------------------------------
   SUBROUTINE GetMaxAndMinNetReturnFlowFrac(UrbLand,ReturnFracFile,ReuseFracFile,FirstTimeStep,rMaxFrac,rMinFrac,iStat)
-    CLASS(UrbanDatabase_v40_Type),INTENT(IN) :: UrbLand
+    CLASS(UrbanLandUse_v40_Type ),INTENT(IN) :: UrbLand
     TYPE(RealTSDataInFileType)               :: ReturnFracFile,ReuseFracFile
     TYPE(TimeStepType),INTENT(IN)            :: FirstTimeStep
     REAL(8),INTENT(OUT)                      :: rMaxFrac,rMinFrac
@@ -459,6 +538,47 @@ CONTAINS
       
   END SUBROUTINE GetMaxAndMinNetReturnFlowFrac
   
+
+  ! -------------------------------------------------------------
+  ! --- GET URBAN AREAS FOR AT ALL ELEMENTS FOR A TIME PERIOD
+  ! --- Note: This method is not meant to be called during a Simulation
+  ! -------------------------------------------------------------
+  SUBROUTINE GetAreasForTimePeriod(cMainFileName,cWorkingDirectory,cBeginDate,cEndDate,TimeStep,AppGrid,rAreas,iStat)
+    CHARACTER(LEN=*),INTENT(IN)   :: cMainFileName,cWorkingDirectory,cBeginDate,cEndDate
+    TYPE(TimeStepType),INTENT(IN) :: TimeStep
+    TYPE(AppGridType),INTENT(IN)  :: AppGrid
+    REAL(8),INTENT(OUT)           :: rAreas(:,:)  !For each (element,time)
+    INTEGER,INTENT(OUT)           :: iStat
+    
+    !Local variables
+    CHARACTER                :: cALine*500
+    TYPE(GenericFileType)    :: MainFile
+    CHARACTER(:),ALLOCATABLE :: cAreaFileName
+   
+    !Return if no file name is specified
+    IF (cMainFileName .EQ. '') THEN
+        rAreas = 0.0
+        iStat  = 0
+        GOTO 10
+    END IF
+    
+    !Open main file
+    CALL MainFile%New(FileName=TRIM(cMainFileName),InputFile=.TRUE.,IsTSFile=.FALSE.,iStat=iStat)
+    IF (iStat .NE. 0) GOTO 10
+    
+    !Read area filename
+    CALL MainFile%ReadData(cALine,iStat)  
+    cALine = StripTextUntilCharacter(cALine,'/') 
+    CALL CleanSpecialCharacters(cALine)
+    CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(cALine)),cWorkingDirectory,cAreaFileName)
+    
+    !Retrieve areas
+    CALL ReadLandUseAreasForTimePeriod(cAreaFileName,cWorkingDirectory,cBeginDate,cEndDate,TimeStep,AppGrid,1,1,rAreas,iStat)
+
+10  CALL MainFile%Kill()
+    
+  END SUBROUTINE GetAreasForTimePeriod
+  
   
 
   
@@ -476,7 +596,7 @@ CONTAINS
   ! --- SET THE URBAN AREAS
   ! -------------------------------------------------------------
   SUBROUTINE SetAreas(UrbLand,Area)
-    CLASS(UrbanDatabase_v40_Type) :: UrbLand
+    CLASS(UrbanLandUse_v40_Type ) :: UrbLand
     REAL(8),INTENT(IN)            :: Area(:)
    
     UrbLand%UrbData%Area(:,1) = Area
@@ -500,12 +620,13 @@ CONTAINS
   ! --- READ RESTART DATA
   ! -------------------------------------------------------------
   SUBROUTINE ReadRestartData(UrbanLand,InFile,iStat)
-    CLASS(UrbanDatabase_v40_Type) :: UrbanLand
+    CLASS(UrbanLandUse_v40_Type ) :: UrbanLand
     TYPE(GenericFileType)         :: InFile
     INTEGER,INTENT(OUT)           :: iStat
     
     CALL InFile%ReadData(UrbanLand%UrbData%Runoff,iStat)          ;  IF (iStat .EQ. -1) RETURN
-    CALL InFile%ReadData(UrbanLand%UrbData%ReturnFlow,iStat)      ;  IF (iStat .EQ. -1) RETURN
+    CALL InFile%ReadData(UrbanLand%UrbData%ReturnFlowIn,iStat)    ;  IF (iStat .EQ. -1) RETURN
+    CALL InFile%ReadData(UrbanLand%UrbData%ReturnFlowOut,iStat)   ;  IF (iStat .EQ. -1) RETURN
     CALL InFile%ReadData(UrbanLand%UrbData%Area_P,iStat)          ;  IF (iStat .EQ. -1) RETURN
     CALL InFile%ReadData(UrbanLand%UrbData%Area,iStat)            ;  IF (iStat .EQ. -1) RETURN
     CALL InFile%ReadData(UrbanLand%UrbData%SoilM_Precip_P,iStat)  ;  IF (iStat .EQ. -1) RETURN
@@ -522,7 +643,7 @@ CONTAINS
   ! --- READ TIME SERIES DATA FOR URBAN LANDS
   ! -------------------------------------------------------------
   SUBROUTINE ReadTSData(UrbanLand,TimeStep,AppGrid,iElemIDs,rElemAreas,iStat)
-    CLASS(UrbanDataBase_v40_Type) :: UrbanLand
+    CLASS(UrbanLandUse_v40_Type ) :: UrbanLand
     TYPE(TimeStepType),INTENT(IN) :: TimeStep
     TYPE(AppGridType),INTENT(IN)  :: AppGrid
     INTEGER,INTENT(IN)            :: iElemIDs(AppGrid%NElements)
@@ -560,7 +681,7 @@ CONTAINS
   ! --- READ URBAN LAND AREA AT AN ELEMENT
   ! -------------------------------------------------------------
   SUBROUTINE ReadElemArea(UrbanLand,iElem,lForInquiry,cReadBeginDateAndTime,cReadEndDateAndTime,nActualOutput,ElemLandUse,rOutputDates,iStat)
-    CLASS(UrbanDataBase_v40_Type) :: UrbanLand
+    CLASS(UrbanLandUse_v40_Type ) :: UrbanLand
     INTEGER,INTENT(IN)            :: iElem
     LOGICAL,INTENT(IN)            :: lForInquiry
     CHARACTER(LEN=*),INTENT(IN)   :: cReadBeginDateAndTime,cReadEndDateAndTime
@@ -600,11 +721,12 @@ CONTAINS
   ! --- PRINT RESTART DATA
   ! -------------------------------------------------------------
   SUBROUTINE PrintRestartData(UrbanLand,OutFile)
-    CLASS(UrbanDatabase_v40_Type),INTENT(IN) :: UrbanLand
+    CLASS(UrbanLandUse_v40_Type ),INTENT(IN) :: UrbanLand
     TYPE(GenericFileType)                    :: OutFile
     
     CALL OutFile%WriteData(UrbanLand%UrbData%Runoff)
-    CALL OutFile%WriteData(UrbanLand%UrbData%ReturnFlow)
+    CALL OutFile%WriteData(UrbanLand%UrbData%ReturnFlowIn)
+    CALL OutFile%WriteData(UrbanLand%UrbData%ReturnFlowOut)
     CALL OutFile%WriteData(UrbanLand%UrbData%Area_P)
     CALL OutFile%WriteData(UrbanLand%UrbData%Area)
     CALL OutFile%WriteData(UrbanLand%UrbData%SoilM_Precip_P)
@@ -633,7 +755,7 @@ CONTAINS
   ! --- SIMULATE FLOW PROCESSES AT URBAN AREAS
   ! -------------------------------------------------------------
   SUBROUTINE Simulate(UrbanLand,AppGrid,ETData,DeltaT,Precip,GenericMoisture,SoilsData,ElemSupply,ReuseFrac,ReturnFrac,ElemsToGW,SolverData,lLakeElem,iStat)
-    CLASS(UrbanDatabase_v40_Type)     :: UrbanLand
+    CLASS(UrbanLandUse_v40_Type )     :: UrbanLand
     TYPE(AppGridType),INTENT(IN)      :: AppGrid
     TYPE(ETType),INTENT(IN)           :: ETData
     TYPE(RootZoneSoilType),INTENT(IN) :: SoilsData(AppGrid%NElements)
@@ -664,14 +786,15 @@ CONTAINS
         pUrban%PrecipInfilt    = 0.0                     
         pUrban%ETa             = 0.0                     
         pUrban%Perc            = 0.0                    
-        pUrban%ReturnFlow      = 0.0
+        pUrban%ReturnFlowIn    = 0.0
+        pUrban%ReturnFlowOut   = 0.0
         pUrban%IrigInfilt      = 0.0
         pUrban%GMExcess        = 0.0
         pUrban%Reuse           = 0.0
         RootDepth              = UrbanLand%RootDepth   
         
         !$OMP PARALLEL DEFAULT(PRIVATE) SHARED(AppGrid,UrbanLand,lLakeElem,SoilsData,ETData,Precip,DeltaT,GenericMoisture, &
-        !$OMP                                  pUrban,ReturnFrac,ReuseFrac,SolverData,ElemSupply,ElemsToGW,iStat,RootDepth)       
+        !$OMP                                  ReturnFrac,ReuseFrac,SolverData,ElemSupply,ElemsToGW,iStat,RootDepth)       
         !$OMP DO SCHEDULE(NONMONOTONIC:DYNAMIC,96)
         DO indxElem=1,AppGrid%NElements
             
@@ -712,11 +835,11 @@ CONTAINS
             END IF
             
             !Infiltration and return flow due to applied water
-            Supply                        = AW_Outdoors * DeltaT
-            fRF                           = ReturnFrac(pUrban%iColReturnFrac(indxElem,1))
-            fRU                           = ReuseFrac(pUrban%iColReuseFrac(indxElem,1))
-            pUrban%IrigInfilt(indxElem,1) = MIN(Supply*(1d0-(fRF-fRU)) , Supply)
-            pUrban%ReturnFlow(indxElem,1) = Supply - pUrban%IrigInfilt(indxElem,1)
+            Supply                          = AW_Outdoors * DeltaT
+            fRF                             = ReturnFrac(pUrban%iColReturnFrac(indxElem,1))
+            fRU                             = ReuseFrac(pUrban%iColReuseFrac(indxElem,1))
+            pUrban%IrigInfilt(indxElem,1)   = MIN(Supply*(1d0-(fRF-fRU)) , Supply)
+            pUrban%ReturnFlowIn(indxElem,1) = Supply - pUrban%IrigInfilt(indxElem,1)
               
             !Total inflow to the root zone
             Inflow = GM + pUrban%IrigInfilt(indxElem,1)
@@ -761,15 +884,15 @@ CONTAINS
             IF (Excess .NE. 0.0) THEN
                 ratio = [pUrban%PrecipInfilt(indxElem,1) , pUrban%IrigInfilt(indxElem,1) , GM]
                 CALL NormalizeArray(ratio)
-                pUrban%Runoff(indxElem,1)       = pUrban%Runoff(indxElem,1)     + Excess * ratio(1) 
-                pUrban%ReturnFlow(indxElem,1)   = pUrban%ReturnFlow(indxElem,1) + Excess * ratio(2)
+                pUrban%Runoff(indxElem,1)       = pUrban%Runoff(indxElem,1)       + Excess * ratio(1) 
+                pUrban%ReturnFlowIn(indxElem,1) = pUrban%ReturnFlowIn(indxElem,1) + Excess * ratio(2)
                 pUrban%GMExcess(indxElem,1)     = Excess * ratio(3)
                 pUrban%PrecipInfilt(indxElem,1) = PrecipD - pUrban%Runoff(indxElem,1)
-                pUrban%IrigInfilt(indxElem,1)   = Supply  - pUrban%ReturnFlow(indxElem,1)
+                pUrban%IrigInfilt(indxElem,1)   = Supply  - pUrban%ReturnFlowIn(indxElem,1)
             END IF
             
             !Compute re-use based on return flow
-            IF (fRF .GT. 0.0) pUrban%Reuse(indxElem,1) = pUrban%ReturnFlow(indxElem,1) * fRU / fRF
+            IF (fRF .GT. 0.0) pUrban%Reuse(indxElem,1) = pUrban%ReturnFlowIn(indxElem,1) * fRU / fRF
               
             !Compute moisture from precip and irrigation
             SoilM_P_Array = [pUrban%SoilM_Precip_P(indxElem,1) , pUrban%SoilM_AW_P(indxElem,1) , pUrban%SoilM_Oth_P(indxElem,1)  ]
@@ -800,22 +923,24 @@ CONTAINS
             END IF
         
             !Convert depths to volumetric rates
-            rMultip                         = Area_Outdoors / DeltaT
-            pUrban%Runoff(indxElem,1)       = pUrban%Runoff(indxElem,1)       * rMultip + Precip(indxElem) * Area_Indoors
-            pUrban%ReturnFlow(indxElem,1)   = pUrban%ReturnFlow(indxElem,1)   * rMultip + AW_Indoors       * Area_Indoors
-            pUrban%PrecipInfilt(indxElem,1) = pUrban%PrecipInfilt(indxElem,1) * rMultip
-            pUrban%IrigInfilt(indxElem,1)   = pUrban%IrigInfilt(indxElem,1)   * rMultip
-            pUrban%ETa(indxElem,1)          = pUrban%ETa(indxElem,1)          * rMultip
-            pUrban%Perc(indxElem,1)         = pUrban%Perc(indxElem,1)         * rMultip
-            pUrban%Reuse(indxElem,1)        = pUrban%Reuse(indxElem,1)        * rMultip
+            rMultip                          = Area_Outdoors / DeltaT
+            pUrban%Runoff(indxElem,1)        = pUrban%Runoff(indxElem,1)       * rMultip + Precip(indxElem) * Area_Indoors
+            pUrban%ReturnFlowIn(indxElem,1)  = pUrban%ReturnFlowIn(indxElem,1) * rMultip 
+            pUrban%ReturnFlowOut(indxElem,1) = AW_Indoors * Area_Indoors
+            pUrban%PrecipInfilt(indxElem,1)  = pUrban%PrecipInfilt(indxElem,1) * rMultip
+            pUrban%IrigInfilt(indxElem,1)    = pUrban%IrigInfilt(indxElem,1)   * rMultip
+            pUrban%ETa(indxElem,1)           = pUrban%ETa(indxElem,1)          * rMultip
+            pUrban%Perc(indxElem,1)          = pUrban%Perc(indxElem,1)         * rMultip
+            pUrban%Reuse(indxElem,1)         = pUrban%Reuse(indxElem,1)        * rMultip
               
             !If surface flow goes to groundwater, update the runoff processes
             IF (LocateInList(indxElem,ElemsToGW) .GT. 0) THEN
-                pUrban%Perc(indxElem,1)         = pUrban%Perc(indxElem,1) + pUrban%Runoff(indxElem,1) + pUrban%ReturnFlow(indxElem,1)
-                pUrban%PrecipInfilt(indxElem,1) = pUrban%PrecipInfilt(indxElem,1) + pUrban%Runoff(indxElem,1)        !Runoff and 
-                pUrban%IrigInfilt(indxElem,1)   = pUrban%IrigInfilt(indxElem,1) + pUrban%ReturnFlow(indxElem,1)      ! return flow are assumed to bypass root zone for proper mass balance       
-                pUrban%Runoff(indxElem,1)       = 0.0
-                pUrban%ReturnFlow(indxElem,1)   = 0.0
+                pUrban%Perc(indxElem,1)          = pUrban%Perc(indxElem,1) + pUrban%Runoff(indxElem,1) + pUrban%ReturnFlowIn(indxElem,1) + pUrban%ReturnFlowOut(indxElem,1)
+                pUrban%PrecipInfilt(indxElem,1)  = pUrban%PrecipInfilt(indxElem,1) + pUrban%Runoff(indxElem,1)                                            !Runoff and 
+                pUrban%IrigInfilt(indxElem,1)    = pUrban%IrigInfilt(indxElem,1) + pUrban%ReturnFlowIn(indxElem,1) + pUrban%ReturnFlowOut(indxElem,1)     ! return flow are assumed to bypass root zone for proper mass balance       
+                pUrban%Runoff(indxElem,1)        = 0.0
+                pUrban%ReturnFlowIn(indxElem,1)  = 0.0
+                pUrban%ReturnFlowOut(indxElem,1) = 0.0
             END IF
         END DO
         !$OMP END DO
@@ -842,7 +967,7 @@ CONTAINS
   ! ---  Note: Called only once at the beginning of simulation
   ! -------------------------------------------------------------
   SUBROUTINE SoilMContent_To_Depth(UrbanLand,NElements,iElemIDs,TotalPorosity,iStat)
-    CLASS(UrbanDatabase_v40_Type) :: UrbanLand
+    CLASS(UrbanLandUse_v40_Type ) :: UrbanLand
     INTEGER,INTENT(IN)            :: NElements,iElemIDs(NElements)
     REAL(8),INTENT(IN)            :: TotalPorosity(:)
     INTEGER,INTENT(OUT)           :: iStat
@@ -885,7 +1010,7 @@ CONTAINS
   ! --- ADVANCE AREAS IN TIME
   ! -------------------------------------------------------------
   SUBROUTINE AdvanceAreas(UrbanLand) 
-    CLASS(UrbanDatabase_v40_Type) :: UrbanLand
+    CLASS(UrbanLandUse_v40_Type ) :: UrbanLand
     
     UrbanLand%UrbData%Area_P = UrbanLand%UrbData%Area
     
@@ -896,7 +1021,7 @@ CONTAINS
   ! --- COMPUTE URBAN WATER DEMAND
   ! -------------------------------------------------------------
   SUBROUTINE ComputeWaterDemand(UrbanLand)
-    CLASS(UrbanDatabase_v40_Type) :: UrbanLand
+    CLASS(UrbanLandUse_v40_Type ) :: UrbanLand
 
     ASSOCIATE (pUrbData => UrbanLand%UrbData)
         !Element demand is calculated based on urban area fractions
@@ -930,7 +1055,7 @@ CONTAINS
   ! --- REWIND TIMESERIES INPUT FILES TO A SPECIFED TIME STAMP
   ! -------------------------------------------------------------
   SUBROUTINE RewindTSInputFilesToTimeStamp(UrbanLand,iElemIDs,rElemAreas,TimeStep,iStat)
-    CLASS(UrbanDatabase_v40_Type) :: UrbanLand
+    CLASS(UrbanLandUse_v40_Type ) :: UrbanLand
     INTEGER,INTENT(IN)            :: iElemIDs(:)
     REAL(8),INTENT(IN)            :: rElemAreas(:)
     TYPE(TimeStepType),INTENT(IN) :: TimeStep 

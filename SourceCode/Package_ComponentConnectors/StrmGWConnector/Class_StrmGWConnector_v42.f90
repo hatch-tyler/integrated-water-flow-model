@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2022 
+!  Copyright (C) 2005-2024 
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -111,6 +111,7 @@ MODULE Class_StrmGWConnector_v42
       PROCEDURE,PASS :: Simulate                                 => StrmGWConnector_v42_Simulate
       PROCEDURE,PASS :: CompileConductance                       => StrmGWConnector_v42_CompileConductance
       PROCEDURE,PASS :: ConvertTimeUnit                          => StrmGWConnector_v42_ConvertTimeUnit               !Overrides the original method from base class
+      PROCEDURE,PASS :: ComputeStrmGWFlow_GivenStrmFlow          => StrmGWConnector_v42_ComputeStrmGWFlow_GivenStrmFlow
   END TYPE StrmGWConnector_v42_Type
     
   
@@ -859,10 +860,11 @@ CONTAINS
   ! --- SIMULATE STREAM-GW INTERACTION
   ! --- *** Note: + flow means losing stream
   ! -------------------------------------------------------------
-  SUBROUTINE StrmGWConnector_v42_Simulate(Connector,iNNodes,rGWHeads,rStrmHeads,rAvailableFlows,Matrix,WetPerimeterFunction,rMaxElevs)
+  SUBROUTINE StrmGWConnector_v42_Simulate(Connector,iNNodes,rGWHeads,rStrmHeads,rAvailableFlows,lUpdateStrmEqns,Matrix,WetPerimeterFunction,rMaxElevs)
     CLASS(StrmGWConnector_v42_Type)                 :: Connector
     INTEGER,INTENT(IN)                              :: iNNodes
     REAL(8),INTENT(IN)                              :: rGWHeads(:),rStrmHeads(:),rAvailableFlows(:)
+    LOGICAL,INTENT(IN)                              :: lUpdateStrmEqns
     TYPE(MatrixType)                                :: Matrix
     CLASS(AbstractFunctionType),OPTIONAL,INTENT(IN) :: WetPerimeterFunction(:)  !Not used in this version                  
     REAL(8),OPTIONAL,INTENT(IN)                     :: rMaxElevs(:)             !Not used in this version
@@ -916,11 +918,15 @@ CONTAINS
                     rUpdateCOEFF_Keep(1) = Conductance
                     rUpdateCOEFF_Keep(2) = -0.5d0 * Conductance * (1d0+rDiff_GW/rDiffGWSQRT) 
                     rUpdateCOEFF         = rUpdateCOEFF_Keep
-                    CALL Matrix%UpdateCOEFF(f_iStrmComp,indxStrm,2,iCompIDs_Connect,iNodes_Connect,rUpdateCOEFF)
+                    IF (lUpdateStrmEqns) CALL Matrix%UpdateCOEFF(f_iStrmComp,indxStrm,2,iCompIDs_Connect,iNodes_Connect,rUpdateCOEFF)
                     
                     !Update Jacobian - entries for groundwater node
                     rUpdateCOEFF = -pData%rFractionForGW(indxGW) * rUpdateCOEFF_Keep
-                    CALL Matrix%UpdateCOEFF(f_iGWComp,iGWNode,2,iCompIDs_Connect,iNodes_Connect,rUpdateCOEFF)
+                    IF (lUpdateStrmEqns) THEN
+                        CALL Matrix%UpdateCOEFF(f_iGWComp,iGWNode,2,iCompIDs_Connect,iNodes_Connect,rUpdateCOEFF)
+                    ELSE
+                        CALL Matrix%UpdateCOEFF(f_iGWComp,iGWNode,1,iCompIDs_Connect(2:2),iNodes_Connect(2:2),rUpdateCOEFF(2:2))
+                    END IF
                                         
                 !Stream is losing; we need to limit stream loss to available flow
                 ELSE
@@ -934,11 +940,15 @@ CONTAINS
                     rUpdateCOEFF_Keep(1) = Conductance * rDStrmGWFlowAdj
                     rUpdateCOEFF_Keep(2) = -0.5d0 * Conductance * (1d0+rDiff_GW/rDiffGWSQRT) * rDStrmGWFlowAdj
                     rUpdateCOEFF         = rUpdateCOEFF_Keep
-                    CALL Matrix%UpdateCOEFF(f_iStrmComp,indxStrm,2,iCompIDs_Connect,iNodes_Connect,rUpdateCOEFF)
+                    IF (lUpdateStrmEqns) CALL Matrix%UpdateCOEFF(f_iStrmComp,indxStrm,2,iCompIDs_Connect,iNodes_Connect,rUpdateCOEFF)
                     
                     !Update Jacobian - entries for groundwater node
                     rUpdateCOEFF = -pData%rFractionForGW(indxGW) * rUpdateCOEFF_Keep
-                    CALL Matrix%UpdateCOEFF(f_iGWComp,iGWNode,2,iCompIDs_Connect,iNodes_Connect,rUpdateCOEFF)
+                    IF (lUpdateStrmEqns) THEN
+                        CALL Matrix%UpdateCOEFF(f_iGWComp,iGWNode,2,iCompIDs_Connect,iNodes_Connect,rUpdateCOEFF)
+                    ELSE
+                        CALL Matrix%UpdateCOEFF(f_iGWComp,iGWNode,1,iCompIDs_Connect(2:2),iNodes_Connect(2:2),rUpdateCOEFF(2:2))
+                    END IF
                     
                     !Store flow exchange
                     pData%StrmGWFlow(indxGW) = MIN(rNodeAvailableFlow , rStrmGWFlow)
@@ -952,7 +962,12 @@ CONTAINS
             !Update RHS 
             rUpdateRHS(1)            = Connector%StrmGWFlow(indxStrm)
             rUpdateRHS(2:1+nGWNodes) = -pData%StrmGWFlow * pData%rFractionForGW
-            CALL Matrix%UpdateRHS(iCompIDs_RHS(1:1+nGWNodes),iNodes_RHS(1:1+nGWNodes),rUpdateRHS(1:1+nGWNodes))
+            IF (lUpdateStrmEqns) THEN
+                CALL Matrix%UpdateRHS(iCompIDs_RHS(1:1+nGWNodes),iNodes_RHS(1:1+nGWNodes),rUpdateRHS(1:1+nGWNodes))
+            ELSE
+                CALL Matrix%UpdateRHS(iCompIDs_RHS(2:1+nGWNodes),iNodes_RHS(2:1+nGWNodes),rUpdateRHS(2:1+nGWNodes))
+            END IF
+            
         END ASSOCIATE
         
         !Update iOffset
@@ -1019,5 +1034,49 @@ CONTAINS
     END DO
 
   END SUBROUTINE StrmGWConnector_v42_ConvertTimeUnit   
+    
+  
+  ! -------------------------------------------------------------
+  ! --- COMPUTE STREAM-GW INTERACTION GIVEN GW HEAD, STREAM FLOW AND CORRESPONDING STREAM HEAD FOR A STREAM NODE
+  ! -------------------------------------------------------------
+  FUNCTION StrmGWConnector_v42_ComputeStrmGWFlow_GivenStrmFlow(Connector,iStrmNode,rStrmFlow,rStrmHead,rGWHeads,WetPerimeterFunction,rMaxElev) RESULT(rStrmGWFlow)
+    CLASS(StrmGWConnector_v42_Type),INTENT(IN)      :: Connector
+    INTEGER,INTENT(IN)                              :: iStrmNode
+    REAL(8),INTENT(IN)                              :: rStrmFlow,rStrmHead,rGWHeads(:)
+    CLASS(AbstractFunctionType),OPTIONAL,INTENT(IN) :: WetPerimeterFunction                    
+    REAL(8),OPTIONAL,INTENT(IN)                     :: rMaxElev                 
+    REAL(8)                                         :: rStrmGWFlow
+    
+    !Local variables
+    INTEGER :: nGWNodes,indxGW,iOffset
+    REAL(8) :: rConductance,rStrmGWFlowWork,rGWHead,rNodeFlow
+    
+    !Initialize
+    rStrmGWFlow = 0.0
+    iOffset     = SUM(Connector%GWNodeList(1:iStrmNode-1)%nGWNodes)
+    
+    !Compute
+    ASSOCIATE (pData => Connector%GWNodeList(iStrmNode))
+        nGWNodes = pData%nGWNodes
+
+        !Loop over each connected gw node
+        DO indxGW=1,nGWNodes
+            !Corresponding conductance
+            rConductance = pData%Conductance(indxGW)
+            IF (rConductance .EQ. 0.0) CYCLE
+
+            !GW head 
+            rGWHead= rGWHeads(iOffset+indxGW)
+            
+            !Stream flow associated with gw node
+            rNodeFlow = rStrmFlow * pData%rDistFrac(indxGW)
+            
+            !Stream-gw interaction
+            rStrmGWFlowWork = rConductance * (rStrmHead - MAX(rGWHead,pData%rDisconnectElev(indxGW)))
+            rStrmGWFlow     = rStrmGWFlow + MIN(rNodeFlow , rStrmGWFlowWork)
+        END DO
+    END ASSOCIATE
+
+  END FUNCTION StrmGWConnector_v42_ComputeStrmGWFlow_GivenStrmFlow
   
 END MODULE

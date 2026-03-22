@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2022  
+!  Copyright (C) 2005-2024  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -168,53 +168,52 @@ CONTAINS
     !$OMP DO SCHEDULE(STATIC,500)
     !Construct the face list
     DO indxElem1=1,NElements
-      NVertexi  =  NVertex(indxElem1)
-      DO indx=1,NVertexi
-        NodeI   = Vertex(indx,indxElem1)
-        indxF   = indx+1  ;  IF (indxF .GT. NVertexi) indxF = 1
-        NodeF   = Vertex(indxF,indxElem1)
-        Elem2   = 0
-        AddFace = .TRUE.
-        
-        !Find other element that shares the face
-        DO indxElem2=1,NElements
-          IF (indxElem1 .EQ. indxElem2) CYCLE
-          IF (LocateInList(NodeI,Vertex(:,indxElem2)) .GT. 0) THEN
-            IF (LocateInList(NodeF,Vertex(:,indxElem2)) .GT. 0) THEN
-              IF (indxElem2 .LT. indxElem1) THEN
-                AddFace = .FALSE.
-                EXIT
-              ELSE
-                AddFace = .TRUE.
-                Elem2   = indxElem2
-                EXIT 
-              END IF 
+        NVertexi  =  NVertex(indxElem1)
+        DO indx=1,NVertexi
+            NodeI   = Vertex(indx,indxElem1)
+            indxF   = indx+1  ;  IF (indxF .GT. NVertexi) indxF = 1
+            NodeF   = Vertex(indxF,indxElem1)
+            Elem2   = 0
+            AddFace = .TRUE.
+            
+            !Find other element that shares the face
+            DO indxElem2=1,NElements
+                IF (indxElem1 .EQ. indxElem2) CYCLE
+                IF (LocateInList(NodeI,Vertex(:,indxElem2)) .GT. 0) THEN
+                    IF (LocateInList(NodeF,Vertex(:,indxElem2)) .GT. 0) THEN
+                        IF (indxElem2 .LT. indxElem1) THEN
+                            AddFace = .FALSE.
+                            EXIT
+                        ELSE
+                            AddFace = .TRUE.
+                            Elem2   = indxElem2
+                            EXIT 
+                        END IF 
+                    END IF
+                END IF
+            END DO
+            
+            !Add face to list
+            IF (.NOT. AddFace) CYCLE
+            anAppFace%Node(1)    = MIN(NodeI,NodeF)
+            anAppFace%Node(2)    = MAX(NodeI,NodeF)
+            anAppFace%Element(1) = MIN(indxElem1,Elem2)
+            anAppFace%Element(2) = MAX(indxElem1,Elem2)
+            x0                   = X(anAppFace%Node(1))
+            x1                   = X(anAppFace%Node(2))
+            y0                   = Y(anAppFace%Node(1))
+            y1                   = Y(anAppFace%Node(2))
+            anAppFace%Length     = SQRT((x0-x1)*(x0-x1) + (y0-y1)*(y0-y1))
+            IF (Elem2 .EQ. 0) THEN
+                anAppFace%BoundaryFace = .TRUE. 
+            ELSE
+                anAppFace%BoundaryFace = .FALSE.
             END IF
-          END IF
+            !$OMP CRITICAL
+            CALL AppFaceList%AddNode(anAppFace,iStatTemp)
+            IF (iStatTemp .EQ. -1) iStat = iStatTemp
+            !$OMP END CRITICAL
         END DO
-        
-        !Add face to list
-        IF (.NOT. AddFace) CYCLE
-        anAppFace%Node(1)    = MIN(NodeI,NodeF)
-        anAppFace%Node(2)    = MAX(NodeI,NodeF)
-        anAppFace%Element(1) = MIN(indxElem1,Elem2)
-        anAppFace%Element(2) = MAX(indxElem1,Elem2)
-        x0                   = X(anAppFace%Node(1))
-        x1                   = X(anAppFace%Node(2))
-        y0                   = Y(anAppFace%Node(1))
-        y1                   = Y(anAppFace%Node(2))
-        anAppFace%Length     = SQRT((x0-x1)*(x0-x1) + (y0-y1)*(y0-y1))
-        IF (Elem2 .EQ. 0) THEN
-          anAppFace%BoundaryFace = .TRUE. 
-        ELSE
-          anAppFace%BoundaryFace = .FALSE.
-        END IF
-        !$OMP CRITICAL
-        CALL AppFaceList%AddNode(anAppFace,iStatTemp)
-        IF (iStatTemp .EQ. -1) iStat = iStatTemp
-        !$OMP END CRITICAL
-        
-      END DO
     END DO
     !$OMP END DO
     !$OMP END PARALLEL

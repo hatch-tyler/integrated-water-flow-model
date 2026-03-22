@@ -278,7 +278,7 @@ PROGRAM IWFM_f2_MultiModel
           MessageArray(2) = 'Maximum exchange flow that did not converge (units in consistent'
           MessageArray(3) = ' simulation units) at time step '//TRIM(IntToText(Connections%iMaxNonConvergeTStep))//':'
           WRITE (MessageArray(4),'(G13.6,4X,A,4X,A)') Connections%rMaxNonConvergeFlow,TRIM(Connections%cMaxNonConvergeVar),TRIM(Connections%cMaxNonConvergeModel)
-          CALL LogMessage(MessageArray(1:4),f_iWarn,'',Destination=f_iSCREEN_FILE)
+          CALL LogMessage(MessageArray(1:4),f_iWarn,'',iDestination=f_iSCREEN_FILE)
       END IF
   END IF
       
@@ -858,7 +858,7 @@ CONTAINS
     IF (iStat .EQ. -1) RETURN
     
     !Instantiate model
-    CALL Model%New(TRIM(cSimFileName),lForInquiry=.FALSE.,iStat=iStat)
+    CALL Model%New('IWFM',TRIM(cSimFileName),'',lForInquiry=.FALSE.,iStat=iStat)
     IF (iStat .EQ. -1) RETURN
     
     !Obtain node IDs
@@ -1006,10 +1006,10 @@ CONTAINS
     END DO
   
     !Remove previously defined b.c. nodes from model
-    CALL Model%RemoveGWBC(iBCNodes(1:iCount),iBCLayers(1:iCount),iStat)  ;  IF (iStat .NE. 0) RETURN
+    CALL Model%RemoveGWBC(iBCNodes(1:iCount),iBCLayers(1:iCount),.FALSE.,iStat)  ;  IF (iStat .NE. 0) RETURN
     
     !Add new b.c. nodes as specified-flow b.c.
-    CALL Model%SetGWBCNodes(iBCNodes(1:iCount),iBCLayers(1:iCount),iFlowBCID,iStat)  ;  IF (iStat .NE. 0) RETURN
+    CALL Model%SetGWBCNodes(iBCNodes(1:iCount),iBCLayers(1:iCount),iFlowBCID,.TRUE.,iStat)  ;  IF (iStat .NE. 0) RETURN
     
     
     !=====================================
@@ -1420,10 +1420,18 @@ CONTAINS
         END DO
         
         !Stream b.c.
+        !First zero out the inflows
         DO indx=1,iNLinkNodesST
             IF (iModelConnectedST(indx) .EQ. iModelIndex) THEN
-                CALL Model%SetStreamInflow(iNodeConnectedST(indx),rInflowConnectedReadST(indx),.FALSE.,iStat)  ;  IF (iStat .NE. 0) RETURN
-                CALL Model%SetStreamInflow(iNodeConnectedST(indx),rFlowST(indx),.TRUE.,iStat)                  ;  IF (iStat .NE. 0) RETURN
+                CALL Model%SetStreamInflow(iNodeConnectedST(indx),0d0,.FALSE.,iStat)  
+                IF (iStat .NE. 0) RETURN
+            END IF
+        END DO
+        !Then add inflows from upstream models
+        DO indx=1,iNLinkNodesST
+            IF (iModelConnectedST(indx) .EQ. iModelIndex) THEN
+                CALL Model%SetStreamInflow(iNodeConnectedST(indx),rInflowConnectedReadST(indx),.TRUE.,iStat)  ;  IF (iStat .NE. 0) RETURN
+                CALL Model%SetStreamInflow(iNodeConnectedST(indx),rFlowST(indx),.TRUE.,iStat)                 ;  IF (iStat .NE. 0) RETURN
             END IF
         END DO
         

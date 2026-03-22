@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2022  
+!  Copyright (C) 2005-2024  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -444,5 +444,35 @@ CONTAINS
     Dates = Dates - 2415020D0
     
   END SUBROUTINE IW_Budget_GetValues_ForAColumn
+  
+
+
+  
+! ******************************************************************
+! ******************************************************************
+! ******************************************************************
+! ***
+! *** MISC. METHODS
+! ***
+! ******************************************************************
+! ******************************************************************
+! ******************************************************************
+
+  ! -------------------------------------------------------------
+  ! --- DO ALL LOCATIONS HAVE THE SAME NUMBER OF COLUMNS?
+  ! -------------------------------------------------------------
+  SUBROUTINE IW_Budget_AreNColumnsSame(iIsSame,iStat) BIND(C,NAME='IW_Budget_AreNColumnsSame')
+    !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Budget_AreNColumnsSame
+    INTEGER(C_INT),INTENT(OUT) :: iIsSame,iStat
+    
+    iStat = 0
+    
+    IF (Budget%AreNColumnsSame()) THEN
+        iIsSame = 1
+    ELSE
+        iIsSame = 0
+    END IF
+    
+  END SUBROUTINE IW_Budget_AreNColumnsSame
   
 END MODULE

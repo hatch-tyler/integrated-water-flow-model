@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2022  
+!  Copyright (C) 2005-2024  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -21,14 +21,15 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 MODULE Class_StrmEvap
-  USE MessageLogger           , ONLY: SetLastMessage           , &
-                                      MessageArray             , &   
-                                      f_iFatal   
-  USE GeneralUtilities        , ONLY: StripTextUntilCharacter  , &
-                                      CleanSpecialCharacters   , &
-                                      IntToText                , &  
-                                      LocateInList
-  USE IOInterface             , ONLY: GenericFileType          , &
+  USE MessageLogger           , ONLY: SetLastMessage                , &
+                                      MessageArray                  , &   
+                                      f_iFatal                      
+  USE GeneralUtilities        , ONLY: StripTextUntilCharacter       , &
+                                      CleanSpecialCharacters        , &
+                                      EstablishAbsolutePathFileName , &
+                                      IntToText                     , &  
+                                      LocateInList                  
+  USE IOInterface             , ONLY: GenericFileType               , &
                                       RealTSDataInFileType
   USE TimeSeriesUtilities     , ONLY: TimeStepType
   USE Package_PrecipitationET , ONLY: ETType
@@ -113,6 +114,7 @@ CONTAINS
     REAL(8)                     :: rFactor(1)
     CHARACTER                   :: cAreaFile*1000
     LOGICAL                     :: lProcessed(iNStrmNodes)
+    CHARACTER(:),ALLOCATABLE    :: cAbsPathFileName
     
     !Initialize
     iStat      = 0
@@ -127,6 +129,8 @@ CONTAINS
     IF (iStat .EQ. 0) THEN
         cAreaFile = StripTextUntilCharacter(cAreaFile,'/') 
         CALL CleanSpecialCharacters(cAreaFile)
+        CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(cAreaFile)),cWorkingDirectory,cAbsPathFileName)
+        cAreaFile = cAbsPathFileName
         IF (LEN_TRIM(cAreaFile) .NE. 0) THEN
             CALL StrmEvap%StrmAreaFile%Init(TRIM(ADJUSTL(cAreaFile)),cWorkingDirectory,'stream surface area file',TimeStep%TrackTime,1,.TRUE.,rFactor,[.FALSE.],iStat=iStat) 
             IF (iStat .EQ. -1) RETURN

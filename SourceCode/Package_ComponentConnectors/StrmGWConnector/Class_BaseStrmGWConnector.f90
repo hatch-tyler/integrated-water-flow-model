@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2022  
+!  Copyright (C) 2005-2024  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -82,29 +82,30 @@ MODULE Class_BaseStrmGWConnector
     REAL(8),ALLOCATABLE :: rFractionForGW(:)                           !Fraction of the stream-aquifer interaction that the groundwater node is exposed to
     REAL(8),ALLOCATABLE :: StrmGWFlow(:)                               !Stream-gw interaction (+ is flow from stream to gw)
   CONTAINS
-    PROCEDURE(Abstract_StrmGWConnector_Simulate),PASS,DEFERRED           :: Simulate 
-    PROCEDURE(Abstract_StrmGWConnector_CompileConductance),PASS,DEFERRED :: CompileConductance
-    PROCEDURE,PASS                                                       :: BaseStrmGWConnector_AddGWNodes
-    PROCEDURE,PASS                                                       :: BaseStrmGWConnector_ReadPreprocessedData
-    PROCEDURE,PASS                                                       :: Kill                    => BaseStrmGWConnector_Kill
-    PROCEDURE,PASS                                                       :: GetAllLayers            => BaseStrmGWConnector_GetAllLayers           
-    PROCEDURE,PASS                                                       :: GetLayer                => BaseStrmGWConnector_GetLayer               
-    PROCEDURE,PASS                                                       :: GetFlowAtGWNode         => BaseStrmGWConnector_GetFlowAtGWNode        
-    PROCEDURE,PASS                                                       :: GetFlowAtAllStrmNodes   => BaseStrmGWConnector_GetFlowAtAllStrmNodes 
-    PROCEDURE,PASS                                                       :: GetFlowAtSomeStrmNodes  => BaseStrmGWConnector_GetFlowAtSomeStrmNodes 
-    PROCEDURE,PASS                                                       :: GetSubregionalFlows     => BaseStrmGWConnector_GetSubregionalFlows    
-    PROCEDURE,PASS                                                       :: GetAllGWNodes           => BaseStrmGWConnector_GetAllGWNodes          
-    PROCEDURE,PASS                                                       :: GetGWNode               => BaseStrmGWConnector_GetGWNode              
-    PROCEDURE,PASS                                                       :: GetGWHeadsAtStrmNodes   => BaseStrmGWConnector_GetGWHeadsAtStrmNodes
-    PROCEDURE,PASS                                                       :: SetInteractionType      => BaseStrmGWConnector_SetInteractionType         
-    PROCEDURE,PASS                                                       :: SetConductance          => BaseStrmGWConnector_SetConductance 
-    PROCEDURE,PASS                                                       :: SetFractionsForGW       => BaseStrmGWConnector_SetFractionsForGW
-    PROCEDURE,PASS                                                       :: SetStrmGWFlow           => BaseStrmGWConnector_SetStrmGWFlow          
-    PROCEDURE,PASS                                                       :: WritePreprocessedData   => BaseStrmGWConnector_WritePreprocessedData  
-    PROCEDURE,PASS                                                       :: ConvertTimeUnit         => BaseStrmGWConnector_ConvertTimeUnit  
-    PROCEDURE,PASS                                                       :: RegisterWithMatrix      => BaseStrmGWConnector_RegisterWithMatrix
-    GENERIC                                                              :: New                     => BaseStrmGWConnector_AddGWNodes           , &
-                                                                                                       BaseStrmGWConnector_ReadPreprocessedData 
+    PROCEDURE(Abstract_StrmGWConnector_Simulate),PASS,DEFERRED                        :: Simulate 
+    PROCEDURE(Abstract_StrmGWConnector_CompileConductance),PASS,DEFERRED              :: CompileConductance
+    PROCEDURE(Abstract_StrmGWConnector_ComputeStrmGWFlow_GivenStrmFlow),PASS,DEFERRED :: ComputeStrmGWFlow_GivenStrmFlow
+    PROCEDURE,PASS                                                                    :: BaseStrmGWConnector_AddGWNodes
+    PROCEDURE,PASS                                                                    :: BaseStrmGWConnector_ReadPreprocessedData
+    PROCEDURE,PASS                                                                    :: Kill                      => BaseStrmGWConnector_Kill
+    PROCEDURE,PASS                                                                    :: GetAllLayers              => BaseStrmGWConnector_GetAllLayers           
+    PROCEDURE,PASS                                                                    :: GetLayer                  => BaseStrmGWConnector_GetLayer               
+    PROCEDURE,PASS                                                                    :: GetFlowAtGWNode           => BaseStrmGWConnector_GetFlowAtGWNode        
+    PROCEDURE,PASS                                                                    :: GetFlowAtAllStrmNodes     => BaseStrmGWConnector_GetFlowAtAllStrmNodes 
+    PROCEDURE,PASS                                                                    :: GetFlowAtSomeStrmNodes    => BaseStrmGWConnector_GetFlowAtSomeStrmNodes 
+    PROCEDURE,PASS                                                                    :: GetSubregionalFlows       => BaseStrmGWConnector_GetSubregionalFlows    
+    PROCEDURE,PASS                                                                    :: GetAllGWNodes             => BaseStrmGWConnector_GetAllGWNodes          
+    PROCEDURE,PASS                                                                    :: GetGWNode                 => BaseStrmGWConnector_GetGWNode              
+    PROCEDURE,PASS                                                                    :: GetGWHeadsAtStrmNodes     => BaseStrmGWConnector_GetGWHeadsAtStrmNodes
+    PROCEDURE,PASS                                                                    :: SetInteractionType        => BaseStrmGWConnector_SetInteractionType         
+    PROCEDURE,PASS                                                                    :: SetConductance            => BaseStrmGWConnector_SetConductance 
+    PROCEDURE,PASS                                                                    :: SetFractionsForGW         => BaseStrmGWConnector_SetFractionsForGW
+    PROCEDURE,PASS                                                                    :: SetStrmGWFlow             => BaseStrmGWConnector_SetStrmGWFlow          
+    PROCEDURE,PASS                                                                    :: WritePreprocessedData     => BaseStrmGWConnector_WritePreprocessedData  
+    PROCEDURE,PASS                                                                    :: ConvertTimeUnit           => BaseStrmGWConnector_ConvertTimeUnit  
+    PROCEDURE,PASS                                                                    :: RegisterWithMatrix        => BaseStrmGWConnector_RegisterWithMatrix
+    GENERIC                                                                           :: New                       => BaseStrmGWConnector_AddGWNodes           , &
+                                                                                                                      BaseStrmGWConnector_ReadPreprocessedData 
   END TYPE BaseStrmGWConnectorType
     
   
@@ -113,11 +114,23 @@ MODULE Class_BaseStrmGWConnector
   ! -------------------------------------------------------------
   ABSTRACT INTERFACE
   
-      SUBROUTINE Abstract_StrmGWConnector_Simulate(Connector,iNNodes,rGWHeads,rStrmHeads,rAvailableFlows,Matrix,WetPerimeterFunction,rMaxElevs)
+      FUNCTION Abstract_StrmGWConnector_ComputeStrmGWFlow_GivenStrmFlow(Connector,iStrmNode,rStrmFlow,rStrmHead,rGWHeads,WetPerimeterFunction,rMaxElev) RESULT(rStrmGWFlow)
+        IMPORT                                          :: BaseStrmGWConnectorType,AbstractFunctionType
+        CLASS(BaseStrmGWConnectorType),INTENT(IN)       :: Connector
+        INTEGER,INTENT(IN)                              :: iStrmNode
+        REAL(8),INTENT(IN)                              :: rStrmFlow,rStrmHead,rGWHeads(:)
+        REAL(8)                                         :: rStrmGWFlow
+        CLASS(AbstractFunctionType),OPTIONAL,INTENT(IN) :: WetPerimeterFunction                    
+        REAL(8),OPTIONAL,INTENT(IN)                     :: rMaxElev    
+      END FUNCTION Abstract_StrmGWConnector_ComputeStrmGWFlow_GivenStrmFlow
+
+  
+      SUBROUTINE Abstract_StrmGWConnector_Simulate(Connector,iNNodes,rGWHeads,rStrmHeads,rAvailableFlows,lUpdateStrmEqns,Matrix,WetPerimeterFunction,rMaxElevs)
         IMPORT                                          :: BaseStrmGWConnectorType,AbstractFunctionType,MatrixType
         CLASS(BaseStrmGWConnectorType)                  :: Connector
         INTEGER,INTENT(IN)                              :: iNNodes
         REAL(8),INTENT(IN)                              :: rGWHeads(:),rStrmHeads(:),rAvailableFlows(:)
+        LOGICAL,INTENT(IN)                              :: lUpdateStrmEqns    !Flag used to check if stream equations will be updated (when streams are simulated by an external program)
         TYPE(MatrixType)                                :: Matrix
         CLASS(AbstractFunctionType),OPTIONAL,INTENT(IN) :: WetPerimeterFunction(:)                     
         REAL(8),OPTIONAL,INTENT(IN)                     :: rMaxElevs(:)

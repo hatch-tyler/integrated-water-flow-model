@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2022
+!  Copyright (C) 2005-2024
 !  State of California, Department of Water Resources
 !
 !  This program is free software; you can redistribute it and/or
@@ -18,7 +18,7 @@
 !  along with this program; if not, write to the Free Software
 !  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 !
-!  For technical support, e-mail: IWFMtechsupport@water.ca.gov
+!  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov
 !***********************************************************************
 MODULE TimeSeriesUtilities
   USE MessageLogger
@@ -118,9 +118,16 @@ MODULE TimeSeriesUtilities
   ! --- OVERLOADED METHODS
   ! -------------------------------------------------------------
 
+  !Overload methods for incrementing a time stamp
+  INTERFACE IncrementTimeStamp
+    MODULE PROCEDURE IncrementTimeStamp_IntervalInMinutes
+    MODULE PROCEDURE IncrementTimeStamp_IntervalInText
+  END INTERFACE
+
   !Overload methods for computing number of periods between two times or time stamps
   INTERFACE NPeriods
-    MODULE PROCEDURE NPeriodsBetweenTimeStamps
+    MODULE PROCEDURE NPeriodsBetweenTimeStamps_IntervalInMinutes
+    MODULE PROCEDURE NPeriodsBetweenTimeStamps_IntervalInText
     MODULE PROCEDURE NPeriodsBetweenTimes
   END INTERFACE
 
@@ -467,7 +474,7 @@ CONTAINS
     IF (PRESENT(STAT)) THEN
       STAT=ErrorCode
     ELSE
-      IF (ErrorCode.NE.0) CALL LogMessage('Error in converting simulation date to Julian date',3,ThisProcedure)
+      IF (ErrorCode.NE.0) CALL LogMessage('Error in converting simulation date to Julian date',f_iFatal,ThisProcedure)
     END IF
 
     !Compute minutes past midnight in the day specified in the time stamp
@@ -630,7 +637,7 @@ CONTAINS
 
 
   ! -------------------------------------------------------------
-  ! --- GET A LIST OF JULIAN DATES BETWEEN TWO TIME STAMPS USING A TIME INCREMENT
+  ! --- GETE A LIST OF JULIAN DATES BETWEEN TWO TIME STAMPS USING A TIME INCREMENT
   ! -------------------------------------------------------------
   SUBROUTINE GetJulianDatesBetweenTimeStampsWithTimeIncrement(Interval_InMinutes,cBeginDateAndTime,cEndDateAndTime,rJulianDates)
     INTEGER,INTENT(IN)          :: Interval_InMinutes
@@ -644,7 +651,7 @@ CONTAINS
     cTimeStamp = cBeginDateAndTime
     DO indx=1,SIZE(rJulianDates)
         rJulianDates(indx) = TimeStampToJulian(cTimeStamp,ErrorCode)
-        cTimeStamp         = IncrementTimeStamp(cTimeStamp,Interval_InMinutes,1)
+        cTimeStamp         = IncrementTimeStamp_IntervalInMinutes(cTimeStamp,Interval_InMinutes,1)
         IF (cTimeStamp .TSGT. cEndDateAndTime) THEN
             rJulianDates(indx+1:) = 0.0
             EXIT
@@ -693,9 +700,32 @@ CONTAINS
 
 
   ! -------------------------------------------------------------
+  ! --- FUNCTION TO INCREMENT A TIME STAMP BY A CERTAIN INTERVAL DEFINED AS TEXT
+  ! -------------------------------------------------------------
+  FUNCTION IncrementTimeStamp_IntervalInText(TimeStamp,cInterval,NumberOfIntervals) RESULT(IncrementedTimeStamp)
+    CHARACTER(LEN=*),INTENT(IN)       :: TimeStamp
+    CHARACTER(LEN=*),INTENT(IN)       :: cInterval
+    INTEGER,INTENT(IN),OPTIONAL       :: NumberOfIntervals
+    CHARACTER(LEN=f_iTimeStampLength) :: IncrementedTimeStamp
+
+    !Local variables
+    INTEGER :: Interval_InMinutes,iStat
+    REAL(8) :: rDeltaT
+
+    CALL CTimeStep_To_RTimeStep(cInterval,rDeltaT,Interval_InMinutes,iStat) 
+    IF (iStat .NE. 0) THEN
+        IncrementedTimeStamp =''
+        RETURN
+    END IF
+    IncrementedTimeStamp = IncrementTimeStamp_IntervalInMinutes(TimeStamp,Interval_InMinutes,NumberOfIntervals)
+
+  END FUNCTION IncrementTimeStamp_IntervalInText
+
+
+  ! -------------------------------------------------------------
   ! --- FUNCTION TO INCREMENT A TIME STAMP BY A CERTAIN NUMBER OF MINUTES
   ! -------------------------------------------------------------
-  FUNCTION IncrementTimeStamp(TimeStamp,Interval_InMinutes,NumberOfIntervals) RESULT(IncrementedTimeStamp)
+  FUNCTION IncrementTimeStamp_IntervalInMinutes(TimeStamp,Interval_InMinutes,NumberOfIntervals) RESULT(IncrementedTimeStamp)
     CHARACTER(LEN=*),INTENT(IN)       :: TimeStamp
     INTEGER,INTENT(IN)                :: Interval_InMinutes
     INTEGER,INTENT(IN),OPTIONAL       :: NumberOfIntervals
@@ -724,7 +754,7 @@ CONTAINS
     !Convert integer JulianDate and MinutesAfterMidnight to TimeStamp
     IncrementedTimeStamp=JulianDateAndMinutesToTimeStamp(JulianDate,MinutesAfterMidnight)
 
-  END FUNCTION IncrementTimeStamp
+  END FUNCTION IncrementTimeStamp_IntervalInMinutes
 
 
   ! -------------------------------------------------------------
@@ -975,7 +1005,7 @@ CONTAINS
         Factor=1d0
       ELSE
         !Decrement the time stamp of the data last read by the interval minutes
-        TimeStampBegin=IncrementTimeStamp(LastDataDate,-DataInterval)
+        TimeStampBegin=IncrementTimeStamp_IntervalInMinutes(LastDataDate,-DataInterval)
         !Compute Factor
         Factor=REAL(NPeriods(SimulationTimeStep_InMinutes,TimeStampBegin,LastDataDate),8)
       END IF
@@ -1102,56 +1132,78 @@ CONTAINS
 
     !Compare
     IF (JulianDate1 .GE. JulianDate2) THEN
-      TestResult = .TRUE.
-    ELSEIF (JulianDate1.EQ.JulianDate2) THEN
-      IF (MinutesAfterMidnight1.GE.MinutesAfterMidnight2) TestResult=.TRUE.
+        TestResult = .TRUE.
     END IF
 
   END FUNCTION CheckForGreaterThanOrEqualTo
 
 
   ! -------------------------------------------------------------
+  ! --- FUNCTION TO COMPUTE THE NUMBER OF PERIODS BETWEEN TWO TIME STAMPS WHEN INTERVAL IS GIVEN IN TEXT
+  ! -------------------------------------------------------------
+  FUNCTION NPeriodsBetweenTimeStamps_IntervalInText(cInterval,cBeginTimeStamp,cEndTimeStamp) RESULT(iNPeriod)
+    CHARACTER(LEN=*),INTENT(IN) :: cInterval,cBeginTimeStamp,cEndTimeStamp
+    INTEGER                     :: iNPeriod
+
+    !Local variables
+    INTEGER :: iDeltaT_InMinutes,iStat
+    REAL(8) :: rDeltaT
+    
+    !Convert time interval in text to minutes
+    CALL CTimeStep_To_RTimeStep(cInterval,rDeltaT,iDeltaT_InMinutes,iStat)
+    IF (iStat .NE. 0) THEN
+        iNPeriod = -1
+        RETURN
+    END IF
+
+    !Now compute number of interval between two time stamps
+    iNPeriod = NPeriodsBetweenTimeStamps_IntervalInMinutes(iDeltaT_InMinutes,cBeginTimeStamp,cEndTimeStamp)
+
+  END FUNCTION NPeriodsBetweenTimeStamps_IntervalInText
+
+
+  ! -------------------------------------------------------------
   ! --- FUNCTION TO COMPUTE THE NUMBER OF PERIODS BETWEEN TWO TIME STAMPS
   ! --- Note: Adopted from HEC-DSS library (Can Dogrul - 4/7/2011)
   ! -------------------------------------------------------------
-  FUNCTION NPeriodsBetweenTimeStamps(DELTAT_InMinutes,BeginTimeStamp,EndTimeStamp) RESULT(NPeriod)
-    INTEGER,INTENT(IN)          :: DELTAT_InMinutes
-    CHARACTER(LEN=*),INTENT(IN) :: BeginTimeStamp,EndTimeStamp
-    INTEGER                     :: NPeriod
+  FUNCTION NPeriodsBetweenTimeStamps_IntervalInMinutes(iDELTAT_InMinutes,cBeginTimeStamp,cEndTimeStamp) RESULT(iNPeriod)
+    INTEGER,INTENT(IN)          :: iDELTAT_InMinutes
+    CHARACTER(LEN=*),INTENT(IN) :: cBeginTimeStamp,cEndTimeStamp
+    INTEGER                     :: iNPeriod
 
     !Local variables
-    INTEGER                           :: BeginJulianDate,EndJulianDate,BeginMinutesAfterMidnight,EndMinutesAfterMidnight, &
+    INTEGER                           :: iBeginJulianDate,iEndJulianDate,iBeginMinutesAfterMidnight,iEndMinutesAfterMidnight, &
                                          iBeginYear,iBeginMonth,iBeginDay,iEndYear,iEndMonth,iEndDay
-    CHARACTER(LEN=f_iTimeStampLength) :: TempTimeStamp
+    CHARACTER(LEN=f_iTimeStampLength) :: cTempTimeStamp
 
     !Find corresponding Julian dates and minutes after midnight
-    CALL TimeStampToJulianDateAndMinutes(BeginTimeStamp,BeginJulianDate,BeginMinutesAfterMidnight)
-    CALL TimeStampToJulianDateAndMinutes(EndTimeStamp,EndJulianDate,EndMinutesAfterMidnight)
+    CALL TimeStampToJulianDateAndMinutes(cBeginTimeStamp,iBeginJulianDate,iBeginMinutesAfterMidnight)
+    CALL TimeStampToJulianDateAndMinutes(cEndTimeStamp,iEndJulianDate,iEndMinutesAfterMidnight)
 
     !If interval is greater than or equal to a month, find corresponding day, month and year
-    IF (DELTAT_InMinutes .GE. 40320) THEN
-      !Find corresponding day, month, year
-      CALL JulianDateToDayMonthYear(BeginJulianDate,iBeginDay,iBeginMonth,iBeginYear)
-      CALL JulianDateToDayMonthYear(EndJulianDate,iEndDay,iEndMonth,iEndYear)
+    IF (iDELTAT_InMinutes .GE. 40320) THEN
+        !Find corresponding day, month, year
+        CALL JulianDateToDayMonthYear(iBeginJulianDate,iBeginDay,iBeginMonth,iBeginYear)
+        CALL JulianDateToDayMonthYear(iEndJulianDate,iEndDay,iEndMonth,iEndYear)
     END IF
 
     !Compute number of periods between two time stamps
-    IF (DELTAT_InMinutes.GE.40320  .AND.  DELTAT_InMinutes.LE.44640) THEN
-      !Monthly interval
-      NPeriod       = ((iEndYear-iBeginYear) * 12) + (iEndMonth-iBeginMonth) + ((iEndDay-iBeginDay) / 27)
-      TempTimeStamp = IncrementTimeStamp(BeginTimeStamp,DELTAT_InMinutes,NPeriod)
-      IF (TempTimeStamp .TSGT. EndTimeStamp) NPeriod = NPeriod - 1
-    ELSE IF (DELTAT_InMinutes .GE. 525600) THEN
-      !Yearly interval
-      NPeriod       = (iEndYear-iBeginYear) + (((iEndMonth-iBeginMonth) + (iEndDay-iBeginDay) / 28) / 12)
-      TempTimeStamp = IncrementTimeStamp(BeginTimeStamp,DELTAT_InMinutes,NPeriod)
-      IF (TempTimeStamp .TSGT. EndTimeStamp) NPeriod = NPeriod - 1
+    IF (iDELTAT_InMinutes.GE.40320  .AND.  iDELTAT_InMinutes.LE.44640) THEN
+        !Monthly interval
+        iNPeriod       = ((iEndYear-iBeginYear) * 12) + (iEndMonth-iBeginMonth) + ((iEndDay-iBeginDay) / 27)
+        cTempTimeStamp = IncrementTimeStamp_IntervalInMinutes(cBeginTimeStamp,iDELTAT_InMinutes,iNPeriod)
+        IF (cTempTimeStamp .TSGT. cEndTimeStamp) iNPeriod = iNPeriod - 1
+    ELSE IF (iDELTAT_InMinutes .GE. 525600) THEN
+        !Yearly interval
+        iNPeriod       = (iEndYear-iBeginYear) + (((iEndMonth-iBeginMonth) + (iEndDay-iBeginDay) / 28) / 12)
+        cTempTimeStamp = IncrementTimeStamp_IntervalInMinutes(cBeginTimeStamp,iDELTAT_InMinutes,iNPeriod)
+        IF (cTempTimeStamp .TSGT. cEndTimeStamp) iNPeriod = iNPeriod - 1
     ELSE
-      !Otherwise
-      NPeriod = (((EndJulianDate-BeginJulianDate)*1440) + (EndMinutesAfterMidnight-BeginMinutesAfterMidnight)) / DELTAT_InMinutes
+        !Otherwise
+        iNPeriod = (((iEndJulianDate-iBeginJulianDate)*1440) + (iEndMinutesAfterMidnight-iBeginMinutesAfterMidnight)) / iDELTAT_InMinutes
     END IF
 
-  END FUNCTION NPeriodsBetweenTimeStamps
+  END FUNCTION NPeriodsBetweenTimeStamps_IntervalInMinutes
 
 
   ! -------------------------------------------------------------

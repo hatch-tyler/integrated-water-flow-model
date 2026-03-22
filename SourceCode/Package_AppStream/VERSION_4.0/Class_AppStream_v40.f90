@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2022  
+!  Copyright (C) 2005-2024  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -99,6 +99,7 @@ MODULE Class_AppStream_v40
     PROCEDURE,PASS :: SetDynamicComponent            => AppStream_v40_SetDynamicComponent
     PROCEDURE,PASS :: SetAllComponents               => AppStream_v40_SetAllComponents
     PROCEDURE,PASS :: SetAllComponentsWithoutBinFile => AppStream_v40_SetAllComponentsWithoutBinFile
+    PROCEDURE,PASS :: SetStrmFlow                    => AppStream_v40_SetStrmFlow
     PROCEDURE,PASS :: GetStrmNodeIDs                 => AppStream_v40_GetStrmNodeIDs
     PROCEDURE,PASS :: GetStrmNodeID                  => AppStream_v40_GetStrmNodeID
     PROCEDURE,PASS :: GetStrmNodeIndex               => AppStream_v40_GetStrmNodeIndex
@@ -107,6 +108,8 @@ MODULE Class_AppStream_v40
     PROCEDURE,PASS :: GetStageFlowRatingTable        => AppStream_v40_GetStageFlowRatingTable
     PROCEDURE,PASS :: GetBottomElevations            => AppStream_v40_GetBottomElevations
     PROCEDURE,PASS :: GetNRatingTablePoints          => AppStream_v40_GetNRatingTablePoints
+    PROCEDURE,PASS :: GetDiversionRechargeZone       => AppStream_v40_GetDiversionRechargeZone
+    PROCEDURE,PASS :: GetStrmGWFlow_GivenStrmFlow    => AppStream_v40_GetStrmGWFlow_GivenStrmFlow
     PROCEDURE,PASS :: KillImplementation             => AppStream_v40_Kill
     PROCEDURE,PASS :: WritePreprocessedData          => AppStream_v40_WritePreprocessedData
     PROCEDURE,PASS :: WriteDataToTextFile            => AppStream_v40_WriteDataToTextFile
@@ -238,6 +241,7 @@ CONTAINS
     !Local variables
     CHARACTER(LEN=ModNameLen+33) :: ThisProcedure = ModName // 'AppStream_v40_SetDynamicComponent'
     INTEGER                      :: indxNode,iStrmNodeIDs(AppStream%NStrmNodes),iReachIDs(AppStream%NReaches),indx,iNStrmNodes
+    LOGICAL                      :: lRoutedStreams
     TYPE(GenericFileType)        :: MainFile
     CHARACTER                    :: cVersionFull*25
     CHARACTER(LEN=1000)          :: ALine,DiverFileName,DiverSpecFileName,BypassSpecFileName,DiverDetailBudFileName,ReachBudRawFileName
@@ -245,10 +249,11 @@ CONTAINS
     CHARACTER(:),ALLOCATABLE     :: cVersionSim,cAbsPathFileName
     
     !Initialzie
-    iStat        = 0
-    iNStrmNodes  = AppStream%NStrmNodes
-    iStrmNodeIDs = AppStream%Nodes%ID
-    cVersionFull = '4.0-' // TRIM(cPackageVersion)
+    iStat          = 0
+    iNStrmNodes    = AppStream%NStrmNodes
+    iStrmNodeIDs   = AppStream%Nodes%ID
+    lRoutedStreams = AppStream%lRouted
+    cVersionFull   = '4.0-' // TRIM(cPackageVersion)
   
     !Open main file
     CALL MainFile%New(FileName=cFileName,InputFile=.TRUE.,Descriptor='main stream data file',iStat=iStat)
@@ -274,7 +279,7 @@ CONTAINS
     
     !Stream inflow file
     CALL MainFile%ReadData(ALine,iStat)  ;  IF (iStat .EQ. -1) RETURN
-    IF (AppStream%lRouted) THEN
+    IF (lRoutedStreams) THEN
         ALine = StripTextUntilCharacter(ALine,'/') 
         CALL CleanSpecialCharacters(ALine)
         CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(ALine)),cWorkingDirectory,cAbsPathFileName)
@@ -284,7 +289,7 @@ CONTAINS
     
     !Diversion specs file name
     CALL MainFile%ReadData(DiverSpecFileName,iStat)  ;  IF (iStat .EQ. -1) RETURN
-    IF (AppStream%lRouted) THEN
+    IF (lRoutedStreams) THEN
         DiverSpecFileName = StripTextUntilCharacter(DiverSpecFileName,'/') 
         CALL CleanSpecialCharacters(DiverSpecFileName)
         CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(DiverSpecFileName)),cWorkingDirectory,cAbsPathFileName)
@@ -293,7 +298,7 @@ CONTAINS
     
     !Bypass specs file name
     CALL MainFile%ReadData(BypassSpecFileName,iStat)  ;  IF (iStat .EQ. -1) RETURN
-    IF (AppStream%lRouted) THEN
+    IF (lRoutedStreams) THEN
         BypassSpecFileName = StripTextUntilCharacter(BypassSpecFileName,'/') 
         CALL CleanSpecialCharacters(BypassSpecFileName)
         CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(BypassSpecFileName)),cWorkingDirectory,cAbsPathFileName)
@@ -302,16 +307,16 @@ CONTAINS
     
     !Diversions file name
     CALL MainFile%ReadData(DiverFileName,iStat)  ;  IF (iStat .EQ. -1) RETURN
-    IF (AppStream%lRouted) THEN
+    IF (lRoutedStreams) THEN
         DiverFileName = StripTextUntilCharacter(DiverFileName,'/') 
         CALL CleanSpecialCharacters(DiverFileName)
         CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(DiverFileName)),cWorkingDirectory,cAbsPathFileName)
         DiverFileName = cAbsPathFileName
     END IF
-
+    
     !Stream reach budget raw filename
     CALL MainFile%ReadData(ALine,iStat)  ;  IF (iStat .EQ. -1) RETURN
-    IF (AppStream%lRouted) THEN
+    IF (lRoutedStreams) THEN
         ReachBudRawFileName = StripTextUntilCharacter(ALine,'/') 
         CALL CleanSpecialCharacters(ReachBudRawFileName)
         IF (ReachBudRawFileName .NE. '') THEN
@@ -322,7 +327,7 @@ CONTAINS
     
     !Diversion details raw file
     CALL MainFile%ReadData(DiverDetailBudFileName,iStat)  ;  IF (iStat .EQ. -1) RETURN
-    IF (AppStream%lRouted) THEN
+    IF (lRoutedStreams) THEN
         DiverDetailBudFileName = StripTextUntilCharacter(DiverDetailBudFileName,'/') 
         CALL CleanSpecialCharacters(DiverDetailBudFileName)
         CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(DiverDetailBudFileName)),cWorkingDirectory,cAbsPathFileName)
@@ -330,39 +335,43 @@ CONTAINS
     END IF
     
     !Diversions and bypasses
-    CALL AppStream%AppDiverBypass%New(IsForInquiry,DiverSpecFileName,BypassSpecFileName,DiverFileName,DiverDetailBudFileName,cWorkingDirectory,TRIM(cVersionFull),NTIME,TimeStep,AppStream%NStrmNodes,iStrmNodeIDs,iLakeIDs,AppStream%Reaches,AppGrid,StrmLakeConnector,iStat)
-    IF (iStat .EQ. -1) RETURN
+    IF (lRoutedStreams) THEN
+        CALL AppStream%AppDiverBypass%New(IsForInquiry,DiverSpecFileName,BypassSpecFileName,DiverFileName,DiverDetailBudFileName,cWorkingDirectory,TRIM(cVersionFull),NTIME,TimeStep,AppStream%NStrmNodes,iStrmNodeIDs,iLakeIDs,AppStream%Reaches,AppGrid,StrmLakeConnector,iStat)
+        IF (iStat .EQ. -1) RETURN
+    END IF
     
     !Reach IDs 
     iReachIDs = AppStream%Reaches%ID
 
     !Prepare reach budget output file
-    IF (ReachBudRawFileName .NE. '') THEN
-        IF (IsForInquiry) THEN
-            CALL AppStream%StrmReachBudRawFile%New(ReachBudRawFileName,iStat)
-            IF (iStat .EQ. -1) RETURN
-        ELSE
-            !Sort reach IDs for budget printing in order
-            ALLOCATE (AppStream%iPrintReachBudgetOrder(AppStream%NReaches))
-            AppStream%iPrintReachBudgetOrder = [(indx,indx=1,AppStream%NReaches)]
-            CALL ShellSort(iReachIDs,AppStream%iPrintReachBudgetOrder)
-            !Restore messed iReachID array
-            iReachIDs = AppStream%Reaches%ID
-            !Prepare budget header
-            BudHeader = PrepareStreamBudgetHeader(AppStream%NReaches,AppStream%iPrintReachBudgetOrder,iReachIDs,iStrmNodeIDs,NTIME,TimeStep,TRIM(cVersionFull),cReachNames=AppStream%Reaches%cName)
-            CALL AppStream%StrmReachBudRawFile%New(ReachBudRawFileName,BudHeader,iStat)
-            IF (iStat .EQ. -1) RETURN
-            CALL BudHeader%Kill()
+    IF (lRoutedStreams) THEN
+        IF (ReachBudRawFileName .NE. '') THEN
+            IF (IsForInquiry) THEN
+                CALL AppStream%StrmReachBudRawFile%New(ReachBudRawFileName,iStat)
+                IF (iStat .EQ. -1) RETURN
+            ELSE
+                !Sort reach IDs for budget printing in order
+                ALLOCATE (AppStream%iPrintReachBudgetOrder(AppStream%NReaches))
+                AppStream%iPrintReachBudgetOrder = [(indx,indx=1,AppStream%NReaches)]
+                CALL ShellSort(iReachIDs,AppStream%iPrintReachBudgetOrder)
+                !Restore messed iReachID array
+                iReachIDs = AppStream%Reaches%ID
+                !Prepare budget header
+                BudHeader = PrepareStreamBudgetHeader(AppStream%NReaches,AppStream%iPrintReachBudgetOrder,iReachIDs,iStrmNodeIDs,NTIME,TimeStep,TRIM(cVersionFull),cReachNames=AppStream%Reaches%cName)
+                CALL AppStream%StrmReachBudRawFile%New(ReachBudRawFileName,BudHeader,iStat)
+                IF (iStat .EQ. -1) RETURN
+                CALL BudHeader%Kill()
+            END IF
+            AppStream%StrmReachBudRawFile_Defined = .TRUE.
         END IF
-        AppStream%StrmReachBudRawFile_Defined = .TRUE.
     END IF
     
     !Hydrograph printing
-    CALL AppStream%StrmHyd%New(AppStream%lRouted,IsForInquiry,cWorkingDirectory,iNStrmNodes,iStrmNodeIDs,TimeStep,MainFile,iStat)
+    CALL AppStream%StrmHyd%New(lRoutedStreams,IsForInquiry,cWorkingDirectory,iNStrmNodes,iStrmNodeIDs,TimeStep,MainFile,iStat)
     IF (iStat .EQ. -1) RETURN
     
     !Stream budget at selected nodes
-    CALL AppStream%StrmNodeBudget%New(AppStream%lRouted,IsForInquiry,cWorkingDirectory,iReachIDs,iStrmNodeIDs,NTIME,TimeStep,TRIM(cVersionFull),PrepareStreamBudgetHeader,MainFile,iStat)
+    CALL AppStream%StrmNodeBudget%New(lRoutedStreams,IsForInquiry,cWorkingDirectory,iReachIDs,iStrmNodeIDs,NTIME,TimeStep,TRIM(cVersionFull),PrepareStreamBudgetHeader,MainFile,iStat)
     IF (iStat .EQ. -1) RETURN
     
     !Stream bed parameters for stream-gw connectivity, wetted perimeter and stream length for each node
@@ -370,15 +379,15 @@ CONTAINS
     CALL StrmGWConnector%CompileConductance(MainFile,AppGrid,Stratigraphy,iNStrmNodes,iStrmNodeIDs,AppStream%Nodes%BottomElev,AppStream%Nodes%rLength,iStat,AppStream%rWetPerimeter)
     IF (iStat .EQ. -1) RETURN
         
-    !Stream evaporation data
-    CALL AppStream%StrmEvap%New(MainFile,TimeStep,ETData,cWorkingDirectory,iNStrmNodes,iStrmNodeIDs,iStat)
-    IF (iStat .EQ. -1) RETURN
-    
     !If non-routed streams, return
-    IF (.NOT. AppStream%lRouted) THEN
+    IF (.NOT. lRoutedStreams) THEN
         CALL MainFile%Kill()
         RETURN
     END IF
+    
+    !Stream evaporation data
+    CALL AppStream%StrmEvap%New(MainFile,TimeStep,ETData,cWorkingDirectory,iNStrmNodes,iStrmNodeIDs,iStat)
+    IF (iStat .EQ. -1) RETURN
     
     !Set the heads to the bottom elevation
     DO indxNode=1,iNStrmNodes
@@ -427,15 +436,17 @@ CONTAINS
     IF (iStat .EQ. -1) RETURN
     
     !Make sure that if static part is defined, so is the dynamic part
-    IF (AppStream%NStrmNodes .GT. 0) THEN
-      IF (SIZE(AppStream%State) .EQ. 0) THEN
-        MessageArray(1) = 'For proper simulation of streams, relevant stream data files must'
-        MessageArray(2) = 'be specified when stream nodes are defined in Pre-Processor.'
-        CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
-        iStat = -1 
-        RETURN
-      END IF
-    END IF 
+    IF (AppStream%lRouted) THEN
+        IF (AppStream%NStrmNodes .GT. 0) THEN
+            IF (SIZE(AppStream%State) .EQ. 0) THEN
+                MessageArray(1) = 'For proper simulation of streams, relevant stream data files must'
+                MessageArray(2) = 'be specified when stream nodes are defined in Pre-Processor.'
+                CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                iStat = -1 
+                RETURN
+            END IF
+        END IF 
+    END IF
     
   END SUBROUTINE AppStream_v40_SetAllComponents
   
@@ -443,9 +454,9 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- INSTANTIATE COMPLETE STREAM DATA WITHOUT INTERMEDIATE BINARY FILE
   ! -------------------------------------------------------------
-  SUBROUTINE AppStream_v40_SetAllComponentsWithoutBinFile(AppStream,IsRoutedStreams,IsForInquiry,cPPFileName,cSimFileName,cSimWorkingDirectory,cPackageVersion,AppGrid,Stratigraphy,ETData,TimeStep,NTIME,iLakeIDs,StrmLakeConnector,StrmGWConnector,iStat)
+  SUBROUTINE AppStream_v40_SetAllComponentsWithoutBinFile(AppStream,IsForInquiry,IsRoutedStreams,cPPFileName,cSimFileName,cSimWorkingDirectory,cPackageVersion,AppGrid,Stratigraphy,ETData,TimeStep,NTIME,iLakeIDs,StrmLakeConnector,StrmGWConnector,iStat)
     CLASS(AppStream_v40_Type),INTENT(OUT) :: AppStream
-    LOGICAL,INTENT(IN)                    :: IsRoutedStreams,IsForInquiry
+    LOGICAL,INTENT(IN)                    :: IsForInquiry,IsRoutedStreams
     CHARACTER(LEN=*),INTENT(IN)           :: cPPFileName,cSimFileName,cSimWorkingDirectory,cPackageVersion
     TYPE(AppGridType),INTENT(IN)          :: AppGrid
     TYPE(StratigraphyType),INTENT(IN)     :: Stratigraphy
@@ -471,16 +482,18 @@ CONTAINS
     IF (iStat .EQ. -1) RETURN
     
     !Make sure that if static part is defined, so is the dynamic part
-    IF (AppStream%NStrmNodes .GT. 0) THEN
-      IF (SIZE(AppStream%State) .EQ. 0) THEN
-        MessageArray(1) = 'For proper simulation of streams, relevant stream data files must'
-        MessageArray(2) = 'be specified when stream nodes are defined in Pre-Processor.'
-        CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
-        iStat = -1
-        RETURN
-      END IF
-    END IF 
-  
+    IF (AppStream%lRouted) THEN
+        IF (AppStream%NStrmNodes .GT. 0) THEN
+            IF (SIZE(AppStream%State) .EQ. 0) THEN
+                MessageArray(1) = 'For proper simulation of streams, relevant stream data files must'
+                MessageArray(2) = 'be specified when stream nodes are defined in Pre-Processor.'
+                CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                iStat = -1
+                RETURN
+            END IF
+        END IF 
+    END IF
+    
   END SUBROUTINE AppStream_v40_SetAllComponentsWithoutBinFile
 
   
@@ -517,12 +530,63 @@ CONTAINS
 ! ******************************************************************
 ! ******************************************************************
 ! ***
+! *** SETTERS
+! ***
+! ******************************************************************
+! ******************************************************************
+! ******************************************************************
+
+  ! -------------------------------------------------------------
+  ! --- SET STREAM FLOW (AND HEAD) AT A NODE (ALLOWED ONLY WHEN STREAMS ARE NON-ROUTED)
+  ! -------------------------------------------------------------
+  SUBROUTINE AppStream_v40_SetStrmFlow(AppStream,iStrmNode,rFlow)
+    CLASS(AppStream_v40_Type) :: AppStream
+    INTEGER,INTENT(IN)        :: iStrmNode
+    REAL(8),INTENT(IN)        :: rFlow
+    
+    AppStream%State(iStrmNode)%Flow = rFlow
+    AppStream%State(iStrmNode)%Head = AppStream%Nodes(iStrmNode)%RatingTable%InverseEvaluate(rFlow)
+        
+  END SUBROUTINE AppStream_v40_SetStrmFlow
+
+  
+  
+  
+! ******************************************************************
+! ******************************************************************
+! ******************************************************************
+! ***
 ! *** GETTERS
 ! ***
 ! ******************************************************************
 ! ******************************************************************
 ! ******************************************************************
 
+  ! -------------------------------------------------------------
+  ! --- GET STREAM-GW INTERACTION GIVEN A STREAM FLOW AT A NODE
+  ! -------------------------------------------------------------
+  FUNCTION AppStream_v40_GetStrmGWFlow_GivenStrmFlow(AppStream,iStrmNode,rStrmFlow,rGWHeads,StrmGWConnector) RESULT(rStrmGWFlow)
+    CLASS(AppStream_v40_Type),INTENT(IN) :: AppStream
+    INTEGER,INTENT(IN)                   :: iStrmNode
+    REAL(8),INTENT(IN)                   :: rStrmFlow,rGWHeads(:,:)
+    TYPE(StrmGWConnectorType),INTENT(IN) :: StrmGWConnector
+    REAL(8)                              :: rStrmGWFlow
+    
+    !Local variables
+    REAL(8) :: rStrmHead,rGWHeadsAtStrmNodes(AppStream%NStrmNodes)
+    
+    !Retrieve gw heads at stream nodes
+    CALL StrmGWConnector%GetGWHeadsAtStrmNodes(rGWHeads,rGWHeadsAtStrmNodes)
+    
+    !Stream head corresponding to stream flow
+    rStrmHead = AppStream%Nodes(iStrmNode)%RatingTable%InverseEvaluate(rStrmFlow)
+    
+    !Compute stream-ge flow
+    rStrmGWFlow = StrmGWConnector%ComputeStrmGWFlow_GivenStrmFlow(iStrmNode,rStrmFlow,rStrmHead,rGWHeadsAtStrmNodes)
+    
+  END FUNCTION AppStream_v40_GetStrmGWFlow_GivenStrmFlow
+  
+    
   ! -------------------------------------------------------------
   ! --- GET STREAM NODE IDS
   ! -------------------------------------------------------------
@@ -654,6 +718,49 @@ CONTAINS
     UpstrmNodes = AppStream%Nodes(iNode)%Connectivity%ConnectedNodes
     
   END SUBROUTINE AppStream_v40_GetUpstrmNodes
+
+  
+  ! -------------------------------------------------------------
+  ! --- GET RECHARGE ZONE INFORMATION FOR A DIVERSION
+  ! -------------------------------------------------------------
+  SUBROUTINE AppStream_v40_GetDiversionRechargeZone(AppStream,cStrmSimMainFileName,cWorkingDirectory,iElemIDs,iDiver,iElems,rFracs,iStat)
+     CLASS(AppStream_v40_Type),INTENT(IN) :: AppStream
+     CHARACTER(LEN=*),INTENT(IN)          :: cStrmSimMainFileName,cWorkingDirectory
+     INTEGER,INTENT(IN)                   :: iElemIDs(:),iDiver
+     INTEGER,ALLOCATABLE,INTENT(OUT)      :: iElems(:)
+     REAL(8),ALLOCATABLE,INTENT(OUT)      :: rFracs(:)
+     INTEGER,INTENT(OUT)                  :: iStat
+     
+     !Local variables
+     CHARACTER                :: cDiverSpecFileName*500,ALine*10
+     CHARACTER(:),ALLOCATABLE :: cAbsPathFileName
+     TYPE(GenericFileType)    :: vMainFile
+     
+    !Open main file
+    CALL vMainFile%New(FileName=cStrmSimMainFileName,InputFile=.TRUE.,Descriptor='main stream data file',iStat=iStat)
+    IF (iStat .EQ. -1) GOTO 10
+        
+    !Read away component version number and make sure Pre and Sim component versions are the same 
+    CALL vMainFile%ReadData(ALine,iStat)
+    IF (iStat .EQ. -1) GOTO 10
+
+    !Stream inflow file
+    CALL vMainFile%ReadData(ALine,iStat)  ;  IF (iStat .EQ. -1) GOTO 10
+    
+    !Diversion specs file name
+    CALL vMainFile%ReadData(cDiverSpecFileName,iStat)  ;  IF (iStat .EQ. -1) GOTO 10
+    cDiverSpecFileName = StripTextUntilCharacter(cDiverSpecFileName,'/') 
+    CALL CleanSpecialCharacters(cDiverSpecFileName)
+    CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(cDiverSpecFileName)),cWorkingDirectory,cAbsPathFileName)
+    cDiverSpecFileName = cAbsPathFileName
+    
+    !Recharge zone
+    CALL AppStream%AppDiverBypass%GetDiversionRechargeZone(TRIM(cDiverSpecFileName),iElemIDs,iDiver,iElems,rFracs,iStat)
+     
+    !Close file
+10  CALL vMainFile%Kill()
+    
+  END SUBROUTINE AppStream_v40_GetDiversionRechargeZone
 
   
   
@@ -1276,7 +1383,7 @@ CONTAINS
     CALL AppStream%AppDiverBypass%ComputeDiversions(AppStream%NStrmNodes)
     
     !Simulate stream-gw interaction
-    CALL StrmGWConnector%Simulate(NNodes,HRG,AppStream%State%Head,rNetInflows,Matrix)  
+    CALL StrmGWConnector%Simulate(NNodes,HRG,AppStream%State%Head,rNetInflows,.TRUE.,Matrix)  
     
     !Clear memory
     DEALLOCATE (iStrmIDs , iLakeIDs , STAT=ErrorCode)

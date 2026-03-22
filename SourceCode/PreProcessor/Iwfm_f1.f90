@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2022  
+!  Copyright (C) 2005-2024  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -22,18 +22,22 @@
 !***********************************************************************
 PROGRAM IWFM_F1
   !$ USE OMP_LIB
-  USE ProgramTimer    , ONLY: StartTimer       , &
-                              StopTimer
-  USE MessageLogger   , ONLY: PrintRunTime     , &
-                              SetLogFileName   , &
-                              KillLogFile      , &
-                              LogLastMessage
-  USE Package_Model   , ONLY: ModelType
+  USE ProgramTimer      , ONLY: StartTimer       , &
+                                StopTimer
+  USE MessageLogger     , ONLY: PrintRunTime     , &
+                                SetLogFileName   , &
+                                KillLogFile      , &
+                                LogLastMessage
+  USE Package_Misc      , ONLY: Print_Screen     , &
+                                Get_Main_File 
+  USE Package_Model     , ONLY: ModelType
+  USE IWFM_Core_Version , ONLY: IWFM_Core                                   
   IMPLICIT NONE
 
   !Local variables
   TYPE(ModelType) :: Model
   INTEGER         :: iStat
+  CHARACTER       :: cPPFileName*500
   
   
   !Set environment for parallel processing
@@ -50,8 +54,16 @@ PROGRAM IWFM_F1
       CALL LogLastMessage()
       
   ELSE
+      !Display opening screen and obtain inpout file name(s)
+      CALL Print_screen('Program: Pre-Processor',IWFM_Core)
+      CALL Get_Main_File(' Enter the Name of the Main Input File >  ',cPPFileName)
+      IF (TRIM(cPPFileName) .EQ. '-about') THEN
+          CALL Model%PrintVersionNumbers()
+          STOP
+      END IF
+
       !Instantiate the static component of the model
-      CALL Model%New('',lRoutedStreams=.TRUE.,lPrintBinFile=.TRUE.,iStat=iStat)
+      CALL Model%New(cPPFileName,lRoutedStreams=.TRUE.,lPrintBinFile=.TRUE.,iStat=iStat)
       IF (iStat .EQ. -1) CALL LogLastMessage()
   END IF
   

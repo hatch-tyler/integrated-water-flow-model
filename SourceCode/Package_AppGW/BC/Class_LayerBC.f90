@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2022  
+!  Copyright (C) 2005-2024  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -75,6 +75,7 @@ MODULE Class_LayerBC
             LayerBC_GetTSHeadBCColumns             , &
             LayerBC_GetNetBCFlow                   , &
             LayerBC_GetNetBCFlowWithBCType         , &
+            LayerBC_GetNetBCFlowWithBCType_AllNodes, &
             LayerBC_SetTSBoundaryConditions        , &
             LayerBC_IsBCNode                       , &
             LayerBC_IsBCNodeWithBCTypes            , &
@@ -498,9 +499,8 @@ CONTAINS
     CHARACTER(LEN=ModNameLen+25) :: ThisProcedure = ModName // 'LayerBC_InitGeneralHeadBC'
     CHARACTER                    :: ALine*1000
     INTEGER                      :: iNode,indx,NGB,iTSCol,iLayer,indxLayer,NBCNode,ErrorCode,ID
-    REAL(8)                      :: FACTH,FACTC,BH,BC
-    REAL(8),ALLOCATABLE          :: DummyArray(:,:)
-    INTEGER,ALLOCATABLE          :: iNodes(:),iRanks(:),Indices(:)
+    REAL(8)                      :: FACTH,FACTC,BH,BC,rDummyArray(5)
+    INTEGER,ALLOCATABLE          :: iNodes(:),iRanks(:)
     TYPE(GenericFileType)        :: InFile
     TYPE(GHBCType)               :: aGHBC
     TYPE(GHBCType),ALLOCATABLE   :: TempGHBCArray(:)
@@ -532,21 +532,15 @@ CONTAINS
           RETURN
       END IF
     
-    !Allocate memory
-    CALL AllocArray(DummyArray,NGB,5,ThisProcedure,iStat)
-    IF (iStat .EQ. -1) RETURN
-    
     !Read and process specified flow b.c.
-    CALL InFile%ReadData(DummyArray,iStat)  ;  IF (iStat .EQ. -1) RETURN
-    ALLOCATE (Indices(NGB))
-    CALL ConvertID_To_Index(INT(DummyArray(:,1)),NodeIDs,Indices)
     DO indx=1,NGB
-        ID     = INT(DummyArray(indx,1))
-        iNode  = Indices(indx)
-        iLayer = INT(DummyArray(indx,2))
-        iTSCol = INT(DummyArray(indx,3))
-        BH     =     DummyArray(indx,4)
-        BC     =     DummyArray(indx,5)
+        CALL InFile%ReadData(rDummyArray,iStat)  ;  IF (iStat .EQ. -1) RETURN
+        ID     = INT(rDummyArray(1))
+        iNode  = LocateInList(ID,NodeIDs)
+        iLayer = INT(rDummyArray(2))
+        iTSCol = INT(rDummyArray(3))
+        BH     =     rDummyArray(4)
+        BC     =     rDummyArray(5)
       
         !Make sure iNode is in model range
         IF (iNode .EQ. 0) THEN
@@ -556,7 +550,7 @@ CONTAINS
         END IF
         
         !Make sure iLayer is in model range
-        IF (iLayer .GT. Stratigraphy%Nlayers  .OR.  iLayer .LT. 1) THEN
+        IF (iLayer .GT. Stratigraphy%NLayers  .OR.  iLayer .LT. 1) THEN
             CALL SetLastMessage('Layer number '//TRIM(IntToText(iLayer))//' listed in groundwater general head boundary condition file is out of range.',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
@@ -615,7 +609,7 @@ CONTAINS
     END DO
     
     !Clear memory
-    DEALLOCATE (Indices , iNodes , iRanks , TempGHBCArray , DummyArray , STAT=ErrorCode)
+    DEALLOCATE (iNodes , iRanks , TempGHBCArray , STAT=ErrorCode)
     
     !Close file
     CALL InFile%Kill()
@@ -837,22 +831,17 @@ CONTAINS
   ! --- GET A LIST OF COLUMN NUMBERS IN TIME SERIES B.C. DATA FILE FOR FLOW B.C.
   ! -------------------------------------------------------------
   SUBROUTINE LayerBC_GetTSFlowBCColumns(LayerBC,iTSColumns,iStat)
-    TYPE(LayerBCType),INTENT(IN)    :: LayerBC(:)
-    INTEGER,ALLOCATABLE,INTENT(OUT) :: iTSColumns(:)
-    INTEGER,INTENT(OUT)             :: iStat
-    
-    !Local data type
-    TYPE,EXTENDS(GenericLinkedListType) :: TSColumnListType
-    END TYPE TSColumnListType
+    TYPE(LayerBCType),INTENT(IN)      :: LayerBC(:)
+    INTEGER,ALLOCATABLE,INTENT(INOUT) :: iTSColumns(:)
+    INTEGER,INTENT(OUT)               :: iStat
     
     !Local variables
-    INTEGER                :: indxLayer,indx,NCol,iCol,ErrorCode
-    INTEGER,ALLOCATABLE    :: iWorkArray(:)
-    TYPE(TSColumnListType) :: TSColumnList
-    CLASS(*),POINTER       :: pCurrentData
+    INTEGER :: indxLayer,indx,iCol,iCount,  &
+               iTSColumnList(SUM(LayerBC%NSpecFlowBC)+SUM(LayerBC%NConstrainedGHBC))
     
     !Initialize
-    iStat = 0
+    iStat  = 0
+    iCount = 0
     
     !Create a linked list that stores time series column numbers for flow b.c.
     DO indxLayer=1,SIZE(LayerBC)
@@ -860,8 +849,8 @@ CONTAINS
         DO indx=1,LayerBC(indxLayer)%NSpecFlowBC
             iCol = LayerBC(indxLayer)%SpecFlowBC(indx)%iTSColumn
             IF (iCol .GT. 0) THEN
-                CALL TSColumnList%AddNode(iCol,iStat)
-                IF (iStat .EQ. -1) RETURN
+                iCount                = iCount + 1
+                iTSColumnList(iCount) = iCol
             END IF
         END DO
         
@@ -869,37 +858,18 @@ CONTAINS
         DO indx=1,LayerBC(indxLayer)%NConstrainedGHBC
             iCol = LayerBC(indxLayer)%ConstrainedGHBC(indx)%iMaxFlowTSColumn
             IF (iCol .GT. 0) THEN
-                CALL TSColumnList%AddNode(iCol,iStat)
-                IF (iStat .EQ. -1) RETURN
+                iCount                = iCount + 1
+                iTSColumnList(iCount) = iCol
             END IF
         END DO
     END DO
     
-    !Number of column numbers in the list
-    NCol = TSColumnList%GetNNodes()
-    
     !Return if there are no time series flow boundary conditions
-    IF (NCol .EQ. 0) RETURN
-    
-    !Extract column numbers into return array
-    ALLOCATE (iWorkArray(NCol))
-    CALL TSColumnList%Reset()
-    DO indx=1,NCol
-        pCurrentData => TSColumnList%GetCurrentValue()
-        SELECT TYPE (pCurrentData)
-           TYPE IS (INTEGER)
-              iWorkArray(indx) = pCurrentData
-        END SELECT
-        CALL TSColumnList%Next()
-    END DO
+    IF (iCount .EQ. 0) RETURN
     
     !Store unique column numbers in return array
-    CALL GetUniqueArrayComponents(iWorkArray,iTSColumns)
+    CALL GetUniqueArrayComponents(iTSColumnList(1:iCount),iTSColumns)
     CALL ShellSort(iTSColumns)
-    
-    !Clear memory
-    CALL TSColumnList%Delete()
-    DEALLOCATE (iWorkArray , STAT=ErrorCode)
     
   END SUBROUTINE LayerBC_GetTSFlowBCColumns
   
@@ -908,31 +878,26 @@ CONTAINS
   ! --- GET A LIST OF COLUMN NUMBERS IN TIME SERIES B.C. DATA FILE FOR HEAD B.C.
   ! -------------------------------------------------------------
   SUBROUTINE LayerBC_GetTSHeadBCColumns(LayerBC,iTSColumns,iStat)
-    TYPE(LayerBCType),INTENT(IN)    :: LayerBC(:)
-    INTEGER,ALLOCATABLE,INTENT(OUT) :: iTSColumns(:)
-    INTEGER,INTENT(OUT)             :: iStat
-    
-    !Local data type
-    TYPE,EXTENDS(GenericLinkedListType) :: TSColumnListType
-    END TYPE TSColumnListType
+    TYPE(LayerBCType),INTENT(IN)      :: LayerBC(:)
+    INTEGER,ALLOCATABLE,INTENT(INOUT) :: iTSColumns(:)
+    INTEGER,INTENT(OUT)               :: iStat
     
     !Local variables
-    INTEGER                :: indxLayer,indx,NCol,iCol,ErrorCode
-    INTEGER,ALLOCATABLE    :: iWorkArray(:)
-    TYPE(TSColumnListType) :: TSColumnList
-    CLASS(*),POINTER       :: pCurrentData
+    INTEGER :: indxLayer,indx,iCol,iCount,   &
+               iTSColumnList(SUM(LayerBC%NSpecHeadBC)+SUM(LayerBC%NGHBC)+SUM(LayerBC%NConstrainedGHBC))
     
     !Initialize
-    iStat = 0
+    iStat  = 0
+    iCount = 0
     
-    !Create a linked list that stores time series column numbers for flow b.c.
+    !Create a linked list that stores time series column numbers for head b.c.
     DO indxLayer=1,SIZE(LayerBC)
         !Specified head b.c.
         DO indx=1,LayerBC(indxLayer)%NSpecHeadBC
-            iCol = LayerBC(indxLayer)%SpecheadBC(indx)%iTSColumn
+            iCol = LayerBC(indxLayer)%SpecHeadBC(indx)%iTSColumn
             IF (iCol .GT. 0) THEN
-                CALL TSColumnList%AddNode(iCol,iStat)
-                IF (iStat .EQ. -1) RETURN
+                iCount                = iCount + 1
+                iTSColumnList(iCount) = iCol
             END IF
         END DO
         
@@ -940,8 +905,8 @@ CONTAINS
         DO indx=1,LayerBC(indxLayer)%NGHBC
             iCol = LayerBC(indxLayer)%GHBC(indx)%iTSColumn
             IF (iCol .GT. 0) THEN
-                CALL TSColumnList%AddNode(iCol,iStat)
-                IF (iStat .EQ. -1) RETURN
+                iCount                = iCount + 1
+                iTSColumnList(iCount) = iCol
             END IF
         END DO
 
@@ -949,37 +914,18 @@ CONTAINS
         DO indx=1,LayerBC(indxLayer)%NConstrainedGHBC
             iCol = LayerBC(indxLayer)%ConstrainedGHBC(indx)%iTSColumn
             IF (iCol .GT. 0) THEN
-                CALL TSColumnList%AddNode(iCol,iStat)
-                IF (iStat .EQ. -1) RETURN
+                iCount                = iCount + 1
+                iTSColumnList(iCount) = iCol
             END IF
         END DO
     END DO
     
-    !Number of column numbers in the list
-    NCol = TSColumnList%GetNNodes()
-    
-    !Return if there are no time series flow boundary conditions
-    IF (NCol .EQ. 0) RETURN
-    
-    !Extract column numbers into return array
-    ALLOCATE (iWorkArray(NCol))
-    CALL TSColumnList%Reset()
-    DO indx=1,NCol
-        pCurrentData => TSColumnList%GetCurrentValue()
-        SELECT TYPE (pCurrentData)
-           TYPE IS (INTEGER)
-              iWorkArray(indx) = pCurrentData
-        END SELECT
-        CALL TSColumnList%Next()
-    END DO
+    !Return if there are no time series head boundary conditions
+    IF (iCount .EQ. 0) RETURN
     
     !Store unique column numbers in return array
-    CALL GetUniqueArrayComponents(iWorkArray,iTSColumns)
+    CALL GetUniqueArrayComponents(iTSColumnList(1:iCount),iTSColumns)
     CALL ShellSort(iTSColumns)
-    
-    !Clear memory
-    CALL TSColumnList%Delete()
-    DEALLOCATE (iWorkArray , STAT=ErrorCode)
     
   END SUBROUTINE LayerBC_GetTSHeadBCColumns
   
@@ -1113,6 +1059,32 @@ CONTAINS
   END FUNCTION LayerBC_GetNetBCFlowWithBCType
 
     
+  ! -------------------------------------------------------------
+  ! --- GET THE NET FLOWS WITH A SPECIFIC B.C. TYPE AT ALL NODES AT A LAYER
+  ! -------------------------------------------------------------
+  PURE SUBROUTINE LayerBC_GetNetBCFlowWithBCType_AllNodes(iBCType,LayerBC,rFlows)
+    INTEGER,INTENT(IN)           :: iBCType
+    TYPE(LayerBCType),INTENT(IN) :: LayerBC
+    REAL(8),INTENT(OUT)          :: rFlows(:)
+
+    !Initialize
+    rFlows = 0.0
+    
+    SELECT CASE (iBCType)
+        CASE (f_iSpFlowBCID)
+            rFlows(LayerBC%SpecFlowBC%iNode) = LayerBC%SpecFlowBC%rFlow
+        
+        CASE (f_iSpHeadBCID)
+            rFlows(LayerBC%SpecHeadBC%iNode) = LayerBC%SpecHeadBC%rFlow
+            
+        CASE (f_iGHBCID)
+            rFlows(LayerBC%GHBC%iNode) = LayerBC%GHBC%rFlow
+            
+        CASE (f_iConstrainedGHBCID)
+            rFlows(LayerBC%ConstrainedGHBC%iNode) = LayerBC%ConstrainedGHBC%rFlow
+    END SELECT
+
+  END SUBROUTINE LayerBC_GetNetBCFlowWithBCType_AllNodes
   
   
 
@@ -1312,16 +1284,16 @@ CONTAINS
   
   ! -------------------------------------------------------------
   ! --- SET BOUNDARY CONDITION AT A NODE 
-  ! ---- (Assumes node is already listed as a b.c. node)
   ! -------------------------------------------------------------
-  SUBROUTINE SetBC(LayerBC,iNode,iBCType,iStat,rFlow,rHead,rMaxBCFlow)
+  SUBROUTINE SetBC(LayerBC,iNode,iBCType,iStat,rFlow,rHead,rMaxBCFlow,rConductance,rConstrainingBCHead)
     CLASS(LayerBCType)          :: LayerBC
     INTEGER,INTENT(IN)          :: iNode,iBCType
     INTEGER,INTENT(OUT)         :: iStat
-    REAL(8),OPTIONAL,INTENT(IN) :: rFlow,rHead,rMaxBCFlow
+    REAL(8),OPTIONAL,INTENT(IN) :: rFlow,rHead,rMaxBCFlow,rConductance,rConstrainingBCHead
     
     !Local variables
-    INTEGER :: iLoc
+    CHARACTER(LEN=ModNameLen+5) :: ThisProcedure = ModName // 'SetBC'
+    INTEGER                     :: iLoc
     
     !Initialize
     iStat = 0
@@ -1329,23 +1301,45 @@ CONTAINS
     !Set b.c.
     SELECT CASE (iBCType)
         CASE (f_iSpFlowBCID)
-            iLoc                               = LocateInList(iNode,LayerBC%SpecFlowBC%iNode)
+            iLoc = LocateInList(iNode,LayerBC%SpecFlowBC%iNode)
+            !Add BC node if it is not defined before
+            IF (iLoc .LT. 1) THEN
+                CALL SetBCNode(LayerBC,iNode,iBCType,iStat)
+                IF (iStat .NE. 0) RETURN
+                iLoc = LocateInList(iNode,LayerBC%SpecFlowBC%iNode)
+            END IF
             LayerBC%SpecFlowBC(iLoc)%rFlowRead = rFlow
             LayerBC%SpecFlowBC(iLoc)%rFlow     = rFlow
 
             
         CASE (f_iSpHeadBCID)
-            iLoc                           = LocateInList(iNode,LayerBC%SpecHeadBC%iNode)
-            LayerBC%SpecHeadBC(iLoc)%rHead = rHead
+            !Do not allow setting head; this creates isues with storage calculations, etc.
+            MessageArray(1) = 'Specified head boundary conditions for groundwater cannot be defined programmatically!'
+            MessageArray(2) = 'Please use the input data files to define specified head b.c.'
+            CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+            iStat = -1
+            RETURN
             
             
         CASE (f_iGHBCID)
-            iLoc                     = LocateInList(iNode,LayerBC%GHBC%iNode)
+            iLoc = LocateInList(iNode,LayerBC%GHBC%iNode)
+            !Add BC node if it is not defined before
+            IF (iLoc .LT. 1) THEN
+                CALL SetBCNode(LayerBC,iNode,iBCType,iStat,rConductance=rConductance)
+                IF (iStat .NE. 0) RETURN
+                iLoc = LocateInList(iNode,LayerBC%GHBC%iNode)
+            END IF
             LayerBC%GHBC(iLoc)%rHead = rHead
             
             
         CASE (f_iConstrainedGHBCID)
-            iLoc                                     = LocateInList(iNode,LayerBC%ConstrainedGHBC%iNode)
+            iLoc = LocateInList(iNode,LayerBC%ConstrainedGHBC%iNode)
+            !Add BC node if it is not defined before
+            IF (iLoc .LT. 1) THEN
+                CALL SetBCNode(LayerBC,iNode,iBCType,iStat,rConductance=rConductance,rConstrainingBCHead=rConstrainingBCHead)
+                IF (iStat .NE. 0) RETURN
+                iLoc = LocateInList(iNode,LayerBC%ConstrainedGHBC%iNode)
+            END IF
             LayerBC%ConstrainedGHBC(iLoc)%rHead      = rHead
             LayerBC%ConstrainedGHBC(iLoc)%rMaxBCFlow = rMaxBCFlow
 
@@ -1677,7 +1671,10 @@ CONTAINS
     END DO
     
     !Clear memory
-    DEALLOCATE(iNodes , iBCTypes , iTSFlowBCColumns , iTSHeadBCColumns , STAT=ErrorCode)
+    DEALLOCATE(iNodes           , STAT=ErrorCode)
+    DEALLOCATE(iBCTypes         , STAT=ErrorCode)
+    DEALLOCATE(iTSFlowBCColumns , STAT=ErrorCode)
+    DEALLOCATE(iTSHeadBCColumns , STAT=ErrorCode)
     
   END SUBROUTINE LayerBC_CheckConsistency
 

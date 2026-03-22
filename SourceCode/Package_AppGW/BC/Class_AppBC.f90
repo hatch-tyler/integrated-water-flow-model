@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2022  
+!  Copyright (C) 2005-2024  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -96,6 +96,8 @@ MODULE Class_AppBC
       PROCEDURE,PASS :: GetNNodesWithBCType               
       PROCEDURE,PASS :: GetNodesWithBCType    
       PROCEDURE,PASS :: GetBoundaryFlowAtFaceLayer
+      PROCEDURE,PASS :: GetBoundaryFlowAtNodeLayer
+      PROCEDURE,PASS :: GetBoundaryFlowAtNodeLayer_All
       PROCEDURE,PASS :: GetBoundaryFlowAtElementNodeLayer 
       PROCEDURE,PASS :: GetSubregionalFlows 
       PROCEDURE,PASS :: SetBCNodes
@@ -159,12 +161,6 @@ CONTAINS
     !Initialize
     iStat   = 0
     
-    !Return if no filename is specified
-    IF (cFileName .EQ. '') RETURN
-    
-    !Inform user
-    CALL EchoProgress('   Instantiating groundwater boundary conditions...')
-    
     !Initialize
     NNodes  = AppGrid%NNodes
     NLayers = Stratigraphy%NLayers
@@ -176,6 +172,12 @@ CONTAINS
         iStat = -1
         RETURN
     END IF
+    
+    !Return if no filename is specified
+    IF (cFileName .EQ. '') RETURN
+    
+    !Inform user
+    CALL EchoProgress('   Instantiating groundwater boundary conditions...')
     
     !Open file
     CALL BCFile%New(FileName=TRIM(cFileName),InputFile=.TRUE.,IsTSFile=.FALSE.,Descriptor='main groundwater boundary conditions data',iStat=iStat)
@@ -634,6 +636,37 @@ CONTAINS
   
     
   ! -------------------------------------------------------------
+  ! --- GET BOUNDARY FLOW AT A NODE WITH DEFINED B.C. AT A LAYER
+  ! -------------------------------------------------------------
+  SUBROUTINE GetBoundaryFlowAtNodeLayer(AppBC,iBCType,iNode,iLayer,rFlow)
+    CLASS(AppBCType),INTENT(IN) :: AppBC
+    INTEGER,INTENT(IN)          :: iBCType,iNode,iLayer
+    REAL(8),INTENT(OUT)         :: rFlow
+    
+    rFlow = LayerBC_GetNetBCFlowWithBCType(iNode,iBCType,AppBC%LayerBC(iLayer))
+    
+  END SUBROUTINE GetBoundaryFlowAtNodeLayer
+  
+    
+  ! -------------------------------------------------------------
+  ! --- GET BOUNDARY FLOW WITH DEFINED B.C. AT ALL NODES AND LAYERS
+  ! -------------------------------------------------------------
+  SUBROUTINE GetBoundaryFlowAtNodeLayer_All(AppBC,iBCType,rFlows)
+    CLASS(AppBCType),INTENT(IN) :: AppBC
+    INTEGER,INTENT(IN)          :: iBCType
+    REAL(8),INTENT(OUT)         :: rFlows(:,:)
+    
+    !Local variables
+    INTEGER :: indxLayer
+    
+    DO indxLayer=1,SIZE(AppBC%LayerBC)
+       CALL LayerBC_GetNetBCFlowWithBCType_AllNodes(iBCType,AppBC%LayerBC(indxLayer),rFlows(:,indxLayer))
+    END DO
+    
+  END SUBROUTINE GetBoundaryFlowAtNodeLayer_All
+  
+    
+  ! -------------------------------------------------------------
   ! --- GET THE LIST OF NODES WITH A SPECIFIED B.C. TYPE AT A LAYER
   ! -------------------------------------------------------------
   PURE SUBROUTINE GetNodesWithBCType(AppBC,iLayer,iBCType,iNodes)
@@ -773,13 +806,17 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- SET BOUNDARY CONDITION
   ! -------------------------------------------------------------
-  SUBROUTINE SetBC(AppBC,iNode,iLayer,iBCType,iStat,rFlow,rHead,rMaxBCFlow)
+  SUBROUTINE SetBC(AppBC,iNode,iLayer,iBCType,iNodeIDs,iStat,rFlow,rHead,rMaxBCFlow,rConductance,rConstrainingHeadBC)
     CLASS(AppBCType)            :: AppBC
-    INTEGER,INTENT(IN)          :: iNode,iLayer,iBCType
+    INTEGER,INTENT(IN)          :: iNode,iLayer,iBCType,iNodeIDs(:)
     INTEGER,INTENT(OUT)         :: iStat
-    REAL(8),OPTIONAL,INTENT(IN) :: rFlow,rHead,rMaxBCFlow
+    REAL(8),OPTIONAL,INTENT(IN) :: rFlow,rHead,rMaxBCFlow,rConductance,rConstrainingHeadBC
     
-    CALL AppBC%LayerBC(iLayer)%SetBC(iNode,iBCType,iStat,rFlow,rHead,rMaxBCFlow)
+    CALL AppBC%LayerBC(iLayer)%SetBC(iNode,iBCType,iStat,rFlow,rHead,rMaxBCFlow,rConductance,rConstrainingHeadBC)
+    IF (iStat .NE. 0) RETURN
+    
+    !Check for inconsistencies
+    CALL LayerBC_CheckConsistency(AppBC%LayerBC,iNodeIDs,iStat)   
     
   END SUBROUTINE SetBC
   

@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2022  
+!  Copyright (C) 2005-2024  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -467,12 +467,8 @@ CONTAINS
     CHARACTER(LEN=*),ALLOCATABLE,INTENT(OUT) :: cFlowNames(:)
     INTEGER,INTENT(OUT)                      :: iStat
     
-    !Local variables
-    INTEGER :: ID
-    
     IF (AppLake%LakeBudRawFile_Defined) THEN
-        ID = AppLake%Lakes(iLakeIndex)%ID
-        CALL GetBudget_MonthlyFlows_GivenFile(AppLake%LakeBudRawFile,ID,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)  
+        CALL GetBudget_MonthlyFlows_GivenFile(AppLake%LakeBudRawFile,iLakeIndex,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)  
     ELSE
         iStat = 0
         ALLOCATE (rFlows(0,0) , cFlowNames(0))
@@ -485,10 +481,10 @@ CONTAINS
   ! --- GET MONTHLY BUDGET FLOWS FROM A DEFINED BUDGET FILE FOR A SPECIFED LAKE
   ! --- (Assumes cBeginDate and cEndDate are adjusted properly)
   ! -------------------------------------------------------------
-  SUBROUTINE GetBudget_MonthlyFlows_GivenFile(Budget,iLakeID,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
+  SUBROUTINE GetBudget_MonthlyFlows_GivenFile(Budget,iLakeIndex,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
     TYPE(BudgetType),INTENT(IN)              :: Budget      !Assumes Budget file is already open
     CHARACTER(LEN=*),INTENT(IN)              :: cBeginDate,cEndDate
-    INTEGER,INTENT(IN)                       :: iLakeID
+    INTEGER,INTENT(IN)                       :: iLakeIndex
     REAL(8),INTENT(IN)                       :: rFactVL
     REAL(8),ALLOCATABLE,INTENT(OUT)          :: rFlows(:,:)  !In (column,month) format
     CHARACTER(LEN=*),ALLOCATABLE,INTENT(OUT) :: cFlowNames(:)
@@ -504,7 +500,7 @@ CONTAINS
     ALLOCATE (rValues(SIZE(iReadCols)+1,iNTimeSteps)) !Adding 1 to the first dimension for Time column; it will be removed later
     
     !Read data
-    CALL Budget%ReadData(iLakeID,iReadCols,'1MON',cBeginDate,cEndDate,0d0,0d0,0d0,1d0,1d0,rFactVL,iDimActual,rValues,iStat)
+    CALL Budget%ReadData(iLakeIndex,iReadCols,'1MON',cBeginDate,cEndDate,0d0,0d0,0d0,1d0,1d0,rFactVL,iDimActual,rValues,iStat)
     IF (iStat .NE. 0) RETURN
     
     !Store values in return argument
@@ -550,13 +546,12 @@ CONTAINS
     INTEGER,INTENT(OUT)               :: iDataTypes(:),inActualOutput,iStat
     
     !Local variables
-    INTEGER :: indx,ID
+    INTEGER :: indx
     
     IF (AppLake%LakeBudRawFile_Defined) THEN
         !Read data
-        ID = AppLake%Lakes(iLakeIndex)%ID
         DO indx=1,SIZE(iCols)
-            CALL AppLake%LakeBudRawFile%ReadData(ID,iCols(indx),cInterval,cBeginDate,cEndDate,1d0,0d0,0d0,rFactLT,rFactAR,rFactVL,iDataTypes(indx),inActualOutput,rOutputDates,rOutputValues(:,indx),iStat)
+            CALL AppLake%LakeBudRawFile%ReadData(iLakeIndex,iCols(indx),cInterval,cBeginDate,cEndDate,1d0,0d0,0d0,rFactLT,rFactAR,rFactVL,iDataTypes(indx),inActualOutput,rOutputDates,rOutputValues(:,indx),iStat)
         END DO
     ELSE
         inActualOutput = 0

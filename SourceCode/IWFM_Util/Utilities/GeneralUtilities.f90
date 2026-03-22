@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2022  
+!  Copyright (C) 2005-2024  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -61,7 +61,8 @@ MODULE GeneralUtilities
             ShellSort                     , &
             GetUniqueArrayComponents      , &
             GetArrayData                  , &
-            L2Norm
+            L2Norm                        , &
+            AppendArray
                                             
   !Public directory utilities               
   PUBLIC :: ConvertPathToWindowsStyle     , &
@@ -166,6 +167,15 @@ MODULE GeneralUtilities
     MODULE PROCEDURE ConvertID_To_Index_Array
     MODULE PROCEDURE ConvertID_To_Index_Scalar
   END INTERFACE ConvertID_To_Index
+  
+  
+  !Overload array appending methods
+  INTERFACE AppendArray
+    MODULE PROCEDURE AppendArray_Integer
+    MODULE PROCEDURE AppendArray_Real
+    MODULE PROCEDURE AppendArray_Character
+    MODULE PROCEDURE AppendArray_Logical
+  END INTERFACE AppendArray
   
 
   CHARACTER(LEN=16),PARAMETER :: ThisProcedure = 'GeneralUtilities'
@@ -694,27 +704,27 @@ CONTAINS
   ! --- CLEAN SPECIAL CHARACTERS IN A STRING
   ! -------------------------------------------------------------
   SUBROUTINE CleanSpecialCharactersInAString(String)
-    CHARACTER(LEN=*)::String
+    CHARACTER(LEN=*) :: String
 
     !Local variables
-    INTEGER::indx
+    INTEGER :: indx
 
     !Replace special characters
     DO indx=1,LEN(String)
-      IF (IACHAR(String(indx:indx)).LT.32) String(indx:indx)=' '
+      IF (IACHAR(String(indx:indx)) .LT. 32) String(indx:indx) = ' '
     END DO
 
-    END SUBROUTINE CleanSpecialCharactersInAString
+  END SUBROUTINE CleanSpecialCharactersInAString
 
 
   ! -------------------------------------------------------------
   ! --- CLEAN SPECIAL CHARACTERS IN AN ARRAY OF STRINGS
   ! -------------------------------------------------------------
   SUBROUTINE CleanSpecialCharactersInStringArray(StringArray)
-    CHARACTER(LEN=*),DIMENSION(:)::StringArray
+    CHARACTER(LEN=*) :: StringArray(:)
 
     !Local variables
-    INTEGER::indx
+    INTEGER :: indx
 
     DO indx=1,SIZE(StringArray)
       CALL CleanSpecialCharactersInAString(StringArray(indx))
@@ -727,41 +737,41 @@ CONTAINS
   ! --- FIND THE STARTING LOCATION OF A DATA COLUMN IN A STRING
   ! -------------------------------------------------------------
   FUNCTION GetStartLocation(String,ColumnNumber) RESULT(Location)
-    CHARACTER(LEN=*),INTENT(IN)::String
-    INTEGER,INTENT(IN)::ColumnNumber
-    INTEGER::Location
+    CHARACTER(LEN=*),INTENT(IN) :: String
+    INTEGER,INTENT(IN)          :: ColumnNumber
+    INTEGER                     :: Location
 
     !Local variables
-    INTEGER::WorkLocation,ColumnCounter,StringLength
-    CHARACTER(LEN=LEN(String))::WorkString
-    LOGICAL::IsCurrentLocationEmpty,IsPreviousLocationEmpty
+    INTEGER                    :: WorkLocation,ColumnCounter,StringLength
+    CHARACTER(LEN=LEN(String)) :: WorkString
+    LOGICAL                    :: IsCurrentLocationEmpty,IsPreviousLocationEmpty
 
     !Initialize
-    Location=0
-    WorkString=String
+    Location   = 0
+    WorkString = String
 
     !Clean string from special characters
     CALL CleanSpecialCharacters(WorkString)
     WorkString=StripTextUntilCharacter(WorkString,'/',Back=.TRUE.)
     StringLength=LEN_TRIM(WorkString)
 
-    WorkLocation=0
-    ColumnCounter=0
-    IsCurrentLocationEmpty=.TRUE.
+    WorkLocation           = 0
+    ColumnCounter          = 0
+    IsCurrentLocationEmpty = .TRUE.
     DO
-      IsPreviousLocationEmpty=IsCurrentLocationEmpty
-      WorkLocation=WorkLocation+1
-      IsCurrentLocationEmpty=.FALSE.
-      IF (WorkString(WorkLocation:WorkLocation).EQ.' ' .OR.  &
-          WorkString(WorkLocation:WorkLocation).EQ.','     ) &
-        IsCurrentLocationEmpty=.TRUE.
-      IF (IsPreviousLocationEmpty .AND. (.NOT. IsCurrentLocationEmpty)) &
-        ColumnCounter=ColumnCounter+1
-      IF (ColumnCounter.EQ.ColumnNumber) THEN
-        Location=WorkLocation
-        EXIT
-      END IF
-      IF (WorkLocation.EQ.StringLength) EXIT      
+        IsPreviousLocationEmpty = IsCurrentLocationEmpty
+        WorkLocation            = WorkLocation+1
+        IsCurrentLocationEmpty  = .FALSE.
+        IF (WorkString(WorkLocation:WorkLocation) .EQ. ' '  .OR.  &
+            WorkString(WorkLocation:WorkLocation) .EQ. ','      ) &
+            IsCurrentLocationEmpty = .TRUE.
+        IF (IsPreviousLocationEmpty .AND. (.NOT. IsCurrentLocationEmpty)) &
+            ColumnCounter = ColumnCounter + 1
+        IF (ColumnCounter.EQ.ColumnNumber) THEN
+            Location = WorkLocation
+            EXIT
+        END IF
+        IF (WorkLocation .EQ. StringLength) EXIT      
     END DO
 
   END FUNCTION GetStartLocation
@@ -807,6 +817,110 @@ CONTAINS
 ! ******************************************************************
 ! ******************************************************************
 
+  ! -------------------------------------------------------------
+  ! --- APPEND AN INTEGER ARRAY
+  ! -------------------------------------------------------------
+  SUBROUTINE AppendArray_Integer(iArrayToBeAppended,iArrayToAppend)
+    INTEGER,ALLOCATABLE,INTENT(INOUT) :: iArrayToBeAppended(:)
+    INTEGER,INTENT(IN)                :: iArrayToAppend(:)
+    
+    !Local variables
+    INTEGER             :: iDim1,iDim2
+    INTEGER,ALLOCATABLE :: iTempArray(:)
+    
+    !Retrieve dimensions
+    iDim1 = SIZE(iArrayToBeAppended)
+    iDim2 = SIZE(iArrayToAppend)
+    
+    !Allocate temp array and combine data
+    ALLOCATE(iTempArray(iDim1+iDim2))
+    iTempArray(1:iDim1)  = iArrayToBeAppended
+    iTempArray(iDim1+1:) = iArrayToAppend
+    
+    !Update array to be appended
+    CALL MOVE_ALLOC(iTempArray , iArrayToBeAppended)
+    
+  END SUBROUTINE AppendArray_Integer
+  
+  
+  ! -------------------------------------------------------------
+  ! --- APPEND A REAL(8) ARRAY
+  ! -------------------------------------------------------------
+  SUBROUTINE AppendArray_Real(rArrayToBeAppended,rArrayToAppend)
+    REAL(8),ALLOCATABLE,INTENT(INOUT) :: rArrayToBeAppended(:)
+    REAL(8),INTENT(IN)                :: rArrayToAppend(:)
+    
+    !Local variables
+    INTEGER             :: iDim1,iDim2
+    REAL(8),ALLOCATABLE :: rTempArray(:)
+    
+    !Retrieve dimensions
+    iDim1 = SIZE(rArrayToBeAppended)
+    iDim2 = SIZE(rArrayToAppend)
+    
+    !Allocate temp array and combine data
+    ALLOCATE(rTempArray(iDim1+iDim2))
+    rTempArray(1:iDim1)  = rArrayToBeAppended
+    rTempArray(iDim1+1:) = rArrayToAppend
+    
+    !Update array to be appended
+    CALL MOVE_ALLOC(rTempArray , rArrayToBeAppended)
+    
+  END SUBROUTINE AppendArray_Real
+  
+  
+  ! -------------------------------------------------------------
+  ! --- APPEND A CHARACTER ARRAY
+  ! -------------------------------------------------------------
+  SUBROUTINE AppendArray_Character(cArrayToBeAppended,cArrayToAppend)
+    CHARACTER(LEN=*),ALLOCATABLE,INTENT(INOUT) :: cArrayToBeAppended(:)
+    CHARACTER(LEN=*),INTENT(IN)                :: cArrayToAppend(:)
+    
+    !Local variables
+    INTEGER                                        :: iDim1,iDim2
+    CHARACTER(LEN=LEN(cArrayToAppend)),ALLOCATABLE :: cTempArray(:)
+    
+    !Retrieve dimensions
+    iDim1 = SIZE(cArrayToBeAppended)
+    iDim2 = SIZE(cArrayToAppend)
+    
+    !Allocate temp array and combine data
+    ALLOCATE(cTempArray(iDim1+iDim2))
+    cTempArray(1:iDim1)  = cArrayToBeAppended
+    cTempArray(iDim1+1:) = cArrayToAppend
+    
+    !Update array to be appended
+    CALL MOVE_ALLOC(cTempArray , cArrayToBeAppended)
+    
+  END SUBROUTINE AppendArray_Character
+  
+  
+  ! -------------------------------------------------------------
+  ! --- APPEND A LOGICAL ARRAY
+  ! -------------------------------------------------------------
+  SUBROUTINE AppendArray_Logical(lArrayToBeAppended,lArrayToAppend)
+    LOGICAL,ALLOCATABLE,INTENT(INOUT) :: lArrayToBeAppended(:)
+    LOGICAL,INTENT(IN)                :: lArrayToAppend(:)
+    
+    !Local variables
+    INTEGER             :: iDim1,iDim2
+    LOGICAL,ALLOCATABLE :: lTempArray(:)
+    
+    !Retrieve dimensions
+    iDim1 = SIZE(lArrayToBeAppended)
+    iDim2 = SIZE(lArrayToAppend)
+    
+    !Allocate temp array and combine data
+    ALLOCATE(lTempArray(iDim1+iDim2))
+    lTempArray(1:iDim1)  = lArrayToBeAppended
+    lTempArray(iDim1+1:) = lArrayToAppend
+    
+    !Update array to be appended
+    CALL MOVE_ALLOC(lTempArray , lArrayToBeAppended)
+    
+  END SUBROUTINE AppendArray_Logical
+  
+  
   ! -------------------------------------------------------------
   ! --- COMPUTE L2-NORM (PARALLEL OR SEQUENTIAL)
   ! -------------------------------------------------------------
@@ -1946,7 +2060,7 @@ CONTAINS
     ELSEIF (rArg .GT. 500d0) THEN
         rExp = HUGE(0d0)
     ELSE
-        i8   = 6497320848556798 * rArg + 4607182418800017408
+        i8   = 6497320848556798_8 * rArg + 4607182418800017408_8
         rExp = r8
     END IF
     
@@ -1961,21 +2075,26 @@ CONTAINS
     INTEGER,INTENT(OUT) :: Indices(:)
     
     !Local variables
-    INTEGER :: indx,indx1
+    INTEGER :: indx,indx1,iDim
     
     !Initialize
+    iDim    = SIZE(AllIDs)
     Indices = 0
     
+    !$OMP PARALLEL DEFAULT(PRIVATE) SHARED(IDs,iDim,AllIDs,Indices) 
+    !$OMP DO SCHEDULE(STATIC,500) 
     DO indx=1,SIZE(IDs)
         IF (IDs(indx) .EQ. 0) CYCLE
         
-        DO indx1=1,SIZE(AllIDs)
+        DO indx1=1,iDim
             IF (IDs(indx) .EQ. AllIDs(indx1)) THEN
                 Indices(indx) = indx1
                 EXIT
             END IF
         END DO
     END DO
+    !$OMP END DO 
+    !$OMP END PARALLEL 
 
   END SUBROUTINE ConvertID_To_Index_Array
   

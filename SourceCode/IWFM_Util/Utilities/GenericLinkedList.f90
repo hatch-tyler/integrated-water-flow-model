@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2022  
+!  Copyright (C) 2005-2024  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -23,7 +23,6 @@
 MODULE GenericLinkedList
   USE MessageLogger  , ONLY: SetLastMessage  , &
                              f_iFatal
-  USE Class_LLNode
   IMPLICIT NONE
   
   
@@ -47,21 +46,30 @@ MODULE GenericLinkedList
   
   
   ! -------------------------------------------------------------
+  ! --- GENERIC NODE TYPE
+  ! -------------------------------------------------------------
+  TYPE LLNodeType
+      CLASS(*),ALLOCATABLE     :: Value
+      TYPE(LLNodeType),POINTER :: pNext  => NULL()
+  END TYPE LLNodeType
+  
+  
+  ! -------------------------------------------------------------
   ! --- GENERIC LIST TYPE
   ! -------------------------------------------------------------
   TYPE,ABSTRACT :: GenericLinkedListType
       PRIVATE
-      INTEGER                  :: NNodes   =  0        !Number of nodes in the list
+      INTEGER                  :: iNNodes  =  0        !Number of nodes in the list
       TYPE(LLNodeType),POINTER :: pHead    => NULL()   !Head of the list
       TYPE(LLNodeType),POINTER :: pTail    => NULL()   !Tail of the list
       TYPE(LLNodeType),POINTER :: pCurrent => NULL()   !Current node in the list
   CONTAINS
-      PROCEDURE,NON_OVERRIDABLE,PASS :: AddNode         => GenericLinkedList_AddNode
-      PROCEDURE,NON_OVERRIDABLE,PASS :: GetNNodes       => GenericLinkedList_GetNNodes
-      PROCEDURE,NON_OVERRIDABLE,PASS :: GetCurrentValue => GenericLinkedList_GetCurrentValue
-      PROCEDURE,NON_OVERRIDABLE,PASS :: Reset           => GenericLinkedList_Reset
-      PROCEDURE,NON_OVERRIDABLE,PASS :: Next            => GenericLinkedList_Next
-      PROCEDURE,NON_OVERRIDABLE,PASS :: Delete          => GenericLinkedList_Delete
+      PROCEDURE,NON_OVERRIDABLE,PASS :: AddNode         
+      PROCEDURE,NON_OVERRIDABLE,PASS :: GetNNodes       
+      PROCEDURE,NON_OVERRIDABLE,PASS :: GetCurrentValue 
+      PROCEDURE,NON_OVERRIDABLE,PASS :: Reset           
+      PROCEDURE,NON_OVERRIDABLE,PASS :: Next            
+      PROCEDURE,NON_OVERRIDABLE,PASS :: Delete          
       PROCEDURE,NON_OVERRIDABLE,PASS :: GetArray        => GenericLinkedList_ConvertToIntegerArray
   END TYPE GenericLinkedListType
   
@@ -93,27 +101,34 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- DELETE LIST 
   ! -------------------------------------------------------------
-  SUBROUTINE GenericLinkedList_Delete(List)
-    CLASS(GenericLinkedListType) :: List
+  SUBROUTINE Delete(List)
+    CLASS(GenericLinkedListType),TARGET :: List
     
     !Local variables
-    INTEGER :: indx
-    TYPE(LLNodeType),POINTER :: pCurrent
+    INTEGER                  :: indx
+    TYPE(LLNodeType),POINTER :: pNext
     
-    !Get a pointer to the head of the list
-    CALL List%Reset()
+    !Return if list is empty
+    IF (List%iNNodes .EQ. 0) RETURN
     
     !Delete nodes one by one
-    DO indx=1,List%NNodes
-        pCurrent => List%pCurrent
-        CALL List%Next()
-        CALL pCurrent%Delete()
+    DO indx=1,List%iNNodes-1
+        pNext => List%pHead%pNext
+        DEALLOCATE (List%pHead%Value)
+        NULLIFY (List%pHead%pNext)
+        DEALLOCATE (List%pHead)
+        List%pHead => pNext
     END DO
+    DEALLOCATE (List%pHead%Value)
+    NULLIFY (List%pHead%pNext)
+    DEALLOCATE (List%pHead)
+    NULLIFY (List%pTail)
+    NULLIFY (List%pCurrent)
     
     !Set the number of data nodes to zero
-    List%NNodes = 0
+    List%iNNodes = 0
     
-  END SUBROUTINE GenericLinkedList_Delete
+  END SUBROUTINE Delete
 
 
 
@@ -130,29 +145,30 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET NUMBER OF NODES IN LIST
   ! -------------------------------------------------------------
-  PURE FUNCTION GenericLinkedList_GetNNodes(List) RESULT(NNodes)
+  PURE FUNCTION GetNNodes(List) RESULT(iNNodes)
     CLASS(GenericLinkedListType),INTENT(IN) :: List
-    INTEGER                                 :: NNodes
+    INTEGER                                 :: iNNodes
     
-    NNodes = List%NNodes
+    iNNodes = List%iNNodes
     
-  END FUNCTION GenericLinkedList_GetNNodes
+  END FUNCTION GetNNodes
   
   
   ! -------------------------------------------------------------
   ! --- GET DATA STORED IN THE NODE POINTED BY pCurrent
   ! -------------------------------------------------------------
-  FUNCTION GenericLinkedList_GetCurrentValue(List) RESULT(pValue)
-    CLASS(GenericLinkedListType),INTENT(IN) :: List
-    CLASS(*),POINTER                        :: pValue
+  FUNCTION GetCurrentValue(List) RESULT(pValue)
+    CLASS(GenericLinkedListType),TARGET,INTENT(IN) :: List
+    CLASS(*),POINTER                               :: pValue
     
     IF (ASSOCIATED(List%pCurrent)) THEN
-        pValue => List%pCurrent%GetValue()
+        ALLOCATE (pValue , SOURCE=List%pCurrent%Value)
+        pValue => List%pCurrent%Value
     ELSE
         NULLIFY(pValue)
     ENDIF
 
-  END FUNCTION GenericLinkedList_GetCurrentValue 
+  END FUNCTION GetCurrentValue 
   
   
   
@@ -171,28 +187,30 @@ CONTAINS
   ! --- CONVERT AN INTEGER LINKED-LIST TO ARRAY
   ! -------------------------------------------------------------
   SUBROUTINE GenericLinkedList_ConvertToIntegerArray(List,iArray,iStat)
-    CLASS(GenericLinkedListType),INTENT(IN) :: List
-    INTEGER,ALLOCATABLE,INTENT(OUT)         :: iArray(:)
-    INTEGER,INTENT(OUT)                     :: iStat
+    CLASS(GenericLinkedListType),TARGET,INTENT(IN) :: List
+    INTEGER,ALLOCATABLE,INTENT(INOUT)              :: iArray(:)
+    INTEGER,INTENT(OUT)                            :: iStat
     
     !Local variables
     CHARACTER(LEN=ModNameLen+39) :: ThisProcedure = ModName // 'GenericLinkedList_ConvertToIntegerArray'
-    INTEGER                      :: indx,ErrorCode
+    INTEGER                      :: indx,iErrorCode
     CHARACTER                    :: cErrorMsg*200
-    CLASS(*),POINTER             :: pCurrent
     
     !Initialize
     iStat = 0
     
+    !Deallocate array in case it is already allocated
+    DEALLOCATE (iArray ,STAT=iErrorCode)
+    
     !Make sure that the list is not empty
-    IF (List%NNodes .EQ. 0) THEN
+    IF (List%iNNodes .EQ. 0) THEN
         ALLOCATE (iArray(0))
         RETURN
     END IF
     
     !Allocate return array
-    ALLOCATE (iArray(List%NNodes) , STAT=ErrorCode , ERRMSG=cErrorMsg)
-    IF (ErrorCode .NE. 0) THEN
+    ALLOCATE (iArray(List%iNNodes) , STAT=iErrorCode , ERRMSG=cErrorMsg)
+    IF (iErrorCode .NE. 0) THEN
         CALL SetLastMessage('Error in allocating memory to convert a linked list to an integer array.'//NEW_LINE('x')//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
@@ -200,11 +218,10 @@ CONTAINS
     
     !Store integer linked list in the return array
     CALL List%Reset()
-    DO indx=1,List%NNodes
-        pCurrent => List%GetCurrentValue()
-        SELECT TYPE (pCurrent)
+    DO indx=1,List%iNNodes
+        SELECT TYPE (pValue => List%pCurrent%Value)
            TYPE IS(INTEGER)
-              iArray(indx) = pCurrent 
+              iArray(indx) = pValue 
         END SELECT
         CALL List%Next()
     END DO
@@ -215,50 +232,51 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- ADD A NODE TO THE LIST
   ! -------------------------------------------------------------
-  SUBROUTINE GenericLinkedList_AddNode(List,ValueToStore,iStat)
+  SUBROUTINE AddNode(List,ValueToStore,iStat)
     CLASS(GenericLinkedListType) :: List
     CLASS(*),INTENT(IN)          :: ValueToStore
     INTEGER,INTENT(OUT)          :: iStat
     
-    !Local variables
-    TYPE(LlNodeType),POINTER :: pNewNode
+    !Initialize
+    iStat = 0
     
-    IF (List%NNodes .EQ. 0) THEN
-        List%pHead   => LLNode_New(ValueToStore)
-        List%pTail   => List%pHead
+    IF (List%iNNodes .EQ. 0) THEN
+        ALLOCATE (List%pHead)
+        ALLOCATE (List%pHead%Value , SOURCE=ValueToStore)
+        List%pTail => List%pHead
     ELSE
-        pNewNode   => LLNode_New(ValueToStore)
-        CALL List%pTail%SetNextNode(pNewNode,iStat)  ;  IF (iStat .EQ. -1) RETURN
-        List%pTail => pNewNode
+        ALLOCATE (List%pTail%pNext)
+        List%pTail => List%pTail%pNext
+        ALLOCATE (List%pTail%Value , SOURCE=ValueToStore)
     END IF
     
     List%pCurrent => List%pTail
-    List%NNodes   =  List%NNodes + 1
+    List%iNNodes  =  List%iNNodes + 1
     
-  END SUBROUTINE GenericLinkedList_AddNode
+  END SUBROUTINE AddNode
     
 
   ! -------------------------------------------------------------
   ! --- RESET THE LIST 
   ! -------------------------------------------------------------
-  SUBROUTINE GenericLinkedList_Reset(List)
+  SUBROUTINE Reset(List)
     CLASS(GenericLinkedListType) :: List
     
     List%pCurrent => List%pHead
     
-  END SUBROUTINE GenericLinkedList_Reset
+  END SUBROUTINE Reset
   
   
   ! -------------------------------------------------------------
   ! --- MOVE CURENT POINTER TO NEXT NODE IN LIST 
   ! --- Pre-condition: Initial pCurrent must not point to pTail
   ! -------------------------------------------------------------
-  SUBROUTINE GenericLinkedList_Next(List)
+  SUBROUTINE Next(List)
     CLASS(GenericLinkedListType) :: List
     
-    List%pCurrent => List%pCurrent%GetNext()
+    List%pCurrent => List%pCurrent%pNext
     
-  END SUBROUTINE GenericLinkedList_Next
+  END SUBROUTINE Next
   
   
 END MODULE

@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2022
+!  Copyright (C) 2005-2024
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -63,7 +63,7 @@ CONTAINS
     INTEGER,PARAMETER                    :: f_RepeatCount_2 = f_OPEN_SCREEN_LINE_LENGTH-2 
     CHARACTER(LEN=10)                    :: TodaysDate
     CHARACTER(f_OPEN_SCREEN_LINE_LENGTH) ::                                  &   !The text (line by line) of opening screen
-       f_L(44) =[         REPEAT('-',f_OPEN_SCREEN_LINE_LENGTH)             ,&
+       f_L(39) =[         REPEAT('-',f_OPEN_SCREEN_LINE_LENGTH)             ,&
                  '|             Integrated Water Flow Model              |' ,&
                  '|                       IWFM                           |' ,&
                  '|THIS PART OF ARRAY IS OVERWRITEN BY INDIVIDUAL PROGRAM|' ,&
@@ -94,11 +94,6 @@ CONTAINS
                  '|                                                      |' ,&
                  '| For technical support, e-mail:                       |' ,&
                  '| IWFMtechsupport@water.ca.gov                         |' ,&
-                 '|                                                      |' ,&
-                 '|   Principal Contact:                                 |' ,&
-                 '|       Dr. Tariq N. Kadir ... Senior Engineer, DWR    |' ,&
-                 '|                  (916) 902 7786                      |' ,&
-                 '|             tariq.kadir@water.ca.gov                 |' ,&
                  '|                                                      |' ,&
                  '|   Principal Programmer and Technical Support:        |' ,&
                  '|       Dr. Emin Can Dogrul ... Senior Engineer, DWR   |' ,&

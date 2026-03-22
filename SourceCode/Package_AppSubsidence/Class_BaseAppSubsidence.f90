@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2022  
+!  Copyright (C) 2005-2024  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -126,8 +126,8 @@ MODULE Class_BaseAppSubsidence
   ! -------------------------------------------------------------
   ABSTRACT INTERFACE
 
-    SUBROUTINE Abstract_New(AppSubsidence,IsForInquiry,cFileName,cWorkingDirectory,iGWNodeIDs,AppGrid,Stratigraphy,StrmConnectivity,TimeStep,iStat) 
-        IMPORT                                   :: BaseAppSubsidenceType,AppGridType,StratigraphyType,TimeStepType
+    SUBROUTINE Abstract_New(AppSubsidence,IsForInquiry,cFileName,cWorkingDirectory,iGWNodeIDs,AppGrid,Stratigraphy,StrmConnectivity,TimeStep,iStat,SubsICFile) 
+        IMPORT                                   :: BaseAppSubsidenceType,AppGridType,StratigraphyType,TimeStepType,GenericFileType
         CLASS(BaseAppSubsidenceType),INTENT(OUT) :: AppSubsidence
         LOGICAL,INTENT(IN)                       :: IsForInquiry
         CHARACTER(LEN=*),INTENT(IN)              :: cFileName,cWorkingDirectory
@@ -137,6 +137,7 @@ MODULE Class_BaseAppSubsidence
         COMPLEX,INTENT(IN)                       :: StrmConnectivity(:)
         TYPE(TimeStepType),INTENT(IN)            :: TimeStep
         INTEGER,INTENT(OUT)                      :: iStat
+        TYPE(GenericFileType),OPTIONAL           :: SubsICFile
     END SUBROUTINE Abstract_New
     
     
@@ -295,10 +296,10 @@ CONTAINS
     CHARACTER(:),ALLOCATABLE,INTENT(OUT)    :: cFileName
     
     !Local variables
-    INTEGER :: ErrorCode
+    INTEGER :: iErrorCode
     
-    DEALLOCATE (cFileName , STAT=ErrorCode)
-    CALL AppSubsidence%SubsHydOutput%GetFileName(cFileName)
+    DEALLOCATE (cFileName , STAT=iErrorCode)
+    IF (ALLOCATED(AppSubsidence%SubsHydOutput)) CALL AppSubsidence%SubsHydOutput%GetFileName(cFileName)
     
   END SUBROUTINE GetHydOutputFileName
   
@@ -388,11 +389,16 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET INTERBED THICKNESS AT ALL NODES
   ! -------------------------------------------------------------
-  PURE SUBROUTINE GetInterbedThickAll(AppSubsidence,InterbedThick)
+  PURE SUBROUTINE GetInterbedThickAll(AppSubsidence,lPrevious,rInterbedThick)
     CLASS(BaseAppSubsidenceType),INTENT(IN) :: AppSubsidence
-    REAL(8),INTENT(OUT)                     :: InterbedThick(:,:)
+    LOGICAL,INTENT(IN)                      :: lPrevious
+    REAL(8),INTENT(OUT)                     :: rInterbedThick(:,:)
     
-    InterbedThick = AppSubsidence%InterbedThick
+    IF (lPrevious) THEN
+        rInterbedThick = AppSubsidence%InterbedThick_P
+    ELSE
+        rInterbedThick = AppSubsidence%InterbedThick
+    END IF
     
   END SUBROUTINE GetInterbedThickAll
   
@@ -579,8 +585,9 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- OVERWRITE ELASTIC AND INELASTIC STORAGE COEFFICIENTS
   ! -------------------------------------------------------------
-  SUBROUTINE OverwriteParameters(AppSubsidence,ElasticSC,InelasticSC)
+  SUBROUTINE OverwriteParameters(AppSubsidence,AppGrid,ElasticSC,InelasticSC)
     CLASS(BaseAppSubsidenceType) :: AppSubsidence
+    TYPE(AppGridType),INTENT(IN) :: AppGrid
     REAL(8),INTENT(IN)           :: ElasticSC(:,:),InelasticSC(:,:)
     
     !Local variables
@@ -593,8 +600,8 @@ CONTAINS
     !Overwrite parameters
     DO indxLayer=1,NLayers
         DO indxNode=1,NNodes
-            IF (ElasticSC(indxNode,indxLayer)   .GE. 0.0) AppSubsidence%ElasticSC(indxNode,indxLayer)   = ElasticSC(indxNode,indxLayer)
-            IF (InelasticSC(indxNode,indxLayer) .GE. 0.0) AppSubsidence%InelasticSC(indxNode,indxLayer) = InelasticSC(indxNode,indxLayer)
+            IF (ElasticSC(indxNode,indxLayer)   .GE. 0.0) AppSubsidence%ElasticSC(indxNode,indxLayer)   = ElasticSC(indxNode,indxLayer) * AppGrid%AppNode(indxNode)%Area
+            IF (InelasticSC(indxNode,indxLayer) .GE. 0.0) AppSubsidence%InelasticSC(indxNode,indxLayer) = InelasticSC(indxNode,indxLayer) * AppGrid%AppNode(indxNode)%Area
         END DO
     END DO
     

@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2022  
+!  Copyright (C) 2005-2024  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -21,12 +21,22 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 MODULE Util_Package_RootZone
-  USE MessageLogger    , ONLY: SetLastMessage     , &
-                               f_iFatal             
-  USE GeneralUtilities , ONLY: LowerCase          , &
-                               ConvertID_To_Index
-  USE IOInterface      , ONLY: GenericFileType
-  USE Package_Misc     , ONLY: f_iRootZoneComp
+  USE MessageLogger          , ONLY: SetLastMessage                , &
+                                     f_iFatal                        
+  USE GeneralUtilities       , ONLY: LowerCase                     , &
+                                     UpperCase                     , &
+                                     IntToText                     , &
+                                     ConvertID_To_Index            , &
+                                     CleanSpecialCharacters        , &
+                                     EstablishAbsolutePathFileName , &
+                                     StripTextUntilCharacter
+  USE TimeSeriesUtilities    , ONLY: TimeStepType                  , &
+                                     IncrementTimeStamp            , &
+                                     OPERATOR(.TSGT.)
+  USE IOInterface            , ONLY: GenericFileType
+  USE Package_Misc           , ONLY: f_iRootZoneComp
+  USE Package_Discretization , ONLY: AppGridType
+  USE Class_LandUseDataFile  , ONLY: LandUseDataFileType
   IMPLICIT NONE
   
   
@@ -37,6 +47,8 @@ MODULE Util_Package_RootZone
   PUBLIC :: WaterSupplyType                      , &
             ReadRealData                         , & 
             ReadPointerData                      , &
+            ReadLandUseAreasForTimePeriod        , &
+            InitColumnPointerData_ForElements    , &
             AddStringToStringList                , &
             f_iNoIrigPeriod                      , &
             f_iIrigPeriod                        , &
@@ -229,6 +241,44 @@ CONTAINS
   
   
   ! -------------------------------------------------------------
+  ! --- INSTANTIATE COLUMN POINTER DATA
+  ! -------------------------------------------------------------
+  SUBROUTINE InitColumnPointerData_ForElements(InputDataFile,cDescription,iNCols,iElemIDs,iColPointers,iStat)  
+    TYPE(GenericFileType)       :: InputDataFile
+    CHARACTER(LEN=*),INTENT(IN) :: cDescription
+    INTEGER,INTENT(IN)          :: iNCols,iElemIDs(:)
+    INTEGER,INTENT(OUT)         :: iColPointers(iNCols,SIZE(iElemIDs)),iStat
+
+    !Local variables
+    CHARACTER(LEN=ModNameLen+33)     :: ThisProcedure = ModName // 'InitColumnPointerData_ForElements'
+    INTEGER                          :: indxElem,iElem,ID,iNElements
+    INTEGER,ALLOCATABLE              :: iDummyIntArray(:,:)
+    LOGICAL                          :: lProcessed(SIZE(iElemIDs))
+    CHARACTER(LEN=LEN(cDescription)) :: cLowerCaseDescription
+    
+    !Initialize
+    iNElements            = SIZE(iElemIDs)    
+    cLowerCaseDescription = LowerCase(cDescription)
+    
+    CALL ReadPointerData(InputDataFile,cLowerCaseDescription,'elements',iNElements,iNCols+1,iElemIDs,iDummyIntArray,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    lProcessed = .FALSE.
+    DO indxElem=1,iNElements
+        iElem = iDummyIntArray(indxElem,1)
+        IF (lProcessed(iElem)) THEN
+            ID                         = iElemIDs(iElem)
+            cLowerCaseDescription(1:1) = UpperCase(cLowerCaseDescription(1:1))
+            CALL SetLastMessage(cLowerCaseDescription//' at element '//TRIM(IntToText(ID))//' are defined more than once!',f_iFatal,ThisProcedure)
+            iStat = -1
+            RETURN
+        END IF
+        lProcessed(iElem)     = .TRUE.
+        iColPointers(:,iElem) = iDummyIntArray(indxElem,2:)
+    END DO
+    
+  END SUBROUTINE InitColumnPointerData_ForElements     
+
+  
+  ! -------------------------------------------------------------
   ! --- SUBROUTINE TO ADD A STRING TO AN ARRAY OF STRINGS
   ! -------------------------------------------------------------
   SUBROUTINE AddStringToStringList(cStringToAdd,cStringList)
@@ -253,4 +303,133 @@ CONTAINS
   END SUBROUTINE AddStringToStringList 
   
 
+  ! -------------------------------------------------------------
+  ! --- READ AREAS OF A SPECIFIED LAND USE FOR ALL ELEMENTS FOR A RANGE OF TIME
+  ! --- Note: This method is intended to be called outside of a Simulation run
+  ! -------------------------------------------------------------
+  SUBROUTINE ReadLandUseAreasForTimePeriod(cAreaFileName,cWorkingDirectory,cBeginDate,cEndDate,TimeStep,AppGrid,iNLU,iLU,rLUAreas,iStat)
+    CHARACTER(LEN=*),INTENT(IN)   :: cAreaFileName,cWorkingDirectory,cBeginDate,cEndDate
+    TYPE(TimeStepType),INTENT(IN) :: TimeStep
+    TYPE(AppGridType),INTENT(IN)  :: AppGrid
+    INTEGER,INTENT(IN)            :: iNLU,iLU
+    REAL(8),INTENT(OUT)           :: rLUAreas(:,:)  !For each (element,time)
+    INTEGER,INTENT(OUT)           :: iStat
+    
+    !Local variables
+    INTEGER                   :: indxTime,iElemIDs(AppGrid%NElements)
+    REAL(8)                   :: rElemAreas(AppGrid%NElements)
+    TYPE(LandUseDataFileType) :: AreaFile
+    TYPE(TimeStepType)        :: TimeStepWork
+   
+    !Open area file
+    CALL AreaFile%New(cAreaFileName,cWorkingDirectory,'Non-ponded ag. area file',AppGrid%NElements,iNLU,.TRUE.,iStat)
+    IF (iStat .NE. 0) GOTO 10
+    
+    !Element IDs and areas
+    CALL AppGrid%GetElementIDs(iElemIDs)
+    rElemAreas = AppGrid%AppElement%Area
+    
+    !Read data
+    TimeStepWork                    = TimeStep
+    TimeStepWork%CurrentDateAndTime = cBeginDate
+    indxTime                        = 1
+    DO 
+        !Exit loop if reached end of period
+        IF (TimeStepWork%CurrentDateAndTime .TSGT. cEndDate) EXIT
+        
+        !Read data
+        CALL AreaFile%ReadTSData('Non-ponded crop areas',TimeStepWork,rElemAreas,iElemIDs,iStat)  ;  IF (iStat .NE. 0) GOTO 10
+        
+        !Store in return array
+        rLUAreas(:,indxTime) = AreaFile%rValues(:,iLU+1)
+        
+        !Advance time and index
+        indxTime                        = indxTime + 1
+        TimeStepWork%CurrentDateAndTime = IncrementTimeStamp(TimeStepWork%CurrentDateAndTime,TimeStep%DELTAT_InMinutes)
+
+    END DO
+        
+    !Close area file
+10  CALL AreaFile%Kill()
+    
+  END SUBROUTINE ReadLandUseAreasForTimePeriod
+
+  
+  ! -------------------------------------------------------------
+  ! --- GET AREAS OF A SPECIFIED PONDED CROP FOR ALL ELEMENTS FOR A RANGE OF TIME
+  ! --- Note: This method is intended to be called outside of a Simulation run
+  ! -------------------------------------------------------------
+  !SUBROUTINE GetPondedCropAreasForTimePeriod(cPondedCropsFileName,cWorkingDirectory,cBeginDate,cEndDate,TimeStep,AppGrid,iCrop,rCropAreas,iStat)
+  !  CHARACTER(LEN=*),INTENT(IN)   :: cPondedCropsFileName,cWorkingDirectory,cBeginDate,cEndDate
+  !  TYPE(TimeStepType),INTENT(IN) :: TimeStep
+  !  TYPE(AppGridType),INTENT(IN)  :: AppGrid
+  !  INTEGER,INTENT(IN)            :: iCrop
+  !  REAL(8),INTENT(OUT)           :: rCropAreas(:,:)  !For each (element,time)
+  !  INTEGER,INTENT(OUT)           :: iStat
+  !  
+  !  !Local variables
+  !  INTEGER                   :: iNCrops,indx,indxTime,iElemIDs(AppGrid%NElements)
+  !  REAL(8)                   :: rElemAreas(AppGrid%NElements)
+  !  CHARACTER                 :: ALine*500
+  !  TYPE(GenericFileType)     :: PondedCropMainFile
+  !  TYPE(LandUseDataFileType) :: AreaFile
+  !  TYPE(TimeStepType)        :: TimeStepWork
+  !  CHARACTER(:),ALLOCATABLE  :: cAreaFileName
+  ! 
+  !  !Return if no file name is specified
+  !  IF (cPondedCropsFileName .EQ. '') THEN
+  !      rCropAreas = 0.0
+  !      iStat      = 0
+  !      GOTO 10
+  !  END IF
+  !  
+  !  !Open main file
+  !  CALL PondedCropMainFile%New(FileName=TRIM(cPondedCropsFileName),InputFile=.TRUE.,IsTSFile=.FALSE.,iStat=iStat)
+  !  IF (iStat .NE. 0) GOTO 10
+  !  
+  !  !Skip unnecssary data
+  !  CALL PondedCropMainFile%ReadData(iNCrops,iStat)  ;  IF (iStat .NE. 0) GOTO 10
+  !  DO indx=1,iNCrops+1
+  !      CALL NPCropMainFile%ReadData(ALine,iStat)  
+  !      IF (iStat .NE. 0) GOTO 10
+  !  END DO
+  !  
+  !  !Read area filename and open file
+  !  CALL NPCropMainFile%ReadData(ALine,iStat)  
+  !  ALine = StripTextUntilCharacter(ALine,'/') 
+  !  CALL CleanSpecialCharacters(ALine)
+  !  CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(ALine)),cWorkingDirectory,cAreaFileName)
+  !  CALL AreaFile%New(cAreaFileName,cWorkingDirectory,'Non-ponded ag. area file',AppGrid%NElements,iNCrops,.TRUE.,iStat)
+  !  IF (iStat .NE. 0) GOTO 10
+  !  
+  !  !Element IDs and areas
+  !  CALL AppGrid%GetElementIDs(iElemIDs)
+  !  rElemAreas = AppGrid%AppElement%Area
+  !  
+  !  !Read data
+  !  TimeStepWork                    = TimeStep
+  !  TimeStepWork%CurrentDateAndTime = cBeginDate
+  !  indxTime                        = 1
+  !  DO 
+  !      !Exit loop if reached end of period
+  !      IF (TimeStepWork%CurrentDateAndTime .TSGT. cEndDate) EXIT
+  !      
+  !      !Read data
+  !      CALL AreaFile%ReadTSData('Non-ponded crop areas',TimeStepWork,rElemAreas,iElemIDs,iStat)  ;  IF (iStat .NE. 0) GOTO 10
+  !      
+  !      !Store in return array
+  !      rCropAreas(:,indxTime) = AreaFile%rValues(:,iCrop+1)
+  !      
+  !      !Advance time and index
+  !      indxTime                        = indxTime + 1
+  !      TimeStepWork%CurrentDateAndTime = IncrementTimeStamp(TimeStepWork%CurrentDateAndTime,TimeStep%DELTAT_InMinutes)
+  !
+  !  END DO
+  !      
+  !  !Close main files
+!10  CALL NPCropMainFile%Kill()
+  !  CALL AreaFile%Kill()
+  !  
+  !END SUBROUTINE GetNPCropAreasForTimePeriod
+  
 END MODULE

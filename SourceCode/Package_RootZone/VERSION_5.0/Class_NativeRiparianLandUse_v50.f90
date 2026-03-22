@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2022  
+!  Copyright (C) 2005-2024  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -34,6 +34,7 @@ MODULE Class_NativeRiparianLandUse_v50
                                       EstablishAbsolutePathFileName
   USE Package_Discretization  , ONLY: AppGridType
   USE Util_Package_RootZone   , ONLY: ReadRealData                  , &
+                                      ReadLandUseAreasForTimePeriod , &   
                                       ReadPointerData
   USE Class_GenericLandUse    , ONLY: GenericLandUseType
   USE Class_LandUseDataFile   , ONLY: LandUseDataFileType  
@@ -75,30 +76,31 @@ MODULE Class_NativeRiparianLandUse_v50
   ! --- NATIVE/RIPARIAN LAND DATABASE TYPE
   ! -------------------------------------------------------------
   TYPE NativeRiparianDatabase_v50_Type
-    TYPE(NativeRiparianType)             :: NativeVeg                            !Native veg data for each (soil,subregion) combination
-    TYPE(NativeRiparianType)             :: RiparianVeg                          !Riparian veg data for each (soil,subregion) combination
-    REAL(8)                              :: RootDepth_Native         = 0.0     
-    REAL(8)                              :: RootDepth_Riparian       = 0.0     
-    REAL(8),ALLOCATABLE                  :: ElementalArea_NV(:)                  !Area of native vegetation at each (element) at current time step
-    REAL(8),ALLOCATABLE                  :: ElementalArea_RV(:)                  !Area of riparian vegetation at each (element) at current time step
-    REAL(8),ALLOCATABLE                  :: ElementalArea_P_NV(:)                !Area of native vegetation at each (element) at previous time step
-    REAL(8),ALLOCATABLE                  :: ElementalArea_P_RV(:)                !Area of riparian vegetation at each (element) at previous time step
-    REAL(8),ALLOCATABLE                  :: SubregionalArea_NV(:)                !Area of native vegetation at each (subregion)
-    REAL(8),ALLOCATABLE                  :: SubregionalArea_RV(:)                !Area of riparian vegetation at each (subregion)
-    REAL(8),ALLOCATABLE                  :: RegionETPot_NV(:)                    !Regional potential ET for native vegetation
-    REAL(8),ALLOCATABLE                  :: RegionETPot_RV(:)                    !Regional potential ET for riparian vegetation
-    TYPE(LandUseDataFileType)            :: LandUseDataFile                      !Land use data file
+      TYPE(NativeRiparianType)             :: NativeVeg                            !Native veg data for each (soil,subregion) combination
+      TYPE(NativeRiparianType)             :: RiparianVeg                          !Riparian veg data for each (soil,subregion) combination
+      REAL(8)                              :: RootDepth_Native         = 0.0     
+      REAL(8)                              :: RootDepth_Riparian       = 0.0     
+      REAL(8),ALLOCATABLE                  :: ElementalArea_NV(:)                  !Area of native vegetation at each (element) at current time step
+      REAL(8),ALLOCATABLE                  :: ElementalArea_RV(:)                  !Area of riparian vegetation at each (element) at current time step
+      REAL(8),ALLOCATABLE                  :: ElementalArea_P_NV(:)                !Area of native vegetation at each (element) at previous time step
+      REAL(8),ALLOCATABLE                  :: ElementalArea_P_RV(:)                !Area of riparian vegetation at each (element) at previous time step
+      REAL(8),ALLOCATABLE                  :: SubregionalArea_NV(:)                !Area of native vegetation at each (subregion)
+      REAL(8),ALLOCATABLE                  :: SubregionalArea_RV(:)                !Area of riparian vegetation at each (subregion)
+      REAL(8),ALLOCATABLE                  :: RegionETPot_NV(:)                    !Regional potential ET for native vegetation
+      REAL(8),ALLOCATABLE                  :: RegionETPot_RV(:)                    !Regional potential ET for riparian vegetation
+      TYPE(LandUseDataFileType)            :: LandUseDataFile                      !Land use data file
   CONTAINS
-    PROCEDURE,PASS :: New
-    PROCEDURE,PASS :: Kill
-    PROCEDURE,PASS :: ReadTSData 
-    PROCEDURE,PASS :: ReadRestartData
-    PROCEDURE,PASS :: PrintRestartData
-    PROCEDURE,PASS :: SetAreas              
-    PROCEDURE,PASS :: AdvanceAreas          
-    PROCEDURE,PASS :: SoilMContent_To_Depth 
-    PROCEDURE,PASS :: Simulate  
-    PROCEDURE,PASS :: RewindTSInputFilesToTimeStamp 
+      PROCEDURE,PASS   :: New
+      PROCEDURE,PASS   :: Kill
+      PROCEDURE,NOPASS :: GetAreasForTimePeriod
+      PROCEDURE,PASS   :: ReadTSData 
+      PROCEDURE,PASS   :: ReadRestartData
+      PROCEDURE,PASS   :: PrintRestartData
+      PROCEDURE,PASS   :: SetAreas              
+      PROCEDURE,PASS   :: AdvanceAreas          
+      PROCEDURE,PASS   :: SoilMContent_To_Depth 
+      PROCEDURE,PASS   :: Simulate  
+      PROCEDURE,PASS   :: RewindTSInputFilesToTimeStamp 
   END TYPE NativeRiparianDatabase_v50_Type
   
 
@@ -325,6 +327,60 @@ CONTAINS
     END SELECT
 
   END SUBROUTINE Kill  
+  
+  
+  
+
+! ******************************************************************
+! ******************************************************************
+! ******************************************************************
+! ***
+! *** GETTERS
+! ***
+! ******************************************************************
+! ******************************************************************
+! ******************************************************************
+
+  ! -------------------------------------------------------------
+  ! --- GET NATIVE OR RIPARIAN VEG AREAS FOR AT ALL ELEMENTS FOR A TIME PERIOD
+  ! --- Note: This method is not meant to be called during a Simulation
+  ! -------------------------------------------------------------
+  SUBROUTINE GetAreasForTimePeriod(cMainFileName,cWorkingDirectory,cBeginDate,cEndDate,TimeStep,AppGrid,iNVorRV,rAreas,iStat)
+    CHARACTER(LEN=*),INTENT(IN)   :: cMainFileName,cWorkingDirectory,cBeginDate,cEndDate
+    TYPE(TimeStepType),INTENT(IN) :: TimeStep
+    TYPE(AppGridType),INTENT(IN)  :: AppGrid
+    INTEGER,INTENT(IN)            :: iNVorRV  !1 = NV; 2 = RV
+    REAL(8),INTENT(OUT)           :: rAreas(:,:)  !For each (element,time)
+    INTEGER,INTENT(OUT)           :: iStat
+    
+    !Local variables
+    CHARACTER                :: cALine*500
+    TYPE(GenericFileType)    :: MainFile
+    CHARACTER(:),ALLOCATABLE :: cAreaFileName
+   
+    !Return if no file name is specified
+    IF (cMainFileName .EQ. '') THEN
+        rAreas = 0.0
+        iStat  = 0
+        GOTO 10
+    END IF
+    
+    !Open main file
+    CALL MainFile%New(FileName=TRIM(cMainFileName),InputFile=.TRUE.,IsTSFile=.FALSE.,iStat=iStat)
+    IF (iStat .NE. 0) GOTO 10
+    
+    !Read area filename
+    CALL MainFile%ReadData(cALine,iStat)  
+    cALine = StripTextUntilCharacter(cALine,'/') 
+    CALL CleanSpecialCharacters(cALine)
+    CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(cALine)),cWorkingDirectory,cAreaFileName)
+    
+    !Retrieve areas
+    CALL ReadLandUseAreasForTimePeriod(cAreaFileName,cWorkingDirectory,cBeginDate,cEndDate,TimeStep,AppGrid,2,iNVorRV,rAreas,iStat)
+
+10  CALL MainFile%Kill()
+    
+  END SUBROUTINE GetAreasForTimePeriod
 
 
 

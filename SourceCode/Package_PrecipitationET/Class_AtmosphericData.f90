@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2022  
+!  Copyright (C) 2005-2024  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -217,7 +217,7 @@ CONTAINS
     !Check for negativity, if desired
     IF (lCheckForNegativity) THEN
         IF (ANY(rOutputValues(1:nActualOutput) .LT. 0.0)) THEN
-            CALL SetLastMessage('Timeseries input for '//TRIM(AtmosphericData%cDataName)//' data cannot be zero!',f_iFatal,ThisProcedure)
+            CALL SetLastMessage('Timeseries input for '//TRIM(AtmosphericData%cDataName)//' data cannot be less than zero!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -255,7 +255,7 @@ CONTAINS
         !Check for negativity if desired
         IF (lCheckForNegativity) THEN
             IF (ANY(AtmosphericData%rValues .LT. 0.0)) THEN
-                CALL SetLastMessage('Timeseries input for '//TRIM(AtmosphericData%cDataName)//' data cannot be zero!',f_iFatal,ThisProcedure)
+                CALL SetLastMessage('Timeseries input for '//TRIM(AtmosphericData%cDataName)//' data cannot be less than zero!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF

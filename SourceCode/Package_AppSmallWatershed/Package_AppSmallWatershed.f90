@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2022  
+!  Copyright (C) 2005-2024  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -21,6 +21,7 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 MODULE Package_AppSmallWatershed
+  USE Class_Version          , ONLY: VersionType
   USE GeneralUtilities       , ONLY: StripTextUntilCharacter       , &
                                      ArrangeText                   , &
                                      IntToText                     , &
@@ -84,8 +85,8 @@ MODULE Package_AppSmallWatershed
   ! -------------------------------------------------------------
   PRIVATE
   PUBLIC :: AppSmallWatershedType  , &
-            SWShedBaseFlowBCID     , &
-            SWShedPercFlowBCID     , &
+            f_iSWShedBaseFlowBCID  , &
+            f_iSWShedPercFlowBCID  , &
             f_iBudgetType_SWShed   , & 
             f_iSWShedBudComp_RZ    , &
             f_iSWShedBudComp_GW 
@@ -95,7 +96,6 @@ MODULE Package_AppSmallWatershed
   ! --- DATA TYPE FOR GW NODE RECEIVING BASEFLOW FROM SMALL WATERSHED
   ! -------------------------------------------------------------
   TYPE BaseFlowGWNodeType
-      PRIVATE
       INTEGER :: Node   = 0     !Node that receives baseflow
       INTEGER :: Layer  = 0     !Aquifer layer for receiving node
       REAL(8) :: Frac   = 0.0   !Fraction of total baseflow that flow into node
@@ -107,7 +107,6 @@ MODULE Package_AppSmallWatershed
   ! --- DATA TYPE FOR GW NODE RECEIVING PERCOLATION FROM SMALL WATERSHED
   ! -------------------------------------------------------------
   TYPE PercFlowGWNodeType
-      PRIVATE
       INTEGER :: Node     = 0      !Node that receives percolation
       INTEGER :: Layer    = 0      !Aquifer layer for receving node (this is the top active node)
       REAL(8) :: MaxFlow  = 0.0    !Maximum percolation rate
@@ -129,7 +128,6 @@ MODULE Package_AppSmallWatershed
   ! --- SMALL WATERSHED DATA TYPE
   ! -------------------------------------------------------------
   TYPE SmallWatershedType
-      PRIVATE
       INTEGER                              :: ID               = 0      !Small watershed ID number
       REAL(8)                              :: Area             = 0.0    !Area of small watershed
       TYPE(RootZoneSoilType)               :: Soil                      !Small watershed root zone soil parameters
@@ -166,9 +164,8 @@ MODULE Package_AppSmallWatershed
   ! --- SMALL WATERSHED DATABASE TYPE
   ! -------------------------------------------------------------
   TYPE AppSmallWatershedType
-      PRIVATE
-      CHARACTER(LEN=6)                     :: VarTimeUnit         = ''      !Time unit of releavnt parameters for the small watershdes
-      INTEGER                              :: NSWShed             = 0       !Number of small watersheds modeled
+      CHARACTER(LEN=6)                     :: cVarTimeUnit        = ''      !Time unit of releavnt parameters for the small watershdes
+      INTEGER                              :: iNSWShed            = 0       !Number of small watersheds modeled
       LOGICAL                              :: lDefined            = .FALSE. !Flag to check if small watersheds are simulated
       TYPE(SmallWatershedType),ALLOCATABLE :: SmallWatersheds(:)            !List of small watersheds and their parameters
       TYPE(NodeListType),ALLOCATABLE       :: BaseFlowNodeList(:)           !List of groundwater nodes receiving base flow at each (layer)
@@ -192,12 +189,18 @@ MODULE Package_AppSmallWatershed
       PROCEDURE,PASS   :: GetSubregionalGWInflows
       PROCEDURE,PASS   :: GetNodesWithBCType 
       PROCEDURE,PASS   :: GetNetBCFlowWithBCType
+      PROCEDURE,PASS   :: GetNetBCFlowWithBCType_FromSmallWatershed
       PROCEDURE,PASS   :: GetBoundaryFlowAtElementNodeLayer
       PROCEDURE,PASS   :: GetBoundaryFlowAtFaceLayer_AtOneFace    
       PROCEDURE,PASS   :: GetBoundaryFlowAtFaceLayer_AtSomeFaces
       PROCEDURE,PASS   :: GetPercFlow_ForAllSmallwatersheds
       PROCEDURE,PASS   :: GetRootZonePerc_ForAllSmallwatersheds
       PROCEDURE,PASS   :: GetRootZonePerc_ForOneSmallWatershed
+      PROCEDURE,PASS   :: GetGWReturnFlow_ForAllSmallwatersheds
+      PROCEDURE,PASS   :: GetGWReturnFlow_ForOneSmallwatershed
+      PROCEDURE,NOPASS :: GetVersion
+      PROCEDURE,PASS   :: ReadAquiferData
+      PROCEDURE,PASS   :: ReadInitialConditions
       PROCEDURE,PASS   :: ReadTSData                         
       PROCEDURE,PASS   :: ReadRestartData
       PROCEDURE,PASS   :: PrintResults
@@ -208,7 +211,8 @@ MODULE Package_AppSmallWatershed
       PROCEDURE,PASS   :: Simulate
       PROCEDURE,PASS   :: AdvanceState                      
       PROCEDURE,PASS   :: UpdateRHS                          
-      PROCEDURE,PASS   :: ConvertTimeUnit                   
+      PROCEDURE,PASS   :: ConvertTimeUnit 
+      PROCEDURE,PASS   :: CompileBaseflowPercolationNodes
       GENERIC          :: GetBoundaryFlowAtFaceLayer => GetBoundaryFlowAtFaceLayer_AtOneFace          , &
                                                         GetBoundaryFlowAtFaceLayer_AtSomeFaces
       GENERIC          :: GetBudget_MonthlyFlows     => GetBudget_MonthlyFlows_GivenFile              , &
@@ -219,8 +223,8 @@ MODULE Package_AppSmallWatershed
   ! -------------------------------------------------------------
   ! --- BOUNDARY FLOW FLAGS
   ! -------------------------------------------------------------
-  INTEGER,PARAMETER :: SWShedBaseFlowBCID = 1  , &
-                       SWShedPercFlowBCID = 2
+  INTEGER,PARAMETER :: f_iSWShedBaseFlowBCID = 1  , &
+                       f_iSWShedPercFlowBCID = 2
 
   
   ! -------------------------------------------------------------
@@ -257,6 +261,14 @@ MODULE Package_AppSmallWatershed
   
 
   ! -------------------------------------------------------------
+  ! --- VERSION RELATED ENTITIES
+  ! -------------------------------------------------------------
+  INTEGER,PARAMETER                    :: iLenVersion = 11
+  CHARACTER(LEN=iLenVersion),PARAMETER :: cVersion    = '2024.0.0000'
+  INCLUDE 'Package_AppSmallWatershed_Revision.fi'
+  
+
+  ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
   INTEGER,PARAMETER                   :: ModNameLen  = 27
@@ -282,10 +294,10 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- NEW SMALL WATERSHED DATABASE
   ! -------------------------------------------------------------
-  SUBROUTINE New(AppSWShed,IsForInquiry,cFileName,cWorkingDirectory,TimeStep,NTIME,NStrmNodes,iStrmNodeIDs,AppGrid,Stratigraphy,Precip,ET,cIWFMVersion,iStat) 
+  SUBROUTINE New(AppSWShed,IsForInquiry,cFileName,cWorkingDirectory,TimeStep,NTIME,NStrmNodes,iStrmNodeIDs,AppGrid,Stratigraphy,Precip,ET,iStat,cVersionOverride) 
     CLASS(AppSmallWatershedType),INTENT(OUT) :: AppSWShed
     LOGICAL,INTENT(IN)                       :: IsForInquiry
-    CHARACTER(LEN=*),INTENT(IN)              :: cFileName,cWorkingDirectory,cIWFMVersion
+    CHARACTER(LEN=*),INTENT(IN)              :: cFileName,cWorkingDirectory
     TYPE(TimeStepType),INTENT(IN)            :: TimeStep
     INTEGER,INTENT(IN)                       :: NStrmNodes,iStrmNodeIDs(NStrmNodes),NTIME
     TYPE(AppGridType),INTENT(IN)             :: AppGrid
@@ -293,12 +305,13 @@ CONTAINS
     TYPE(PrecipitationType),INTENT(IN)       :: Precip
     TYPE(ETType),INTENT(IN)                  :: ET
     INTEGER,INTENT(OUT)                      :: iStat
+    CHARACTER(LEN=*),OPTIONAL,INTENT(IN)     :: cVersionOverride   !Not used here; in case we want to use another version number with child classes, instead of the version of Package_AppSmallWatershed
     
     !Local variables
     TYPE(GenericFileType)    :: MainFile
     CHARACTER                :: ALine*1200,cBudFileName*1200,cFinResultsFileName*1200
     CHARACTER(:),ALLOCATABLE :: cAbsPathFileName
-    INTEGER                  :: NSWShed,indxLayer,iGWNodeIDs(AppGrid%NNodes)
+    INTEGER                  :: iNSWShed,iGWNodeIDs(AppGrid%NNodes)
     INTEGER,ALLOCATABLE      :: iSWShedIDs(:)
     
     !Initialize
@@ -333,19 +346,17 @@ CONTAINS
     cFinResultsFileName = cAbsPathFileName
 
     !Number of small watersheds; if zero return
-    CALL MainFile%ReadData(NSWShed,iStat)  ;  IF (iStat .EQ. -1) RETURN
-    IF (NSWShed .EQ. 0) RETURN
-    AppSWShed%NSWShed = NSWShed
+    CALL MainFile%ReadData(iNSWShed,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    IF (iNSWShed .EQ. 0) RETURN
+    AppSWShed%iNSWShed = iNSWShed
     
     !Allocate memory
-    ALLOCATE (AppSWShed%SmallWatersheds(NSWShed)               , &
-              AppSWShed%BaseFlowNodeList(Stratigraphy%NLayers) , &
-              AppSWShed%PercFlowNodeList(Stratigraphy%NLayers) )
+    ALLOCATE (AppSWShed%SmallWatersheds(iNSWShed))
 
     !Read geospatial parameters
     CALL ReadGeospatialData(MainFile,TimeStep,AppGrid,Stratigraphy,NStrmNodes,iStrmNodeIDs,AppSWShed,iStat)
     IF (iStat .EQ. -1) RETURN
-    ALLOCATE (iSWShedIDs(NSWShed))
+    ALLOCATE (iSWShedIDs(iNSWShed))
     iSWShedIDs = AppSWShed%SmallWatersheds%ID
     
     !Read root zone parameters
@@ -353,16 +364,16 @@ CONTAINS
     IF (iStat .EQ. -1) RETURN
     
     !Read aquifer related parameters
-    CALL ReadAquiferData(MainFile,TimeStep,iSWShedIDs,AppSWShed,iStat)
+    CALL AppSWShed%ReadAquiferData(MainFile,TimeStep,iSWShedIDs,iStat)
     IF (iStat .EQ. -1) RETURN
     
     !Read initial conditions
-    CALL ReadInitialConditions(MainFile,iSWShedIDs,AppSWShed,iStat)
+    CALL AppSWShed%ReadInitialConditions(MainFile,iSWShedIDs,.TRUE.,iStat)
     IF (iStat .EQ. -1) RETURN
     
     !Instantiate the small watershed budget file
     IF (cBudFileName .NE. '')  THEN
-        CALL InitSmallWatershedBudRawFile(IsForInquiry,TRIM(cBudFileName),cIWFMVersion,iSWShedIDs,NTIME,TimeStep,AppSWShed,iStat)
+        CALL InitSmallWatershedBudRawFile(AppSWShed,IsForInquiry,TRIM(cBudFileName),iSWShedIDs,NTIME,TimeStep,iStat)
         IF (iStat .EQ. -1) RETURN
     END IF
     
@@ -377,22 +388,14 @@ CONTAINS
     END IF
     
     !Compile list of nodes recieving baseflow and percolation at each layer
-    DO indxLayer=1,Stratigraphy%NLayers
-        !Baseflow nodes
-        CALL CompileNodesWithBCType(AppSWShed,indxLayer,SWShedBaseFlowBCID,AppSWShed%BaseFlowNodeList(indxLayer)%Nodes)
-        AppSWShed%BaseFlowNodeList(indxLayer)%NNodes = SIZE(AppSWShed%BaseFlowNodeList(indxLayer)%Nodes)
-        
-        !Percolation nodes
-        CALL CompileNodesWithBCType(AppSWShed,indxLayer,SWShedPercFlowBCID,AppSWShed%PercFlowNodeList(indxLayer)%Nodes)
-        AppSWShed%PercFlowNodeList(indxLayer)%NNodes = SIZE(AppSWShed%PercFlowNodeList(indxLayer)%Nodes)        
-    END DO
+    CALL AppSWShed%CompileBaseflowPercolationNodes(Stratigraphy%NLayers)
     
     !Check if pointed TS data columns actually exist
     CALL CheckTSDataPointers(AppSWShed,Precip,ET,iStat)
     IF (iStat .NE. 0) RETURN
     
     !Set the flag
-    IF (AppSWShed%NSWShed .GT. 0) AppSWShed%lDefined = .TRUE.
+    IF (AppSWShed%iNSWShed .GT. 0) AppSWShed%lDefined = .TRUE.
     
     !Close main input file
     CALL MainFile%Kill()
@@ -403,12 +406,12 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- NEW SMALL WATERSHED BUDGET OUTPUT FILE
   ! -------------------------------------------------------------
-  SUBROUTINE InitSmallWatershedBudRawFile(IsForInquiry,cFileName,cIWFMVersion,iSWShedIDs,NTIME,TimeStep,AppSWShed,iStat)
+  SUBROUTINE InitSmallWatershedBudRawFile(AppSWShed,IsForInquiry,cFileName,iSWShedIDs,NTIME,TimeStep,iStat)
+    TYPE(AppSmallWatershedType)   :: AppSWShed
     LOGICAL,INTENT(IN)            :: IsForInquiry
-    CHARACTER(LEN=*),INTENT(IN)   :: cFileName,cIWFMVersion
+    CHARACTER(LEN=*),INTENT(IN)   :: cFileName
     INTEGER,INTENT(IN)            :: iSWShedIDs(:),NTIME
     TYPE(TimeStepType),INTENT(IN) :: TimeStep
-    TYPE(AppSmallWatershedType)   :: AppSWShed
     INTEGER,INTENT(OUT)           :: iStat
     
     !Local variables
@@ -418,8 +421,8 @@ CONTAINS
                                    NTitles            = 6          , &
                                    NColumnHeaderLines = 4          , &
                                    NColumns           = f_iNBudgetCols
-    INTEGER                     :: iCount,indxLocation,indxCol,indx,NSWShed,I
-    CHARACTER                   :: UnitT*10,TextTime*17
+    INTEGER                     :: iCount,indxLocation,indxCol,indx,iNSWShed,I
+    CHARACTER                   :: UnitT*10,TextTime*17,cVersionFull*25
     CHARACTER(LEN=15),PARAMETER :: FParts(NColumns) = ['PRECIP'         , &
                                                        'RUNOFF'         , & 
                                                        'RZ_BEGIN_STOR'  , & 
@@ -450,7 +453,8 @@ CONTAINS
     END IF
 
     !Initialize
-    NSWShed = AppSWShed%NSWShed
+    iNSWShed     = AppSWShed%iNSWShed
+    cVersionFull = '4.0-' // GetVersion()
                                                       
     !Increment the initial simulation time to represent the data begin date for budget binary output files  
     TimeStepLocal = TimeStep
@@ -471,8 +475,8 @@ CONTAINS
     Header%TimeStep   = TimeStepLocal
 
     !Areas
-    ALLOCATE (Header%Areas(NSWShed))
-    Header%NAreas = NSWShed
+    ALLOCATE (Header%Areas(iNSWShed))
+    Header%NAreas = iNSWShed
     Header%Areas  = AppSWShed%SmallWatersheds%Area
 
     !Data for ASCII output
@@ -480,7 +484,7 @@ CONTAINS
       pASCIIOutput%TitleLen = TitleLen
       pASCIIOutput%NTitles  = NTitles
       ALLOCATE(pASCIIOutput%cTitles(NTitles)  ,  pASCIIOutput%lTitlePersist(NTitles))
-        pASCIIOutput%cTitles(1) = ArrangeText('IWFM (v'//TRIM(cIWFMVersion)//')' , pASCIIOutput%TitleLen)
+        pASCIIOutput%cTitles(1) = ArrangeText('IWFM SMALL WATERSHED PACKAGE (v'//TRIM(cVersionFull)//')' , pASCIIOutput%TitleLen)
         pASCIIOutput%cTitles(2) = ArrangeText('SMALL WATERSHED FLOW COMPONENTS IN '//f_cVolumeUnitMarker//' FOR '//f_cLocationNameMarker , pASCIIOutput%TitleLen)
         pASCIIOutput%cTitles(3) = ArrangeText('WATERSHED AREA: '//f_cAreaMarker//' '//f_cAreaUnitMarker , pASCIIOutput%TitleLen)
         pASCIIOutput%cTitles(4) = REPEAT('-',pASCIIOutput%TitleLen)
@@ -493,9 +497,9 @@ CONTAINS
     END ASSOCIATE 
     
     !Location names
-    Header%NLocations = NSWShed
-    ALLOCATE (Header%cLocationNames(NSWShed))
-    DO indx=1,NSWShed
+    Header%NLocations = iNSWShed
+    ALLOCATE (Header%cLocationNames(iNSWShed))
+    DO indx=1,iNSWShed
         Header%cLocationNames(indx) = 'WATERSHED '//TRIM(IntToText(iSWShedIDs(indx))) 
     END DO
     
@@ -544,9 +548,9 @@ CONTAINS
 
     !Data for DSS output  
     ASSOCIATE (pDSSOutput => Header%DSSOutput)
-      ALLOCATE (pDSSOutput%cPathNames(NColumns*NSWShed) , pDSSOutput%iDataTypes(1))
+      ALLOCATE (pDSSOutput%cPathNames(NColumns*iNSWShed) , pDSSOutput%iDataTypes(1))
       iCount = 1
-      DO indxLocation=1,NSWShed
+      DO indxLocation=1,iNSWShed
         DO indxCol=1,NColumns
           pDSSOutput%cPathNames(iCount) = '/IWFM_SWSHED_BUD/'                                              //  &  !A part
                                           'WSHED_'//TRIM(IntToText(iSWShedIDs(indxLocation)))//'/'         //  &  !B part
@@ -590,23 +594,21 @@ CONTAINS
     CLASS(AppSmallWatershedType) :: AppSWShed
     
     !Local variables
-    INTEGER              :: ErrorCode
-    TYPE(SolverDataType) :: DummySolverData
+    INTEGER                     :: iErrorCode
+    TYPE(AppSmallWatershedType) :: DummyAppSWShed
     
     !Deallocate arrays
-    DEALLOCATE (AppSWShed%SmallWatersheds ,STAT=ErrorCode)
+    DEALLOCATE (AppSWShed%SmallWatersheds ,STAT=iErrorCode)
     
     !Close files
     IF (AppSWShed%lBudRawFile_Defined) CALL AppSWShed%BudRawFile%Kill()
     IF (AppSWShed%FinResultsFile%iGetFileType() .NE. f_iUNKNOWN) CALL AppSWShed%FinResultsFile%Kill()
     
     !Set the attributes to their defaults
-    AppSWShed%VarTimeUnit         = ''
-    AppSWShed%NSWShed             = 0
-    APpSWShed%lDefined            = .FALSE.
-    AppSWShed%RZSolverData        = DummySolverData
-    AppSWShed%lBudRawFile_Defined = .FALSE.
-    
+    SELECT TYPE(AppSWShed)
+        TYPE IS (AppSmallWatershedType)
+            AppSWShed = DummyAppSWShed
+    END SELECT 
     
   END SUBROUTINE Kill
   
@@ -726,12 +728,8 @@ CONTAINS
     CHARACTER(LEN=*),ALLOCATABLE,INTENT(OUT) :: cFlowNames(:)
     INTEGER,INTENT(OUT)                      :: iStat
     
-    !Local variables
-    INTEGER :: ID
-    
     IF (AppSWShed%lBudRawFile_Defined) THEN
-        ID = AppSWShed%SmallWatersheds(iSWShedIndex)%ID
-        CALL GetBudget_MonthlyFlows_GivenFile(AppSWShed%BudRawFile,iBudCompType,ID,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)  
+        CALL GetBudget_MonthlyFlows_GivenFile(AppSWShed%BudRawFile,iBudCompType,iSWShedIndex,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)  
     ELSE
         iStat = 0
         ALLOCATE (rFlows(0,0) , cFlowNames(0))
@@ -744,9 +742,9 @@ CONTAINS
   ! --- GET MONTHLY BUDGET FLOWS FROM A DEFINED BUDGET FILE FOR A SPECIFED WATERSHED
   ! --- (Assumes cBeginDate and cEndDate are adjusted properly)
   ! -------------------------------------------------------------
-  SUBROUTINE GetBudget_MonthlyFlows_GivenFile(Budget,iBudCompType,iSWShedID,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
+  SUBROUTINE GetBudget_MonthlyFlows_GivenFile(Budget,iBudCompType,iSWShedIndex,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
     TYPE(BudgetType),INTENT(IN)              :: Budget      !Assumes Budget file is already open
-    INTEGER,INTENT(IN)                       :: iBudCompType,iSWShedID
+    INTEGER,INTENT(IN)                       :: iBudCompType,iSWShedIndex
     CHARACTER(LEN=*),INTENT(IN)              :: cBeginDate,cEndDate
     REAL(8),INTENT(IN)                       :: rFactVL
     REAL(8),ALLOCATABLE,INTENT(OUT)          :: rFlows(:,:)  !In (column,month) format
@@ -771,7 +769,7 @@ CONTAINS
     END IF
     
     !Read data
-    CALL Budget%ReadData(iSWShedID,iReadCols,'1MON',cBeginDate,cEndDate,0d0,0d0,0d0,1d0,1d0,rFactVL,iDimActual,rValues,iStat)
+    CALL Budget%ReadData(iSWShedIndex,iReadCols,'1MON',cBeginDate,cEndDate,0d0,0d0,0d0,1d0,1d0,rFactVL,iDimActual,rValues,iStat)
     IF (iStat .NE. 0) RETURN
     
     !Store values in return argument
@@ -799,7 +797,8 @@ CONTAINS
         cFlowNames(2)  = 'Recharge'       
         cFlowNames(3)  = 'Base Flow'       
         cFlowNames(4)  = 'GW Return Flow'       
-    END IF    
+    END IF 
+    
   END SUBROUTINE GetBudget_MonthlyFlows_GivenFile
 
   
@@ -815,13 +814,12 @@ CONTAINS
     INTEGER,INTENT(OUT)                     :: iDataTypes(:),inActualOutput,iStat
     
     !Local variables
-    INTEGER :: indx,ID
+    INTEGER :: indx
     
     IF (AppSWShed%lBudRawFile_Defined) THEN
         !Read data
-        ID = AppSWShed%Smallwatersheds(iSWShedIndex)%ID
         DO indx=1,SIZE(iCols)
-            CALL AppSWShed%BudRawFile%ReadData(ID,iCols(indx),cInterval,cBeginDate,cEndDate,1d0,0d0,0d0,rFactLT,rFactAR,rFactVL,iDataTypes(indx),inActualOutput,rOutputDates,rOutputValues(:,indx),iStat)
+            CALL AppSWShed%BudRawFile%ReadData(iSWShedIndex,iCols(indx),cInterval,cBeginDate,cEndDate,1d0,0d0,0d0,rFactLT,rFactAR,rFactVL,iDataTypes(indx),inActualOutput,rOutputDates,rOutputValues(:,indx),iStat)
         END DO
     ELSE
         inActualOutput = 0
@@ -836,11 +834,11 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET NUMBER OF SMALL WATERSHEDS
   ! -------------------------------------------------------------
-  PURE FUNCTION GetNSmallWatersheds(AppSWShed) RESULT(NSWShed)
+  PURE FUNCTION GetNSmallWatersheds(AppSWShed) RESULT(iNSWShed)
     CLASS(AppSmallWatershedType),INTENT(IN) :: AppSWShed
-    INTEGER                                 :: NSWShed
+    INTEGER                                 :: iNSWShed
     
-    NSWShed = AppSWShed%NSWShed
+    iNSWShed = AppSWShed%iNSWShed
 
   END FUNCTION GetNSmallWatersheds
   
@@ -871,11 +869,24 @@ CONTAINS
   
     
   ! -------------------------------------------------------------
+  ! --- GET GW RETURN FLOW FOR ONE SMALL WATERSHED 
+  ! -------------------------------------------------------------
+  PURE FUNCTION GetGWReturnFlow_ForOneSmallWatershed(AppSWShed,iSWShed) RESULT(rGWReturnFlow)
+    CLASS(AppSmallWatershedType),INTENT(IN) :: AppSWShed
+    INTEGER,INTENT(IN)                      :: iSWShed
+    REAL(8)                                 :: rGWReturnFlow
+    
+    rGWReturnFlow = AppSWShed%SmallWatersheds(iSWShed)%ExcessGWRunoff
+    
+  END FUNCTION GetGWReturnFlow_ForOneSmallWatershed
+  
+    
+  ! -------------------------------------------------------------
   ! --- GET PERCOLATION FOR ALL SMALL WATERSHEDS (PERCOLATION WITHIN THE SMALL WATERSHED)
   ! -------------------------------------------------------------
   SUBROUTINE GetRootZonePerc_ForAllSmallWatersheds(AppSWShed,Perc)
     CLASS(AppSmallWatershedType),INTENT(IN) :: AppSWShed
-    REAL(8),INTENT(OUT)                     :: Perc(AppSWShed%NSWShed)
+    REAL(8),INTENT(OUT)                     :: Perc(AppSWShed%iNSWShed)
     
     Perc = AppSWShed%SmallWatersheds%RootZonePerc
     
@@ -887,16 +898,28 @@ CONTAINS
   ! -------------------------------------------------------------
   SUBROUTINE GetPercFlow_ForAllSmallWatersheds(AppSWShed,PercFlows)
     CLASS(AppSmallWatershedType),INTENT(IN) :: AppSWShed
-    REAL(8),INTENT(OUT)                     :: PercFlows(AppSWShed%NSWShed)
+    REAL(8),INTENT(OUT)                     :: PercFlows(AppSWShed%iNSWShed)
     
     !Local variables
     INTEGER :: indxSWShed
     
-    DO indxSWShed=1,AppSWShed%NSWShed
+    DO indxSWShed=1,AppSWShed%iNSWShed
         PercFlows(indxSWShed) = SUM(AppSWShed%SmallWatersheds(indxSWShed)%PercFlowNodes%Flow)
     END DO
     
   END SUBROUTINE GetPercFlow_ForAllSmallWatersheds
+  
+    
+  ! -------------------------------------------------------------
+  ! --- GET GW RETURN FLOW FOR ALL SMALL WATERSHEDS 
+  ! -------------------------------------------------------------
+  SUBROUTINE GetGWReturnFlow_ForAllSmallWatersheds(AppSWShed,rGWReturnFlows)
+    CLASS(AppSmallWatershedType),INTENT(IN) :: AppSWShed
+    REAL(8),INTENT(OUT)                     :: rGWReturnFlows(AppSWShed%iNSWShed)
+    
+    rGWReturnFlows = AppSWShed%SmallWatersheds%ExcessGWRunoff
+    
+  END SUBROUTINE GetGWReturnFlow_ForAllSmallWatersheds
   
     
   ! -------------------------------------------------------------
@@ -916,7 +939,7 @@ CONTAINS
     RInflows = 0.0
     
     !Return if small watersheds are not modeled
-    IF (AppSWShed%NSWShed .EQ. 0) RETURN
+    IF (.NOT. AppSWShed%lDefined) RETURN
     
     ASSOCIATE (pBaseFlowNodeList => AppSWShed%BaseFlowNodeList , &
                pPercFlowNodeList => AppSWShed%PercFlowNodeList , &
@@ -929,7 +952,7 @@ CONTAINS
                     iElem      = pAppNodes(iNode)%SurroundingElement(indxElem)
                     indxVertex = LocateInList(iNode,AppGrid%Vertex(:,iElem))
                     iSubregion = AppGrid%AppElement(iElem)%Subregion
-                    CALL AppSWShed%GetBoundaryFlowAtElementNodeLayer(SWShedBaseFlowBCID,iElem,indxVertex,indxLayer,AppGrid,rFlow,lDummy)
+                    CALL AppSWShed%GetBoundaryFlowAtElementNodeLayer(f_iSWShedBaseFlowBCID,iElem,indxVertex,indxLayer,AppGrid,rFlow,lDummy)
                     RInflows(iSubregion) = RInflows(iSubregion) + rFlow
                 END DO
             END DO
@@ -941,7 +964,7 @@ CONTAINS
                     iElem      = pAppNodes(iNode)%SurroundingElement(indxElem)
                     indxVertex = LocateInList(iNode,AppGrid%Vertex(:,iElem))
                     iSubregion = AppGrid%AppElement(iElem)%Subregion
-                    CALL AppSWShed%GetBoundaryFlowAtElementNodeLayer(SWShedPercFlowBCID,iElem,indxVertex,indxLayer,AppGrid,rFlow,lDummy)
+                    CALL AppSWShed%GetBoundaryFlowAtElementNodeLayer(f_iSWShedPercFlowBCID,iElem,indxVertex,indxLayer,AppGrid,rFlow,lDummy)
                     IF (rFlow .EQ. 0.0) EXIT
                     RInflows(iSubregion) = RInflows(iSubregion) + rFlow
                 END DO
@@ -968,7 +991,7 @@ CONTAINS
     
     !Process
     ASSOCIATE (pSWSheds => AppSWShed%SmallWatersheds)
-        DO indxSWShed=1,AppSWShed%NSWShed
+        DO indxSWShed=1,AppSWShed%iNSWShed
             indx = pSWSheds(indxSWShed)%StrmNode
             IF (indx .EQ. 0) CYCLE
             QTRIB(indx) = QTRIB(indx) + pSWSheds(indxSWShed)%NetStreamInflow
@@ -993,11 +1016,11 @@ CONTAINS
     DEALLOCATE (iBCNodes , STAT=ErrorCode)
     
     SELECT CASE (iBCType)
-        CASE (SWShedBaseFlowBCID)
+        CASE (f_iSWShedBaseFlowBCID)
             ALLOCATE (iBCNodes(AppSWShed%BaseFlowNodeList(iLayer)%NNodes))
             iBCNodes = AppSWShed%BaseFlowNodeList(iLayer)%Nodes
             
-        CASE (SWShedPercFlowBCID)
+        CASE (f_iSWShedPercFlowBCID)
             ALLOCATE (iBCNodes(AppSWShed%PercFlowNodeList(iLayer)%NNodes))
             iBCNodes = AppSWShed%PercFlowNodeList(iLayer)%Nodes
     END SELECT
@@ -1037,7 +1060,7 @@ CONTAINS
         iVertex = LocateInList(iNode,Vertex)
         
         !Base flow
-        CALL GetBoundaryFlowAtElementNodeLayer(AppSWShed,SWShedBaseFlowBCID,iElem,iVertex,iLayer,AppGrid,rFlowTemp,lDummy)
+        CALL GetBoundaryFlowAtElementNodeLayer(AppSWShed,f_iSWShedBaseFlowBCID,iElem,iVertex,iLayer,AppGrid,rFlowTemp,lDummy)
         rFlow = rFlow - rFlowTemp
         
         !Percolation
@@ -1083,7 +1106,7 @@ CONTAINS
             iVertex = LocateInList(iNode,Vertex)
         
             !Base flow
-            CALL GetBoundaryFlowAtElementNodeLayer(AppSWShed,SWShedBaseFlowBCID,iElem,iVertex,iLayers(indxFace),AppGrid,rFlowTemp,lDummy)
+            CALL GetBoundaryFlowAtElementNodeLayer(AppSWShed,f_iSWShedBaseFlowBCID,iElem,iVertex,iLayers(indxFace),AppGrid,rFlowTemp,lDummy)
             rFlows(indxFace) = rFlows(indxFace) - rFlowTemp
         
             !Percolation
@@ -1117,7 +1140,7 @@ CONTAINS
     lAddToRHS = .TRUE.
 
     !If it is percolation from small watersheds it is always distributed among elements
-    IF (iBCType .EQ. SWShedPercFlowBCID) THEN
+    IF (iBCType .EQ. f_iSWShedPercFlowBCID) THEN
       rFlow = rFlow * AppGrid%AppElement(iElem)%VertexArea(indxVertex) / AppGrid%AppNode(iNode)%Area
       RETURN
     END IF
@@ -1173,8 +1196,8 @@ CONTAINS
         SELECT CASE (iBCType)
             
           !Small watershed base flow
-          CASE (SWShedBaseFlowBCID)
-            DO indx=1,AppSWShed%NSWShed
+          CASE (f_iSWShedBaseFlowBCID)
+            DO indx=1,AppSWShed%iNSWShed
                 DO indxNode=1,pSWSheds(indx)%NBaseFlowNodes
                     IF (pSWSheds(indx)%BaseFlowNodes(indxNode)%Node .EQ. Node) THEN
                         IF (pSWSheds(indx)%BaseFlowNodes(indxNode)%Layer .EQ. Layer)   &
@@ -1184,8 +1207,8 @@ CONTAINS
             END DO
             
           !Small watershed percolation
-          CASE (SWShedPercFlowBCID)
-            DO indx=1,AppSWShed%NSWShed
+          CASE (f_iSWShedPercFlowBCID)
+            DO indx=1,AppSWShed%iNSWShed
                 DO indxNode=1,pSWSheds(indx)%NPercFlowNodes
                     IF (pSWSheds(indx)%PercFlowNodes(indxNode)%Node .EQ. Node) THEN
                       IF (pSWSheds(indx)%PercFlowNodes(indxNode)%Layer .EQ. Layer)   &
@@ -1199,6 +1222,47 @@ CONTAINS
     
   END FUNCTION GetNetBCFlowWithBCType
 
+  
+  ! -------------------------------------------------------------
+  ! --- GET NET FLOW WITH A SPECIFIED B.C. TYPE FROM A SMALL WATERSHED
+  ! -------------------------------------------------------------
+  FUNCTION GetNetBCFlowWithBCType_FromSmallWatershed(AppSWShed,iBCType,iSWShed) RESULT(rFlow)
+    CLASS(AppSmallWatershedType),INTENT(IN) :: AppSWShed
+    INTEGER,INTENT(IN)                      :: iBCType,iSWShed
+    REAL(8)                                 :: rFlow
+    
+    !Initialize
+    rFlow = 0.0
+    
+    ASSOCIATE (pSWShed => AppSWSHed%SmallWatersheds(iSWShed))       
+        SELECT CASE (iBCType)
+            !Small watershed base flow
+            CASE (f_iSWShedBaseFlowBCID)
+                rFlow = SUM(pSWShed%BaseFlowNodes%Flow)
+              
+            !Small watershed percolation
+            CASE (f_iSWShedPercFlowBCID)
+                rFlow = SUM(pSWShed%PercFlowNodes%Flow)
+        END SELECT
+    END ASSOCIATE
+    
+  END FUNCTION GetNetBCFlowWithBCType_FromSmallWatershed
+
+  
+  ! -------------------------------------------------------------
+  ! --- GET VERSION NUMBER
+  ! -------------------------------------------------------------
+  FUNCTION GetVersion() RESULT(cVrs)
+    CHARACTER(:),ALLOCATABLE :: cVrs
+    
+    !Local variables
+    TYPE(VersionType) :: MyVersion
+    
+    MyVersion = MyVersion%New(iLenVersion,cVersion,cRevision)
+    cVrs      = TRIM(MyVersion%GetVersion()) 
+    
+  END FUNCTION GetVersion
+  
   
   
   
@@ -1257,7 +1321,7 @@ CONTAINS
     !Local variables
     CHARACTER(LEN=ModNameLen+18) :: ThisProcedure = ModName // 'ReadGeospatialData'
     REAL(8)                      :: FactArea,FactQ,DummyArray(6),QSUM
-    CHARACTER                    :: ALine*500
+    CHARACTER                    :: cALine*500
     INTEGER                      :: indxSWShed,NGWNodes,ErrorCode,iCount,NNode,indx,iBaseFlowNode,iBaseFlowLayer,  &
                                     iPercNode,iPercLayer,iSWShedID,iGWNodeIDs(AppGrid%NNodes),iStrmNodeID
     REAL(8),ALLOCATABLE          :: QMaxPerc(:),Dummy2DArray(:,:)
@@ -1269,12 +1333,12 @@ CONTAINS
     !Conversion factors
     CALL InFile%ReadData(FactArea,iStat)  ;  IF (iStat .EQ. -1) RETURN
     CALL InFile%ReadData(FactQ,iStat)     ;  IF (iStat .EQ. -1) RETURN
-    CALL InFile%ReadData(ALine,iStat)     ;  IF (iStat .EQ. -1) RETURN  ;  Aline = StripTextUntilCharacter(ALine,'/')  ;  CALL CleanSpecialCharacters(ALine)
-    AppSWShed%VarTimeUnit = TRIM(ADJUSTL(ALine))
+    CALL InFile%ReadData(cALine,iStat)    ;  IF (iStat .EQ. -1) RETURN  ;  cALine = StripTextUntilCharacter(cALine,'/')  ;  CALL CleanSpecialCharacters(cALine)
+    AppSWShed%cVarTimeUnit = TRIM(ADJUSTL(cALine))
     
     !Make sure time unit is recognized
     IF (TimeStep%TrackTime) THEN
-        IF (IsTimeIntervalValid(AppSWShed%VarTimeUnit) .EQ. 0) THEN
+        IF (IsTimeIntervalValid(AppSWShed%cVarTimeUnit) .EQ. 0) THEN
             CALL SetLastMessage('Time unit for maximum recharge rate for small watersheds is not valid!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
@@ -1283,7 +1347,7 @@ CONTAINS
     
     !Read geospatial parameters
     ASSOCIATE (pSWSheds => AppSWShed%SmallWatersheds)        
-        DO indxSWShed=1,AppSWShed%NSWShed
+        DO indxSWShed=1,AppSWShed%iNSWShed
             CALL InFile%ReadData(DummyArray,iStat)  ;  IF (iStat .EQ. -1) RETURN
             
             iSWShedID                 = INT(DummyArray(1))
@@ -1412,8 +1476,8 @@ CONTAINS
     CHARACTER(LEN=ModNameLen+16) :: ThisProcedure = ModName // 'ReadRootZoneData'
     INTEGER                      :: indxSWShed,iSWShedID,iSWShed
     REAL(8)                      :: FactLength,FactCN,FactK,DummyArray(12)
-    CHARACTER                    :: ALine*500,TimeUnitK*6
-    LOGICAL                      :: lProcessed(AppSWShed%NSWShed)
+    CHARACTER                    :: cALine*500,cTimeUnitK*6
+    LOGICAL                      :: lProcessed(AppSWShed%iNSWShed)
     
     !Initialize
     lProcessed = .FALSE.
@@ -1423,25 +1487,28 @@ CONTAINS
     CALL InFile%ReadData(AppSWShed%RZSolverData%IterMax,iStat)  ;  IF (iStat .EQ. -1) RETURN
     CALL InFile%ReadData(FactLength,iStat)  ;  IF (iStat .EQ. -1) RETURN
     CALL InFile%ReadData(FactCN,iStat)  ;  IF (iStat .EQ. -1) RETURN
-    CALL InFile%ReadData(FactK,iStat)  ;  IF (iStat .EQ. -1) RETURN
-    CALL InFile%ReadData(ALine,iStat)  ;  IF (iStat .EQ. -1) RETURN  ;  Aline = StripTextUntilCharacter(ALine,'/')  ;  CALL CleanSpecialCharacters(ALine)
-    TimeUnitK = TRIM(ADJUSTL(ALine))
+    CALL InFile%ReadData(FactK,iStat)   ;  IF (iStat .EQ. -1) RETURN
+    CALL InFile%ReadData(cALine,iStat)  ;  IF (iStat .EQ. -1) RETURN  ;  cALine = StripTextUntilCharacter(cALine,'/')  ;  CALL CleanSpecialCharacters(cALine)
+    cTimeUnitK = TRIM(ADJUSTL(cALine))
     
     !Make sure time unit is recognized
     IF (TimeStep%TrackTime) THEN
-        IF (IsTimeIntervalValid(TimeUnitK) .EQ. 0) THEN
+        IF (IsTimeIntervalValid(cTimeUnitK) .EQ. 0) THEN
             CALL SetLastMessage('Time unit for small watershed root zone hydraulic conductivity is not valid!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
     END IF
     
+    !If time unit is not yet set, set it
+    IF (AppSWShed%cVarTimeUnit .EQ. '') AppSWShed%cVarTimeUnit = cTimeUnitK
+    
     !Convert time unit of soil hydraulic conductivity to the time unit stored in AppSWShed%VarTimeUnit
-    FactK = FactK * TimeIntervalConversion(AppSWShed%VarTimeUnit,TimeUnitK) 
+    FactK = FactK * TimeIntervalConversion(AppSWShed%cVarTimeUnit,cTimeUnitK) 
     
     !Read and process root zone parameters
     ASSOCIATE (pSWSheds => AppSWShed%SmallWatersheds)
-        DO indxSWShed=1,AppSWShed%NSWShed
+        DO indxSWShed=1,AppSWShed%iNSWShed
             CALL InFile%ReadData(DummyArray,iStat)  ;  IF (iStat .EQ. -1) RETURN
             iSWShedID = INT(DummyArray(1))
             
@@ -1513,48 +1580,51 @@ CONTAINS
   ! --- READ AQUIFER DATA
   ! --- * Note: Assumes the VarTimeUnit attribute is set previously
   ! -------------------------------------------------------------
-  SUBROUTINE ReadAquiferData(InFile,TimeStep,iSWShedIDs,AppSWShed,iStat)
+  SUBROUTINE ReadAquiferData(AppSWShed,InFile,TimeStep,iSWShedIDs,iStat)
+    CLASS(AppSmallWaterShedType)  :: AppSWShed
     TYPE(GenericFileType)         :: InFile
     TYPE(TimeStepType),INTENT(IN) :: TimeStep
     INTEGER,INTENT(IN)            :: iSWShedIDs(:)
-    TYPE(AppSmallWaterShedType)   :: AppSWShed
     INTEGER,INTENT(OUT)           :: iStat
     
     !Local variables
     CHARACTER(LEN=ModNameLen+15) :: ThisProcedure = ModName // 'ReadAquiferData'
     INTEGER                      :: indxSWShed,iSWShedID,iSWShed
-    REAL(8)                      :: FactGW,FactT,DummyArray(5)
-    CHARACTER                    :: ALine*1200,TimeUnitT*6
-    LOGICAL                      :: lProcessed(AppSWShed%NSWShed)
+    REAL(8)                      :: rFactGW,rFactT,rDummyArray(5)
+    CHARACTER                    :: cALine*1200,cTimeUnitT*6
+    LOGICAL                      :: lProcessed(AppSWShed%iNSWShed)
     
     !Initialize
     lProcessed = .FALSE.
     
     !Read conversion factors
-    CALL InFile%ReadData(FactGW,iStat)  ;  IF (iStat .EQ. -1) RETURN
-    CALL InFile%ReadData(FactT,iStat)  ;  IF (iStat .EQ. -1) RETURN
-    CALL InFile%ReadData(ALine,iStat)  ;  IF (iStat .EQ. -1) RETURN  ;  Aline = StripTextUntilCharacter(ALine,'/')  ;  CALL CleanSpecialCharacters(ALine)
-    TimeUnitT = TRIM(ADJUSTL(ALine))
+    CALL InFile%ReadData(rFactGW,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    CALL InFile%ReadData(rFactT,iStat)   ;  IF (iStat .EQ. -1) RETURN
+    CALL InFile%ReadData(cALine,iStat)   ;  IF (iStat .EQ. -1) RETURN  ;  cALine = StripTextUntilCharacter(cALine,'/')  ;  CALL CleanSpecialCharacters(cALine)
+    cTimeUnitT = TRIM(ADJUSTL(cALine))
     
     !Make sure time unit is recognized
     IF (TimeStep%TrackTime) THEN
-        IF (IsTimeIntervalValid(TimeUnitT) .EQ. 0) THEN
+        IF (IsTimeIntervalValid(cTimeUnitT) .EQ. 0) THEN
             CALL SetLastMessage('Time unit for small watershed recession coefficients is not valid!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
     END IF
     
+    !If time unit is not yet set, set it 
+    IF (AppSWShed%cVarTimeUnit .EQ. '') AppSWShed%cVarTimeUnit = cTimeUnitT
+    
     !Convert time unit of recession coefficients to the time unit stored in AppSWShed%VarTimeUnit
-    FactT = FactT * TimeIntervalConversion(AppSWShed%VarTimeUnit,TimeUnitT)
+    rFactT = rFactT * TimeIntervalConversion(AppSWShed%cVarTimeUnit,cTimeUnitT)
     
     !Read and process data
     ASSOCIATE (pSWSheds => AppSWShed%SmallWatersheds)
-        DO indxSWShed=1,AppSWShed%NSWShed
-            CALL InFile%ReadData(DummyArray,iStat)  ;  IF (iStat .EQ. -1) RETURN
+        DO indxSWShed=1,AppSWShed%iNSWShed
+            CALL InFile%ReadData(rDummyArray,iStat)  ;  IF (iStat .EQ. -1) RETURN
 
             !Make sure small watershed ID is legit and has not beed processed before
-            iSWShedID = INT(DummyArray(1))
+            iSWShedID = INT(rDummyArray(1))
             CALL ConvertID_To_Index(iSWShedID,iSWShedIDs,iSWShed)
             IF (iSWShed .EQ. 0) THEN
                 CALL SetLastMessage('Small watershed ID '//TRIM(IntToText(iSWShedID))//' listed for aquifer parameter definition is not in the model!',f_iFatal,ThisProcedure)
@@ -1568,10 +1638,10 @@ CONTAINS
             END IF
             lProcessed(iSWShed) = .TRUE.
        
-            pSWSheds(iSWShed)%GWThreshold      = DummyArray(2) * FactGW
-            pSWSheds(iSWShed)%MaxGWStor        = DummyArray(3) * FactGW
-            pSWSheds(iSWShed)%SurfaceFlowCoeff = DummyArray(4) * FactT
-            pSWSheds(iSWShed)%BaseFlowCoeff    = DummyArray(5) * FactT
+            pSWSheds(iSWShed)%GWThreshold      = rDummyArray(2) * rFactGW
+            pSWSheds(iSWShed)%MaxGWStor        = rDummyArray(3) * rFactGW
+            pSWSheds(iSWShed)%SurfaceFlowCoeff = rDummyArray(4) * rFactT
+            pSWSheds(iSWShed)%BaseFlowCoeff    = rDummyArray(5) * rFactT
 
         END DO
     END ASSOCIATE
@@ -1582,31 +1652,41 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- READ INITIAL CONDITIONS
   ! -------------------------------------------------------------
-  SUBROUTINE ReadInitialConditions(InFile,iSWShedIDs,AppSWShed,iStat)
-    TYPE(GenericFileType)       :: InFile
-    INTEGER,INTENT(IN)          :: iSWShedIDs(:)
-    TYPE(AppSmallWaterShedType) :: AppSWShed
-    INTEGER,INTENT(OUT)         :: iStat
+  SUBROUTINE ReadInitialConditions(AppSWShed,InFile,iSWShedIDs,lReadRootZoneIC,iStat)
+    CLASS(AppSmallWaterShedType) :: AppSWShed
+    TYPE(GenericFileType)        :: InFile
+    INTEGER,INTENT(IN)           :: iSWShedIDs(:)
+    LOGICAL,INTENT(IN)           :: lReadRootZoneIC
+    INTEGER,INTENT(OUT)          :: iStat
     
     !Local variables
     CHARACTER(LEN=ModNameLen+21) :: ThisProcedure = ModName // 'ReadInitialConditions'
-    REAL(8)                      :: Factor,DummyArray(3)
+    REAL(8)                      :: rFactor
+    REAL(8),TARGET               :: rDummyArray3(3),rDummyArray2(2)
     INTEGER                      :: indxSWShed,iSWShedID,iSWShed
-    LOGICAL                      :: lProcessed(AppSWShed%NSWShed)
+    LOGICAL                      :: lProcessed(AppSWShed%iNSWShed)
+    REAL(8),POINTER              :: prDummyArray(:)
     
     !Initialize
     lProcessed = .FALSE.
     
     !Conversion factor
-    CALL InFile%ReadData(Factor,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    CALL InFile%ReadData(rFactor,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    
+    !Are we reading IC for root zone soil?
+    IF (lReadRootZoneIC) THEN
+        prDummyArray => rDummyArray3
+    ELSE
+        prDummyArray => rDummyArray2
+    END IF        
     
     !Read and process data
     ASSOCIATE (pSWSheds => AppSWShed%SmallWatersheds)
-        DO indxSWShed=1,AppSWShed%NSWShed           
-            CALL InFile%ReadData(DummyArray,iStat)  ;  IF (iStat .EQ. -1) RETURN
+        DO indxSWShed=1,AppSWShed%iNSWShed           
+            CALL InFile%ReadData(prDummyArray,iStat)  ;  IF (iStat .EQ. -1) RETURN
         
             !Make sure small watershed ID is legit and has not yet been processed
-            iSWShedID = INT(DummyArray(1))
+            iSWShedID = INT(prDummyArray(1))
             CALL ConvertID_To_Index(iSWShedID,iSWSHedIDs,iSWShed)
             IF (iSWShed .EQ. 0) THEN
                 CALL SetLastMessage('Small watershed ID '//TRIM(IntToText(iSWShedID))//' listed for initial conditions is not in the model!',f_iFatal,ThisProcedure)
@@ -1621,15 +1701,17 @@ CONTAINS
             lProcessed(iSWShed) = .TRUE.
             
             !Make sure that initail moistuire content is less than or equal to 1.0
-            IF (DummyArray(2) .GT. 1.0   .OR.  DummyArray(2) .LT. 0.0) THEN
-                CALL SetLastMessage('The initail soil moisture content at small watershed ID '//TRIM(IntToText(iSWShedID))// ' must be between 0.0 and 1.0!',f_iFatal,ThisProcedure)
-                iStat = -1
-                RETURN
-            END IF
-            
-            pSWSheds(iSWShed)%SoilMoist = DummyArray(2) * pSWSheds(iSWShed)%RootDepth   ;   pSWSheds(iSWShed)%SoilMoist_P = pSWSheds(iSWShed)%SoilMoist
-            pSWSheds(iSWShed)%GWStor    = DummyArray(3) * Factor                        ;   pSWSheds(iSWShed)%GWStor_P    = pSWSheds(iSWShed)%GWStor
-           
+            IF (lReadRootZoneIC) THEN
+                IF (prDummyArray(2) .GT. 1.0   .OR.  prDummyArray(2) .LT. 0.0) THEN
+                    CALL SetLastMessage('The initial soil moisture content at small watershed ID '//TRIM(IntToText(iSWShedID))// ' must be between 0.0 and 1.0!',f_iFatal,ThisProcedure)
+                    iStat = -1
+                    RETURN
+                END IF
+                pSWSheds(iSWShed)%SoilMoist = prDummyArray(2) * pSWSheds(iSWShed)%RootDepth   ;   pSWSheds(iSWShed)%SoilMoist_P = pSWSheds(iSWShed)%SoilMoist
+                pSWSheds(iSWShed)%GWStor    = prDummyArray(3) * rFactor                       ;   pSWSheds(iSWShed)%GWStor_P    = pSWSheds(iSWShed)%GWStor
+            ELSE
+                pSWSheds(iSWShed)%GWStor    = prDummyArray(2) * rFactor                       ;   pSWSheds(iSWShed)%GWStor_P    = pSWSheds(iSWShed)%GWStor
+            END IF          
         END DO
     END ASSOCIATE
     
@@ -1672,7 +1754,7 @@ CONTAINS
     LOGICAL,INTENT(IN)            :: lEndOfSimulation
     
     !return if no small watersheds are modeled
-    IF (AppSWShed%NSWShed .EQ. 0) RETURN
+    IF (.NOT. AppSWShed%lDefined) RETURN
     
     !Raw budget output
     IF (AppSWShed%lBudRawFile_Defined) CALL PrintBudRawFile(AppSWShed)
@@ -1693,11 +1775,11 @@ CONTAINS
     TYPE(AppSmallWatershedType) :: AppSWShed
     
     !Local variables
-    INTEGER                              :: indxSWShed
-    REAL(8)                              :: DummyArray(f_iNBudgetCols,AppSWShed%NSWShed)
-    REAL(8),DIMENSION(AppSWShed%NSWShed) :: RZBeginStor,RZEndStor,RZError,            &
-                                            GWBeginStor,GWEndStor,GWError,BaseFlow,   &
-                                            TotalSurfaceFlow,PercToGW,TotalGWInflow
+    INTEGER                               :: indxSWShed
+    REAL(8)                               :: DummyArray(f_iNBudgetCols,AppSWShed%iNSWShed)
+    REAL(8),DIMENSION(AppSWShed%iNSWShed) :: RZBeginStor,RZEndStor,RZError,            &
+                                             GWBeginStor,GWEndStor,GWError,BaseFlow,   &
+                                             TotalSurfaceFlow,PercToGW,TotalGWInflow
     
     !Compile
     ASSOCIATE (pSWSheds => AppSWShed%SmallWatersheds)
@@ -1711,7 +1793,7 @@ CONTAINS
         GWEndStor = pSWSheds%GWStor * pSWSheds%Area
         
         !Groundwater baseflow and percolation to groundwater
-        DO indxSWShed=1,AppSWShed%NSWShed
+        DO indxSWShed=1,AppSWShed%iNSWShed
             BaseFlow(indxSWShed) = SUM(pSWSheds(indxSWShed)%BaseFlowNodes%Flow)
             PercToGW(indxSWShed) = SUM(pSWSheds(indxSWShed)%PercFlowNodes%Flow)
         END DO
@@ -1835,7 +1917,7 @@ CONTAINS
     lSimulated = .FALSE.
     
     !Check
-    DO indxSWShed=1,AppSWShed%NSWShed
+    DO indxSWShed=1,AppSWShed%iNSWShed
         IF (AppSWShed%SmallWatersheds(indxSWShed)%NBaseFlowNodes .GT. 0) THEN
             lSimulated = .TRUE.
             EXIT
@@ -1859,7 +1941,7 @@ CONTAINS
     lSimulated = .FALSE.
     
     !Check
-    DO indxSWShed=1,AppSWShed%NSWShed
+    DO indxSWShed=1,AppSWShed%iNSWShed
         IF (AppSWShed%SmallWatersheds(indxSWShed)%NPercFlowNodes .GT. 0) THEN
             lSimulated = .TRUE.
             EXIT
@@ -1908,11 +1990,11 @@ CONTAINS
     INTEGER,PARAMETER :: iCompIDs(500) = f_iGWComp
     
     !Return if small watersheds are not simulated
-    IF (AppSWShed%NSWShed .EQ. 0) RETURN
+    IF (.NOT. AppSWShed%lDefined) RETURN
     
     !Loop through small watersheds
     ASSOCIATE (pSWSheds => AppSWShed%SmallWatersheds)
-        DO indxSWShed=1,AppSWShed%NSWShed
+        DO indxSWShed=1,AppSWShed%iNSWShed
            !Process base flow
            N = pSWSheds(indxSWShed)%NBaseFlowNodes 
            Flow(1:N)     = -pSWSheds(indxSWShed)%BaseFlowNodes%Flow
@@ -1941,56 +2023,56 @@ CONTAINS
     !Local variables
     CHARACTER(LEN=ModNameLen+8) :: ThisProcedure = ModName // 'Simulate'
     INTEGER                     :: indxSWShed,IterMax,indxNode
-    REAL(8)                     :: Toler,DeltaT,Area,BaseFlow,ExcessGWRunoff,SurfaceFlow,GWStor,     &
-                                   DeepPerc,AchievedConv,GWThreshold,MaxGWStor,Excess,BaseFlowCoeff, &
-                                   SurfaceFlowCoeff,TotalPorosity,SoilMoist_P,Tolerance
+    REAL(8)                     :: rToler,rDeltaT,rArea,rBaseFlow,rExcessGWRunoff,rSurfaceFlow,rGWStor,    &
+                                   rDeepPerc,rAchievedConv,rGWThreshold,rMaxGWStor,rExcess,rBaseFlowCoeff, &
+                                   rSurfaceFlowCoeff,rTotalPorosity,rSoilMoist_P,rTolerance
     REAL(8),PARAMETER           :: Inflow = 0.0
     
     !Initialize
     iStat = 0
    
     !Return if no small watersheds
-    IF (AppSWShed%NSWShed .EQ. 0) RETURN
+    IF (.NOT. AppSWShed%lDefined) RETURN
     
     !Inform user
     CALL EchoProgress('Simulating small watershed b.c.')
     
     !Initialize
-    DeltaT  = TimeStep%DeltaT
-    Toler   = AppSWShed%RZSolverData%Tolerance
+    rDeltaT = TimeStep%DeltaT
+    rToler  = AppSWShed%RZSolverData%Tolerance
     IterMax = AppSWShed%RZSolverData%IterMax
     
     !Simulate
     ASSOCIATE (pSWSheds => AppSWShed%SmallWatersheds)
-        DO indxSWShed=1,AppSWShed%NSWShed
-            Area             = pSWSheds(indxSWShed)%Area
-            GWStor           = pSWSheds(indxSWShed)%GWStor_P
-            GWThreshold      = pSWSheds(indxSWShed)%GWThreshold
-            MaxGWStor        = pSWSheds(indxSWShed)%MaxGWStor
-            BaseFlowCoeff    = pSWSheds(indxSWShed)%BaseFlowCoeff
-            SurfaceFlowCoeff = pSWSheds(indxSWShed)%SurfaceFlowCoeff
-            TotalPorosity    = pSWSheds(indxSWShed)%Soil%TotalPorosity
-            SoilMoist_P      = pSWSheds(indxSWShed)%SoilMoist_P
-            IF (SoilMoist_P .EQ. 0.0) THEN
-                IF (TotalPorosity .EQ. 0.0) THEN
-                    Tolerance = Toler
+        DO indxSWShed=1,AppSWShed%iNSWShed
+            rArea             = pSWSheds(indxSWShed)%Area
+            rGWStor           = pSWSheds(indxSWShed)%GWStor_P
+            rGWThreshold      = pSWSheds(indxSWShed)%GWThreshold
+            rMaxGWStor        = pSWSheds(indxSWShed)%MaxGWStor
+            rBaseFlowCoeff    = pSWSheds(indxSWShed)%BaseFlowCoeff
+            rSurfaceFlowCoeff = pSWSheds(indxSWShed)%SurfaceFlowCoeff
+            rTotalPorosity    = pSWSheds(indxSWShed)%Soil%TotalPorosity
+            rSoilMoist_P      = pSWSheds(indxSWShed)%SoilMoist_P
+            IF (rSoilMoist_P .EQ. 0.0) THEN
+                IF (rTotalPorosity .EQ. 0.0) THEN
+                    rTolerance = rToler
                 ELSE
-                    Tolerance = TotalPorosity * Toler
+                    rTolerance = rTotalPorosity * rToler
                 END IF
             ELSE
-                Tolerance = SoilMoist_P * Toler
+                rTolerance = rSoilMoist_P * rToler
             END IF
             CALL NonPondedLUMoistureRouter(pSWSheds(indxSWShed)%Precip                     , &
                                            pSWSheds(indxSWShed)%SMax                       , &
-                                           SoilMoist_P                                     , &
-                                           pSWSheds(indxSWShed)%ETc * DeltaT               , &
+                                           rSoilMoist_P                                    , &
+                                           pSWSheds(indxSWShed)%ETc * rDeltaT              , &
                                            pSWSheds(indxSWShed)%Soil%HydCond               , &
-                                           TotalPorosity                                   , &
+                                           rTotalPorosity                                  , &
                                            pSWSheds(indxSWShed)%Soil%FieldCapacity         , &
                                            pSWSheds(indxSWShed)%Soil%WiltingPoint          , &
                                            pSWSheds(indxSWShed)%Soil%Lambda                , &
                                            Inflow                                          , &
-                                           Tolerance                                       , &
+                                           rTolerance                                      , &
                                            pSWSheds(indxSWShed)%Soil%KunsatMethod          , &
                                            IterMax                                         , &
                                            pSWSheds(indxSWShed)%SoilMoist                  , &
@@ -1998,60 +2080,60 @@ CONTAINS
                                            pSWSheds(indxSWShed)%PrecipInfilt               , &
                                            pSWSheds(indxSWShed)%ETa                        , &
                                            pSWSheds(indxSWShed)%RootZonePerc               , &
-                                           Excess                                          , &
-                                           AchievedConv                                    )
+                                           rExcess                                         , &
+                                           rAchievedConv                                   )
            
             !Generate error if convergence is not achieved
-            IF (AchievedConv .NE. 0.0) THEN
+            IF (rAchievedConv .NE. 0.0) THEN
                 MessageArray(1) = 'Convergence error in soil moisture routing for small watersheds!'
                 MessageArray(2) =                   'Small watershed ID   = '//TRIM(IntToText(AppSWShed%SmallWatersheds(indxSWShed)%ID))
-                WRITE (MessageArray(3),'(A,F11.8)') 'Desired convergence  = ',Toler
-                WRITE (MessageArray(4),'(A,F11.8)') 'Achieved convergence = ',ABS(AchievedConv)
+                WRITE (MessageArray(3),'(A,F11.8)') 'Desired convergence  = ',rToler
+                WRITE (MessageArray(4),'(A,F11.8)') 'Achieved convergence = ',ABS(rAchievedConv)
                 CALL SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
 
             !Reduce total infiltration based on correction for total porosity
-            IF (Excess .NE. 0.0) THEN
-                pSWSheds(indxSWShed)%Runoff       = pSWSheds(indxSWShed)%Runoff + Excess 
+            IF (rExcess .NE. 0.0) THEN
+                pSWSheds(indxSWShed)%Runoff       = pSWSheds(indxSWShed)%Runoff + rExcess 
                 pSWSheds(indxSWShed)%PrecipInfilt = pSWSheds(indxSWShed)%Precip - pSWSheds(indxSWShed)%Runoff
             END IF
             
             !Flows out of small watershed and simulation of groundwater
-            pSWSheds(indxSWShed)%RootZonePerc = pSWSheds(indxSWShed)%RootZonePerc * DeltaT
-            DeepPerc                          = pSWSheds(indxSWShed)%RootZonePerc
-            BaseFlow                          = (GWStor + DeepPerc) * BaseFlowCoeff
-            ExcessGWRunoff                    = MAX(0.0 , GWStor + DeepPerc - GWThreshold) * SurfaceFlowCoeff
-            GWStor                            = GWStor + DeepPerc - (BaseFlow+ExcessGWRunoff)*DeltaT
-            IF (GWStor .LT. 0.0) THEN
-                BaseFlow       = BaseFlow       + (GWStor/DeltaT) * BaseFlow/(BaseFlow+ExcessGWRunoff)
-                ExcessGWRunoff = ExcessGWRunoff + (GWStor/DeltaT) * ExcessGWRunoff/(BaseFlow+ExcessGWRunoff)
-                GWStor         = 0.0
-            ELSEIF (GWStor .GT. MaxGWStor) THEN
-                ExcessGWRunoff = ExcessGWRunoff + GWStor - MaxGWStor
-                GWStor         = MaxGWStor
+            pSWSheds(indxSWShed)%RootZonePerc = pSWSheds(indxSWShed)%RootZonePerc * rDeltaT
+            rDeepPerc                         = pSWSheds(indxSWShed)%RootZonePerc
+            rBaseFlow                         = (rGWStor + rDeepPerc) * rBaseFlowCoeff
+            rExcessGWRunoff                   = MAX(0.0 , rGWStor + rDeepPerc - rGWThreshold) * rSurfaceFlowCoeff
+            rGWStor                           = rGWStor + rDeepPerc - (rBaseFlow+rExcessGWRunoff)*rDeltaT
+            IF (rGWStor .LT. 0.0) THEN
+                rBaseFlow       = rBaseFlow       + (rGWStor/rDeltaT) * rBaseFlow/(rBaseFlow+rExcessGWRunoff)
+                rExcessGWRunoff = rExcessGWRunoff + (rGWStor/rDeltaT) * rExcessGWRunoff/(rBaseFlow+rExcessGWRunoff)
+                rGWStor         = 0.0
+            ELSEIF (rGWStor .GT. rMaxGWStor) THEN
+                rExcessGWRunoff = rExcessGWRunoff + rGWStor - rMaxGWStor
+                rGWStor         = rMaxGWStor
             END IF
             
             !Convert unit rates to volumetric rates and finalize values
             pSWSheds(indxSWShed)%Precip             = pSWSheds(indxSWShed)%Precip 
-            pSWSheds(indxSWShed)%PrecipInfilt       = pSWSheds(indxSWShed)%PrecipInfilt * Area
-            pSWSheds(indxSWShed)%Runoff             = pSWSheds(indxSWShed)%Runoff * Area
-            pSWSheds(indxSWShed)%ETa                = pSWSheds(indxSWShed)%ETa  * Area
-            pSWSheds(indxSWShed)%ExcessGWRunoff     = ExcessGWRunoff * Area
-            pSWSheds(indxSWShed)%RootZonePerc       = pSWSheds(indxSWShed)%RootZonePerc * Area
-            pSWSheds(indxSWShed)%BaseFlowNodes%Flow = BaseFlow * pSWSheds(indxSWShed)%BaseFlowNodes%Frac * Area
-            pSWSheds(indxSWShed)%GWStor             = GWStor
+            pSWSheds(indxSWShed)%PrecipInfilt       = pSWSheds(indxSWShed)%PrecipInfilt * rArea
+            pSWSheds(indxSWShed)%Runoff             = pSWSheds(indxSWShed)%Runoff * rArea
+            pSWSheds(indxSWShed)%ETa                = pSWSheds(indxSWShed)%ETa * rArea
+            pSWSheds(indxSWShed)%ExcessGWRunoff     = rExcessGWRunoff * rArea
+            pSWSheds(indxSWShed)%RootZonePerc       = pSWSheds(indxSWShed)%RootZonePerc * rArea
+            pSWSheds(indxSWShed)%BaseFlowNodes%Flow = rBaseFlow * pSWSheds(indxSWShed)%BaseFlowNodes%Frac * rArea
+            pSWSheds(indxSWShed)%GWStor             = rGWStor
             
             !Percolation into groundwater
-            SurfaceFlow = pSWSheds(indxSWShed)%Runoff + pSWSheds(indxSWShed)%ExcessGWRunoff
+            rSurfaceFlow = pSWSheds(indxSWShed)%Runoff + pSWSheds(indxSWShed)%ExcessGWRunoff
             DO indxNode=1,pSWSheds(indxSWShed)%NPercFlowNodes
-                pSWSheds(indxSWShed)%PercFlowNodes(indxNode)%Flow = MAX(0.0 , MIN(SurfaceFlow , pSWSheds(indxSWShed)%PercFlowNodes(indxNode)%MaxFlow))
-                SurfaceFlow                                       = SurfaceFlow - pSWSheds(indxSWShed)%PercFlowNodes(indxNode)%Flow
+                pSWSheds(indxSWShed)%PercFlowNodes(indxNode)%Flow = MAX(0.0 , MIN(rSurfaceFlow , pSWSheds(indxSWShed)%PercFlowNodes(indxNode)%MaxFlow))
+                rSurfaceFlow                                      = rSurfaceFlow - pSWSheds(indxSWShed)%PercFlowNodes(indxNode)%Flow
             END DO
             
             !Net inflow into streams (or outside of model area)
-            pSWSheds(indxSWShed)%NetStreamInflow = SurfaceFlow
+            pSWSheds(indxSWShed)%NetStreamInflow = rSurfaceFlow
 
         END DO
     END ASSOCIATE
@@ -2062,30 +2144,30 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- CONVERT TIME UNIT OF SMALL WATERSHED RELATED ENTITIES
   ! -------------------------------------------------------------
-  SUBROUTINE ConvertTimeUnit(AppSWShed,NewUnit)
+  SUBROUTINE ConvertTimeUnit(AppSWShed,cNewUnit)
     CLASS(AppSmallWatershedType) :: AppSWShed
-    CHARACTER(LEN=*),INTENT(IN)  :: NewUnit
+    CHARACTER(LEN=*),INTENT(IN)  :: cNewUnit
     
     !Local variables
     INTEGER :: indxSWShed
-    REAL(8) :: Factor
+    REAL(8) :: rFactor
     
     !Make sure small watersheds are simulated
-    IF (AppSWShed%NSWShed .EQ. 0) RETURN
+    IF (.NOT. AppSWShed%lDefined) RETURN
     
     !Make sure NewUnit is defined
-    IF (NewUnit .EQ. '') RETURN
+    IF (cNewUnit .EQ. '') RETURN
     
     !Convert time unit of small watershed parameters
-    Factor                = TimeIntervalConversion(NewUnit,AppSWShed%VarTimeUnit)
-    AppSWShed%VarTimeUnit = NewUnit
+    rFactor                = TimeIntervalConversion(cNewUnit,AppSWShed%cVarTimeUnit)
+    AppSWShed%cVarTimeUnit = cNewUnit
     
     ASSOCIATE (pSWSheds => AppSWShed%SmallWatersheds)
-        DO indxSWShed=1,AppSWShed%NSWShed
-            pSWSheds(indxSWShed)%PercFlowNodes%MaxFlow = pSWSheds(indxSWShed)%PercFlowNodes%MaxFlow * Factor
-            pSWSheds(indxSWShed)%Soil%HydCond          = pSWSheds(indxSWShed)%Soil%HydCond * Factor
-            pSWSheds(indxSWShed)%SurfaceFlowCoeff      = pSWSheds(indxSWShed)%SurfaceFlowCoeff * Factor
-            pSWSheds(indxSWShed)%BaseFlowCoeff         = pSWSheds(indxSWShed)%BaseFlowCoeff * Factor
+        DO indxSWShed=1,AppSWShed%iNSWShed
+            pSWSheds(indxSWShed)%PercFlowNodes%MaxFlow = pSWSheds(indxSWShed)%PercFlowNodes%MaxFlow * rFactor
+            pSWSheds(indxSWShed)%Soil%HydCond          = pSWSheds(indxSWShed)%Soil%HydCond * rFactor
+            pSWSheds(indxSWShed)%SurfaceFlowCoeff      = pSWSheds(indxSWShed)%SurfaceFlowCoeff * rFactor
+            pSWSheds(indxSWShed)%BaseFlowCoeff         = pSWSheds(indxSWShed)%BaseFlowCoeff * rFactor
         END DO
     END ASSOCIATE
       
@@ -2110,10 +2192,10 @@ CONTAINS
     
     ASSOCIATE (pSWSheds => AppSWShed%SmallWatersheds)
         SELECT CASE (iBCType)
-            CASE (SWShedBaseFlowBCID)
+            CASE (f_iSWShedBaseFlowBCID)
                 NTotal = SUM(pSWSheds%NBaseFlowNodes)
                 ALLOCATE (iWorkArray(NTotal))  ;  iWorkArray = 0
-                DO indxSWShed=1,AppSWShed%NSWShed
+                DO indxSWShed=1,AppSWShed%iNSWShed
                     DO indxNode=1,pSWSheds(indxSWShed)%NBaseFlowNodes
                         IF (pSWSheds(indxSWShed)%BaseFlowNodes(indxNode)%Layer .EQ. iLayer) THEN
                             iCount             = iCount + 1
@@ -2122,10 +2204,10 @@ CONTAINS
                     END DO
                 END DO
                 
-            CASE (SWShedPercFlowBCID)
+            CASE (f_iSWShedPercFlowBCID)
                 NTotal = SUM(pSWSheds%NPercFlowNodes)
                 ALLOCATE (iWorkArray(NTotal))  ;  iWorkArray = 0
-                DO indxSWShed=1,AppSWShed%NSWShed
+                DO indxSWShed=1,AppSWShed%iNSWShed
                     DO indxNode=1,pSWSheds(indxSWShed)%NPercFlowNodes
                         IF (pSWSheds(indxSWShed)%PercFlowNodes(indxNode)%Layer .EQ. iLayer) THEN
                             iCount             = iCount + 1
@@ -2190,5 +2272,43 @@ CONTAINS
     END IF
     
   END SUBROUTINE CheckTSDataPointers
+  
+  
+  ! -------------------------------------------------------------
+  ! --- COMPILE LIST OF GW NODES RECEIVING BASEFLOW AND PERCOLATION
+  ! -------------------------------------------------------------
+  SUBROUTINE CompileBaseflowPercolationNodes(AppSWShed,iNLayers)
+    CLASS(AppSmallWatershedType) :: AppSWShed
+    INTEGER,OPTIONAL,INTENT(IN)  :: iNLayers 
+    
+    !Local variables
+    INTEGER :: indxLayer,iNLayers_Local,indxSWShed
+    
+    !Initialize
+    IF (PRESENT(iNLayers)) THEN
+        iNLayers_Local = iNLayers
+    ELSE
+        iNLayers_Local = 0
+        DO indxSWShed=1,AppSWShed%iNSWShed
+            iNLayers_Local = MAX(iNLayers_Local , MAXVAL(AppSWShed%SmallWatersheds(indxSWShed)%BaseFlowNodes%Layer))
+            iNLayers_Local = MAX(iNLayers_Local , MAXVAL(AppSWShed%SmallWatersheds(indxSWShed)%PercFlowNodes%Layer))
+        END DO
+    END IF
+    
+    !Allocate memory
+    ALLOCATE (AppSWShed%BaseFlowNodeList(iNLayers_Local) , AppSWShed%PercFlowNodeList(iNLayers_Local))
+
+    !Compile list of nodes recieving baseflow and percolation at each layer
+    DO indxLayer=1,iNLayers_Local
+        !Baseflow nodes
+        CALL CompileNodesWithBCType(AppSWShed,indxLayer,f_iSWShedBaseFlowBCID,AppSWShed%BaseFlowNodeList(indxLayer)%Nodes)
+        AppSWShed%BaseFlowNodeList(indxLayer)%NNodes = SIZE(AppSWShed%BaseFlowNodeList(indxLayer)%Nodes)
+        
+        !Percolation nodes
+        CALL CompileNodesWithBCType(AppSWShed,indxLayer,f_iSWShedPercFlowBCID,AppSWShed%PercFlowNodeList(indxLayer)%Nodes)
+        AppSWShed%PercFlowNodeList(indxLayer)%NNodes = SIZE(AppSWShed%PercFlowNodeList(indxLayer)%Nodes)        
+    END DO
+    
+  END SUBROUTINE CompileBaseflowPercolationNodes  
   
 END MODULE

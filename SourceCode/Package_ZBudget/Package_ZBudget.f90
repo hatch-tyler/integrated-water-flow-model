@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2022  
+!  Copyright (C) 2005-2024  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -97,8 +97,8 @@ MODULE Package_ZBudget
   ! -------------------------------------------------------------
   ! --- VERSION RELEATED DATA
   ! -------------------------------------------------------------
-  INTEGER,PARAMETER                    :: iLenVersion = 8
-  CHARACTER(LEN=iLenVersion),PARAMETER :: cVersion    ='4.0.0000'
+  INTEGER,PARAMETER                    :: iLenVersion = 11
+  CHARACTER(LEN=iLenVersion),PARAMETER :: cVersion    ='2024.0.0000'
   INCLUDE 'Package_ZBudget_Revision.fi'
   
   

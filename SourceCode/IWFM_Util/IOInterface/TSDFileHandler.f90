@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2022  
+!  Copyright (C) 2005-2024  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -117,7 +117,7 @@ MODULE TSDFileHandler
                                                                     RealTSDataInFile_AsAsciiFile_New          , &
                                                                     RealTSDataInFile_AsDSSFile_New
       GENERIC        :: ReadTSData                               => RealTSDataInFile_ReadTSData               , &
-                                                                   RealTSDataInFile_ReadTSData_ForTimeRange
+                                                                    RealTSDataInFile_ReadTSData_ForTimeRange
   END TYPE RealTSDataInFileType
   
   
@@ -230,10 +230,8 @@ CONTAINS
     
     !Local variables
     CHARACTER(LEN=ModNameLen+23) :: ThisProcedure = ModName // 'IntPairTSDataInFile_New'
-    CHARACTER                    :: cDSSFL*1000
     INTEGER                      :: iNCOL,iNSP,iNFQ,iErrorCode
     LOGICAL                      :: lDummyArray(1) = .FALSE.
-    CHARACTER(:),ALLOCATABLE     :: cAbsPathFileName
     
     !Initialize
     iStat = 0

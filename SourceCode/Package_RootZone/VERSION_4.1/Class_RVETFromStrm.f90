@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2022  
+!  Copyright (C) 2005-2024  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -51,9 +51,9 @@ MODULE Class_RVETFromStrm
   ! -------------------------------------------------------------
   TYPE ElemToStrmType
       PRIVATE
-      INTEGER :: iStrmNode        = 0
-      REAL(8) :: rETStrm_Required = 0.0
-      REAL(8) :: rETStrm_Actual   = 0.0
+      INTEGER             :: iStrmNode          = 0
+      REAL(8),ALLOCATABLE :: rETStrm_Required(:)     !For each (riparian veg)
+      REAL(8),ALLOCATABLE :: rETStrm_Actual(:)       !For each (riparian veg)
   END TYPE ElemToStrmType
   
 
@@ -62,7 +62,7 @@ MODULE Class_RVETFromStrm
   ! -------------------------------------------------------------
   TYPE StrmToElemType
       PRIVATE
-      INTEGER             :: NElems   = 0
+      INTEGER             :: iNElems   = 0
       INTEGER,ALLOCATABLE :: iElems(:)
   END TYPE StrmToElemType
 
@@ -72,7 +72,7 @@ MODULE Class_RVETFromStrm
   ! -------------------------------------------------------------
   TYPE RVETFromStrmType
       PRIVATE
-      INTEGER                          :: NStrmNodes              = 0       !Maximum stream node number from which riparian ET is taken out of (may be less than the total number of stream nodes simulated)
+      INTEGER                          :: iNStrmNodes              = 0       !Maximum stream node number from which riparian ET is taken out of (may be less than the total number of stream nodes simulated)
       TYPE(ElemToStrmType),ALLOCATABLE :: ElemToStrm(:)                     
       TYPE(StrmToElemType),ALLOCATABLE :: StrmToElem(:)
   CONTAINS
@@ -118,38 +118,42 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- INSTANTIATE ELEMENT-TO-STREAM CONNECTIVITY
   ! -------------------------------------------------------------
-  SUBROUTINE New(RVETFromStrm,iStrmNodes,iStat)
+  SUBROUTINE New(RVETFromStrm,iStrmNodes,iNRiparian,iStat)
     CLASS(RVETFromStrmType) :: RVETFromStrm
-    INTEGER,INTENT(IN)      :: iStrmNodes(:)
+    INTEGER,INTENT(IN)      :: iStrmNodes(:),iNRiparian
     INTEGER,INTENT(OUT)     :: iStat
     
     !Local variables
     CHARACTER(LEN=ModNameLen+3) :: ThisProcedure = ModName // 'New'
-    INTEGER                      :: ErrorCode,indxElem,iStrmNode,NStrmNodes,NElements
+    INTEGER                     :: iErrorCode,indxElem,iStrmNode,iNStrmNodes,iNElements
 
     !Initialize
-    iStat     = 0
-    NElements = SIZE(iStrmNodes)
+    iStat      = 0
+    iNElements = SIZE(iStrmNodes)
     
     !Obtain the maximum stream node number
-    NStrmNodes = MAXVAL(iStrmNodes)
+    iNStrmNodes = MAXVAL(iStrmNodes)
     
     !Return if streams are not simulated
-    IF (NStrmNodes .EQ. 0) RETURN
+    IF (iNStrmNodes .EQ. 0) RETURN
   
     !Otherwise allocate memory
-    RVETFromStrm%NStrmNodes = NStrmNodes
-    ALLOCATE (RVETFromStrm%ElemToStrm(NElements) , RVETFromStrm%StrmToElem(NStrmNodes) , STAT=ErrorCode)
-    IF (ErrorCode .NE. 0) THEN
+    RVETFromStrm%iNStrmNodes = iNStrmNodes
+    ALLOCATE (RVETFromStrm%ElemToStrm(iNElements) , RVETFromStrm%StrmToElem(iNStrmNodes) , STAT=iErrorCode)
+    IF (iErrorCode .NE. 0) THEN
         MessageArray(1) = 'Error allocating memory for element-to-stream node connectivity ' 
         MessageArray(2) = 'for the simulation of riparian vegetation!'
         CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
+    DO indxElem=1,iNElements
+        ALLOCATE (RVETFromStrm%ElemToStrm(indxElem)%rETStrm_Required(iNRiparian) , &
+                  RVETFromStrm%ElemToStrm(indxElem)%rETStrm_Actual(iNRiparian)   ) 
+    END DO               
     
     !Read data and instantiate variables
-    DO indxElem=1,NElements 
+    DO indxElem=1,iNElements 
        iStrmNode = iStrmNodes(indxElem)
        
        !Add stream node to element data
@@ -173,21 +177,21 @@ CONTAINS
     TYPE(StrmToElemType) :: StrmToElem
     
     !Local variables
-    INTEGER             :: NElems
+    INTEGER             :: iNElems
     INTEGER,ALLOCATABLE :: iTempArray(:)
     
     !Initialize
-    NElems = StrmToElem%NElems
+    iNElems = StrmToElem%iNElems
     
     !Store old data in temporary array and append new element ID
-    ALLOCATE (iTempArray(NElems+1))
-    iTempArray(1:NElems) = StrmToElem%iElems
-    NElems               = NElems + 1
-    iTempArray(NElems  ) = iElem
+    ALLOCATE (iTempArray(iNElems+1))
+    iTempArray(1:iNElems) = StrmToElem%iElems
+    iNElems               = iNElems + 1
+    iTempArray(iNElems  ) = iElem
     
     !Trasfer new info to the persistent arrays
     CALL MOVE_ALLOC(iTempArray , StrmToElem%iElems)
-    StrmToElem%NElems = NElems
+    StrmToElem%iNElems = iNElems
        
   END SUBROUTINE AddElemToStrmNode
   
@@ -211,13 +215,16 @@ CONTAINS
     CLASS(RVETFromStrmType) :: RVETFromStrm
     
     !Local variables
-    INTEGER                :: ErrorCode,indx
+    INTEGER                :: iErrorCode,indx
     TYPE(RVETFromStrmType) :: Dummy
     
-    DO indx=1,RVETFromStrm%NStrmNodes
-        DEALLOCATE (RVETFromStrm%StrmToElem(indx)%iElems ,STAT=ErrorCode)
+    DO indx=1,RVETFromStrm%iNStrmNodes
+        DEALLOCATE (RVETFromStrm%StrmToElem(indx)%iElems ,STAT=iErrorCode)
     END DO
-    DEALLOCATE (RVETFromStrm%StrmToElem , RVETFromStrm%ElemToStrm , STAT=ErrorCode)
+    DO indx=1,SIZE(RVETFromStrm%ElemToStrm)
+        DEALLOCATE (RVETFromStrm%ElemToStrm(indx)%rETStrm_Required , RVETFromStrm%ElemToStrm(indx)%rETStrm_Actual ,STAT=iErrorCode)
+    END DO
+    DEALLOCATE (RVETFromStrm%StrmToElem , RVETFromStrm%ElemToStrm , STAT=iErrorCode)
     
     SELECT TYPE (RVETFromStrm)
         TYPE IS (RVETFromStrmType)
@@ -242,24 +249,24 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET REQUIRED OUTFLOW DUE TO RIPARIAN ET AT ALL STREAM NODES 
   ! -------------------------------------------------------------
-  SUBROUTINE GetRequiredET_AtStrmNodes(RVETFromStrm,ETOutflow)
+  SUBROUTINE GetRequiredET_AtStrmNodes(RVETFromStrm,rETOutflow)
     CLASS(RVETFromStrmType),INTENT(IN) :: RVETFromStrm
-    REAL(8),INTENT(OUT)                :: ETOutflow(:)
+    REAL(8),INTENT(OUT)                :: rETOutflow(:)
     
     !Local variables
     INTEGER :: indxStrm,indxElem,iElem
     
     !Initialize
-    ETOutflow = 0.0
+    rETOutflow = 0.0
     
     !Return if riparian ET met by streams is not simulated
-    IF (RVETFromStrm%NStrmNodes .EQ. 0) RETURN
+    IF (RVETFromStrm%iNStrmNodes .EQ. 0) RETURN
     
     !Compile 
-    DO indxStrm=1,RVETFromStrm%NStrmNodes
-        DO indxElem=1,RVETFromStrm%StrmToElem(indxStrm)%NElems
-            iElem               = RVETFromStrm%StrmToElem(indxStrm)%iElems(indxElem)
-            ETOutflow(indxStrm) = ETOutflow(indxStrm) + RVETFromStrm%ElemToStrm(iElem)%rETStrm_Required
+    DO indxStrm=1,RVETFromStrm%iNStrmNodes
+        DO indxElem=1,RVETFromStrm%StrmToElem(indxStrm)%iNElems
+            iElem                = RVETFromStrm%StrmToElem(indxStrm)%iElems(indxElem)
+            rETOutflow(indxStrm) = rETOutflow(indxStrm) + SUM(RVETFromStrm%ElemToStrm(iElem)%rETStrm_Required)
         END DO
     END DO
     
@@ -269,16 +276,23 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET ACTUAL RIPARIAN ET FROM STREAMS AT SUBREGIONS AFFILIATION 
   ! -------------------------------------------------------------
-  SUBROUTINE GetActualET_AtRegions(RVETFromStrm,AppGrid,RegionalET)
+  SUBROUTINE GetActualET_AtRegions(RVETFromStrm,AppGrid,rRegionalET)
     CLASS(RVETFromStrmType),INTENT(IN) :: RVETFRomStrm
     TYPE(AppGridType),INTENT(IN)       :: AppGrid
-    REAL(8),INTENT(OUT)                :: RegionalET(:)
+    REAL(8),INTENT(OUT)                :: rRegionalET(:)
     
-    IF (RVETFromStrm%NStrmNodes .EQ. 0) THEN
-        RegionalET = 0.0
+    !Local variables
+    INTEGER :: indxElem
+    REAL(8) :: rElemValues(AppGrid%NElements)
+    
+    IF (RVETFromStrm%iNStrmNodes .EQ. 0) THEN
+        rRegionalET = 0.0
         RETURN
     ELSE
-        RegionalET = AppGrid%AccumElemValuesToSubregions(RVETFromStrm%ElemToStrm%rETStrm_Actual)
+        DO indxElem=1,AppGrid%NElements
+            rElemValues(indxElem) = SUM(RVETFromStrm%ElemToStrm(indxElem)%rETStrm_Actual)
+        END DO
+        rRegionalET = AppGrid%AccumElemValuesToSubregions(rElemValues)
     END IF
     
   END SUBROUTINE GetActualET_AtRegions
@@ -287,25 +301,25 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET ACTUAL RIPARIAN ET AT STREAM NODES 
   ! -------------------------------------------------------------
-  SUBROUTINE GetActualET_AtStrmNodes(RVETFromStrm,QRVET)
+  SUBROUTINE GetActualET_AtStrmNodes(RVETFromStrm,rQRVET)
     CLASS(RVETFromStrmType),INTENT(IN) :: RVETFromStrm
-    REAL(8),INTENT(OUT)                :: QRVET(:)
+    REAL(8),INTENT(OUT)                :: rQRVET(:)
     
     !Local variables
     INTEGER :: indxNode,indxElem,iElem
     
     !Initialize
-    QRVET = 0.0
+    rQRVET = 0.0
     
     !Compile
     ASSOCIATE (pStrmToElem => RVETFromStrm%StrmToElem , &
                pElemToStrm => RVETFromStrm%ElemToStrm )
         
-        DO indxNode=1,SIZE(QRVET)
-            IF (indxNode .GT. RVETFromStrm%NStrmNodes) CYCLE
-            DO indxElem=1,pStrmToElem(indxNode)%NElems
-                iElem           = pStrmToElem(indxNode)%iElems(indxElem)
-                QRVET(indxNode) = QRVET(indxNode) + pElemToStrm(iElem)%rETStrm_Actual
+        DO indxNode=1,SIZE(rQRVET)
+            IF (indxNode .GT. RVETFromStrm%iNStrmNodes) CYCLE
+            DO indxElem=1,pStrmToElem(indxNode)%iNElems
+                iElem            = pStrmToElem(indxNode)%iElems(indxElem)
+                rQRVET(indxNode) = rQRVET(indxNode) + SUM(pElemToStrm(iElem)%rETStrm_Actual)
             END DO
         END DO
         
@@ -317,11 +331,16 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET ACTUAL RIPARIAN ET AT ELEMENTS
   ! -------------------------------------------------------------
-  SUBROUTINE GetActualET_AtElements(RVETFromStrm,ElemET)
+  SUBROUTINE GetActualET_AtElements(RVETFromStrm,rElemET)
     CLASS(RVETFromStrmType),INTENT(IN) :: RVETFRomStrm
-    REAL(8),INTENT(OUT)                :: ElemET(:)
+    REAL(8),INTENT(OUT)                :: rElemET(:)
     
-    ElemET = RVETFromStrm%ElemToStrm%rETStrm_Actual
+    !Local variables
+    INTEGER :: indxElem
+    
+    DO indxElem=1,SIZE(RVETFromStrm%ElemToStrm)
+        rElemET(indxElem) = SUM(RVETFromStrm%ElemToStrm(indxElem)%rETStrm_Actual)
+    END DO
     
   END SUBROUTINE GetActualET_AtElements
   
@@ -329,28 +348,28 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET UNMET RIPARIAN ET FROM STREAMS AT STREAM NODES 
   ! -------------------------------------------------------------
-  FUNCTION GetUnmetET_AtStrmNodes(RVETFromStrm,NR) RESULT(UnmetET)
+  FUNCTION GetUnmetET_AtStrmNodes(RVETFromStrm,iNR) RESULT(rUnmetET)
     CLASS(RVETFromStrmType),INTENT(IN) :: RVETFromStrm
-    INTEGER,INTENT(IN)                 :: NR
-    REAL(8)                            :: UnmetET(NR)
+    INTEGER,INTENT(IN)                 :: iNR
+    REAL(8)                            :: rUnmetET(iNR)
     
     !Local variables
     INTEGER :: indxNode,indxElem,iElem
     
     !Initialize
-    UnmetET = 0.0
+    rUnmetET = 0.0
     
     !Return if the process is not simulated
-    IF (RVETFromStrm%NStrmNodes .EQ. 0) RETURN
+    IF (RVETFromStrm%iNStrmNodes .EQ. 0) RETURN
     
     !Compile
     ASSOCIATE (pStrmToElem => RVETFromStrm%StrmToElem  , &
                pElemToStrm => RVETFromStrm%ElemToStrm  )
         
-        DO indxNode=1,RVETFromStrm%NStrmNodes
-            DO indxElem=1,pStrmToElem(indxNode)%NElems
-                iElem             = pStrmToElem(indxNode)%iElems(indxElem)
-                UnmetET(indxNode) = UnmetET(indxNode) + pElemToStrm(iElem)%rETStrm_Required - pElemToStrm(iElem)%rETStrm_Actual
+        DO indxNode=1,RVETFromStrm%iNStrmNodes
+            DO indxElem=1,pStrmToElem(indxNode)%iNElems
+                iElem              = pStrmToElem(indxNode)%iElems(indxElem)
+                rUnmetET(indxNode) = rUnmetET(indxNode) + SUM(pElemToStrm(iElem)%rETStrm_Required - pElemToStrm(iElem)%rETStrm_Actual)
             END DO
         END DO
     
@@ -362,32 +381,32 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET UNMET RIPARIAN ET FROM STREAMS AT STREAM REACHES 
   ! -------------------------------------------------------------
-  FUNCTION GetUnmetET_AtStrmReaches(RVETFromStrm,NReaches,iUpstrm,iDownstrm) RESULT(UnmetET)
+  FUNCTION GetUnmetET_AtStrmReaches(RVETFromStrm,iNReaches,iUpstrm,iDownstrm) RESULT(rUnmetET)
     CLASS(RVETFromStrmType),INTENT(IN) :: RVETFromStrm
-    INTEGER,INTENT(IN)                 :: NReaches,iUpstrm(NReaches),iDownstrm(NReaches)
-    REAL(8)                            :: UnmetET(NReaches)
+    INTEGER,INTENT(IN)                 :: iNReaches,iUpstrm(iNReaches),iDownstrm(iNReaches)
+    REAL(8)                            :: rUnmetET(iNReaches)
     
     !Local variables
     INTEGER :: indxElem,iElem,indxReach,iUpstrmNode,iDownstrmNode,indxNode
     
     !Initialize
-    UnmetET = 0.0
+    rUnmetET = 0.0
     
     !Return if the process is not simulated
-    IF (RVETFromStrm%NStrmNodes .EQ. 0) RETURN
+    IF (RVETFromStrm%iNStrmNodes .EQ. 0) RETURN
     
     !Compile
     ASSOCIATE (pStrmToElem => RVETFromStrm%StrmToElem  , &
                pElemToStrm => RVETFromStrm%ElemToStrm  )
         
-        DO indxReach=1,NReaches
+        DO indxReach=1,iNReaches
             iUpstrmNode   = iUpstrm(indxReach)
             iDownstrmNode = iDownstrm(indxReach)
             DO indxNode=iUpstrmNode,iDownstrmNode
-                IF (indxNode .GT. RVETFromStrm%NStrmNodes) CYCLE
-                DO indxElem=1,pStrmToElem(indxNode)%NElems
-                    iElem              = pStrmToElem(indxNode)%iElems(indxElem)
-                    UnmetET(indxReach) = UnmetET(indxReach) + pElemToStrm(iElem)%rETStrm_Required - pElemToStrm(iElem)%rETStrm_Actual
+                IF (indxNode .GT. RVETFromStrm%iNStrmNodes) CYCLE
+                DO indxElem=1,pStrmToElem(indxNode)%iNElems
+                    iElem               = pStrmToElem(indxNode)%iElems(indxElem)
+                    rUnmetET(indxReach) = rUnmetET(indxReach) + SUM(pElemToStrm(iElem)%rETStrm_Required - pElemToStrm(iElem)%rETStrm_Actual)
                 END DO
             END DO
         END DO
@@ -400,16 +419,21 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET UNMET RIPARIAN VEG ET FROM STREAM AT ALL ELEMENTS
   ! -------------------------------------------------------------
-  FUNCTION GetUnmetET_AtElements(RVETFRomStrm,NElements) RESULT(UnmetET)
+  FUNCTION GetUnmetET_AtElements(RVETFRomStrm,iNElements) RESULT(rUnmetET)
     CLASS(RVETFromStrmType),INTENT(IN) :: RVETFromStrm
-    INTEGER,INTENT(IN)                 :: NElements
-    REAL(8)                            :: UnmetET(NElements)
+    INTEGER,INTENT(IN)                 :: iNElements
+    REAL(8)                            :: rUnmetET(iNElements)
     
-    IF (RVETFromStrm%NStrmNodes .EQ. 0) THEN
-        UnmetET = 0.0
+    !Local variables
+    INTEGER :: indxElem
+    
+    IF (RVETFromStrm%iNStrmNodes .EQ. 0) THEN
+        rUnmetET = 0.0
         RETURN
     ELSE
-        UnmetET = RVETFromStrm%ElemToStrm%rETStrm_Required - RVETFromStrm%ElemToStrm%rETStrm_Actual
+        DO indxElem=1,iNElements
+            rUnmetET(indxElem) = SUM(RVETFromStrm%ElemToStrm(indxElem)%rETStrm_Required - RVETFromStrm%ElemToStrm(indxElem)%rETStrm_Actual)
+        END DO
     END IF
 
   END FUNCTION GetUnmetET_AtElements
@@ -430,11 +454,16 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- SET REQUIRED ELEMENT RIPARIAN VEG ET FROM STREAM AT ALL ELEMENTS
   ! -------------------------------------------------------------
-  SUBROUTINE SetRequiredET_AtElements(RVETFromStrm,RVETRequired)
+  SUBROUTINE SetRequiredET_AtElements(RVETFromStrm,rRVETRequired)
     CLASS(RVETFromStrmType) :: RVETFromStrm
-    REAL(8),INTENT(IN)      :: RVETRequired(:)
+    REAL(8),INTENT(IN)      :: rRVETRequired(:,:)
     
-    RVETFromStrm%ElemToStrm%rETStrm_Required = RVETRequired
+    !Local variables
+    INTEGER :: indxElem
+    
+    DO indxElem=1,SIZE(RVETFromStrm%ElemToStrm)
+        RVETFromStrm%ElemToStrm(indxElem)%rETStrm_Required = rRVETRequired(:,indxElem)
+    END DO
 
   END SUBROUTINE SetRequiredET_AtElements
   
@@ -450,14 +479,14 @@ CONTAINS
     INTEGER :: indxStrm,indxElem,iElem
     
     !Return if the process is not simulated
-    IF (RVETFromStrm%NStrmNodes .EQ. 0) RETURN
+    IF (RVETFromStrm%iNStrmNodes .EQ. 0) RETURN
     
     !Compile actual ET at element level
     ASSOCIATE (pStrmToElem => RVETFromStrm%StrmToElem  , &
                pElemToStrm => RVETFromStrm%ElemToStrm  )
             
-        DO indxStrm=1,RVETFromStrm%NStrmNodes
-            DO indxElem=1,pStrmToElem(indxStrm)%NElems
+        DO indxStrm=1,RVETFromStrm%iNStrmNodes
+            DO indxElem=1,pStrmToElem(indxStrm)%iNElems
                 iElem                             = pStrmToElem(indxStrm)%iElems(indxElem)
                 pElemToStrm(iElem)%rETStrm_Actual = pElemToStrm(iElem)%rETStrm_Required * rETActualFrac(indxStrm)
             END DO
@@ -487,7 +516,7 @@ CONTAINS
     CLASS(RVETFromStrmType),INTENT(IN) :: RVETFromStrm
     LOGICAL                            :: lSimulated
     
-    IF (RVETFromStrm%NStrmNodes .EQ. 0) THEN
+    IF (RVETFromStrm%iNStrmNodes .EQ. 0) THEN
         lSimulated = .FALSE.
     ELSE
         lSimulated = .TRUE.
@@ -513,9 +542,14 @@ CONTAINS
   SUBROUTINE AdvanceState(RVETFromStrm)
     CLASS(RVETFromStrmType) :: RVETFromStrm
     
-    RVETFromStrm%ElemToStrm%rETStrm_Required = 0.0
-    RVETFromStrm%ElemToStrm%rETStrm_Actual   = 0.0
-  
+    !Local variables
+    INTEGER :: indxElem
+    
+    DO indxElem=1,SIZE(RVETFromStrm%ElemToStrm)
+        RVETFromStrm%ElemToStrm(indxElem)%rETStrm_Required = 0.0
+        RVETFromStrm%ElemToStrm(indxElem)%rETStrm_Actual   = 0.0
+    END DO
+    
   END SUBROUTINE AdvanceState
 
 END MODULE

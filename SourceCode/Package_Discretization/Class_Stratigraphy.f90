@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2022  
+!  Copyright (C) 2005-2024  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -71,16 +71,19 @@ MODULE Class_Stratigraphy
     PROCEDURE,PASS :: GetAllActiveLayerBelow     
     PROCEDURE,PASS :: GetNActiveLayers           
     PROCEDURE,PASS :: GetTopActiveLayer          
-    PROCEDURE,PASS :: GetLayerNumberForElevation 
+    PROCEDURE,PASS :: GetLayerNumberForElevation_AtXY 
+    PROCEDURE,PASS :: GetLayerNumberForElevation_AtNode 
     PROCEDURE,PASS :: GetNLayers
     PROCEDURE,PASS :: GetGSElev
     PROCEDURE,PASS :: GetAquiferTopElev
     PROCEDURE,PASS :: GetAquiferBottomElev
     PROCEDURE,PASS :: GetStratigraphy_AtXYCoordinate
     PROCEDURE,PASS :: WritePreProcessedData      
-    GENERIC        :: New        => ReadStratigraphyData           , &
-                                    ReadProcessedStratigraphyData  , &
-                                    NewStratigraphy
+    GENERIC        :: New                        => ReadStratigraphyData           , &
+                                                    ReadProcessedStratigraphyData  , &
+                                                    NewStratigraphy
+    GENERIC        :: GetLayerNumberForElevation => GetLayerNumberForElevation_AtXY  , &
+                                                    GetLayerNumberForElevation_AtNode
   END TYPE StratigraphyType
   
    
@@ -558,9 +561,9 @@ CONTAINS
   
   
   ! -------------------------------------------------------------
-  ! --- GET THE LAYER NUMBER GIVEN ELEVATION
+  ! --- GET THE LAYER NUMBER GIVEN ELEVATION AT AN (X,Y) COORDINATE
   ! -------------------------------------------------------------
-  FUNCTION GetLayerNumberForElevation(Stratigraphy,Elevation,X,Y,AppGrid) RESULT(Layer)
+  FUNCTION GetLayerNumberForElevation_AtXY(Stratigraphy,Elevation,X,Y,AppGrid) RESULT(Layer)
     CLASS(StratigraphyTYpe),INTENT(IN) :: Stratigraphy
     REAL(8),INTENT(IN)                 :: Elevation,X,Y
     TYPE(AppGridType),INTENT(IN)       :: AppGrid
@@ -594,7 +597,39 @@ CONTAINS
       END IF
     END DO
     
-  END FUNCTION GetLayerNumberForElevation
+  END FUNCTION GetLayerNumberForElevation_AtXY
+
+
+  ! -------------------------------------------------------------
+  ! --- GET THE LAYER NUMBER GIVEN ELEVATION AT A NODE
+  ! -------------------------------------------------------------
+  FUNCTION GetLayerNumberForElevation_AtNode(Stratigraphy,Elevation,iNode) RESULT(Layer)
+    CLASS(StratigraphyTYpe),INTENT(IN) :: Stratigraphy
+    REAL(8),INTENT(IN)                 :: Elevation
+    INTEGER,INTENT(IN)                 :: iNode
+    INTEGER                            :: Layer
+    
+    !Local variables
+    INTEGER :: iNLayers,indxLayer
+    REAL(8) :: TopElev(Stratigraphy%NLayers+1)
+    
+    !Initialize
+    iNLayers = Stratigraphy%NLayers 
+    Layer    = 0
+    
+    !Aquifer layer top elevations at node
+    TopElev(1)  = Stratigraphy%GSElev(iNode)
+    TopElev(2:) = Stratigraphy%BottomElev(iNode,:)
+    
+    !Find the layer number for Elevation
+    DO indxLayer=1,iNLayers
+        IF (Elevation.LE.TopElev(indxLayer) .AND. Elevation.GE.TopElev(indxLayer+1)) THEN
+            Layer = indxLayer
+            RETURN
+        END IF
+    END DO
+    
+  END FUNCTION GetLayerNumberForElevation_AtNode
 
 
   ! -------------------------------------------------------------

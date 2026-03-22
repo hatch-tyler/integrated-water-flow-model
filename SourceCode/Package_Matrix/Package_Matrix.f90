@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2022  
+!  Copyright (C) 2005-2024  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -32,6 +32,9 @@ MODULE Package_Matrix
                                ShellSort
   USE IOInterface      , ONLY: GenericFileType
   USE Package_Misc     , ONLY: SolverDataType           , &
+                               f_iStrmComp              , &
+                               f_iLakeComp              , &
+                               f_iGWComp                , &
                                f_cCompNames
   USE Module_pgmres    , ONLY: ILUT                     , &
                                AMUX                     , &
@@ -158,8 +161,8 @@ MODULE Package_Matrix
   ! -------------------------------------------------------------
   ! --- VERSION RELATED ENTITIES
   ! -------------------------------------------------------------
-  INTEGER,PARAMETER                    :: iLenVersion = 8
-  CHARACTER(LEN=iLenVersion),PARAMETER :: cVersion    = '4.0.0000'
+  INTEGER,PARAMETER                    :: iLenVersion = 11
+  CHARACTER(LEN=iLenVersion),PARAMETER :: cVersion    = '2024.0.0000'
   INCLUDE 'Package_Matrix_Revision.fi'
   
 
@@ -1152,9 +1155,9 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GATEWAY METHOD TO SOLVE THE MATRIX
   ! -------------------------------------------------------------
-  SUBROUTINE Solve(Matrix,NewtonRaphsonIter,iStat)
+  SUBROUTINE Solve(Matrix,NewtonRaphsonIter,iStrmNodeIDS,iLakeIDs,iGWNodeIDs,iStat)
     CLASS(MatrixType)   :: Matrix
-    INTEGER,INTENT(IN)  :: NewtonRaphsonIter
+    INTEGER,INTENT(IN)  :: NewtonRaphsonIter,iStrmNodeIDs(:),iLakeIDs(:),iGWNodeIDs(:)
     INTEGER,INTENT(OUT) :: iStat
     
     !Local variables
@@ -1189,14 +1192,16 @@ CONTAINS
                 !Convert matrix storage to CRS storage
                 CALL ConvertToCRSFormat(Matrix%COEFF , Matrix%NJD , Matrix%JND , COEFF_CRS , NJD_CRS , JND_CRS)
                 
-                CALL PGMRES(NRow                            , &
+                CALL PGMRES(Matrix                          , &
+                            iStrmNodeIDs                    , &
+                            iLakeIDs                        , &
+                            iGWNodeIDs                      , &
+                            NRow                            , &
                             SIZE(COEFF_CRS)                 , &
                             NJD_CRS                         , &
                             JND_CRS                         , &
-                            Matrix%RHS                      , &
                             Matrix%RHSL2(NewtonRaphsonIter) , &
                             COEFF_CRS                       , &
-                            Matrix%HDelta                   , &
                             pSolver%IterMax                 , &
                             pSolver%Tolerance               , &
                             iStat                           )
@@ -1472,16 +1477,18 @@ CONTAINS
   ! more reliable the code is. Efficiency may also be much improved.     *
   ! Note that lfil=n and tol=0.0 in ILUT  will yield the same factors as *
   ! Gaussian elimination without pivoting.                               *
-  SUBROUTINE PGMRES(N,iDimCOEFF,NJD,JND,RHS,RHS_L2,COEFF,U,MXITER,Toler,iStat)
-    INTEGER,INTENT(IN)  :: N,iDimCOEFF,MXITER,NJD(N+1),JND(iDimCOEFF)
-    REAL(8),INTENT(IN)  :: COEFF(iDimCOEFF),RHS(N),RHS_L2,Toler     
-    REAL(8)             :: U(N)
-    INTEGER,INTENT(OUT) :: iStat
+  SUBROUTINE PGMRES(Matrix,iStrmNodeIDs,iLakeIDs,iGWNodeIDs,N,iDimCOEFF,NJD,JND,RHS_L2,COEFF,MXITER,Toler,iStat)
+    TYPE(MatrixType)            :: Matrix
+    INTEGER,INTENT(IN)          :: iStrmNodeIDs(:),iLakeIDs(:),iGWNodeIDs(:),N,iDimCOEFF,MXITER,NJD(N+1),JND(iDimCOEFF)
+    REAL(8),INTENT(IN)          :: COEFF(iDimCOEFF),RHS_L2,Toler     
+    INTEGER,INTENT(OUT)         :: iStat
     
     !Local variables
     CHARACTER(LEN=ModNameLen+6) :: ThisProcedure=ModName // 'PGMRES'
-    INTEGER, ALLOCATABLE        :: JLU(:)
-    REAL(8), ALLOCATABLE        :: COEFFLU(:),W(:)
+    INTEGER                     :: iGlobalVar,iCompID,iCompVar,iNNodes,indxLayer,indxS,indxL,ID, &
+                                   iNLayers,indxComp
+    INTEGER,ALLOCATABLE         :: JLU(:)
+    REAL(8),ALLOCATABLE         :: COEFFLU(:),W(:)
     REAL(8)                     :: DROPTOL, RES, FPAR(16)
     INTEGER                     :: LFIL, IM, IWK, IERR, Iter,IPAR(16),JU(N),IW(3*N)  
     
@@ -1489,18 +1496,18 @@ CONTAINS
     iStat = 0
 
     ! ILUT PRECONDITIONER PARAMETERS    
-    LFIL        =       5                                           ! THE LEVEL OF FILL-IN, TYPICALLY BETWEEN 5 AND 10
-    DROPTOL     =       0.01                                    ! THE DROP TOLERANCE, TYPICALLY SET TO < 1.0    
+    LFIL        =       5                               ! THE LEVEL OF FILL-IN, TYPICALLY BETWEEN 5 AND 10
+    DROPTOL     =       0.01                            ! THE DROP TOLERANCE, TYPICALLY SET TO < 1.0    
     IWK         =       N*(2*LFIL + 1)                  ! WORKSPACE SIZE REQUIRED BY THE PRECONDITIONER
 
-    IM          =       20                                          ! THE NUMBER OF ITERATIONS PERFORMED BEFORE RESTART OF GMRES(IM) 
-    RES         =       0.0D0                                   ! THE RESIDUAL ERROR USED TO ASSESS CONVERGENCE
+    IM          =       20                              ! THE NUMBER OF ITERATIONS PERFORMED BEFORE RESTART OF GMRES(IM) 
+    RES         =       0.0D0                           ! THE RESIDUAL ERROR USED TO ASSESS CONVERGENCE
 
     
     ! PARMETERS OF THE SOLVER
-    IPAR(1)         =   0                                           ! INITIALIZE THE SOLVER
-    IPAR(2)     =       1                                           ! CHOOSE LEFT PRECONDITIONING
-    IPAR(3)     =       2                                           ! SPECIFY STOPPING CRITERIA BASED ON THE RESIDUAL   
+    IPAR(1)         =   0                               ! INITIALIZE THE SOLVER
+    IPAR(2)     =       1                               ! CHOOSE LEFT PRECONDITIONING
+    IPAR(3)     =       2                               ! SPECIFY STOPPING CRITERIA BASED ON THE RESIDUAL   
     IPAR(4)     =       (N+3)*(IM+2) + (IM+1)*IM/2      ! WORKSPACE SIZE NEED BY THE SOLVER
     IPAR(5)     =       IM
     IPAR(6)     =       MXITER
@@ -1530,33 +1537,61 @@ CONTAINS
 !   CALL SPARSKIT IMPLEMENTATION OF ILUT IN THE FILE pgmres.f
     CALL ILUT(N, COEFF, JND, NJD, LFIL, DROPTOL, COEFFLU, JLU, JU, IWK, W, IW, IERR)
     SELECT CASE (IERR)
-      CASE (-1)
-        MessageArray(1) = 'Bad coefficent matrix! Execution cannot proceed.'
-        MessageArray(2) = 'Please check input data.'
-        CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
-        iStat = -1
-        RETURN
-       
-      CASE (-3:-2)
-        MessageArray(1) = 'Insufficent storage for LU factorization!'
-        MessageArray(2) = 'Please contact IWFM techical support.'
-        CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
-        iStat = -1
-        RETURN
-        
-      CASE (:-5)
-        MessageArray(1) = 'All matrix entries for variable '//TRIM(IntToText(-5-IERR))//' are zero!'
-        MessageArray(2) = 'Check all data specified for this variable.'
-        CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
-        iStat = -1
-        RETURN
-        
+        CASE (-1)
+            MessageArray(1) = 'Bad coefficent matrix! Execution cannot proceed.'
+            MessageArray(2) = 'Please check input data.'
+            CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+            iStat = -1
+            RETURN
+         
+        CASE (-3:-2)
+            MessageArray(1) = 'Insufficent storage for LU factorization!'
+            MessageArray(2) = 'Please contact IWFM techical support.'
+            CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+            iStat = -1
+            RETURN
+          
+        CASE (:-5)
+            iGlobalVar = -5-IERR
+            CALL Matrix%GlobalNode_to_LocalNode(iGlobalVar,iCompID,iCompVar)
+            SELECT CASE (iCompID)
+                CASE (f_iStrmComp)
+                    ID              = iStrmNodeIDs(iCompVar)
+                    MessageArray(1) = 'All matrix entries for stream node '//TRIM(IntToText(ID))//' are zero!'
+                CASE (f_iLakeComp)
+                    ID              = iLakeIDs(iCompVar)
+                    MessageArray(1) = 'All matrix entries for lake '//TRIM(IntToText(ID))//' are zero!'
+                CASE (f_iGWComp)
+                    iNNodes  = SIZE(iGWNodeIDs)
+                    iNLayers = 0
+                    !Find number of aquifer layers
+                    DO indxComp=1,Matrix%nComps
+                        IF (Matrix%iComps(indxComp) .EQ. f_iGWComp) THEN
+                            iNLayers = Matrix%nCompNodes(indxComp) / iNNodes
+                            EXIT
+                        END IF
+                    END DO
+                    !Find the aquifer layer that the problematic node is in
+                    DO indxLayer=1,iNLayers
+                        indxS = (indxLayer-1)*iNNodes + 1
+                        indxL = indxLayer * iNNodes
+                        IF (iCompVar.GE.indxS  .AND.  iCompVar.LE.indxL) THEN
+                            ID              = iGWNodeIDs(iCompVar-indxS+1)
+                            MessageArray(1) = 'All matrix entries for groundwater node '//TRIM(IntToText(ID))//' at layer '//TRIM(IntToText(indxLayer))//' are zero!'
+                            EXIT
+                        END IF
+                    END DO
+            END SELECT
+            MessageArray(2) = 'Check all data specified for this variable.'
+            CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+            iStat = -1
+            RETURN
     END SELECT
 
     Iter = 0                                           ! INITIALIZE THE NUMBER OF ITERATIONS
    
     DO
-        CALL GMRES(N, RHS, U, IPAR, FPAR, W)                ! CALL SPARSKIT IMPLEMENTATION OF GMRES(M) IN THE FILE iters.f
+        CALL GMRES(N, Matrix%RHS, Matrix%HDelta, IPAR, FPAR, W)                ! CALL SPARSKIT IMPLEMENTATION OF GMRES(M) IN THE FILE iters.f
         
         IF (IPAR(7) .NE. Iter) THEN
              Iter = IPAR(7)

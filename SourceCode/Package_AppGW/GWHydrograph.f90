@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2022  
+!  Copyright (C) 2005-2024  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -72,7 +72,15 @@ MODULE GWHydrograph
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: GWHydrographType 
+  PUBLIC :: GWHydrographType          , & 
+            f_iTecPlot_PrintGWHeads   
+  
+  
+  ! -------------------------------------------------------------
+  ! --- ENUMURATORS FOR TECPLOT GW HEAD OUTPUT
+  ! -------------------------------------------------------------
+  INTEGER,PARAMETER :: f_iTecPlot_PrintGWHeads   = 1, &
+                       f_iTecPlot_PrintDepthToGW = 2
   
   
   ! -------------------------------------------------------------
@@ -94,21 +102,22 @@ MODULE GWHydrograph
   ! -------------------------------------------------------------
   TYPE GWHydrographType
       PRIVATE
-      TYPE(HydOutputType),ALLOCATABLE          :: GWHydOutput                             !Groundwater hydrograph at user-defined locations print-out data 
-      TYPE(GenericFileType),ALLOCATABLE        :: AllHeadOutFile                          !File to print heads at all nodes and layers
-      TYPE(Real2DTSDataInFileType),ALLOCATABLE :: AllHeadOutFile_ForInquiry               !File that stores heads at all nodes and layers to be opened for post-processing
-      TYPE(GenericFileType),ALLOCATABLE        :: CellVelocityOutFile                     !File to print-out velocities at cell centroids
-      TYPE(FaceFlowOutputType),ALLOCATABLE     :: FaceFlowOutput                          !Element face flow print-out information
-      TYPE(TecplotOutputType),ALLOCATABLE      :: HeadTecplotFile                         !File to print heads in Tecplot-readable format
-      TYPE(TecplotOutputType),ALLOCATABLE      :: VelocityTecplotFile                     !File to print velocities in Tecplot-readable format
-      REAL(8),ALLOCATABLE                      :: ElemCentroid_X(:)                       !X-coordinate of element centroid 
-      REAL(8),ALLOCATABLE                      :: ElemCentroid_Y(:)                       !Y-coordinate of element centroid
-      LOGICAL                                  :: lGWHydOutput_Defined         = .FALSE.  !Flag to check if an output file is defined
-      LOGICAL                                  :: lAllHeadOutFile_Defined      = .FALSE.  !Flag to check if this output file is defined  
-      LOGICAL                                  :: lCellVelocityOutFile_Defined = .FALSE.  !Flag to check if cell velocity output is defined 
-      LOGICAL                                  :: lFaceFlowOutput_Defined      = .FALSE.  !Flag to check if element face flow output is defined 
-      LOGICAL                                  :: lHeadTecplotFile_Defined     = .FALSE.  !Flag to check if this output file is defined
-      LOGICAL                                  :: lVelocityTecplotFile_Defined = .FALSE.  !Flag to check if this output file is defined
+      LOGICAL                                  :: lTecPlot_PrintGWHeads         = .TRUE.     !What is going to be printed to TecPlot for gw heads?
+      TYPE(HydOutputType),ALLOCATABLE          :: GWHydOutput                                !Groundwater hydrograph at user-defined locations print-out data 
+      TYPE(GenericFileType),ALLOCATABLE        :: AllHeadOutFile                             !File to print heads at all nodes and layers
+      TYPE(Real2DTSDataInFileType),ALLOCATABLE :: AllHeadOutFile_ForInquiry                  !File that stores heads at all nodes and layers to be opened for post-processing
+      TYPE(GenericFileType),ALLOCATABLE        :: CellVelocityOutFile                        !File to print-out velocities at cell centroids
+      TYPE(FaceFlowOutputType),ALLOCATABLE     :: FaceFlowOutput                             !Element face flow print-out information
+      TYPE(TecplotOutputType),ALLOCATABLE      :: HeadTecplotFile                            !File to print heads in Tecplot-readable format
+      TYPE(TecplotOutputType),ALLOCATABLE      :: VelocityTecplotFile                        !File to print velocities in Tecplot-readable format
+      REAL(8),ALLOCATABLE                      :: ElemCentroid_X(:)                          !X-coordinate of element centroid 
+      REAL(8),ALLOCATABLE                      :: ElemCentroid_Y(:)                          !Y-coordinate of element centroid
+      LOGICAL                                  :: lGWHydOutput_Defined          = .FALSE.    !Flag to check if an output file is defined
+      LOGICAL                                  :: lAllHeadOutFile_Defined       = .FALSE.    !Flag to check if this output file is defined  
+      LOGICAL                                  :: lCellVelocityOutFile_Defined  = .FALSE.    !Flag to check if cell velocity output is defined 
+      LOGICAL                                  :: lFaceFlowOutput_Defined       = .FALSE.    !Flag to check if element face flow output is defined 
+      LOGICAL                                  :: lHeadTecplotFile_Defined      = .FALSE.    !Flag to check if this output file is defined
+      LOGICAL                                  :: lVelocityTecplotFile_Defined  = .FALSE.    !Flag to check if this output file is defined
   CONTAINS
       PROCEDURE,PASS :: New
       PROCEDURE,PASS :: Kill
@@ -159,21 +168,21 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- NEW GW HYDROGRAPH DATA
   ! -------------------------------------------------------------
-  SUBROUTINE New(GWHydData,IsForInquiry,AppGrid,Stratigraphy,cWorkingDirectory,iGWNodeIDs,FACTLTOU,UNITLTOU,UNITVLOU,UNITVROU,cAllHeadOutFileName,cCellVelocityFileName,cHeadTecplotFileName,cVelTecplotFileName,TimeStep,InFile,iStat) 
+  SUBROUTINE New(GWHydData,lIsForInquiry,AppGrid,Stratigraphy,cWorkingDirectory,iGWNodeIDs,iTecPlotFlag,rFACTLTOU,cUNITLTOU,cUNITVLOU,cUNITVROU,cAllHeadOutFileName,cCellVelocityFileName,cHeadTecplotFileName,cVelTecplotFileName,TimeStep,InFile,iStat) 
     CLASS(GWHydrographType),INTENT(OUT) :: GWHydData
-    LOGICAL,INTENT(IN)                  :: IsForInquiry
+    LOGICAL,INTENT(IN)                  :: lIsForInquiry
     TYPE(AppGridType),INTENT(IN)        :: AppGrid
     TYPE(StratigraphyType),INTENT(IN)   :: Stratigraphy
-    INTEGER,INTENT(IN)                  :: iGWNodeIDs(:)
-    REAL(8),INTENT(IN)                  :: FACTLTOU
-    CHARACTER(LEN=*),INTENT(IN)         :: cWorkingDirectory,UNITLTOU,UNITVLOU,UNITVROU,cAllHeadOutFileName,cCellVelocityFileName,cHeadTecplotFileName,cVelTecplotFileName
+    INTEGER,INTENT(IN)                  :: iGWNodeIDs(:),iTecPlotFlag
+    REAL(8),INTENT(IN)                  :: rFACTLTOU
+    CHARACTER(LEN=*),INTENT(IN)         :: cWorkingDirectory,cUNITLTOU,cUNITVLOU,cUNITVROU,cAllHeadOutFileName,cCellVelocityFileName,cHeadTecplotFileName,cVelTecplotFileName
     TYPE(TimeStepType),INTENT(IN)       :: TimeStep
     TYPE(GenericFileType)               :: InFile
     INTEGER,INTENT(OUT)                 :: iStat
     
     !Local variables
-    CHARACTER(LEN=ModNameLen+3) :: ThisProcedure = ModName // 'New'
-    INTEGER                     :: ErrorCode,NLayers,NElements
+    CHARACTER(LEN=ModNameLen+3) :: cThisProcedure = ModName // 'New'
+    INTEGER                     :: iErrorCode,iNLayers,iNElements
     CHARACTER                   :: cErrorMsg*300
     
     !Initialize
@@ -183,15 +192,15 @@ CONTAINS
     CALL EchoProgress('   Instantiating groundwater hydrograph print-out data...')
     
     !Initialize
-    NLayers   = Stratigraphy%NLayers
-    NElements = AppGrid%NElements
+    iNLayers   = Stratigraphy%NLayers
+    iNElements = AppGrid%NElements
     
     !Instantiate file for the output of all heads
     IF (cAllHeadOutFileName .NE. '') THEN
-        IF (IsForInquiry) THEN
-            CALL AllHeadOutFile_ForInquiry_New(cAllHeadOutFileName,AppGrid%NNodes,NLayers,iGWNodeIDs,TimeStep,GWHydData%AllHeadOutFile_ForInquiry,iStat)
+        IF (lIsForInquiry) THEN
+            CALL AllHeadOutFile_ForInquiry_New(cAllHeadOutFileName,AppGrid%NNodes,iNLayers,iGWNodeIDs,TimeStep,GWHydData%AllHeadOutFile_ForInquiry,iStat)
         ELSE
-            CALL AllHeadOutFile_New(cAllHeadOutFileName,UNITLTOU,AppGrid%NNodes,NLayers,iGWNodeIDs,TimeStep,GWHydData%AllHeadOutFile,iStat)
+            CALL AllHeadOutFile_New(cAllHeadOutFileName,cUNITLTOU,AppGrid%NNodes,iNLayers,iGWNodeIDs,TimeStep,GWHydData%AllHeadOutFile,iStat)
         END IF
         IF (iStat .EQ. -1) RETURN
         GWHydData%lAllHeadOutFile_Defined = .TRUE.
@@ -199,68 +208,77 @@ CONTAINS
     
     !Instantiate file for the output of velocities at cell centers
     IF (cCellVelocityFileName .NE. '') THEN
-        ALLOCATE (GWHydData%CellVelocityOutFile        , &
-                  GWHydData%ElemCentroid_X(NElements)  , &
-                  GWHydData%ElemCentroid_Y(NElements)  , &
-                  STAT=ErrorCode ,ERRMSG=cErrorMsg     )
-        IF (ErrorCode .NE. 0) THEN
-            CALL SetLastMessage('Error in allocating memory for the print-out of groundwater velocities at cell centroids!'//NEW_LINE('')//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
+        ALLOCATE (GWHydData%CellVelocityOutFile         , &
+                  GWHydData%ElemCentroid_X(iNElements)  , &
+                  GWHydData%ElemCentroid_Y(iNElements)  , &
+                  STAT=iErrorCode ,ERRMSG=cErrorMsg     )
+        IF (iErrorCode .NE. 0) THEN
+            CALL SetLastMessage('Error in allocating memory for the print-out of groundwater velocities at cell centroids!'//NEW_LINE('')//TRIM(cErrorMsg),f_iFatal,cThisProcedure)
             iStat = -1
             RETURN
         END IF
-        CALL CellVelocityFile_New(IsForInquiry,cCellVelocityFileName,NLayers,AppGrid,GWHydData%CellVelocityOutFile,UNITLTOU,UNITVROU,FACTLTOU,GWHydData%ElemCentroid_X,GWHydData%ElemCentroid_Y,iStat)
+        CALL CellVelocityFile_New(lIsForInquiry,cCellVelocityFileName,iNLayers,AppGrid,GWHydData%CellVelocityOutFile,cUNITLTOU,cUNITVROU,rFACTLTOU,GWHydData%ElemCentroid_X,GWHydData%ElemCentroid_Y,iStat)
         IF (iStat .EQ. -1) RETURN
         GWHydData%lCellVelocityOutFile_Defined = .TRUE.
     END IF
     
     !Instantiate file for head Tecplot output
     IF (cHeadTecplotFileName .NE. '') THEN
-        ALLOCATE (GWHydData%HeadTecplotFile , STAT=ErrorCode ,ERRMSG=cErrorMsg)
-        IF (ErrorCode .NE. 0) THEN
-            CALL SetLastMessage('Error in allocating memory for groundwater head print-out for TecPlot!'//NEW_LINE('')//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
+        ALLOCATE (GWHydData%HeadTecplotFile , STAT=iErrorCode ,ERRMSG=cErrorMsg)
+        IF (iErrorCode .NE. 0) THEN
+            CALL SetLastMessage('Error in allocating memory for groundwater head print-out for TecPlot!'//NEW_LINE('')//TRIM(cErrorMsg),f_iFatal,cThisProcedure)
             iStat = -1
             RETURN
         END IF
-        CALL GWHydData%HeadTecplotFile%New(IsForInquiry,cHeadTecplotFileName,'groundwater head print-out for TecPlot',iStat)  ;  IF (iStat .EQ. -1) RETURN
+        CALL GWHydData%HeadTecplotFile%New(lIsForInquiry,cHeadTecplotFileName,'groundwater head print-out for TecPlot',iStat)  ;  IF (iStat .EQ. -1) RETURN
         GWHydData%lHeadTecplotFile_Defined = .TRUE.
     END IF
     
+    !Make sure Tecplot head print flag is recognized, and save it
+    IF (iTecPlotFlag .EQ. f_iTecPlot_PrintGWHeads) THEN
+        GWHydData%lTecPlot_PrintGWHeads = .TRUE.
+    ELSE IF (iTecPlotFlag .EQ. f_iTecPlot_PrintDepThToGW) THEN
+        GWHydData%lTecPlot_PrintGWHeads = .FALSE.
+    ELSE
+        GWHydData%lTecPlot_PrintGWHeads = .TRUE.
+    END IF
+        
     !Instantiate file for velocity Tecplot output
     IF (cVelTecplotFileName .NE. '') THEN
-        ALLOCATE (GWHydData%VelocityTecplotFile , STAT=ErrorCode ,ERRMSG=cErrorMsg)
-        IF (ErrorCode .NE. 0) THEN
-            CALL SetLastMessage('Error in allocating memory for groundwater velocities print-out for TecPlot!'//NEW_LINE('')//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
+        ALLOCATE (GWHydData%VelocityTecplotFile , STAT=iErrorCode ,ERRMSG=cErrorMsg)
+        IF (iErrorCode .NE. 0) THEN
+            CALL SetLastMessage('Error in allocating memory for groundwater velocities print-out for TecPlot!'//NEW_LINE('')//TRIM(cErrorMsg),f_iFatal,cThisProcedure)
             iStat = -1
             RETURN
         END IF
-        CALL GWHydData%VelocityTecplotFile%New(IsForInquiry,cVelTecplotFileName,'groundwater velocities print-out for TecPlot',iStat=iStat)
+        CALL GWHydData%VelocityTecplotFile%New(lIsForInquiry,cVelTecplotFileName,'groundwater velocities print-out for TecPlot',iStat=iStat)
         IF (iStat .EQ. -1) RETURN
         GWHydData%lVelocityTecplotFile_Defined = .TRUE.
     END IF
     
     !Instantiate the user-specified hydrographs output data
-    ALLOCATE (GWHydData%GWHydOutput , STAT=ErrorCode ,ERRMSG=cErrorMsg)
-    IF (ErrorCode .NE. 0) THEN
-        CALL SetLastMessage('Error in allocating memory for groundwater hydrograph printing at user-specified locations!'//NEW_LINE('')//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
+    ALLOCATE (GWHydData%GWHydOutput , STAT=iErrorCode ,ERRMSG=cErrorMsg)
+    IF (iErrorCode .NE. 0) THEN
+        CALL SetLastMessage('Error in allocating memory for groundwater hydrograph printing at user-specified locations!'//NEW_LINE('')//TRIM(cErrorMsg),f_iFatal,cThisProcedure)
         iStat = -1
         RETURN
     END IF
-    CALL GWHydData%GWHydOutput%New(IsForInquiry,InFile,cWorkingDirectory,AppGrid,Stratigraphy,iGWNodeIDs,f_iHyd_GWHead,UNITLTOU,'HEAD',TimeStep,iStat)
+    CALL GWHydData%GWHydOutput%New(lIsForInquiry,InFile,cWorkingDirectory,AppGrid,Stratigraphy,iGWNodeIDs,f_iHyd_GWHead,cUNITLTOU,'HEAD',TimeStep,iStat)
     IF (iStat .EQ. -1) RETURN
     GWHydData%lGWHydOutput_Defined = GWHydData%GWHydOutput%IsDefined()
-    IF (.NOT. GWHydData%lGWHydOutput_Defined) DEALLOCATE (GWHydData%GWHydOutput , STAT=ErrorCode)
+    IF (.NOT. GWHydData%lGWHydOutput_Defined) DEALLOCATE (GWHydData%GWHydOutput , STAT=iErrorCode)
 
     !Instantiate face flow hydrographs output data
-    ALLOCATE (GWHydData%FaceFlowOutput , STAT=ErrorCode ,ERRMSG=cErrorMsg)
-    IF (ErrorCode .NE. 0) THEN
-        CALL SetLastMessage('Error in allocating memory for face flow hydrograph printing!'//NEW_LINE('')//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
+    ALLOCATE (GWHydData%FaceFlowOutput , STAT=iErrorCode ,ERRMSG=cErrorMsg)
+    IF (iErrorCode .NE. 0) THEN
+        CALL SetLastMessage('Error in allocating memory for face flow hydrograph printing!'//NEW_LINE('')//TRIM(cErrorMsg),f_iFatal,cThisProcedure)
         iStat = -1
         RETURN
     END IF
-    CALL FaceFlowOutput_New(IsForInquiry,InFile,cWorkingDirectory,AppGrid%AppFace,NLayers,AppGrid%AppElement%ID,UNITVLOU,TimeStep,GWHydData%FaceFlowOutput,iStat)
+    CALL FaceFlowOutput_New(lIsForInquiry,InFile,cWorkingDirectory,AppGrid%AppFace,iNLayers,AppGrid%AppElement%ID,cUNITVLOU,TimeStep,GWHydData%FaceFlowOutput,iStat)
     IF (iStat .EQ. -1) RETURN
     IF (GWHydData%FaceFlowOutput%OutFile%iGetFileType() .EQ. f_iUNKNOWN) THEN
-        DEALLOCATE (GWHydData%FaceFlowOutput , STAT=ErrorCode)
+        DEALLOCATE (GWHydData%FaceFlowOutput , STAT=iErrorCode)
     ELSE
         GWHydData%lFaceFlowOutput_Defined = .TRUE.
     END IF
@@ -462,7 +480,7 @@ CONTAINS
     iStat = 0
     
     !Inform user
-    CALL EchoProgress('  Instantiating output file for groundwater heads at all nodes...') 
+    CALL EchoProgress('   Instantiating output file for groundwater heads at all nodes...') 
     
     !Initialize
     Header     = ''
@@ -985,47 +1003,56 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GATEWAY TO PRINTING INITIAL VALUES
   ! -------------------------------------------------------------
-  SUBROUTINE PrintInitialValues(GWHydData,AppGrid,Stratigraphy,Heads,FACTLTOU,FACTVROU,StrmConnectivity,TimeStep)
+  SUBROUTINE PrintInitialValues(GWHydData,AppGrid,Stratigraphy,rHeads,rFACTLTOU,rFACTVROU,StrmConnectivity,TimeStep)
     CLASS(GWHydrographType)           :: GWHydData
     TYPE(AppGridType),INTENT(IN)      :: AppGrid
     TYPE(StratigraphyType),INTENT(IN) :: Stratigraphy
-    REAL(8),INTENT(IN)                :: Heads(:,:),FACTLTOU,FACTVROU
+    REAL(8),INTENT(IN)                :: rHeads(:,:),rFACTLTOU,rFACTVROU
     COMPLEX,INTENT(IN)                :: StrmConnectivity(:)
     TYPE(TimeStepType),INTENT(IN)     :: TimeStep
     
     !Local variables
-    INTEGER                     :: NLayers,indxLayer
-    REAL(8)                     :: FactorsHead(Stratigraphy%NLayers),FactorsVel(3*Stratigraphy%NLayers),          &
-                                   DummyVels(AppGrid%NNodes,3*Stratigraphy%NLayers)
-    CHARACTER                   :: cVarNamesHead(Stratigraphy%NLayers)*10,cVarNamesVel(3*Stratigraphy%NLayers)*10
+    INTEGER                     :: iNLayers,indxLayer
+    REAL(8)                     :: rFactorsHead(Stratigraphy%NLayers),rFactorsVel(3*Stratigraphy%NLayers),          &
+                                   rDummyVels(AppGrid%NNodes,3*Stratigraphy%NLayers),                               &
+                                   rDepthToGW(AppGrid%NNodes,Stratigraphy%NLayers)
+    CHARACTER                   :: cVarNamesHead(Stratigraphy%NLayers)*20,cVarNamesVel(3*Stratigraphy%NLayers)*10
     CHARACTER(LEN=26),PARAMETER :: cFormatHead = '(50(F12.3,2X))' , cFormatVel = '(2(F12.3,2X),75(F12.5,2X))'
     
     !Initialize
-    NLayers = Stratigraphy%NLayers
+    iNLayers = Stratigraphy%NLayers
     
     !Print user-specified hydrographs
     IF (GWHydData%lGWHydOutput_Defined)  &
-        CALL GWHydData%GWHydOutput%PrintResults(Stratigraphy,f_iHyd_GWHead,Heads,FACTLTOU,TimeStep,.FALSE.)
+        CALL GWHydData%GWHydOutput%PrintResults(Stratigraphy,f_iHyd_GWHead,rHeads,rFACTLTOU,TimeStep,.FALSE.)
     
     !Print heads at all nodes
     IF (GWHydData%lAllHeadOutFile_Defined)  &
-        CALL AllHeadOutFile_PrintResults(Heads,FACTLTOU,TimeStep,.FALSE.,GWHydData%AllHeadOutFile)
+        CALL AllHeadOutFile_PrintResults(rHeads,rFACTLTOU,TimeStep,.FALSE.,GWHydData%AllHeadOutFile)
     
     !Print Head Tecplot output
     IF (GWHydData%lHeadTecplotFile_Defined) THEN
-        cVarNamesHead = [('GWHEAD'//TRIM(IntToText(indxLayer)) , indxLayer=1,NLayers)]
-        FactorsHead   = FACTLTOU
-        CALL GWHydData%HeadTecplotFile%PrintInitialValues(AppGrid,StrmConnectivity,Heads,FactorsHead,cFormatHead,cVarNamesHead,TimeStep)
+        rFactorsHead = rFACTLTOU
+        IF (GWHydData%lTecPlot_PrintGWHeads) THEN
+            cVarNamesHead = [('GWHEAD'//TRIM(IntToText(indxLayer)) , indxLayer=1,iNLayers)]
+            CALL GWHydData%HeadTecplotFile%PrintInitialValues(AppGrid,StrmConnectivity,rHeads,rFactorsHead,cFormatHead,cVarNamesHead,TimeStep)
+        ELSE
+            cVarNamesHead = [('DEPTH-TO-GW'//TRIM(IntToText(indxLayer)) , indxLayer=1,iNLayers)]
+            DO indxLayer=1,iNLayers
+                rDepthToGW(:,indxLayer) = Stratigraphy%GSElev - rHeads(:,indxLayer) 
+            END DO
+            CALL GWHydData%HeadTecplotFile%PrintInitialValues(AppGrid,StrmConnectivity,rDepthToGW,rFactorsHead,cFormatHead,cVarNamesHead,TimeStep)
+        END IF
     END IF
     
     !Print Velocity Tecplot output
     IF (GWHydData%lVelocityTecplotFile_Defined) THEN
-        cVarNamesVel(1::3) = [('VX_L'//TRIM(IntToText(indxLayer)) , indxLayer=1,NLayers)]
-        cVarNamesVel(2::3) = [('VY_L'//TRIM(IntToText(indxLayer)) , indxLayer=1,NLayers)]
-        cVarNamesVel(3::3) = [('VZ_L'//TRIM(IntToText(indxLayer)) , indxLayer=1,NLayers)]
-        FactorsVel         = FACTVROU
-        DummyVels          = 0.0
-        CALL GWHydData%VelocityTecplotFile%PrintInitialValues(AppGrid,StrmConnectivity,DummyVels,FactorsVel,cFormatVel,cVarNamesVel,TimeStep)
+        cVarNamesVel(1::3) = [('VX_L'//TRIM(IntToText(indxLayer)) , indxLayer=1,iNLayers)]
+        cVarNamesVel(2::3) = [('VY_L'//TRIM(IntToText(indxLayer)) , indxLayer=1,iNLayers)]
+        cVarNamesVel(3::3) = [('VZ_L'//TRIM(IntToText(indxLayer)) , indxLayer=1,iNLayers)]
+        rFactorsVel        = rFACTVROU
+        rDummyVels         = 0.0
+        CALL GWHydData%VelocityTecplotFile%PrintInitialValues(AppGrid,StrmConnectivity,rDummyVels,rFactorsVel,cFormatVel,cVarNamesVel,TimeStep)
     END IF
     
   END SUBROUTINE PrintInitialValues
@@ -1034,51 +1061,59 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GATEWAY TO ALL HYDROGRAPH PRINTING
   ! -------------------------------------------------------------
-  SUBROUTINE PrintResults(GWHydData,AppGrid,Stratigraphy,AppBC,GWState,FaceFlows,SWShedFaceFlows,FACTLTOU,FACTVLOU,FACTVROU,TimeStep,lEndOfSimulation)
+  SUBROUTINE PrintResults(GWHydData,AppGrid,Stratigraphy,AppBC,GWState,rFaceFlows,rSWShedFaceFlows,rFACTLTOU,rFACTVLOU,rFACTVROU,TimeStep,lEndOfSimulation)
     CLASS(GWHydrographType)           :: GWHydData
     TYPE(AppGridType),INTENT(IN)      :: AppGrid
     TYPE(StratigraphyType),INTENT(IN) :: Stratigraphy
     TYPE(AppBCType),INTENT(IN)        :: AppBC
     TYPE(GWStateType),INTENT(IN)      :: GWState
-    REAL(8),INTENT(IN)                :: FaceFlows(:,:),SWShedFaceFlows(:,:),FACTLTOU,FACTVLOU,FACTVROU
+    REAL(8),INTENT(IN)                :: rFaceFlows(:,:),rSWShedFaceFlows(:,:),rFACTLTOU,rFACTVLOU,rFACTVROU
     TYPE(TimeStepType),INTENT(IN)     :: TimeStep
     LOGICAL,INTENT(IN)                :: lEndOfSimulation
     
     !Local variables
     INTEGER :: indx,indxLayer
-    REAL(8) :: Vels(AppGrid%NNodes,3*Stratigraphy%NLayers)
+    REAL(8) :: rVels(AppGrid%NNodes,3*Stratigraphy%NLayers),rDepthToGW(AppGrid%NNodes,Stratigraphy%NLayers)
     
     !Print user-specified hydrographs
     IF (GWHydData%lGWHydOutput_Defined)  &
-        CALL GWHydData%GWHydOutput%PrintResults(Stratigraphy,f_iHyd_GWHead,GWState%Head,FACTLTOU,TimeStep,lEndOfSimulation)
+        CALL GWHydData%GWHydOutput%PrintResults(Stratigraphy,f_iHyd_GWHead,GWState%Head,rFACTLTOU,TimeStep,lEndOfSimulation)
     
     !Print heads at all nodes
     IF (GWHydData%lAllHeadOutFile_Defined)  &
-        CALL AllHeadOutFile_PrintResults(GWState%Head,FACTLTOU,TimeStep,lEndOfSimulation,GWHydData%AllHeadOutFile)
+        CALL AllHeadOutFile_PrintResults(GWState%Head,rFACTLTOU,TimeStep,lEndOfSimulation,GWHydData%AllHeadOutFile)
     
     !Print head Tecplot output
-    IF (GWHydData%lHeadTecplotFile_Defined)  &
-        CALL GWHydData%HeadTecplotFile%PrintResults(GWState%Head,FACTLTOU,TimeStep)
+    IF (GWHydData%lHeadTecplotFile_Defined) THEN
+        IF (GWHydData%lTecPlot_PrintGWHeads) THEN
+            CALL GWHydData%HeadTecplotFile%PrintResults(GWState%Head,rFACTLTOU,TimeStep)
+        ELSE
+            DO indxLayer=1,Stratigraphy%NLayers
+                rDepthToGW(:,indxLayer) = Stratigraphy%GSElev - GWState%Head(:,indxLayer) 
+            END DO
+            CALL GWHydData%HeadTecplotFile%PrintResults(rDepthToGW,rFACTLTOU,TimeStep)
+        END IF
+    END IF
     
     !Print velocity Tecplot output
     IF (GWHydData%lVelocityTecplotFile_Defined) THEN
         indx = 1
         DO indxLayer=1,3*Stratigraphy%NLayers,3
-            Vels(:,indxLayer)   = GWState%Vx(:,indx)
-            Vels(:,indxLayer+1) = GWState%Vy(:,indx)
-            Vels(:,indxLayer+2) = GWState%Vz(:,indx)
-            indx                = indx + 1
+            rVels(:,indxLayer)   = GWState%Vx(:,indx)
+            rVels(:,indxLayer+1) = GWState%Vy(:,indx)
+            rVels(:,indxLayer+2) = GWState%Vz(:,indx)
+            indx                 = indx + 1
         END DO
-        CALL GWHydData%VelocityTecplotFile%PrintResults(Vels,FACTVROU,TimeStep)
+        CALL GWHydData%VelocityTecplotFile%PrintResults(rVels,rFACTVROU,TimeStep)
     END IF
     
     !Print velocities at cell centroids
     IF (GWHydData%lCellVelocityOutFile_Defined)  &
-        CALL CellVelocitiesOutput_PrintResults(AppGrid,Stratigraphy%NLayers,TimeStep,GWState,FACTVROU,GWHydData%ElemCentroid_X,GWHydData%ElemCentroid_Y,GWHydData%CellVelocityOutFile)
+        CALL CellVelocitiesOutput_PrintResults(AppGrid,Stratigraphy%NLayers,TimeStep,GWState,rFACTVROU,GWHydData%ElemCentroid_X,GWHydData%ElemCentroid_Y,GWHydData%CellVelocityOutFile)
     
     !Print face flow output
     IF (GWHydData%lFaceFlowOutput_Defined)  &
-        CALL FaceFlowOutput_PrintResults(AppGrid,AppBC,FACTVLOU,FaceFlows,SWShedFaceFlows(:,:),TimeStep,lEndOfSimulation,GWHydData%FaceFlowOutput)
+        CALL FaceFlowOutput_PrintResults(AppGrid,AppBC,rFACTVLOU,rFaceFlows,rSWShedFaceFlows,TimeStep,lEndOfSimulation,GWHydData%FaceFlowOutput)
     
   END SUBROUTINE PrintResults
   

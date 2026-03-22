@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2022  
+!  Copyright (C) 2005-2024  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -181,6 +181,12 @@ CONTAINS
                 RETURN
             END IF
         END IF
+    ELSE
+        !If streams are not simulated, burn through the entries
+        DO indxNode=1,nBudNodes
+           CALL InFile%ReadData(iStrmNodeID,iStat)  
+        END DO
+        RETURN
     END IF
     
     
@@ -346,10 +352,10 @@ CONTAINS
   ! --- GET MONTHLY BUDGET FLOWS FROM StrmNodeBudget OBJECT 
   ! --- (Assumes cBeginDate and cEndDate are adjusted properly)
   ! -------------------------------------------------------------
-  SUBROUTINE GetBudget_MonthlyFlows_GivenStrmNodeBudget(StrmNodeBudget,iStrmNodeID,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
+  SUBROUTINE GetBudget_MonthlyFlows_GivenStrmNodeBudget(StrmNodeBudget,iStrmNodeWithBudget,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
     CLASS(StrmNodeBudgetType),INTENT(IN)     :: StrmNodeBudget
     CHARACTER(LEN=*),INTENT(IN)              :: cBeginDate,cEndDate
-    INTEGER,INTENT(IN)                       :: iStrmNodeID
+    INTEGER,INTENT(IN)                       :: iStrmNodeWithBudget
     REAL(8),INTENT(IN)                       :: rFactVL
     REAL(8),ALLOCATABLE,INTENT(OUT)          :: rFlows(:,:)  !In (column,month) format
     CHARACTER(LEN=*),ALLOCATABLE,INTENT(OUT) :: cFlowNames(:)
@@ -366,7 +372,7 @@ CONTAINS
     END IF
     
     !Retrieve flows
-    CALL GetBudget_MonthlyFlows_GivenFile(StrmNodeBudget%StrmNodeBudRawFile,iStrmNodeID,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
+    CALL GetBudget_MonthlyFlows_GivenFile(StrmNodeBudget%StrmNodeBudRawFile,iStrmNodeWithBudget,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
         
   END SUBROUTINE GetBudget_MonthlyFlows_GivenStrmNodeBudget
 
@@ -375,10 +381,10 @@ CONTAINS
   ! --- GET MONTHLY BUDGET FLOWS FROM A DEFINED BUDGET FILE
   ! --- (Assumes cBeginDate and cEndDate are adjusted properly)
   ! -------------------------------------------------------------
-  SUBROUTINE GetBudget_MonthlyFlows_GivenFile(Budget,iStrmNodeID,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
+  SUBROUTINE GetBudget_MonthlyFlows_GivenFile(Budget,iStrmNodeWithBudget,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
     TYPE(BudgetType),INTENT(IN)              :: Budget      !Assumes Budget file is already open
     CHARACTER(LEN=*),INTENT(IN)              :: cBeginDate,cEndDate
-    INTEGER,INTENT(IN)                       :: iStrmNodeID
+    INTEGER,INTENT(IN)                       :: iStrmNodeWithBudget
     REAL(8),INTENT(IN)                       :: rFactVL
     REAL(8),ALLOCATABLE,INTENT(OUT)          :: rFlows(:,:)  !In (column,month) format
     CHARACTER(LEN=*),ALLOCATABLE,INTENT(OUT) :: cFlowNames(:)
@@ -394,7 +400,7 @@ CONTAINS
     ALLOCATE (rValues(SIZE(iReadCols)+1,iNTimeSteps)) !Adding 1 to the first dimension for Time column; it will be removed later
     
     !Read data
-    CALL Budget%ReadData(iStrmNodeID,iReadCols,'1MON',cBeginDate,cEndDate,0d0,0d0,0d0,1d0,1d0,rFactVL,iDimActual,rValues,iStat)
+    CALL Budget%ReadData(iStrmNodeWithBudget,iReadCols,'1MON',cBeginDate,cEndDate,0d0,0d0,0d0,1d0,1d0,rFactVL,iDimActual,rValues,iStat)
     IF (iStat .NE. 0) RETURN
     
     !Store values in return argument
@@ -435,9 +441,9 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET BUDGET TIME SERIES DATA FOR A SET OF COLUMNS 
   ! -------------------------------------------------------------
-  SUBROUTINE GetBudget_TSData(StrmNodeBudget,iStrmNodeID,iCols,cBeginDate,cEndDate,cInterval,rFactLT,rFactAR,rFactVL,rOutputDates,rOutputValues,iDataTypes,inActualOutput,iStat)
+  SUBROUTINE GetBudget_TSData(StrmNodeBudget,iStrmNodeWithBudget,iCols,cBeginDate,cEndDate,cInterval,rFactLT,rFactAR,rFactVL,rOutputDates,rOutputValues,iDataTypes,inActualOutput,iStat)
     CLASS(StrmNodeBudgetType),INTENT(IN) :: StrmNodeBudget
-    INTEGER,INTENT(IN)                   :: iStrmNodeID,iCols(:)
+    INTEGER,INTENT(IN)                   :: iStrmNodeWithBudget,iCols(:)
     CHARACTER(LEN=*),INTENT(IN)          :: cBeginDate,cEndDate,cInterval
     REAL(8),INTENT(IN)                   :: rFactLT,rFactAR,rFactVL
     REAL(8),INTENT(OUT)                  :: rOutputDates(:),rOutputValues(:,:)    !rOutputValues is in (timestep,column) format
@@ -448,7 +454,7 @@ CONTAINS
     
     IF (StrmNodeBudget%StrmNodeBudRawFile_Defined) THEN
         DO indx=1,SIZE(iCols)
-            CALL StrmNodeBudget%StrmNodeBudRawFile%ReadData(iStrmNodeID,iCols(indx),cInterval,cBeginDate,cEndDate,1d0,0d0,0d0,rFactLT,rFactAR,rFactVL,iDataTypes(indx),inActualOutput,rOutputDates,rOutputValues(:,indx),iStat)
+            CALL StrmNodeBudget%StrmNodeBudRawFile%ReadData(iStrmNodeWithBudget,iCols(indx),cInterval,cBeginDate,cEndDate,1d0,0d0,0d0,rFactLT,rFactAR,rFactVL,iDataTypes(indx),inActualOutput,rOutputDates,rOutputValues(:,indx),iStat)
         END DO
     ELSE
         iStat          = 0

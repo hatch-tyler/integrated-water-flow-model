@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2022  
+!  Copyright (C) 2005-2024  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -127,7 +127,7 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- INSTANTIATE SUBSIDENCE COMPONENT
   ! -------------------------------------------------------------
-  SUBROUTINE AppSubsidence_v50_New(AppSubsidence,IsForInquiry,cFileName,cWorkingDirectory,iGWNodeIDs,AppGrid,Stratigraphy,StrmConnectivity,TimeStep,iStat) 
+  SUBROUTINE AppSubsidence_v50_New(AppSubsidence,IsForInquiry,cFileName,cWorkingDirectory,iGWNodeIDs,AppGrid,Stratigraphy,StrmConnectivity,TimeStep,iStat,SubsICFile) 
     CLASS(AppSubsidence_v50_Type),INTENT(OUT) :: AppSubsidence
     LOGICAL,INTENT(IN)                        :: IsForInquiry
     CHARACTER(LEN=*),INTENT(IN)               :: cFileName,cWorkingDirectory
@@ -137,6 +137,7 @@ CONTAINS
     COMPLEX,INTENT(IN)                        :: StrmConnectivity(:)
     TYPE(TimeStepType),INTENT(IN)             :: TimeStep
     INTEGER,INTENT(OUT)                       :: iStat
+    TYPE(GenericFileType),OPTIONAL            :: SubsICFile
     
     !Local data type for data compilation
     TYPE SubLayerDataType
@@ -308,7 +309,12 @@ CONTAINS
     IF (iStat .EQ. -1) RETURN
     
     !Read initial interbed thickness, pre-compaction head and initial interbed heads to overwrite the previous values
-    CALL ReadOverwriteICData(cICFileName,iGWNodeIDs,AppSubsidence%InterbedThick,rPreCompactHead,AppSubsidence%lInitHeadsFromGW,rInitHeads,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    IF (PRESENT(SubsICFile)) THEN
+        CALL ReadOverwriteICData_FromOpenedFile(SubsICFile,iGWNodeIDs,AppSubsidence%InterbedThick,rPreCompactHead,AppSubsidence%lInitHeadsFromGW,rInitHeads,iStat)  
+    ELSE
+        CALL ReadOverwriteICData_OpenFile(cICFileName,iGWNodeIDs,AppSubsidence%InterbedThick,rPreCompactHead,AppSubsidence%lInitHeadsFromGW,rInitHeads,iStat)  
+    END IF
+    IF (iStat .EQ. -1) RETURN
     AppSubsidence%InterbedThick_P = AppSubsidence%InterbedThick
     
     !Process and organize interbed data arrays
@@ -484,9 +490,10 @@ CONTAINS
   
   
   ! -------------------------------------------------------------
-  ! --- READ OVERWRITING INITIAL INTERBED THICKNESS AND PRE-COMPACTION HEAD
+  ! --- READ OVERWRITING INITIAL INTERBED THICKNESS, PRE-COMPACTION HEAD AND INTERBED HEADS
+  ! --- (IC file is not yet opened; first open file)
   ! -------------------------------------------------------------
-  SUBROUTINE ReadOverWriteICData(cICFileName,iGWNodeIDs,InterbedThick,PreCompactHead,lInitHeadsFromGW,rInitHeads,iStat)
+  SUBROUTINE ReadOverWriteICData_OpenFile(cICFileName,iGWNodeIDs,InterbedThick,PreCompactHead,lInitHeadsFromGW,rInitHeads,iStat)
     CHARACTER(LEN=*),INTENT(IN) :: cICFileName
     INTEGER,INTENT(IN)          :: iGWNodeIDs(:)
     REAL(8)                     :: InterbedThick(:,:),PreCompactHead(:,:),rInitHeads(:,:)
@@ -494,7 +501,7 @@ CONTAINS
     INTEGER,INTENT(OUT)         :: iStat
     
     !Local variables
-    CHARACTER(LEN=ModNameLen+19) :: ThisProcedure = ModName // 'ReadOverWriteICData'
+    CHARACTER(LEN=ModNameLen+28) :: ThisProcedure = ModName // 'ReadOverWriteICData_OpenFile'
     TYPE(GenericFileType)        :: ICFile
     INTEGER                      :: ID,indxNode,iNLayers,iNNodes,iNode
     REAL(8)                      :: rFact,rDummyArray(1+2*SIZE(InterbedThick,DIM=2))
@@ -551,7 +558,65 @@ CONTAINS
     !Close file
     CALL ICFile%Kill()
     
-  END SUBROUTINE ReadOverWriteICData
+  END SUBROUTINE ReadOverWriteICData_OpenFile
+  
+  
+  ! -------------------------------------------------------------
+  ! --- READ OVERWRITING INITIAL INTERBED THICKNESS, PRE-COMPACTION HEAD AND INTERBED HEADS
+  ! --- (IC file is alreay opened)
+  ! -------------------------------------------------------------
+  SUBROUTINE ReadOverWriteICData_FromOpenedFile(ICFile,iGWNodeIDs,InterbedThick,PreCompactHead,lInitHeadsFromGW,rInitHeads,iStat)
+    TYPE(GenericFileType) :: ICFile
+    INTEGER,INTENT(IN)    :: iGWNodeIDs(:)
+    REAL(8)               :: InterbedThick(:,:),PreCompactHead(:,:),rInitHeads(:,:)
+    LOGICAL               :: lInitHeadsFromGW
+    INTEGER,INTENT(OUT)   :: iStat
+    
+    !Local variables
+    CHARACTER(LEN=ModNameLen+34) :: ThisProcedure = ModName // 'ReadOverWriteICData_FromOpenedFile'
+    INTEGER                      :: ID,indxNode,iNLayers,iNNodes,iNode
+    REAL(8)                      :: rFact,rDummyArray(1+2*SIZE(InterbedThick,DIM=2))
+    LOGICAL                      :: lProcessed(SIZE(iGWNodeIDs))
+    
+    !Initialize
+    lProcessed = .FALSE.
+    iNNodes    = SIZE(InterbedThick , DIM=1)
+    iNLayers   = SIZE(InterbedThick , DIM=2)
+    
+    !Conversion factor
+    CALL ICFile%ReadData(rFact,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    
+    !Read initial interbed thickness and pre-compaction heads
+    DO indxNode=1,iNNodes
+        CALL ICFile%ReadData(rDummyArray,iStat)  ;  IF (iStat .EQ. -1) RETURN
+        
+        !Make gw node ID is legit and not defined more than once
+        ID = rDummyArray(1)
+        CALL ConvertID_To_Index(ID,iGWNodeIDs,iNode)
+        IF (iNode .EQ. 0) THEN
+            CALL SetLastMessage('Groundwater node ID '//TRIM(IntToText(ID))//' listed for subsidence initial conditions is not in the model!',f_iFatal,ThisProcedure)
+            iStat = -1
+            RETURN
+        END IF
+        IF (lProcessed(iNode)) THEN
+            CALL SetLastMessage('Groundwater node ID '//TRIM(IntToText(ID))//' is listed more than once for subsidence initial conditions definitions!',f_iFatal,ThisProcedure)
+            iStat = -1
+            RETURN
+        END IF
+        lProcessed(iNode) = .TRUE.
+        
+        !Interbed thickness
+        InterbedThick(iNode,:) = rDummyArray(2:1+iNLayers) * rFact
+        
+        !Pre-compaction head
+        PreCompactHead(iNode,:) = rDummyArray(iNLayers+2:) * rFact
+        
+    END DO
+    
+    !Read initial heads
+    CALL ReadInitialHeads(ICFile,iGWNodeIDs,lInitHeadsFromGW,rInitHeads,iStat)
+    
+  END SUBROUTINE ReadOverWriteICData_FromOpenedFile
   
   
   ! -------------------------------------------------------------

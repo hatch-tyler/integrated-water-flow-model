@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2022  
+!  Copyright (C) 2005-2024  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -243,7 +243,7 @@ CONTAINS
     MessageArray(4) = '  Package_Misc.lib  : '//TRIM(Package_Misc_GetVersion())
     MessageArray(5) = '  Package_Budget.lib: '//TRIM(Package_Budget_GetVersion())
     
-    CALL LogMessage(MessageArray(1:5),f_iMessage,'',Destination=f_iSCREEN)
+    CALL LogMessage(MessageArray(1:5),f_iMessage,'',iDestination=f_iSCREEN)
   
   END SUBROUTINE PrintVersionNumbers
   

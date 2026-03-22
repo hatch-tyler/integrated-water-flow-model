@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2022  
+!  Copyright (C) 2005-2024  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -47,7 +47,8 @@ MODULE Class_UrbanLandUse_v50
                                       f_iFlowDest_Lake                        , &
                                       f_iFlowDest_Subregion                   , &
                                       f_iFlowDest_GWElement                   
-  USE Util_Package_RootZone   , ONLY: ReadRealData
+  USE Util_Package_RootZone   , ONLY: ReadRealData                            , &
+                                      ReadLandUseAreasForTimePeriod    
   USE Package_PrecipitationET , ONLY: ETType
   USe Package_UnsatZone       , ONLY: RootZoneSoilType                        , &
                                       NonPondedLUMoistureRouter
@@ -90,39 +91,40 @@ MODULE Class_UrbanLandUse_v50
   ! --- URBAN LAND DATABASE TYPE
   ! -------------------------------------------------------------
   TYPE UrbanDatabase_v50_Type
-    TYPE(UrbanType)                             :: UrbData                         !Urban data for each (soil,subregion) combination
-    REAL(8)                                     :: RootDepth               = 0.0   !Urban root depth
-    INTEGER,ALLOCATABLE                         :: iColReturnFrac(:)               !Column number in the return flow fraction data file defined for each (subregion)
-    INTEGER,ALLOCATABLE                         :: iColReuseFrac(:)                !Column number in the re-use fraction data file defined for each (subregion)
-    INTEGER,ALLOCATABLE                         :: iColWaterDemand(:)              !Column number in the water demand data file defined for each (subregion)
-    INTEGER,ALLOCATABLE                         :: iColWaterUseSpec(:)             !Column number in the urban water use specs data file for each (subregion)
-    REAL(8),ALLOCATABLE                         :: ElementalArea(:)                !Urban area at each (element) at current time step
-    REAL(8),ALLOCATABLE                         :: ElementalArea_P(:)              !Urban area at each (element) at previous time step
-    REAL(8),ALLOCATABLE                         :: SubregionalArea(:)              !Total urban area for each (subregion)             
-    REAL(8),ALLOCATABLE                         :: Demand(:)                       !Urban water demand for each (subregion)
-    REAL(8)                                     :: DemandConversionFactor  = 1.0   !Conversion factor for urban water demand
-    REAL(8),ALLOCATABLE                         :: PerviousFrac(:)                 !Fraction of pervious area to total urban area at each (subregion)
-    INTEGER,ALLOCATABLE                         :: ElemToOutside(:)                !List of elements where surface flow goes outside model domain
-    TYPE(ElemSurfaceFlowToDestType),ALLOCATABLE :: ElemToStreams(:)                !List of elements and corresponding stream nodes where surface flow goes into streams
-    TYPE(ElemSurfaceFlowToDestType),ALLOCATABLE :: ElemToLakes(:)                  !List of elements and corresponding lakes where surface flow goes into lakes
-    TYPE(ElemSurfaceFlowToDestType),ALLOCATABLE :: ElemToSubregions(:)             !List of elements and corresponding subregions where surface flow goes into subregions
-    INTEGER,ALLOCATABLE                         :: ElemToGW(:)                     !List of elements where surface flow goes into groundwater at the same element
-    REAL(8),ALLOCATABLE                         :: RegionETPot(:)                  !Regional urban potential ET
-    TYPE(LandUseDataFileType)                   :: LandUseDataFile                 !Land use data file
-    TYPE(RealTSDataInFileType)                  :: WaterDemandFile                 !Urban water demand data file
-    TYPE(RealTSDataInFileType)                  :: WaterUseSpecsFile               !Urban water use specs data file
+      TYPE(UrbanType)                             :: UrbData                         !Urban data for each (soil,subregion) combination
+      REAL(8)                                     :: RootDepth               = 0.0   !Urban root depth
+      INTEGER,ALLOCATABLE                         :: iColReturnFrac(:)               !Column number in the return flow fraction data file defined for each (subregion)
+      INTEGER,ALLOCATABLE                         :: iColReuseFrac(:)                !Column number in the re-use fraction data file defined for each (subregion)
+      INTEGER,ALLOCATABLE                         :: iColWaterDemand(:)              !Column number in the water demand data file defined for each (subregion)
+      INTEGER,ALLOCATABLE                         :: iColWaterUseSpec(:)             !Column number in the urban water use specs data file for each (subregion)
+      REAL(8),ALLOCATABLE                         :: ElementalArea(:)                !Urban area at each (element) at current time step
+      REAL(8),ALLOCATABLE                         :: ElementalArea_P(:)              !Urban area at each (element) at previous time step
+      REAL(8),ALLOCATABLE                         :: SubregionalArea(:)              !Total urban area for each (subregion)             
+      REAL(8),ALLOCATABLE                         :: Demand(:)                       !Urban water demand for each (subregion)
+      REAL(8)                                     :: DemandConversionFactor  = 1.0   !Conversion factor for urban water demand
+      REAL(8),ALLOCATABLE                         :: PerviousFrac(:)                 !Fraction of pervious area to total urban area at each (subregion)
+      INTEGER,ALLOCATABLE                         :: ElemToOutside(:)                !List of elements where surface flow goes outside model domain
+      TYPE(ElemSurfaceFlowToDestType),ALLOCATABLE :: ElemToStreams(:)                !List of elements and corresponding stream nodes where surface flow goes into streams
+      TYPE(ElemSurfaceFlowToDestType),ALLOCATABLE :: ElemToLakes(:)                  !List of elements and corresponding lakes where surface flow goes into lakes
+      TYPE(ElemSurfaceFlowToDestType),ALLOCATABLE :: ElemToSubregions(:)             !List of elements and corresponding subregions where surface flow goes into subregions
+      INTEGER,ALLOCATABLE                         :: ElemToGW(:)                     !List of elements where surface flow goes into groundwater at the same element
+      REAL(8),ALLOCATABLE                         :: RegionETPot(:)                  !Regional urban potential ET
+      TYPE(LandUseDataFileType)                   :: LandUseDataFile                 !Land use data file
+      TYPE(RealTSDataInFileType)                  :: WaterDemandFile                 !Urban water demand data file
+      TYPE(RealTSDataInFileType)                  :: WaterUseSpecsFile               !Urban water use specs data file
   CONTAINS
-    PROCEDURE,PASS :: New
-    PROCEDURE,PASS :: Kill
-    PROCEDURE,PASS :: GetMaxAndMinNetReturnFlowFrac
-    PROCEDURE,PASS :: SetAreas
-    PROCEDURE,PASS :: ReadTSData
-    PROCEDURE,PASS :: ReadRestartData
-    PROCEDURE,PASS :: PrintRestartData
-    PROCEDURE,PASS :: SoilMContent_To_Depth
-    PROCEDURE,PASS :: AdvanceAreas
-    PROCEDURE,PASS :: Simulate
-    PROCEDURE,PASS :: RewindTSInputFilesToTimeStamp          
+      PROCEDURE,PASS   :: New
+      PROCEDURE,PASS   :: Kill
+      PROCEDURE,PASS   :: GetMaxAndMinNetReturnFlowFrac
+      PROCEDURE,NOPASS :: GetAreasForTimePeriod
+      PROCEDURE,PASS   :: SetAreas
+      PROCEDURE,PASS   :: ReadTSData
+      PROCEDURE,PASS   :: ReadRestartData
+      PROCEDURE,PASS   :: PrintRestartData
+      PROCEDURE,PASS   :: SoilMContent_To_Depth
+      PROCEDURE,PASS   :: AdvanceAreas
+      PROCEDURE,PASS   :: Simulate
+      PROCEDURE,PASS   :: RewindTSInputFilesToTimeStamp          
   END TYPE UrbanDatabase_v50_Type
 
 
@@ -545,6 +547,47 @@ CONTAINS
     END DO
       
   END SUBROUTINE GetMaxAndMinNetReturnFlowFrac
+  
+
+  ! -------------------------------------------------------------
+  ! --- GET URBAN AREAS FOR AT ALL ELEMENTS FOR A TIME PERIOD
+  ! --- Note: This method is not meant to be called during a Simulation
+  ! -------------------------------------------------------------
+  SUBROUTINE GetAreasForTimePeriod(cMainFileName,cWorkingDirectory,cBeginDate,cEndDate,TimeStep,AppGrid,rAreas,iStat)
+    CHARACTER(LEN=*),INTENT(IN)   :: cMainFileName,cWorkingDirectory,cBeginDate,cEndDate
+    TYPE(TimeStepType),INTENT(IN) :: TimeStep
+    TYPE(AppGridType),INTENT(IN)  :: AppGrid
+    REAL(8),INTENT(OUT)           :: rAreas(:,:)  !For each (element,time)
+    INTEGER,INTENT(OUT)           :: iStat
+    
+    !Local variables
+    CHARACTER                :: cALine*500
+    TYPE(GenericFileType)    :: MainFile
+    CHARACTER(:),ALLOCATABLE :: cAreaFileName
+   
+    !Return if no file name is specified
+    IF (cMainFileName .EQ. '') THEN
+        rAreas = 0.0
+        iStat  = 0
+        GOTO 10
+    END IF
+    
+    !Open main file
+    CALL MainFile%New(FileName=TRIM(cMainFileName),InputFile=.TRUE.,IsTSFile=.FALSE.,iStat=iStat)
+    IF (iStat .NE. 0) GOTO 10
+    
+    !Read area filename
+    CALL MainFile%ReadData(cALine,iStat)  
+    cALine = StripTextUntilCharacter(cALine,'/') 
+    CALL CleanSpecialCharacters(cALine)
+    CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(cALine)),cWorkingDirectory,cAreaFileName)
+    
+    !Retrieve areas
+    CALL ReadLandUseAreasForTimePeriod(cAreaFileName,cWorkingDirectory,cBeginDate,cEndDate,TimeStep,AppGrid,1,1,rAreas,iStat)
+
+10  CALL MainFile%Kill()
+    
+  END SUBROUTINE GetAreasForTimePeriod
   
   
 

@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2022  
+!  Copyright (C) 2005-2024  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -18,7 +18,7 @@
 !  along with this program; if not, write to the Free Software
 !  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 !
-!  For technical support, e-mail: IWFMtechsupport@water.ca.gov 
+!  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 PROGRAM IWFM_F2
   !$ USE OMP_LIB
@@ -28,12 +28,16 @@ PROGRAM IWFM_F2
                                 SetLogFileName   , &
                                 KillLogFile      , &
                                 LogLastMessage
+  USE Package_Misc      , ONLY: Print_Screen     , &
+                                Get_Main_File 
   USE Package_Model     , ONLY: ModelType
+  USE IWFM_Core_Version , ONLY: IWFM_Core                                   
   IMPLICIT NONE
   
 
   !Local variables
   TYPE(ModelType) :: Model
+  CHARACTER       :: cSimFileName*500,cWSAFileName*500
   INTEGER         :: iStat
   !$ INTEGER      :: iBlockTime
 
@@ -54,8 +58,16 @@ PROGRAM IWFM_F2
       CALL LogLastMessage()
   
   ELSE
+      !Display opening screen and obtain inpout file name(s)
+      CALL Print_screen('Program: Simulation',IWFM_Core)
+      CALL Get_Main_File(' Enter the Name of the Main Input File >  ',cSimFileName,cWSAFileName)
+      IF (TRIM(cSimFileName) .EQ. '-about') THEN
+          CALL Model%PrintVersionNumbers()
+          STOP
+      END IF
+
       !Instantiate model
-      CALL Model%New('',lForInquiry=.FALSE.,iStat=iStat)
+      CALL Model%New('IWFM',cSimFileName,cWSAFileName,lForInquiry=.FALSE.,iStat=iStat)
            
       !If an error, print it and stop
       IF (iStat .EQ. -1) THEN

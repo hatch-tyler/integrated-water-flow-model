@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2022  
+!  Copyright (C) 2005-2024  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -87,7 +87,8 @@ MODULE Class_AppGW
                                           StratigraphyType                                   , &
                                           GetValuesFromParametricGrid                        
   USE Class_GWState               , ONLY: GWStateType                                        
-  USE GWHydrograph                , ONLY: GWHydrographType                                     
+  USE GWHydrograph                , ONLY: GWHydrographType                                   , &
+                                          f_iTecPlot_PrintGWHeads
   USE Class_LayerBC               , ONLY: f_iSpFlowBCID                                      , &
                                           f_iSpHeadBCID                                      , &
                                           f_iGHBCID                                          , &
@@ -138,7 +139,9 @@ MODULE Class_AppGW
             f_iTileDrain                      , &
             f_iSubIrig                        , &
             f_iBudgetType_GW                  , &
-            f_cDescription_GWHyd_AtNodeLayer    
+            f_cDescription_GWHyd_AtNodeLayer  , &
+            f_iPump_Well                      , &
+            f_iPump_ElemPump                  
   
   
   ! -------------------------------------------------------------
@@ -202,8 +205,14 @@ MODULE Class_AppGW
       PROCEDURE,PASS   :: GetAquitardKv 
       PROCEDURE,PASS   :: GetAquiferSy
       PROCEDURE,PASS   :: GetAquiferSs
+      PROCEDURE,NOPASS :: GetGWNParametricGrids
+      PROCEDURE,NOPASS :: GetGWNParametricNodes
+      PROCEDURE,NOPASS :: GetGWNParametricElements
+      PROCEDURE,NOPASS :: GetGWParametricNodeXY
+      PROCEDURE,NOPASS :: GetGWParametricElementConfigData
+      PROCEDURE,NOPASS :: GetGWParametricAquiferParameters
+      PROCEDURE,PASS   :: GetNames
       PROCEDURE,PASS   :: GetHydrographTypeList
-      PROCEDURE,PASS   :: GetHydrographNames
       PROCEDURE,PASS   :: GetNHydrographs
       PROCEDURE,PASS   :: GetHydrographIDs
       PROCEDURE,PASS   :: GetHydrographCoordinates
@@ -213,6 +222,7 @@ MODULE Class_AppGW
       PROCEDURE,PASS   :: GetHead_AtOneNodeLayer
       PROCEDURE,PASS   :: GetGWHeads_ForALayer_GivenAppGW
       PROCEDURE,NOPASS :: GetGWHeads_ForALayer_GivenFile 
+      PROCEDURE,NOPASS :: GetGWHeadsIC
       PROCEDURE,PASS   :: GetNodalStorages
       PROCEDURE,PASS   :: GetElementDepthToGW              
       PROCEDURE,PASS   :: GetHorizontalFlow  
@@ -224,7 +234,8 @@ MODULE Class_AppGW
       PROCEDURE,PASS   :: GetZBudgetRawFileName             
       PROCEDURE,PASS   :: GetElementSy  
       PROCEDURE,PASS   :: GetSubsidence_All
-      PROCEDURE,PASS   :: GetSubsidenceAtLayer              
+      PROCEDURE,PASS   :: GetSubsidenceAtLayer
+      PROCEDURE,PASS   :: GetSubsidenceInterbedThick_All
       PROCEDURE,PASS   :: GetNDrain                         
       PROCEDURE,PASS   :: GetNSubIrig                       
       PROCEDURE,PASS   :: GetTileDrainIDs                      
@@ -235,7 +246,8 @@ MODULE Class_AppGW
       PROCEDURE,PASS   :: GetNElemPumps
       PROCEDURE,PASS   :: GetElemPumpIDs
       PROCEDURE,PASS   :: GetWellIDs
-      PROCEDURE,PASS   :: GetWellXY
+      PROCEDURE,PASS   :: GetWellCoordinates
+      PROCEDURE,PASS   :: GetWellPerfTopBottom
       PROCEDURE,PASS   :: GetPumpDestination
       PROCEDURE,PASS   :: GetNodalPumpActual 
       PROCEDURE,PASS   :: GetNodalPumpRequired
@@ -251,13 +263,16 @@ MODULE Class_AppGW
       PROCEDURE,PASS   :: GetiColAdjust                     
       PROCEDURE,PASS   :: GetNNodesWithBCType               
       PROCEDURE,PASS   :: GetNodesWithBCType                
-      PROCEDURE,PASS   :: GetBoundaryFlowAtElementNodeLayer 
+      PROCEDURE,PASS   :: GetBoundaryFlowAtElementNodeLayer
+      PROCEDURE,PASS   :: GetBoundaryFlowAtNodeLayer
+      PROCEDURE,PASS   :: GetBoundaryFlowAtNodeLayer_All
       PROCEDURE,PASS   :: GetSubregionAgPumpingAverageDepthToGW
       PROCEDURE,PASS   :: GetZoneAgPumpingAverageDepthToGW
       PROCEDURE,PASS   :: SetBCNodes
       PROCEDURE,PASS   :: SetBC
       PROCEDURE,PASS   :: SetIrigFracsRead                  
-      PROCEDURE,PASS   :: SetSupplySpecs  
+      PROCEDURE,PASS   :: SetSupplySpecs
+      PROCEDURE,PASS   :: SetPumpRequired
       PROCEDURE,PASS   :: SetVelocities
       PROCEDURE,PASS   :: IsGWBudgetGenerated  
       PROCEDURE,PASS   :: IsCellVelocityOutputDefined
@@ -328,7 +343,7 @@ MODULE Class_AppGW
   
   
   ! -------------------------------------------------------------
-  ! --- ELEVATION ABOVE BOOTOM OF AQUIFER AT WHICH HORIZONTAL FLOW WILL START SCALING DOWN
+  ! --- ELEVATION ABOVE BOTTOM OF AQUIFER AT WHICH HORIZONTAL FLOW WILL START SCALING DOWN
   ! -------------------------------------------------------------
   REAL(8),PARAMETER :: f_rScaleElevation = 1d0
   
@@ -358,7 +373,7 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- INSTANTIATE GW COMPONENT
   ! -------------------------------------------------------------
-  SUBROUTINE New(AppGW,lIsForInquiry,cFileName,cWorkingDirectory,AppGrid,Stratigraphy,StrmConnectivity,iStrmNodeIDs,TimeStep,NTIME,cIWFMVersion,iStat) 
+  SUBROUTINE New(AppGW,lIsForInquiry,cFileName,cWorkingDirectory,AppGrid,Stratigraphy,StrmConnectivity,iStrmNodeIDs,TimeStep,NTIME,cIWFMVersion,iStat,GWHeadICFile,SubsICFile,lPrintParametersOverwrite) 
     CLASS(AppGWType),INTENT(OUT)      :: AppGW
     LOGICAL,INTENT(IN)                :: lIsForInquiry
     CHARACTER(LEN=*),INTENT(IN)       :: cFileName,cWorkingDirectory,cIWFMVersion
@@ -368,19 +383,24 @@ CONTAINS
     TYPE(TimeStepType),INTENT(IN)     :: TimeStep
     INTEGER,INTENT(IN)                :: NTIME,iStrmNodeIDs(:)
     INTEGER,INTENT(OUT)               :: iStat
+    TYPE(GenericFileType),OPTIONAL    :: GWHeadICFile,SubsICFile
+    LOGICAL,OPTIONAL,INTENT(IN)       :: lPrintParametersOverwrite
     
     !Local variables
     CHARACTER(LEN=ModNameLen+3) :: ThisProcedure = ModName // "New"
     TYPE(GenericFileType)       :: AppGWParamFile
     TYPE(BudgetHeaderType)      :: BudHeader
-    CHARACTER                   :: ALine*3000,cErrorMsg*300,cAllHeadOutFileName*1000,cHeadTecplotFileName*1200, &
-                                   cVelTecplotFileName*1200,cBCFileName*1200,cOverwriteFileName*1200,           &
-                                   cCellVelocityFileName*1200
+    CHARACTER                   :: cALine*3000,cErrorMsg*300,cAllHeadOutFileName*1000,cHeadTecplotFileName*1200, &
+                                   cVelTecplotFileName*1200,cBCFileName*1200,cOverwriteFileName*1200,            &
+                                   cCellVelocityFileName*1200,cSubsidenceFileName*1200
     INTEGER                     :: NNodes,NElements,NLayers,NRegions,iGWNodeIDs(AppGrid%NNodes),     &
-                                   ErrorCode,iDebug
+                                   ErrorCode,iPrintParameters,iTecPlotFlag
     REAL(8)                     :: Head(AppGrid%NNodes,Stratigraphy%NLayers)
-    INTEGER,PARAMETER           :: YesDebug = 1
+    LOGICAL                     :: lTecPlotFlag_Defined
+    CHARACTER,ALLOCATABLE       :: cCountLines(:)*50
     CHARACTER(:),ALLOCATABLE    :: cAbsPathFileName
+    INTEGER,PARAMETER           :: f_iYesPrintAquiferParameters = 1 , &
+                                   f_iNotPrintAquiferParameters = 0
     
     !Initialize
     iStat      = 0
@@ -432,7 +452,19 @@ CONTAINS
     IF (iStat .EQ. -1) RETURN
     
     !Read away the first version number line to avoid any errors
-    CALL AppGWParamFile%ReadData(ALine,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    CALL AppGWParamFile%ReadData(cALine,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    
+    !BACKWARD COMPATIBILITY: Check if there are 19 or 20 lines of entry to see if flag (dictating gw heads or 
+    !                        depth-to-groundwater will be printed to TecPlot output) is provided
+    CALL AppGWParamFile%ReadData(cCountLines,iStat)  ;  IF (iStat .NE. 0) RETURN
+    IF (SIZE(cCountLines) .EQ. 19) THEN
+        lTecPlotFlag_Defined = .FALSE.
+    ELSE
+        lTecPlotFlag_Defined = .TRUE.
+    END IF
+    CALL AppGWParamFile%RewindFile()
+    CALL AppGWParamFile%ReadData(cALine,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    
     
     !Initialize related files
     !-------------------------
@@ -445,51 +477,49 @@ CONTAINS
     cBCFileName = cAbsPathFileName
     
     !Tile drains/subsurface irrigation
-    CALL AppGWParamFile%ReadData(ALine,iStat)  ;  IF (iStat .EQ. -1) RETURN  
-    ALine = StripTextUntilCharacter(ALine,'/')  
-    CALL CleanSpecialCharacters(ALine)
-    CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(ALine)),cWorkingDirectory,cAbsPathFileName)
+    CALL AppGWParamFile%ReadData(cALine,iStat)  ;  IF (iStat .EQ. -1) RETURN  
+    cALine = StripTextUntilCharacter(cALine,'/')  
+    CALL CleanSpecialCharacters(cALine)
+    CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(cALine)),cWorkingDirectory,cAbsPathFileName)
     CALL AppGW%AppTileDrain%New(lIsForInquiry,cAbsPathFileName,cWorkingDirectory,iStrmNodeIDs,TimeStep,AppGrid,Stratigraphy,iStat)
     IF (iStat .EQ. -1) RETURN
     IF (AppGW%AppTileDrain%GetNDrain() .GT. 0   .OR.   AppGW%AppTileDrain%GetNSubIrig() .GT. 0)  &
         AppGW%lTileDrain_Defined = .TRUE.
     
     !Pumping
-    CALL AppGWParamFile%ReadData(ALine,iStat)  ;  IF (iStat .EQ. -1) RETURN  
-    ALine = StripTextUntilCharacter(ALine,'/')  
-    CALL CleanSpecialCharacters(ALine)
-    CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(ALine)),cWorkingDirectory,cAbsPathFileName)
+    CALL AppGWParamFile%ReadData(cALine,iStat)  ;  IF (iStat .EQ. -1) RETURN  
+    cALine = StripTextUntilCharacter(cALine,'/')  
+    CALL CleanSpecialCharacters(cALine)
+    CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(cALine)),cWorkingDirectory,cAbsPathFileName)
     CALL AppGW%AppPumping%New(lIsForInquiry,cAbsPathFileName,cWorkingDirectory,AppGrid,Stratigraphy,TimeStep,iStat)
     IF (iStat .EQ. -1) RETURN
     IF (AppGW%AppPumping%GetNWells() .GT. 0   .OR.   AppGW%AppPumping%GetNElemPumps() .GT. 0)   &
         AppGW%lPumping_Defined = .TRUE.
     
-    !Subsidence
-    CALL AppGWParamFile%ReadData(ALine,iStat)  ;  IF (iStat .EQ. -1) RETURN  
-    ALine = StripTextUntilCharacter(ALine,'/')  
-    CALL CleanSpecialCharacters(ALine)
-    CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(ALine)),cWorkingDirectory,cAbsPathFileName)
-    CALL AppGW%AppSubsidence%New(lIsForInquiry,cAbsPathFileName,cWorkingDirectory,iGWNodeIDs,AppGrid,Stratigraphy,StrmConnectivity,TimeStep,iStat)
-    IF (iStat .EQ. -1) RETURN
-    AppGW%lSubsidence_Defined = AppGW%AppSubsidence%IsDefined()
+    !Subsidence filename
+    CALL AppGWParamFile%ReadData(cSubsidenceFileName,iStat)  ;  IF (iStat .EQ. -1) RETURN  
+    cSubsidenceFileName = StripTextUntilCharacter(cSubsidenceFileName,'/')  
+    CALL CleanSpecialCharacters(cSubsidenceFileName)
+    CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(cSubsidenceFileName)),cWorkingDirectory,cAbsPathFileName)
+    cSubsidenceFileName = cAbsPathFileName
 
     !Parameter over-write file name
-    CALL AppGWParamFile%ReadData(ALine,iStat)  ;  IF (iStat .EQ. -1) RETURN  
-    ALine = StripTextUntilCharacter(ALine,'/')  
-    CALL CleanSpecialCharacters(ALine)
-    CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(ALine)),cWorkingDirectory,cAbsPathFileName)
+    CALL AppGWParamFile%ReadData(cALine,iStat)  ;  IF (iStat .EQ. -1) RETURN  
+    cALine = StripTextUntilCharacter(cALine,'/')  
+    CALL CleanSpecialCharacters(cALine)
+    CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(cALine)),cWorkingDirectory,cAbsPathFileName)
     cOverwriteFileName = cAbsPathFileName
 
     !Output units and conversion factors
     CALL AppGWParamFile%ReadData(AppGW%FactHead,iStat)  ;  IF (iStat .EQ. -1) RETURN
-    CALL AppGWParamFile%ReadData(ALine,iStat)  ;  IF (iStat .EQ. -1) RETURN ; CALL CleanSpecialCharacters(ALine) ; ALine = StripTextUntilCharacter(ALine,'/')
-    AppGW%UnitHead = ADJUSTL(TRIM(ALine))
+    CALL AppGWParamFile%ReadData(cALine,iStat)  ;  IF (iStat .EQ. -1) RETURN ; CALL CleanSpecialCharacters(cALine) ; cALine = StripTextUntilCharacter(cALine,'/')
+    AppGW%UnitHead = ADJUSTL(TRIM(cALine))
     CALL AppGWParamFile%ReadData(AppGW%FactFlow,iStat)  ;  IF (iStat .EQ. -1) RETURN
-    CALL AppGWParamFile%ReadData(ALine,iStat)  ;  IF (iStat .EQ. -1) RETURN ; CALL CleanSpecialCharacters(ALine) ; ALine = StripTextUntilCharacter(ALine,'/')
-    AppGW%UnitFlow = ADJUSTL(TRIM(ALine))
+    CALL AppGWParamFile%ReadData(cALine,iStat)  ;  IF (iStat .EQ. -1) RETURN ; CALL CleanSpecialCharacters(cALine) ; cALine = StripTextUntilCharacter(cALine,'/')
+    AppGW%UnitFlow = ADJUSTL(TRIM(cALine))
     CALL AppGWParamFile%ReadData(AppGW%FactVelocity,iStat)  ;  IF (iStat .EQ. -1) RETURN
-    CALL AppGWParamFile%ReadData(ALine,iStat)  ;  IF (iStat .EQ. -1) RETURN ; CALL CleanSpecialCharacters(ALine) ; ALine = StripTextUntilCharacter(ALine,'/')
-    AppGW%UnitVelocity = ADJUSTL(TRIM(ALine))
+    CALL AppGWParamFile%ReadData(cALine,iStat)  ;  IF (iStat .EQ. -1) RETURN ; CALL CleanSpecialCharacters(cALine) ; cALine = StripTextUntilCharacter(cALine,'/')
+    AppGW%UnitVelocity = ADJUSTL(TRIM(cALine))
     
     !Output file for velocities at cell centroids
     CALL AppGWParamFile%ReadData(cCellVelocityFileName,iStat)  ;  IF (iStat .EQ. -1) RETURN   
@@ -499,10 +529,10 @@ CONTAINS
     cCellVelocityFileName = cAbsPathFileName
 
     !Vertical flow output file
-    CALL AppGWParamFile%ReadData(ALine,iStat)  ;  IF (iStat .EQ. -1) RETURN 
-    CALL CleanSpecialCharacters(ALine) 
-    ALine = ADJUSTL(StripTextUntilCharacter(ALine,'/'))
-    CALL EstablishAbsolutePathFileName(TRIM(ALine),cWorkingDirectory,cAbsPathFileName)
+    CALL AppGWParamFile%ReadData(cALine,iStat)  ;  IF (iStat .EQ. -1) RETURN 
+    CALL CleanSpecialCharacters(cALine) 
+    cALine = ADJUSTL(StripTextUntilCharacter(cALine,'/'))
+    CALL EstablishAbsolutePathFileName(TRIM(cALine),cWorkingDirectory,cAbsPathFileName)
     CALL VerticalFlowOutput_New(lIsForInquiry,TimeStep,NLayers,NRegions,AppGW%UnitFlow,cAbsPathFileName,AppGW%VerticalFlowOutput,iStat)
     IF (iStat .EQ. -1) RETURN
     
@@ -528,11 +558,11 @@ CONTAINS
     cVelTecplotFileName = cAbsPathFileName
     
     !Groundwater budget output
-    CALL AppGWParamFile%ReadData(ALine,iStat)  ;  IF (iStat .EQ. -1) RETURN  
-    ALine = StripTextUntilCharacter(ALine,'/')  
-    CALL CleanSpecialCharacters(ALine)
-    IF (ALine .NE. '') THEN
-        CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(ALine)),cWorkingDirectory,cAbsPathFileName)
+    CALL AppGWParamFile%ReadData(cALine,iStat)  ;  IF (iStat .EQ. -1) RETURN  
+    cALine = StripTextUntilCharacter(cALine,'/')  
+    CALL CleanSpecialCharacters(cALine)
+    IF (cALine .NE. '') THEN
+        CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(cALine)),cWorkingDirectory,cAbsPathFileName)
         IF (lIsForInquiry) THEN
             CALL AppGW%GWBudFile%New(cAbsPathFileName,iStat)
             IF (iStat .EQ. -1) RETURN
@@ -555,18 +585,18 @@ CONTAINS
     END IF
     
     !Z-Budget binary output filename
-    CALL AppGWParamFile%ReadData(ALine,iStat)  ;  IF (iStat .EQ. -1) RETURN  
-    ALine = StripTextUntilCharacter(ALine,'/')  
-    CALL CleanSpecialCharacters(ALine)
-    CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(ALine)),cWorkingDirectory,cAbsPathFileName)
+    CALL AppGWParamFile%ReadData(cALine,iStat)  ;  IF (iStat .EQ. -1) RETURN  
+    cALine = StripTextUntilCharacter(cALine,'/')  
+    CALL CleanSpecialCharacters(cALine)
+    CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(cALine)),cWorkingDirectory,cAbsPathFileName)
     AppGW%cZBudRawFileName = cAbsPathFileName
     
     !Final results output file
-    CALL AppGWParamFile%ReadData(ALine,iStat)  ;  IF (iStat .EQ. -1) RETURN  
-    ALine = StripTextUntilCharacter(ALine,'/')  
-    CALL CleanSpecialCharacters(ALine)
-    IF (ALine .NE. '') THEN
-        CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(ALine)),cWorkingDirectory,cAbsPathFileName)
+    CALL AppGWParamFile%ReadData(cALine,iStat)  ;  IF (iStat .EQ. -1) RETURN  
+    cALine = StripTextUntilCharacter(cALine,'/')  
+    CALL CleanSpecialCharacters(cALine)
+    IF (cALine .NE. '') THEN
+        CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(cALine)),cWorkingDirectory,cAbsPathFileName)
         IF (lIsForInquiry) THEN
             CALL AppGW%FinalHeadsFile%New(FileName=cAbsPathFileName,InputFile=.TRUE.,Descriptor='final groundwater heads output',iStat=iStat)
         ELSE
@@ -581,33 +611,38 @@ CONTAINS
         AppGW%lFinalHeadsFile_Defined = .TRUE.
     END IF
     
+    !TecPlot flag, if provided, to print gw heads or depth-to-groundwater
+    IF (lTecPlotFlag_Defined) THEN
+        CALL AppGWParamFile%ReadData(iTecPlotFlag,iStat)  
+        IF (iStat .EQ. -1) RETURN
+    ELSE
+        iTecPlotFlag = f_iTecPlot_PrintGWHeads
+    END IF
+    
     !Debug option
-    CALL AppGWParamFile%ReadData(iDebug,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    CALL AppGWParamFile%ReadData(iPrintParameters,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    IF (PRESENT(lPrintParametersOverwrite)) THEN
+        IF (lPrintParametersOverwrite) THEN
+            iPrintParameters = f_iYesPrintAquiferParameters
+        ELSE
+            iPrintParameters = f_iNotPrintAquiferParameters
+        END IF
+    END IF
     
     !Groundwater hydrographs
-    CALL AppGW%GWHyd%New(lIsForInquiry,AppGrid,Stratigraphy,cWorkingDirectory,iGWNodeIDs,AppGW%FactHead,AppGW%UnitHead,AppGW%UnitFlow,AppGW%UnitVelocity,TRIM(cAllHeadOutFileName),TRIM(cCellVelocityFileName),TRIM(cHeadTecplotFileName),TRIM(cVelTecplotFileName),TimeStep,AppGWParamFile,iStat)
+    CALL AppGW%GWHyd%New(lIsForInquiry,AppGrid,Stratigraphy,cWorkingDirectory,iGWNodeIDs,iTecPlotFlag,AppGW%FactHead,AppGW%UnitHead,AppGW%UnitFlow,AppGW%UnitVelocity,TRIM(cAllHeadOutFileName),TRIM(cCellVelocityFileName),TRIM(cHeadTecplotFileName),TRIM(cVelTecplotFileName),TimeStep,AppGWParamFile,iStat)
     IF (iStat .EQ. -1) RETURN
     
     !Aquifer parameters
     CALL ReadAquiferParameters(NLayers,AppGrid,TimeStep,AppGWParamFile,AppGW%VarTimeUnit,AppGW%Nodes,iStat)
     IF (iStat .EQ. -1) RETURN
     
-    !Aquifer overwrite parameters
-    IF (cOverwriteFileName .NE. '') THEN
-        CALL OverwriteParameters(cOverwriteFileName,iGWNodeIDs,AppGW%VarTimeUnit,TimeStep%TrackTime,AppGW%lSubsidence_Defined,AppGW%Nodes,AppGW%AppSubsidence,iStat)
-        IF (iStat .EQ. -1) RETURN
-    END IF
-    
-    !Print final aquifer parameters, if desired
-    IF (iDebug .EQ. YesDebug) THEN
-        IF (IsLogFileDefined()) THEN
-            CALL PrintAquiferParameters(iGWNodeIDs,AppGW%Nodes)
-            IF (AppGW%lSubsidence_Defined) CALL AppGW%AppSubsidence%PrintParameters(iGWNodeIDs,AppGrid%AppNode%Area)
-        END IF
-    END IF
-    
     !Initial conditions
-    CALL ReadInitialHeads(AppGWParamFile,NNodes,iGWNodeIDs,Stratigraphy,Head,iStat)
+    IF (PRESENT(GWHeadICFile)) THEN
+        CALL ReadInitialHeads(GWHeadICFile,NNodes,iGWNodeIDs,Stratigraphy,Head,iStat)
+    ELSE
+        CALL ReadInitialHeads(AppGWParamFile,NNodes,iGWNodeIDs,Stratigraphy,Head,iStat)
+    END IF
     IF (iStat .EQ. -1) RETURN
     AppGW%State%Head = Head
     
@@ -616,11 +651,30 @@ CONTAINS
     IF (iStat .EQ. -1) RETURN
     AppGW%lAppBC_Defined = AppGW%AppBC%IsDefined()
 
-    !Print initial conditions for hydrographs including head at all nodes and Tecplot output
-    IF (.NOT. lIsForInquiry) CALL AppGW%GWHyd%PrintInitialValues(AppGrid,Stratigraphy,AppGW%State%Head,AppGW%FactHead,AppGW%FactVelocity,StrmConnectivity,TimeStep)
-    
     !Assign previous head as current head
     AppGW%State%Head_P = AppGW%State%Head
+    
+    !Instantiate subsidence; this has to be done after AppGW initial conditions are processed
+    CALL AppGW%AppSubsidence%New(lIsForInquiry,cSubsidenceFileName,cWorkingDirectory,iGWNodeIDs,AppGrid,Stratigraphy,StrmConnectivity,TimeStep,iStat,SubsICFile)
+    IF (iStat .EQ. -1) RETURN
+    AppGW%lSubsidence_Defined = AppGW%AppSubsidence%IsDefined()
+
+    !Aquifer overwrite parameters
+    IF (cOverwriteFileName .NE. '') THEN
+        CALL OverwriteParameters(cOverwriteFileName,AppGrid,AppGW%VarTimeUnit,TimeStep%TrackTime,AppGW%lSubsidence_Defined,AppGW%Nodes,AppGW%AppSubsidence,iStat)
+        IF (iStat .EQ. -1) RETURN
+    END IF
+    
+    !Print final aquifer parameters, if desired
+    IF (iPrintParameters .EQ. f_iYesPrintAquiferParameters) THEN
+        IF (IsLogFileDefined()) THEN
+            CALL PrintAquiferParameters(iGWNodeIDs,AppGW%Nodes)
+            IF (AppGW%lSubsidence_Defined) CALL AppGW%AppSubsidence%PrintParameters(iGWNodeIDs,AppGrid%AppNode%Area)
+        END IF
+    END IF
+    
+    !Print initial conditions for hydrographs including head at all nodes and Tecplot output
+    IF (.NOT. lIsForInquiry) CALL AppGW%GWHyd%PrintInitialValues(AppGrid,Stratigraphy,AppGW%State%Head,AppGW%FactHead,AppGW%FactVelocity,StrmConnectivity,TimeStep)
     
     !Process aquifer parameters for use in simulation
     CALL ProcessAquiferParameters(AppGrid,Stratigraphy,AppGW%lSubsidence_Defined,AppGW%AppSubsidence,AppGW%Nodes,AppGW%State,iStat)
@@ -832,6 +886,541 @@ CONTAINS
 ! ******************************************************************
 ! ******************************************************************
 
+  ! -------------------------------------------------------------
+  ! --- GET GW NUMBER OF PARAMETRIC GRIDS
+  ! -------------------------------------------------------------
+  SUBROUTINE GetGWNParametricGrids(cGWMainFileName,iNParamGrids,iStat)
+    CHARACTER(LEN=*),INTENT(IN) :: cGWMainFileName
+    INTEGER,INTENT(OUT)         :: iNParamGrids,iStat
+    
+    !Local variables
+    TYPE(GenericFileType) :: vGWMainFile
+    INTEGER               :: iNData,indx
+    CHARACTER             :: ALine*10
+    
+    !Open main gw file
+    CALL vGWMainFile%New(cGWMainFileName,InputFile=.TRUE.,IsTSFile=.FALSE.,Descriptor='gw main input file',iStat=iStat)
+    IF (iStat .NE. 0) RETURN
+    
+    !Read away the first line that lists the version number
+    CALL vGWMainFile%ReadData(ALine,iStat)  ;  IF (iStat .NE. 0) RETURN
+    
+    !Skip 2 data blocks (this will get us to optional hydrograph output data)
+    CALL vGWMainFile%SkipDataBlocks(2,iStat)  ;  IF (iStat .NE. 0) RETURN
+    
+    !Skip groundwater hydrograph output data
+    CALL vGWMainFile%ReadData(iNData,iStat)  ;  IF (iStat .NE. 0) RETURN
+    DO indx=1,iNData+2
+        CALL vGWMainFile%ReadData(ALine,iStat)
+        IF (iStat .NE. 0) RETURN
+    END DO
+    
+    !Skip element face flow output data
+    CALL vGWMainFile%ReadData(iNData,iStat)  ;  IF (iStat .NE. 0) RETURN
+    DO indx=1,iNData+1
+        CALL vGWMainFile%ReadData(ALine,iStat)
+        IF (iStat .NE. 0) RETURN
+    END DO
+    
+    !Number of parametric grids
+    CALL vGWMainFile%ReadData(iNParamGrids,iStat) 
+
+    !Close file
+    CALL vGWMainFile%Kill()
+    
+  END SUBROUTINE GetGWNParametricGrids
+  
+  
+  ! -------------------------------------------------------------
+  ! --- GET NUMBER OF PARAMETRIC NODES FOR A PARAMETRIC GRID
+  ! -------------------------------------------------------------
+  SUBROUTINE GetGWNParametricNodes(cGWMainFileName,iParamGridID,iNParamGridNodes,iStat)
+    CHARACTER(LEN=*),INTENT(IN) :: cGWMainFileName
+    INTEGER,INTENT(IN)          :: iParamGridID
+    INTEGER,INTENT(OUT)         :: iNParamGridNodes,iStat
+    
+    !Local variables
+    TYPE(GenericFileType) :: vGWMainFile
+    INTEGER               :: iNData,indx,iNParamGrids,iDummy
+    CHARACTER             :: ALine*10
+    
+    !Open main gw file
+    CALL vGWMainFile%New(cGWMainFileName,InputFile=.TRUE.,IsTSFile=.FALSE.,Descriptor='gw main input file',iStat=iStat)
+    IF (iStat .NE. 0) RETURN
+    
+    !Read away the first line that lists the version number
+    CALL vGWMainFile%ReadData(ALine,iStat)  ;  IF (iStat .NE. 0) RETURN
+    
+    !Skip 2 data blocks (this will get us to optional hydrograph output data)
+    CALL vGWMainFile%SkipDataBlocks(2,iStat)  ;  IF (iStat .NE. 0) RETURN
+    
+    !Skip groundwater hydrograph output data
+    CALL vGWMainFile%ReadData(iNData,iStat)  ;  IF (iStat .NE. 0) RETURN
+    DO indx=1,iNData+2
+        CALL vGWMainFile%ReadData(ALine,iStat)
+        IF (iStat .NE. 0) RETURN
+    END DO
+    
+    !Skip element face flow output data
+    CALL vGWMainFile%ReadData(iNData,iStat)  ;  IF (iStat .NE. 0) RETURN
+    DO indx=1,iNData+1
+        CALL vGWMainFile%ReadData(ALine,iStat)
+        IF (iStat .NE. 0) RETURN
+    END DO
+    
+    !Number of parametric grids
+    CALL vGWMainFile%ReadData(iNParamGrids,iStat)  ;  IF (iStat .NE. 0) RETURN
+    IF (iNParamGrids .EQ. 0) THEN
+        iNParamGridNodes = 0
+        CALL vGWMainFile%Kill()
+        RETURN
+    END IF
+    
+    !Skip data blocks
+    CALL vGWMainFile%SkipDataBlocks(2,iStat)  ;  IF (iStat .NE. 0) RETURN
+    DO indx=1,iParamGridID-1
+        CALL vGWMainFile%SkipDataBlocks(1,iStat)  ;  IF (iStat .NE. 0) RETURN
+        CALL vGWMainFile%ReadData(iDummy,iStat)   ;  IF (iStat .NE. 0) RETURN
+        CALL vGWMainFile%ReadData(iDummy,iStat)   ;  IF (iStat .NE. 0) RETURN
+        IF (iDummy .GT. 0) THEN
+            CALL vGWMainFile%SkipDataBlocks(1,iStat)  
+            IF (iStat .NE. 0) RETURN
+        END IF
+        CALL vGWMainFile%SkipDataBlocks(1,iStat)  ;  IF (iStat .NE. 0) RETURN
+    END DO
+    
+    !Read the number of parametric grid nodes
+    CALL vGWMainFile%SkipDataBlocks(1,iStat)  ;  IF (iStat .NE. 0) RETURN
+    CALL vGWMainFile%ReadData(iNParamGridNodes,iStat)
+    
+    !Close file
+    CALL vGWMainFile%Kill()
+    
+  END SUBROUTINE GetGWNParametricNodes
+  
+  
+  ! -------------------------------------------------------------
+  ! --- GET NUMBER OF PARAMETRIC ELEMENTS FOR A PARAMETRIC GRID
+  ! -------------------------------------------------------------
+  SUBROUTINE GetGWNParametricElements(cGWMainFileName,iParamGridID,iNParamGridElements,iStat)
+    CHARACTER(LEN=*),INTENT(IN) :: cGWMainFileName
+    INTEGER,INTENT(IN)          :: iParamGridID
+    INTEGER,INTENT(OUT)         :: iNParamGridElements,iStat
+    
+    !Local variables
+    TYPE(GenericFileType) :: vGWMainFile
+    INTEGER               :: iNData,indx,iNParamGrids,iDummy
+    CHARACTER             :: ALine*10
+    
+    !Open main gw file
+    CALL vGWMainFile%New(cGWMainFileName,InputFile=.TRUE.,IsTSFile=.FALSE.,Descriptor='gw main input file',iStat=iStat)
+    IF (iStat .NE. 0) RETURN
+    
+    !Read away the first line that lists the version number
+    CALL vGWMainFile%ReadData(ALine,iStat)  ;  IF (iStat .NE. 0) RETURN
+    
+    !Skip 2 data blocks (this will get us to optional hydrograph output data)
+    CALL vGWMainFile%SkipDataBlocks(2,iStat)  ;  IF (iStat .NE. 0) RETURN
+    
+    !Skip groundwater hydrograph output data
+    CALL vGWMainFile%ReadData(iNData,iStat)  ;  IF (iStat .NE. 0) RETURN
+    DO indx=1,iNData+2
+        CALL vGWMainFile%ReadData(ALine,iStat)
+        IF (iStat .NE. 0) RETURN
+    END DO
+    
+    !Skip element face flow output data
+    CALL vGWMainFile%ReadData(iNData,iStat)  ;  IF (iStat .NE. 0) RETURN
+    DO indx=1,iNData+1
+        CALL vGWMainFile%ReadData(ALine,iStat)
+        IF (iStat .NE. 0) RETURN
+    END DO
+    
+    !Number of parametric grids
+    CALL vGWMainFile%ReadData(iNParamGrids,iStat)  ;  IF (iStat .NE. 0) RETURN
+    IF (iNParamGrids .EQ. 0) THEN
+        iNParamGridElements = 0
+        CALL vGWMainFile%Kill()
+        RETURN
+    END IF
+    
+    !Skip data blocks
+    CALL vGWMainFile%SkipDataBlocks(2,iStat)  ;  IF (iStat .NE. 0) RETURN
+    DO indx=1,iParamGridID-1
+        CALL vGWMainFile%SkipDataBlocks(1,iStat)  ;  IF (iStat .NE. 0) RETURN
+        CALL vGWMainFile%ReadData(iDummy,iStat)   ;  IF (iStat .NE. 0) RETURN
+        CALL vGWMainFile%ReadData(iDummy,iStat)   ;  IF (iStat .NE. 0) RETURN
+        IF (iDummy .GT. 0) THEN
+            CALL vGWMainFile%SkipDataBlocks(1,iStat)  
+            IF (iStat .NE. 0) RETURN
+        END IF
+        CALL vGWMainFile%SkipDataBlocks(1,iStat)  ;  IF (iStat .NE. 0) RETURN
+    END DO
+    
+    !Read the number of parametric grid nodes
+    CALL vGWMainFile%SkipDataBlocks(1,iStat)  ;  IF (iStat .NE. 0) RETURN
+    CALL vGWMainFile%ReadData(iDummy,iStat)   ;  IF (iStat .NE. 0) RETURN
+    CALL vGWMainFile%ReadData(iNParamGridElements,iStat)
+    
+    !Close file
+    CALL vGWMainFile%Kill()
+    
+  END SUBROUTINE GetGWNParametricElements
+  
+  
+  ! -------------------------------------------------------------
+  ! --- GET COORDINATES OF PARAMETRIC NODES FOR A PARAMETRIC GRID
+  ! -------------------------------------------------------------
+  SUBROUTINE GetGWParametricNodeXY(cGWMainFileName,iParamGridID,iNLayers,rX,rY,iStat)
+    CHARACTER(LEN=*),INTENT(IN) :: cGWMainFileName
+    INTEGER,INTENT(IN)          :: iParamGridID,iNLayers
+    REAL(8),INTENT(OUT)         :: rX(:),rY(:)
+    INTEGER,INTENT(OUT)         :: iStat
+    
+    !Local variables
+    TYPE(GenericFileType) :: vGWMainFile
+    INTEGER               :: iNData,indx,iNParamGrids,iNNodes,iNElems,indxLayer
+    REAL(8)               :: rFactor,rDummyArray8(8)
+    CHARACTER             :: ALine*10
+    
+    !Open main gw file
+    CALL vGWMainFile%New(cGWMainFileName,InputFile=.TRUE.,IsTSFile=.FALSE.,Descriptor='gw main input file',iStat=iStat)
+    IF (iStat .NE. 0) RETURN
+    
+    !Read away the first line that lists the version number
+    CALL vGWMainFile%ReadData(ALine,iStat)  ;  IF (iStat .NE. 0) RETURN
+    
+    !Skip 2 data blocks (this will get us to optional hydrograph output data)
+    CALL vGWMainFile%SkipDataBlocks(2,iStat)  ;  IF (iStat .NE. 0) RETURN
+    
+    !Skip groundwater hydrograph output data
+    CALL vGWMainFile%ReadData(iNData,iStat)  ;  IF (iStat .NE. 0) RETURN
+    DO indx=1,iNData+2
+        CALL vGWMainFile%ReadData(ALine,iStat)
+        IF (iStat .NE. 0) RETURN
+    END DO
+    
+    !Skip element face flow output data
+    CALL vGWMainFile%ReadData(iNData,iStat)  ;  IF (iStat .NE. 0) RETURN
+    DO indx=1,iNData+1
+        CALL vGWMainFile%ReadData(ALine,iStat)
+        IF (iStat .NE. 0) RETURN
+    END DO
+    
+    !Number of parametric grids
+    CALL vGWMainFile%ReadData(iNParamGrids,iStat)  ;  IF (iStat .NE. 0) RETURN
+    IF (iNParamGrids .EQ. 0) THEN
+        rX = 0.0
+        rY = 0.0
+        CALL vGWMainFile%Kill()
+        RETURN
+    END IF
+    
+    !Conversion factor for coordinates
+    CALL vGWMainFile%ReadData(rFactor,iStat)  ;  IF (iStat .NE. 0) RETURN
+
+    !Skip data blocks
+    CALL vGWMainFile%SkipDataBlocks(1,iStat)  ;  IF (iStat .NE. 0) RETURN
+    DO indx=1,iParamGridID-1
+        CALL vGWMainFile%SkipDataBlocks(1,iStat)  ;  IF (iStat .NE. 0) RETURN
+        CALL vGWMainFile%ReadData(iNNodes,iStat)  ;  IF (iStat .NE. 0) RETURN
+        CALL vGWMainFile%ReadData(iNElems,iStat)  ;  IF (iStat .NE. 0) RETURN
+        IF (iNElems .GT. 0) THEN
+            CALL vGWMainFile%SkipDataBlocks(1,iStat)  
+            IF (iStat .NE. 0) RETURN
+        END IF
+        CALL vGWMainFile%SkipDataBlocks(1,iStat)  ;  IF (iStat .NE. 0) RETURN
+    END DO
+    
+    !Skip the unnecessary data for the parametric grid in question
+    CALL vGWMainFile%SkipDataBlocks(1,iStat)  ;  IF (iStat .NE. 0) RETURN
+    CALL vGWMainFile%ReadData(iNNodes,iStat)   ;  IF (iStat .NE. 0) RETURN
+    CALL vGWMainFile%ReadData(iNElems,iStat)   ;  IF (iStat .NE. 0) RETURN
+    IF (iNElems .GT. 0) THEN
+        CALL vGWMainFile%SkipDataBlocks(1,iStat)  
+        IF (iStat .NE. 0) RETURN
+    END IF
+    
+    !Read the coordinates
+    DO indx=1,SIZE(rX)
+        CALL vGWMainFile%ReadData(rDummyArray8,iStat)  ;  IF (iStat .NE. 0) RETURN
+        rX(indx) = rDummyArray8(2) * rFactor
+        rY(indx) = rDummyArray8(3) * rFactor
+        DO indxLayer=2,iNLayers
+            CALL vGWMainFile%ReadData(ALine,iStat)
+            IF (iStat .NE. 0) RETURN
+        END DO
+    END DO
+    
+    !Close file
+    CALL vGWMainFile%Kill()
+    
+  END SUBROUTINE GetGWParametricNodeXY
+  
+  
+  ! -------------------------------------------------------------
+  ! --- GET VERTICES OF A PARAMETRIC ELEMENT FOR A PARAMETRIC GRID
+  ! -------------------------------------------------------------
+  SUBROUTINE GetGWParametricElementConfigData(cGWMainFileName,iParamGridID,iParamElemID,iVertices,iStat)
+    CHARACTER(LEN=*),INTENT(IN) :: cGWMainFileName
+    INTEGER,INTENT(IN)          :: iParamGridID,iParamElemID
+    INTEGER,INTENT(OUT)         :: iVertices(4),iStat
+    
+    !Local variables
+    TYPE(GenericFileType) :: vGWMainFile
+    INTEGER               :: iNData,indx,iNParamGrids,iNNodes,iNElems,iDummyArray5(5)
+    CHARACTER             :: ALine*10
+    
+    !Initialize
+    iVertices = 0
+    
+    !Open main gw file
+    CALL vGWMainFile%New(cGWMainFileName,InputFile=.TRUE.,IsTSFile=.FALSE.,Descriptor='gw main input file',iStat=iStat)
+    IF (iStat .NE. 0) RETURN
+    
+    !Read away the first line that lists the version number
+    CALL vGWMainFile%ReadData(ALine,iStat)  ;  IF (iStat .NE. 0) RETURN
+    
+    !Skip 2 data blocks (this will get us to optional hydrograph output data)
+    CALL vGWMainFile%SkipDataBlocks(2,iStat)  ;  IF (iStat .NE. 0) RETURN
+    
+    !Skip groundwater hydrograph output data
+    CALL vGWMainFile%ReadData(iNData,iStat)  ;  IF (iStat .NE. 0) RETURN
+    DO indx=1,iNData+2
+        CALL vGWMainFile%ReadData(ALine,iStat)
+        IF (iStat .NE. 0) RETURN
+    END DO
+    
+    !Skip element face flow output data
+    CALL vGWMainFile%ReadData(iNData,iStat)  ;  IF (iStat .NE. 0) RETURN
+    DO indx=1,iNData+1
+        CALL vGWMainFile%ReadData(ALine,iStat)
+        IF (iStat .NE. 0) RETURN
+    END DO
+    
+    !Number of parametric grids
+    CALL vGWMainFile%ReadData(iNParamGrids,iStat)  ;  IF (iStat .NE. 0) RETURN
+    IF (iNParamGrids .EQ. 0) THEN
+        CALL vGWMainFile%Kill()
+        RETURN
+    END IF
+    
+    !Skip data blocks
+    CALL vGWMainFile%SkipDataBlocks(2,iStat)  ;  IF (iStat .NE. 0) RETURN
+    DO indx=1,iParamGridID-1
+        CALL vGWMainFile%SkipDataBlocks(1,iStat)  ;  IF (iStat .NE. 0) RETURN
+        CALL vGWMainFile%ReadData(iNNodes,iStat)  ;  IF (iStat .NE. 0) RETURN
+        CALL vGWMainFile%ReadData(iNElems,iStat)  ;  IF (iStat .NE. 0) RETURN
+        IF (iNElems .GT. 0) THEN
+            CALL vGWMainFile%SkipDataBlocks(1,iStat)  
+            IF (iStat .NE. 0) RETURN
+        END IF
+        CALL vGWMainFile%SkipDataBlocks(1,iStat)  ;  IF (iStat .NE. 0) RETURN
+    END DO
+    
+    !Skip the unnecessary data for the parametric grid in question
+    CALL vGWMainFile%SkipDataBlocks(1,iStat)  ;  IF (iStat .NE. 0) RETURN
+    CALL vGWMainFile%ReadData(iNNodes,iStat)   ;  IF (iStat .NE. 0) RETURN
+    CALL vGWMainFile%ReadData(iNElems,iStat)   ;  IF (iStat .NE. 0) RETURN
+    IF (iNElems .EQ. 0) THEN
+        CALL vGWMainFile%Kill()
+        RETURN
+    END IF
+    
+    !Read the elememnt config data
+    DO indx=1,iNElems
+        CALL vGWMainFile%ReadData(iDummyArray5,iStat)  ;  IF (iStat .NE. 0) RETURN
+        IF (iDummyArray5(1) .EQ. iParamElemID) THEN
+            iVertices = iDummyArray5(2:)
+            EXIT
+        END IF
+    END DO
+    
+    !Close file
+    CALL vGWMainFile%Kill()
+    
+  END SUBROUTINE GetGWParametricElementConfigData
+  
+  
+  ! -------------------------------------------------------------
+  ! --- GET AQUIFER PARAMETERS DEFINED BY A SPECIFIED PARAMETRIC GRID
+  ! -------------------------------------------------------------
+  SUBROUTINE GetGWParametricAquiferParameters(cGWMainFileName,iParamGridID,rKh,rAquiferKv,rAquitardKv,rSy,rSs,iStat)
+    CHARACTER(LEN=*),INTENT(IN) :: cGWMainFileName
+    INTEGER,INTENT(IN)          :: iParamGridID
+    REAL(8),INTENT(OUT)         :: rKh(:,:),rAquiferKv(:,:),rAquitardKv(:,:),rSy(:,:),rSs(:,:)
+    INTEGER,INTENT(OUT)         :: iStat
+    
+    !Local variables
+    TYPE(GenericFileType) :: vGWMainFile
+    INTEGER               :: iNData,indx,indxLayer,iNParamGrids,iNNodes,iNElems,iNLayers
+    REAL(8)               :: rFactors(6),rDummyArray8(8),rDummyArray5(5)
+    CHARACTER             :: ALine*10
+    
+    !Open main gw file
+    CALL vGWMainFile%New(cGWMainFileName,InputFile=.TRUE.,IsTSFile=.FALSE.,Descriptor='gw main input file',iStat=iStat)
+    IF (iStat .NE. 0) RETURN
+    
+    !Read away the first line that lists the version number
+    CALL vGWMainFile%ReadData(ALine,iStat)  ;  IF (iStat .NE. 0) RETURN
+    
+    !Skip 2 data blocks (this will get us to optional hydrograph output data)
+    CALL vGWMainFile%SkipDataBlocks(2,iStat)  ;  IF (iStat .NE. 0) RETURN
+    
+    !Skip groundwater hydrograph output data
+    CALL vGWMainFile%ReadData(iNData,iStat)  ;  IF (iStat .NE. 0) RETURN
+    DO indx=1,iNData+2
+        CALL vGWMainFile%ReadData(ALine,iStat)
+        IF (iStat .NE. 0) RETURN
+    END DO
+    
+    !Skip element face flow output data
+    CALL vGWMainFile%ReadData(iNData,iStat)  ;  IF (iStat .NE. 0) RETURN
+    DO indx=1,iNData+1
+        CALL vGWMainFile%ReadData(ALine,iStat)
+        IF (iStat .NE. 0) RETURN
+    END DO
+    
+    !Number of parametric grids
+    CALL vGWMainFile%ReadData(iNParamGrids,iStat)  ;  IF (iStat .NE. 0) RETURN
+    IF (iNParamGrids .EQ. 0) THEN
+        rKh         = -999.0
+        rSs         = -999.0
+        rSy         = -999.0
+        rAquitardKv = -999.0
+        rAquiferKv  = -999.0
+        CALL vGWMainFile%Kill()
+        RETURN
+    END IF
+    
+    !Conversion factors
+    CALL vGWMainFile%ReadData(rFactors,iStat)
+    IF (iStat .NE. 0) RETURN
+    
+    !Skip data blocks
+    CALL vGWMainFile%SkipDataBlocks(1,iStat)  ;  IF (iStat .NE. 0) RETURN
+    DO indx=1,iParamGridID-1
+        CALL vGWMainFile%SkipDataBlocks(1,iStat)  ;  IF (iStat .NE. 0) RETURN
+        CALL vGWMainFile%ReadData(iNNodes,iStat)  ;  IF (iStat .NE. 0) RETURN
+        CALL vGWMainFile%ReadData(iNElems,iStat)  ;  IF (iStat .NE. 0) RETURN
+        IF (iNElems .GT. 0) THEN
+            CALL vGWMainFile%SkipDataBlocks(1,iStat)  
+            IF (iStat .NE. 0) RETURN
+        END IF
+        CALL vGWMainFile%SkipDataBlocks(1,iStat)  ;  IF (iStat .NE. 0) RETURN
+    END DO
+    
+    !Skip the unnecessary data for the parametric grid in question
+    CALL vGWMainFile%SkipDataBlocks(1,iStat)  ;  IF (iStat .NE. 0) RETURN
+    CALL vGWMainFile%ReadData(iNNodes,iStat)   ;  IF (iStat .NE. 0) RETURN
+    CALL vGWMainFile%ReadData(iNElems,iStat)   ;  IF (iStat .NE. 0) RETURN
+    IF (iNElems .GT. 0) THEN
+        CALL vGWMainFile%SkipDataBlocks(1,iStat)  
+        IF (iStat .NE. 0) RETURN
+    END IF
+    
+    !Read the parametric data
+    iNLayers = SIZE(rKh , DIM=2)
+    DO indx=1,iNNodes
+        CALL vGWMainFile%ReadData(rDummyArray8,iStat)  ;  IF (iStat .NE. 0) RETURN
+        rKh(indx,1)         = rDummyArray8(4) * rFactors(2)
+        rSs(indx,1)         = rDummyArray8(5) * rFactors(3)
+        rSy(indx,1)         = rDummyArray8(6) * rFactors(4)
+        rAquitardKv(indx,1) = rDummyArray8(7) * rFactors(5)
+        rAquiferKv(indx,1)  = rDummyArray8(8) * rFactors(6)
+        DO indxLayer=2,iNLayers
+            CALL vGWMainFile%ReadData(rDummyArray5,iStat)  ;  IF (iStat .NE. 0) RETURN
+            rKh(indx,indxLayer)         = rDummyArray5(1) * rFactors(2)
+            rSs(indx,indxLayer)         = rDummyArray5(2) * rFactors(3)
+            rSy(indx,indxLayer)         = rDummyArray5(3) * rFactors(4)
+            rAquitardKv(indx,indxLayer) = rDummyArray5(4) * rFactors(5)
+            rAquiferKv(indx,indxLayer)  = rDummyArray5(5) * rFactors(6)
+        END DO
+    END DO
+    
+    !Close file
+    CALL vGWMainFile%Kill()
+    
+  END SUBROUTINE GetGWParametricAquiferParameters
+  
+  
+  ! -------------------------------------------------------------
+  ! --- GET INITIAL GW HEADS
+  ! -------------------------------------------------------------
+  SUBROUTINE GetGWHeadsIC(cGWMainFileName,iNodeIDs,Stratigraphy,rGWHeadsIC,iStat)
+    CHARACTER(LEN=*),INTENT(IN)       :: cGWMainFileName
+    INTEGER,INTENT(IN)                :: iNodeIDs(:)
+    TYPE(StratigraphyType),INTENT(IN) :: Stratigraphy
+    REAL(8),INTENT(OUT)               :: rGWHeadsIC(:,:)
+    INTEGER,INTENT(OUT)               :: iStat
+    
+    !Local variables
+    TYPE(GenericFileType) :: vGWMainFile
+    INTEGER               :: iNData,indx,iNNodes,iDummy
+    CHARACTER             :: ALine*10
+    
+    !Open main gw file
+    CALL vGWMainFile%New(cGWMainFileName,InputFile=.TRUE.,IsTSFile=.FALSE.,Descriptor='gw main input file',iStat=iStat)
+    IF (iStat .NE. 0) RETURN
+    
+    !Read away the first line that lists the version number
+    CALL vGWMainFile%ReadData(ALine,iStat)  ;  IF (iStat .NE. 0) RETURN
+    
+    !Skip 2 data blocks (this will get us to optional hydrograph output data)
+    CALL vGWMainFile%SkipDataBlocks(2,iStat)  ;  IF (iStat .NE. 0) RETURN
+    
+    !Skip groundwater hydrograph output data
+    CALL vGWMainFile%ReadData(iNData,iStat)  ;  IF (iStat .NE. 0) RETURN
+    DO indx=1,iNData+2
+        CALL vGWMainFile%ReadData(ALine,iStat)
+        IF (iStat .NE. 0) RETURN
+    END DO
+    
+    !Skip element face flow output data
+    CALL vGWMainFile%ReadData(iNData,iStat)  ;  IF (iStat .NE. 0) RETURN
+    DO indx=1,iNData+1
+        CALL vGWMainFile%ReadData(ALine,iStat)
+        IF (iStat .NE. 0) RETURN
+    END DO
+    
+    !Skip aquifer parameters
+    CALL vGWMainFile%ReadData(iNData,iStat)  ;  IF (iStat .NE. 0) RETURN
+    CALL vGWMainFile%SkipDataBlocks(2,iStat)   ;  IF (iStat .NE. 0) RETURN
+    !Aquifer parameters are provided via parametric grids
+    IF (iNData .GT. 0) THEN
+        DO indx=1,iNData
+            CALL vGWMainFile%SkipDataBlocks(1,iStat)  ;  IF (iStat .NE. 0) RETURN
+            CALL vGWMainFile%ReadData(iDummy,iStat)   ;  IF (iStat .NE. 0) RETURN
+            CALL vGWMainFile%ReadData(iDummy,iStat)   ;  IF (iStat .NE. 0) RETURN
+            IF (iDummy .GT. 0) THEN
+                CALL vGWMainFile%SkipDataBlocks(1,iStat)  
+                IF (iStat .NE. 0) RETURN
+            END IF
+            CALL vGWMainFile%SkipDataBlocks(1,iStat)  ;  IF (iStat .NE. 0) RETURN
+        END DO
+    !Aquifer parameters are provided at each node and layer
+    ELSE
+        CALL vGWMainFile%SkipDataBlocks(1,iStat)
+        IF (iStat .NE. 0) RETURN
+    END IF
+    
+    !Skip anomaly hydrualic conductivities
+    CALL vGWMainFile%ReadData(iNData,iStat)  ;  IF (iStat .NE. 0) RETURN
+    DO indx=1,iNData+2
+        CALL vGWMainFile%ReadData(ALine,iStat)
+        IF (iStat .NE. 0) RETURN
+    END DO
+    
+    !Now, we are at initial conditions
+    iNNodes = SIZE(iNodeIDs)
+    CALL ReadInitialHeads(vGWMainFile,iNNodes,iNodeIDs,Stratigraphy,rGWHeadsIC,iStat)
+    
+    !Close file
+    CALL vGWMainFile%Kill()
+    
+  END SUBROUTINE GetGWHeadsIC
+  
+  
   ! -------------------------------------------------------------
   ! --- GET ALL GW HEADS AT A LAYER FOR A PERIOD FOR POST-PROCESSING WHEN AppGW OBJECT IS FULLY INSTANTIATED
   ! -------------------------------------------------------------
@@ -1133,9 +1722,9 @@ CONTAINS
   
   
   ! -------------------------------------------------------------
-  ! --- GET GW HEAD, SUBSIDENCE OR TILE DRAIN HYDROGRAPH NAMES
+  ! --- GET FEATURE NAMES
   ! -------------------------------------------------------------
-  SUBROUTINE GetHydrographNames(AppGW,iLocationType,cNamesList)
+  SUBROUTINE GetNames(AppGW,iLocationType,cNamesList)
     CLASS(AppGWType),INTENT(IN)  :: AppGW
     INTEGER,INTENT(IN)           :: iLocationType
     CHARACTER(LEN=*),INTENT(OUT) :: cNamesList(:) !Assumes array was dimensioned previously based on the number of hydrographs
@@ -1149,9 +1738,10 @@ CONTAINS
             
         CASE (f_iLocationType_TileDrainObs)
             CALL AppGW%AppTileDrain%GetHydrographNames(cNamesList)
+            
     END SELECT
     
-  END SUBROUTINE GetHydrographNames
+  END SUBROUTINE GetNames
   
   
   ! -------------------------------------------------------------
@@ -1666,6 +2256,23 @@ CONTAINS
   
   
   ! -------------------------------------------------------------
+  ! --- GET ALL SUBSIDENCE INTEBED THICKNESS AT (node,layer) COMBINATION
+  ! -------------------------------------------------------------
+  PURE SUBROUTINE GetSubsidenceInterbedThick_All(AppGW,lPrevious,rInterbedThick)
+    CLASS(AppGWType),INTENT(IN) :: AppGW
+    LOGICAL,INTENT(IN)          :: lPrevious
+    REAL(8),INTENT(OUT)         :: rInterbedThick(:,:)
+    
+    IF (AppGW%lSubsidence_Defined) THEN
+        CALL AppGW%AppSubsidence%GetInterbedThickAll(lPrevious,rInterbedThick)
+    ELSE
+        rInterbedThick = 0.0
+    END IF
+    
+  END SUBROUTINE GetSubsidenceInterbedThick_All
+    
+
+  ! -------------------------------------------------------------
   ! --- GET ALL SUBSIDENCE AT (node,layer) COMBINATION
   ! -------------------------------------------------------------
   PURE SUBROUTINE GetSubsidence_All(AppGW,Subs)
@@ -1708,13 +2315,35 @@ CONTAINS
     REAL(8),INTENT(OUT)          :: rFlow
     LOGICAL,OPTIONAL,INTENT(OUT) :: lAddToRHS
     
-    IF (PRESENT(lAddToRHS)) THEN
-        CALL AppGW%AppBC%GetBoundaryFlowAtElementNodeLayer(iBCType,iElem,indxVertex,iLayer,AppGrid,rFlow,lAddToRHS)
-    ELSE
-        CALL AppGW%AppBC%GetBoundaryFlowAtElementNodeLayer(iBCType,iElem,indxVertex,iLayer,AppGrid,rFlow)
-    END IF
+    CALL AppGW%AppBC%GetBoundaryFlowAtElementNodeLayer(iBCType,iElem,indxVertex,iLayer,AppGrid,rFlow,lAddToRHS)
 
   END SUBROUTINE GetBoundaryFlowAtElementNodeLayer
+  
+    
+  ! -------------------------------------------------------------
+  ! --- GET BOUNDARY FLOW AT A NODE WITH DEFINED B.C. AT A LAYER
+  ! -------------------------------------------------------------
+  SUBROUTINE GetBoundaryFlowAtNodeLayer(AppGW,iBCType,iNode,iLayer,rFlow)
+    CLASS(AppGWType),INTENT(IN) :: AppGW
+    INTEGER,INTENT(IN)          :: iBCType,iNode,iLayer
+    REAL(8),INTENT(OUT)         :: rFlow
+    
+    CALL AppGW%AppBC%GetBoundaryFlowAtNodeLayer(iBCType,iNode,iLayer,rFlow)
+    
+  END SUBROUTINE GetBoundaryFlowAtNodeLayer
+  
+    
+  ! -------------------------------------------------------------
+  ! --- GET BOUNDARY FLOW WITH DEFINED B.C. AT AALL NODES AND LAYERS
+  ! -------------------------------------------------------------
+  SUBROUTINE GetBoundaryFlowAtNodeLayer_All(AppGW,iBCType,rFlows)
+    CLASS(AppGWType),INTENT(IN) :: AppGW
+    INTEGER,INTENT(IN)          :: iBCType
+    REAL(8),INTENT(OUT)         :: rFlows(:,:)
+    
+    CALL AppGW%AppBC%GetBoundaryFlowAtNodeLayer_All(iBCType,rFlows)
+    
+  END SUBROUTINE GetBoundaryFlowAtNodeLayer_All
   
     
   ! -------------------------------------------------------------
@@ -2103,18 +2732,6 @@ CONTAINS
     
   END SUBROUTINE GetWellIDs
   
-  
-  ! -------------------------------------------------------------
-  ! --- GET WELL XY
-  ! -------------------------------------------------------------
-  PURE SUBROUTINE GetWellXY(AppGW, X, Y)
-    CLASS(AppGWType),INTENT(IN) :: AppGW
-    REAL(8),INTENT(OUT)         :: X(:), Y(:)
-    
-    IF (SIZE(X) .GT. 0 .AND. SIZE(Y) .GT. 0) CALL AppGW%AppPumping%GetWellXY(X,Y)
-    
-  END SUBROUTINE GetWellXY
-  
    
   ! -------------------------------------------------------------
   ! --- GET ELEMENT PUMPING IDs
@@ -2126,6 +2743,30 @@ CONTAINS
     IF (SIZE(IDs) .GT. 0) CALL AppGW%AppPumping%GetElemPumpIDs(IDs)
     
   END SUBROUTINE GetElemPumpIDs
+  
+   
+  ! -------------------------------------------------------------
+  ! --- GET WELL COORDINATES
+  ! -------------------------------------------------------------
+  PURE SUBROUTINE GetWellCoordinates(AppGW,rX,rY)
+    CLASS(AppGWType),INTENT(IN) :: AppGW
+    REAL(8),INTENT(OUT)         :: rX(:),rY(:)
+    
+    IF (SIZE(rX) .GT. 0) CALL AppGW%AppPumping%GetWellCoordinates(rX,rY)
+    
+  END SUBROUTINE GetWellCoordinates
+  
+   
+  ! -------------------------------------------------------------
+  ! --- GET ALL WELL PERFORATION TOP AND BOTTOM ELEVATIONS
+  ! -------------------------------------------------------------
+  PURE SUBROUTINE GetWellPerfTopBottom(AppGW,rTop,rBottom)
+    CLASS(AppGWType),INTENT(IN) :: AppGW
+    REAL(8),INTENT(OUT)         :: rTop(:),rBottom(:)
+    
+    CALL AppGW%AppPumping%GetWellPerfTopBottom(rTop,rBottom)
+    
+  END SUBROUTINE GetWellPerfTopBottom
   
    
   ! -------------------------------------------------------------
@@ -2371,17 +3012,17 @@ CONTAINS
   ! --- GET MONTHLY BUDGET FLOWS FROM AppGW OBJECT FOR A SPECIFED SUBREGION
   ! --- (Assumes cBeginDate and cEndDate are adjusted properly)
   ! -------------------------------------------------------------
-  SUBROUTINE GetBudget_MonthlyFlows_GivenAppGW(AppGW,iSubregionID,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
+  SUBROUTINE GetBudget_MonthlyFlows_GivenAppGW(AppGW,iSubregionIndex,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
     CLASS(AppGWType),INTENT(IN)              :: AppGW      
     CHARACTER(LEN=*),INTENT(IN)              :: cBeginDate,cEndDate
-    INTEGER,INTENT(IN)                       :: iSubregionID
+    INTEGER,INTENT(IN)                       :: iSubregionIndex
     REAL(8),INTENT(IN)                       :: rFactVL
     REAL(8),ALLOCATABLE,INTENT(OUT)          :: rFlows(:,:)      !In (column,month) format
     CHARACTER(LEN=*),ALLOCATABLE,INTENT(OUT) :: cFlowNames(:)
     INTEGER,INTENT(OUT)                      :: iStat
     
     IF (AppGW%lGWBudFile_Defined) THEN
-        CALL GetBudget_MonthlyFlows_GivenFile(AppGW%GWBudFile,iSubregionID,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
+        CALL GetBudget_MonthlyFlows_GivenFile(AppGW%GWBudFile,iSubregionIndex,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
     ELSE
         ALLOCATE (rFlows(0,0) , cFlowNames(0))
         iStat = 0
@@ -2394,10 +3035,10 @@ CONTAINS
   ! --- GET MONTHLY BUDGET FLOWS FROM A DEFINED BUDGET FILE FOR A SPECIFED SUBREGION
   ! --- (Assumes cBeginDate and cEndDate are adjusted properly)
   ! -------------------------------------------------------------
-  SUBROUTINE GetBudget_MonthlyFlows_GivenFile(Budget,iSubregionID,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
+  SUBROUTINE GetBudget_MonthlyFlows_GivenFile(Budget,iSubregionIndex,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
     TYPE(BudgetType),INTENT(IN)              :: Budget      !Assumes Budget file is already open
     CHARACTER(LEN=*),INTENT(IN)              :: cBeginDate,cEndDate
-    INTEGER,INTENT(IN)                       :: iSubregionID
+    INTEGER,INTENT(IN)                       :: iSubregionIndex
     REAL(8),INTENT(IN)                       :: rFactVL
     REAL(8),ALLOCATABLE,INTENT(OUT)          :: rFlows(:,:)  !In (column,month) format
     CHARACTER(LEN=*),ALLOCATABLE,INTENT(OUT) :: cFlowNames(:)
@@ -2413,7 +3054,7 @@ CONTAINS
     ALLOCATE (rValues(14,iNTimeSteps)) !Adding 1 to the first dimension for Time column; it will be removed later
     
     !Read data
-    CALL Budget%ReadData(iSubregionID,iReadCols,'1MON',cBeginDate,cEndDate,0d0,0d0,0d0,1d0,1d0,rFactVL,iDimActual,rValues,iStat)
+    CALL Budget%ReadData(iSubregionIndex,iReadCols,'1MON',cBeginDate,cEndDate,0d0,0d0,0d0,1d0,1d0,rFactVL,iDimActual,rValues,iStat)
     IF (iStat .NE. 0) RETURN
     
     !Store values in return argument
@@ -2452,9 +3093,9 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET BUDGET TIME SERIES DATA FOR A SET OF COLUMNS 
   ! -------------------------------------------------------------
-  SUBROUTINE GetBudget_TSData(AppGW,iSubregionID,iCols,cBeginDate,cEndDate,cInterval,rFactLT,rFactAR,rFactVL,rOutputDates,rOutputValues,iDataTypes,inActualOutput,iStat)
+  SUBROUTINE GetBudget_TSData(AppGW,iSubregionIndex,iCols,cBeginDate,cEndDate,cInterval,rFactLT,rFactAR,rFactVL,rOutputDates,rOutputValues,iDataTypes,inActualOutput,iStat)
     CLASS(AppGWType),INTENT(IN) :: AppGW
-    INTEGER,INTENT(IN)          :: iSubregionID,iCols(:)
+    INTEGER,INTENT(IN)          :: iSubregionIndex,iCols(:)
     CHARACTER(LEN=*),INTENT(IN) :: cBeginDate,cEndDate,cInterval
     REAL(8),INTENT(IN)          :: rFactLT,rFactAR,rFactVL
     REAL(8),INTENT(OUT)         :: rOutputDates(:),rOutputValues(:,:)    !rOutputValues is in (timestep,column) format
@@ -2466,7 +3107,7 @@ CONTAINS
     IF (AppGW%lGWBudFile_Defined) THEN
         !Read data
         DO indx=1,SIZE(iCols)
-            CALL AppGW%GWBudFile%ReadData(iSubregionID,iCols(indx),cInterval,cBeginDate,cEndDate,1d0,0d0,0d0,rFactLT,rFactAR,rFactVL,iDataTypes(indx),inActualOutput,rOutputDates,rOutputValues(:,indx),iStat)
+            CALL AppGW%GWBudFile%ReadData(iSubregionIndex,iCols(indx),cInterval,cBeginDate,cEndDate,1d0,0d0,0d0,rFactLT,rFactAR,rFactVL,iDataTypes(indx),inActualOutput,rOutputDates,rOutputValues(:,indx),iStat)
         END DO
     ELSE
         inActualOutput = 0
@@ -2481,16 +3122,16 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET CUMULATIVE CHANGE IN STORAGE FOR A SUBREGION FROM AppGW OBJECT
   ! -------------------------------------------------------------
-  SUBROUTINE GetBudget_CumGWStorChange_GivenAppGW(AppGW,iSubregionID,cBeginDate,cEndDate,cOutputInterval,rFactVL,rOutDates,rCumStorChange,iStat)
+  SUBROUTINE GetBudget_CumGWStorChange_GivenAppGW(AppGW,iSubregionIndex,cBeginDate,cEndDate,cOutputInterval,rFactVL,rOutDates,rCumStorChange,iStat)
     CLASS(AppGWType),INTENT(IN)     :: AppGW
-    INTEGER,INTENT(IN)              :: iSubregionID
+    INTEGER,INTENT(IN)              :: iSubregionIndex
     CHARACTER(LEN=*),INTENT(IN)     :: cBeginDate,cEndDate,cOutputInterval
     REAL(8),INTENT(IN)              :: rFactVL
     REAL(8),ALLOCATABLE,INTENT(OUT) :: rOutDates(:),rCumStorChange(:)
     INTEGER,INTENT(OUT)             :: iStat
     
     IF (AppGW%lGWBudFile_Defined) THEN
-        CALL GetBudget_CumGWStorChange_GivenFile(AppGW%GWBudFile,iSubregionID,cBeginDate,cEndDate,cOutputInterval,rFactVL,rOutDates,rCumStorChange,iStat)
+        CALL GetBudget_CumGWStorChange_GivenFile(AppGW%GWBudFile,iSubregionIndex,cBeginDate,cEndDate,cOutputInterval,rFactVL,rOutDates,rCumStorChange,iStat)
     ELSE
         ALLOCATE (rOutDates(0) , rCumStorChange(0))
         iStat = 0
@@ -2502,9 +3143,9 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET CUMULATIVE CHANGE IN STORAGE FOR A SUBREGION FROM GW BUDGET FILE
   ! -------------------------------------------------------------
-  SUBROUTINE GetBudget_CumGWStorChange_GivenFile(Budget,iSubregionID,cBeginDate,cEndDate,cOutputInterval,rFactVL,rOutDates,rCumStorChange,iStat)
+  SUBROUTINE GetBudget_CumGWStorChange_GivenFile(Budget,iSubregionIndex,cBeginDate,cEndDate,cOutputInterval,rFactVL,rOutDates,rCumStorChange,iStat)
     TYPE(BudgetType),INTENT(IN)     :: Budget      !Assumes Budget file is already open
-    INTEGER,INTENT(IN)              :: iSubregionID
+    INTEGER,INTENT(IN)              :: iSubregionIndex
     CHARACTER(LEN=*),INTENT(IN)     :: cBeginDate,cEndDate,cOutputInterval
     REAL(8),INTENT(IN)              :: rFactVL
     REAL(8),ALLOCATABLE,INTENT(OUT) :: rOutDates(:),rCumStorChange(:)
@@ -2522,7 +3163,7 @@ CONTAINS
     ALLOCATE (rValues(3,iNTimeSteps)) !Adding 1 to the first dimension for Time column; it will be removed later
     
     !Read data
-    CALL Budget%ReadData(iSubregionID,f_iReadCols,cOutputInterval,cBeginDate,cEndDate,0d0,0d0,0d0,1d0,1d0,rFactVL,iDimActual,rValues,iStat)
+    CALL Budget%ReadData(iSubregionIndex,f_iReadCols,cOutputInterval,cBeginDate,cEndDate,0d0,0d0,0d0,1d0,1d0,rFactVL,iDimActual,rValues,iStat)
     IF (iStat .NE. 0) RETURN
     
     !Store values in return argument
@@ -2572,13 +3213,17 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- SET BOUNDARY CONDITION 
   ! -------------------------------------------------------------
-  SUBROUTINE SetBC(AppGW,iNode,iLayer,iBCType,iStat,rFlow,rHead,rMaxBCFlow)
+  SUBROUTINE SetBC(AppGW,iNode,iLayer,iBCType,iNodeIDs,iStat,rFlow,rHead,rMaxBCFlow,rConductance,rConstrainingHeadBC)
     CLASS(AppGWType)            :: AppGW
-    INTEGER,INTENT(IN)          :: iNode,iLayer,iBCType
+    INTEGER,INTENT(IN)          :: iNode,iLayer,iBCType,iNodeIDs(:)
     INTEGER,INTENT(OUT)         :: iStat
-    REAL(8),OPTIONAL,INTENT(IN) :: rFlow,rHead,rMaxBCFlow
+    REAL(8),OPTIONAL,INTENT(IN) :: rFlow,rHead,rMaxBCFlow,rConductance,rConstrainingHeadBC
     
-    CALL AppGW%AppBC%SetBC(iNode,iLayer,iBCType,iStat,rFlow,rHead,rMaxBCFlow) 
+    CALL AppGW%AppBC%SetBC(iNode,iLayer,iBCType,iNodeIDs,iStat,rFlow,rHead,rMaxBCFlow,rConductance,rConstrainingHeadBC) 
+    IF (iStat .NE. 0) RETURN
+    
+    !Update flag to check if BC data is defined
+    AppGW%lAppBC_Defined = AppGW%AppBC%IsDefined()
     
   END SUBROUTINE SetBC
   
@@ -2624,6 +3269,19 @@ CONTAINS
   END SUBROUTINE SetSupplySpecs
   
     
+  ! -------------------------------------------------------------
+  ! --- SET REQUIRED PUMPING VALUES FOR A LIST OF WELLS/ELEMENT PUMPS
+  ! -------------------------------------------------------------
+  SUBROUTINE SetPumpRequired(AppGW,iPumpType,iPumpList,rPumpRequired)
+    CLASS(AppGWType)   :: AppGW
+    INTEGER,INTENT(IN) :: iPumpType,iPumpList(:)
+    REAL(8),INTENT(IN) :: rPumpRequired(:)
+    
+    CALL AppGW%AppPumping%SetPumpRequired(iPumpType,iPumpList,rPumpRequired)
+    
+  END SUBROUTINE SetPumpRequired
+  
+  
     
     
 ! ******************************************************************
@@ -3284,14 +3942,10 @@ CONTAINS
     
     !Local variables
     CHARACTER(LEN=ModNameLen+24) :: ThisProcedure = ModName // 'ProcessAquiferParameters'
-    INTEGER                      :: indxNode,indxLayer,iActiveLayerAbove,indx_S,indx_L,indxMessage, &
-                                    iNProblemNodes,iNNumbers,ID
+    INTEGER                      :: indxNode,indxLayer,iActiveLayerAbove,ID
     REAL(8)                      :: rAquiferThickness,Area,TopElevAboveLayer,BottomElevAboveLayer,  &
-                                    InterbedThick(AppGrid%NNodes,Stratigraphy%NLayers),DConfine,    &
+                                    rInterbedThick(AppGrid%NNodes,Stratigraphy%NLayers),DConfine,   &
                                     TopElev,BottomElev,ALU,ALL,rGWHead
-    LOGICAL                      :: lProblemSsExists
-    INTEGER,ALLOCATABLE          :: iNodeList(:)
-    TYPE(ProblemSsNodesType)     :: ProblemSsNodeList
     
     !Initialize
     iStat = 0
@@ -3299,15 +3953,13 @@ CONTAINS
     !Process subsidence related data    
     IF (lSubsidence_Defined) THEN
         CALL AppSubsidence%ProcessSubsidenceParameters(GWState%Head)
-        CALL AppSubsidence%GetInterbedThickAll(InterbedThick) 
+        CALL AppSubsidence%GetInterbedThickAll(.FALSE.,rInterbedThick) 
     ELSE
-        InterbedThick = 0.0
+        rInterbedThick = 0.0
     END IF
     
     !Process parameters
     DO indxLayer=1,Stratigraphy%NLayers
-        lProblemSsExists = .FALSE.
-        CALL ProblemSsNodeList%Delete()
         DO indxNode=1,AppGrid%NNodes
             ID   = AppGrid%AppNode(indxNode)%ID
             Area = AppGrid%AppNode(indxNode)%Area
@@ -3321,21 +3973,18 @@ CONTAINS
                 
                 !Make sure interbed thickness is less than aquifer thickness
                 IF (lSubsidence_Defined) THEN
-                    IF (rAquiferThickness .LE. InterbedThick(indxNode,indxLayer)) THEN
-                        CALL SetLastMessage('Aquifer thickness at node '//TRIM(IntToText(ID))//' and layer '//TRIM(IntToText(indxLayer))//' is less than interbed thickness!',f_iFatal,ThisProcedure)
+                    IF (rAquiferThickness .LE. rInterbedThick(indxNode,indxLayer)) THEN
+                        MessageArray(1) = 'Aquifer thickness at node '//TRIM(IntToText(ID))//' and layer '//TRIM(IntToText(indxLayer))//' is less than interbed thickness!'
+                        WRITE(MessageArray(2),'(A,F12.6)') 'Aquifer thickness  = ',rAquiferThickness
+                        WRITE(MessageArray(3),'(A,F12.6)') 'Interbed thickness = ',rInterbedThick(indxNode,indxLayer)
+                        CALL SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
                         iStat = -1
                         RETURN
                     END IF
                 END IF
                 
                 !Storage coefficient
-                GWNodes%Ss(indxNode,indxLayer) = GWNodes%Ss(indxNode,indxLayer) * (rAquiferThickness-InterbedThick(indxNode,indxLayer))
-                !Check if Ss is greater than 1.0, if so add to reporting list
-                IF (GWNodes%Ss(indxNode,indxLayer) .GT. 1.0) THEN
-                    lProblemSsExists = .TRUE.
-                    CALL ProblemSsNodeList%AddNode(ID,iStat)
-                    IF (iStat .EQ. -1) RETURN
-                END IF
+                GWNodes%Ss(indxNode,indxLayer) = GWNodes%Ss(indxNode,indxLayer) * (rAquiferThickness-rInterbedThick(indxNode,indxLayer))
                 GWNodes%Ss(indxNode,indxLayer) = GWNodes%Ss(indxNode,indxLayer) * Area
                 
                 !Specific yield
@@ -3422,28 +4071,8 @@ CONTAINS
             ELSE
                 !Zero out aquifer parameters for inactive nodes
                 !Do nothing; the values are already instantiated with zero values
-            END IF
-            
-        END DO
-        
-        !If problematic Ss data exists for this layer, report 
-        iNProblemNodes = ProblemSsNodeList%GetNNodes()
-        IF (iNProblemNodes .GT. 0) THEN
-            CALL ProblemSsNodeList%GetArray(iNodeList,iStat)  ;  IF (iStat .EQ. -1) RETURN
-            MessageArray(1) = 'The following nodes in layer ' // TRIM(IntToText(indxLayer)) // ' have storage coefficient (= specific storage x aquifer thickness) greater than 1.'
-            !How many numbers can we fit into a single message line?
-            iNNumbers = LEN(MessageArray(1)) / 8
-            !Populate message lines with problem node numbers
-            indx_L = 0
-            DO indxMessage=2,SIZE(MessageArray)
-                indx_S = indx_L + 1
-                indx_L = MIN(indx_S+iNNumbers-1 , iNProblemNodes)
-                WRITE (MessageArray(indxMessage),'(1000I8)') iNodeList(indx_S:indx_L)
-                IF (indx_L .EQ. iNProblemNodes) EXIT
-            END DO
-            IF (indxMessage .GT. SIZE(MessageArray)) indxMessage = indxMessage - 1
-            CALL LogMessage(MessageArray(1:indxMessage),f_iWarn,ThisProcedure)
-        END IF
+            END IF            
+        END DO        
     END DO
     
   END SUBROUTINE ProcessAquiferParameters
@@ -3452,17 +4081,17 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- OVERWRITE GROUNDWATER PARAMETERS
   ! -------------------------------------------------------------
-  SUBROUTINE OverwriteParameters(cFileName,NodeIDs,VarTimeUnit,TrackTime,lSubsidence_Defined,GWNodes,AppSubsidence,iStat)
-    CHARACTER(LEN=*),INTENT(IN) :: cFileName,VarTimeUnit
-    INTEGER,INTENT(IN)          :: NodeIDs(:)
-    LOGICAL,INTENT(IN)          :: TrackTime,lSubsidence_Defined
-    TYPE(GWNodeType)            :: GWNodes
-    TYPE(AppSubsidenceType)     :: AppSubsidence
-    INTEGER,INTENT(OUT)         :: iStat
+  SUBROUTINE OverwriteParameters(cFileName,AppGrid,VarTimeUnit,TrackTime,lSubsidence_Defined,GWNodes,AppSubsidence,iStat)
+    CHARACTER(LEN=*),INTENT(IN)  :: cFileName,VarTimeUnit
+    TYPE(AppGridType),INTENT(IN) :: AppGrid
+    LOGICAL,INTENT(IN)           :: TrackTime,lSubsidence_Defined
+    TYPE(GWNodeType)             :: GWNodes
+    TYPE(AppSubsidenceType)      :: AppSubsidence
+    INTEGER,INTENT(OUT)          :: iStat
     
     !Local variables
     CHARACTER(LEN=ModNameLen+19) :: ThisProcedure = ModName // 'OverwriteParameters'
-    INTEGER                      :: NWrite,indx,iNode,iLayer,index
+    INTEGER                      :: NWrite,indx,iNode,iLayer,index,NodeIDs(AppGrid%NNodes)
     REAL(8)                      :: rFactors(7),rDummyArrayNoSubs(7),rDummyArraySubs(9),Factor,   &
                                     ElasticSC(SIZE(GWNodes%Kh,DIM=1),SIZE(GWNodes%Kh,DIM=2)),           &
                                     InelasticSC(SIZE(GWNodes%Kh,DIM=1),SIZE(GWNodes%Kh,DIM=2))
@@ -3516,6 +4145,7 @@ CONTAINS
     Factor = TimeIntervalConversion(VarTimeUnit,cTimeUnit_Kv)         ;  rFactors(5) = rFactors(5) * Factor
 
     !Read and process data
+    NodeIDs = AppGrid%AppNode%ID
     IF (lSubsidence_Defined) THEN
         ElasticSC   = -1.0
         InelasticSC = -1.0
@@ -3536,7 +4166,7 @@ CONTAINS
           IF (rDummyArraySubs(8) .GE. 0.0)  ElasticSC(index,iLayer)          = rDummyArraySubs(8) * rFactors(6) 
           IF (rDummyArraySubs(9) .GE. 0.0)  InelasticSC(index,iLayer)        = rDummyArraySubs(9) * rFactors(7) 
         END DO
-        CALL AppSubsidence%OverwriteParameters(ElasticSC,InelasticSC)
+        CALL AppSubsidence%OverwriteParameters(AppGrid,ElasticSC,InelasticSC)
     ELSE
         DO indx=1,NWrite
           CALL OverwriteFile%ReadData(rDummyArrayNoSubs,iStat)  ;  IF (iStat .EQ. -1) RETURN

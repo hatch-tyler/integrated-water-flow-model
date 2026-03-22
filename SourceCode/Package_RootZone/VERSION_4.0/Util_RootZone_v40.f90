@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2022  
+!  Copyright (C) 2005-2024  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -70,22 +70,22 @@ MODULE Util_RootZone_v40
                                   f_iNRootZoneBudColumns                                = 46  , & 
                                   f_iNAgLWUseBudColumns                                 = 10  , &
                                   f_iNAgRootZoneBudColumns                              = 17  
-   CHARACTER(LEN=30),PARAMETER :: f_cLWUseBudgetColumnTitles(f_iNLWUseBudColumns)       = ['Ag. Area'                           , &   
+   CHARACTER(LEN=32),PARAMETER :: f_cLWUseBudgetColumnTitles(f_iNLWUseBudColumns)       = ['Ag. Area'                           , &   
                                                                                            'Potential CUAW'                     , &   
-                                                                                           'Ag. Supply Requirement'             , &   
-                                                                                           'Ag. Pumping'                        , &   
-                                                                                           'Ag. Deliveries'                     , &   
-                                                                                           'Ag. Inflow as Surface Runoff'       , &   
-                                                                                           'Ag. Shortage'                       , &   
+                                                                                           'Ag. Supply Requirement (+)'         , &   
+                                                                                           'Ag. Pumping (-)'                    , &   
+                                                                                           'Ag. Deliveries (-)'                 , &   
+                                                                                           'Ag. Inflow as Surface Runoff (-)'   , &   
+                                                                                           'Ag. Shortage (=)'                   , &   
                                                                                            'Ag. ETAW'                           , &   
                                                                                            'Ag. Effective Precipitation'        , &   
                                                                                            'Ag. ET from Other Sources'          , &   
                                                                                            'Urban Area'                         , &   
-                                                                                           'Urban Supply Requirement'           , &   
-                                                                                           'Urban Pumping'                      , &   
-                                                                                           'Urban Deliveries'                   , &   
-                                                                                           'Urban Inflow as Surface Runoff'     , &   
-                                                                                           'Urban Shortage'                     ]     
+                                                                                           'Urban Supply Requirement (+)'       , &   
+                                                                                           'Urban Pumping (-)'                  , &   
+                                                                                           'Urban Deliveries (-)'               , &   
+                                                                                           'Urban Inflow as Surface Runoff (-)' , &   
+                                                                                           'Urban Shortage (=)'                 ]     
    CHARACTER(LEN=53),PARAMETER :: f_cRootZoneBudgetColumnTitles(f_iNRootZoneBudColumns) = ['Ag. Area'                                               , &     
                                                                                            'Ag. Potential ET'                                       , &     
                                                                                            'Ag. Precipitation'                                      , &     
@@ -143,9 +143,9 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- NEW BINARY LAND AND WATER USE BUDGET FILE FOR POST-PROCESSING
   ! -------------------------------------------------------------
-  SUBROUTINE LWUseBudRawFile_New(IsForInquiry,cFileName,TimeStep,NTIME,NRegion,RegionArea,cRegionNames,cDescriptor,cVersion,RawFile,iStat)
+  SUBROUTINE LWUseBudRawFile_New(IsForInquiry,cProjectNameForDSS,cFileName,TimeStep,NTIME,NRegion,RegionArea,cRegionNames,cDescriptor,cVersion,RawFile,iStat)
     LOGICAL,INTENT(IN)            :: IsForInquiry
-    CHARACTER(LEN=*),INTENT(IN)   :: cFileName,cRegionNames(NRegion)
+    CHARACTER(LEN=*),INTENT(IN)   :: cProjectNameForDSS,cFileName,cRegionNames(NRegion)
     TYPE(TimeStepType),INTENT(IN) :: TimeStep
     INTEGER,INTENT(IN)            :: NTIME,NRegion
     REAL(8),INTENT(IN)            :: RegionArea(NRegion)
@@ -299,11 +299,11 @@ CONTAINS
       iCount = 1
       DO indxLocation=1,NRegion
         DO indxCol=1,f_iNLWUseBudColumns
-          pDSSOutput%cPathNames(iCount) = '/IWFM_L&W_USE_BUD/'                                           //  &  !A part
+          pDSSOutput%cPathNames(iCount) = '/'//TRIM(UpperCase(cProjectNameForDSS))//'_L&W_USE_BUD/'      //  &  !A part
                                           TRIM(UpperCase(OutputData%cLocationNames(indxLocation)))//'/'  //  &  !B part
                                           TRIM(CParts(indxCol))//'/'                                     //  &  !C part
                                           '/'                                                            //  &  !D part
-                                           TRIM(TimeStep%Unit)//'/'                                      //  &  !E part
+                                          TRIM(TimeStep%Unit)//'/'                                       //  &  !E part
                                           TRIM(FParts(indxCol))//'/'                                            !F part
           iCount = iCount+1
         END DO
@@ -320,9 +320,9 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- NEW BINARY LAND AND WATER USE BUDGET FILE FOR POST-PROCESSING
   ! -------------------------------------------------------------
-  SUBROUTINE AgLWUseBudRawFile_New(IsForInquiry,cFileName,TimeStep,NTIME,NRegion,RegionArea,cRegionNames,cDescriptor,cVersion,RawFile,iStat)
+  SUBROUTINE AgLWUseBudRawFile_New(IsForInquiry,cProjectNameForDSS,cFileName,TimeStep,NTIME,NRegion,RegionArea,cRegionNames,cDescriptor,cVersion,RawFile,iStat)
     LOGICAL,INTENT(IN)            :: IsForInquiry
-    CHARACTER(LEN=*),INTENT(IN)   :: cFileName,cRegionNames(NRegion)
+    CHARACTER(LEN=*),INTENT(IN)   :: cProjectNameForDSS,cFileName,cRegionNames(NRegion)
     TYPE(TimeStepType),INTENT(IN) :: TimeStep
     INTEGER,INTENT(IN)            :: NTIME,NRegion
     REAL(8),INTENT(IN)            :: RegionArea(NRegion)
@@ -423,11 +423,11 @@ CONTAINS
       pLocation%cFullColumnHeaders = ['Time'                           , &
                                       'Area ('//f_cAreaUnitMarker//')' , &
                                       'Potential CUAW'                 , &
-                                      'Supply Requirement'             , &
-                                      'Pumping'                        , &
-                                      'Deliveries'                     , &
-                                      'Inflow as Surface Runoff'       , &
-                                      'Shortage'                       , &
+                                      'Supply Requirement (+)'         , &
+                                      'Pumping (-)'                    , &
+                                      'Deliveries (-)'                 , &
+                                      'Inflow as Surface Runoff (-)'   , &
+                                      'Shortage (=)'                   , &
                                       'ETAW'                           , &
                                       'Effective Precipitation'        , &
                                       'ET from Other Sources'          ]
@@ -446,9 +446,9 @@ CONTAINS
                  pFormatSpecs   => pLocation%cColumnHeadersFormatSpec )
         Text                = ArrangeText(TRIM(UnitT),17)
         Text1               = '('//TRIM(f_cAreaUnitMarker)//')'
-        pColumnHeaders(:,1) = ['                 ','            ','    Potential ',' Agricultural','             ','             ','  Inflow as  ','             ','             ','             ','      ET     ']
-        pColumnHeaders(:,2) = ['      Time       ','        Area','      CUAW    ','    Supply   ','      Pumping',' Deliveries  ',' Srfc. Runoff','     Shortage','             ','   Effective ','  from Other ']
-        pColumnHeaders(:,3) = [               Text,         Text1,'              ','  Requirement','        (-)  ','     (-)     ','     (-)     ','       (=)   ','       ETAW  ','    Precip   ','    Sources  ']
+        pColumnHeaders(:,1) = ['                 ','            ','    Potential ','    Supply   ','             ','             ','  Inflow as  ','             ','             ','             ','      ET     ']
+        pColumnHeaders(:,2) = ['      Time       ','        Area','      CUAW    ','  Requirement','      Pumping',' Deliveries  ',' Srfc. Runoff','     Shortage','             ','   Effective ','  from Other ']
+        pColumnHeaders(:,3) = [               Text,         Text1,'              ','      (+)    ','        (-)  ','     (-)     ','     (-)     ','       (=)   ','       ETAW  ','    Precip   ','    Sources  ']
         pColumnHeaders(:,4) = ''
         pFormatSpecs(1)     = '(A17,A12,A14,8A13)'
         pFormatSpecs(2)     = '(A17,A12,A14,8A13)'
@@ -463,11 +463,11 @@ CONTAINS
       iCount = 1
       DO indxLocation=1,NRegion
         DO indxCol=1,f_iNAgLWUseBudColumns
-          pDSSOutput%cPathNames(iCount) = '/IWFM_L&W_USE_BUD/'                                           //  &  !A part
+          pDSSOutput%cPathNames(iCount) = '/'//TRIM(UpperCase(cProjectNameForDSS))//'_L&W_USE_BUD/'      //  &  !A part
                                           TRIM(UpperCase(OutputData%cLocationNames(indxLocation)))//'/'  //  &  !B part
                                           TRIM(CParts(indxCol))//'/'                                     //  &  !C part
                                           '/'                                                            //  &  !D part
-                                           TRIM(TimeStep%Unit)//'/'                                      //  &  !E part
+                                          TRIM(TimeStep%Unit)//'/'                                       //  &  !E part
                                           TRIM(FParts(indxCol))//'/'                                            !F part
           iCount = iCount+1
         END DO
@@ -485,9 +485,9 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- NEW BINARY ROOT ZONE BUDGET FILE FOR POST-PROCESSING
   ! -------------------------------------------------------------
-  SUBROUTINE RootZoneBudRawFile_New(IsForInquiry,cFileName,TimeStep,NTIME,NRegion,RegionArea,cRegionNames,cDescriptor,cVersion,RawFile,iStat)
+  SUBROUTINE RootZoneBudRawFile_New(IsForInquiry,cProjectNameForDSS,cFileName,TimeStep,NTIME,NRegion,RegionArea,cRegionNames,cDescriptor,cVersion,RawFile,iStat)
     LOGICAL,INTENT(IN)            :: IsForInquiry
-    CHARACTER(LEN=*),INTENT(IN)   :: cFileName,cRegionNames(NRegion)
+    CHARACTER(LEN=*),INTENT(IN)   :: cProjectNameForDSS,cFileName,cRegionNames(NRegion)
     TYPE(TimeStepType),INTENT(IN) :: TimeStep
     INTEGER,INTENT(IN)            :: NTIME,NRegion
     REAL(8),INTENT(IN)            :: RegionArea(NRegion)
@@ -774,11 +774,11 @@ CONTAINS
       iCount = 1
       DO indxLocation=1,NRegion
         DO indxCol=1,f_iNRootZoneBudColumns
-          pDSSOutput%cPathNames(iCount) = '/IWFM_ROOTZN_BUD/'                                            //  &  !A part
+          pDSSOutput%cPathNames(iCount) = '/'//TRIM(UpperCase(cProjectNameForDSS))//'_ROOTZN_BUD/'       //  &  !A part
                                           TRIM(UpperCase(OutputData%cLocationNames(indxLocation)))//'/'  //  &  !B part
                                           TRIM(CParts(indxCol))//'/'                                     //  &  !C part
                                           '/'                                                            //  &  !D part
-                                           TRIM(TimeStep%Unit)//'/'                                      //  &  !E part
+                                          TRIM(TimeStep%Unit)//'/'                                       //  &  !E part
                                           TRIM(FParts(indxCol))//'/'                                            !F part
           iCount = iCount+1
         END DO
@@ -798,9 +798,9 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- NEW BINARY ROOT ZONE BUDGET FILE FOR POST-PROCESSING OF AG LANDS
   ! -------------------------------------------------------------
-  SUBROUTINE AgRootZoneBudRawFile_New(IsForInquiry,cFileName,TimeStep,NTIME,NRegion,RegionArea,cRegionNames,cDescriptor,cVersion,RawFile,iStat)
+  SUBROUTINE AgRootZoneBudRawFile_New(IsForInquiry,cProjectNameForDSS,cFileName,TimeStep,NTIME,NRegion,RegionArea,cRegionNames,cDescriptor,cVersion,RawFile,iStat)
     LOGICAL,INTENT(IN)            :: IsForInquiry
-    CHARACTER(LEN=*),INTENT(IN)   :: cFileName,cRegionNames(NRegion)
+    CHARACTER(LEN=*),INTENT(IN)   :: cProjectNameForDSS,cFileName,cRegionNames(NRegion)
     TYPE(TimeStepType),INTENT(IN) :: TimeStep
     INTEGER,INTENT(IN)            :: NTIME,NRegion
     REAL(8),INTENT(IN)            :: RegionArea(NRegion)
@@ -969,11 +969,11 @@ CONTAINS
       iCount = 1
       DO indxLocation=1,NRegion
         DO indxCol=1,f_iNAgRootZoneBudColumns
-          pDSSOutput%cPathNames(iCount) = '/IWFM_ROOTZN_BUD/'                                            //  &  !A part
+          pDSSOutput%cPathNames(iCount) = '/'//TRIM(UpperCase(cProjectNameForDSS))//'_ROOTZN_BUD/'       //  &  !A part
                                           TRIM(UpperCase(OutputData%cLocationNames(indxLocation)))//'/'  //  &  !B part
                                           TRIM(CParts(indxCol))//'/'                                     //  &  !C part
                                           '/'                                                            //  &  !D part
-                                           TRIM(TimeStep%Unit)//'/'                                      //  &  !E part
+                                          TRIM(TimeStep%Unit)//'/'                                       //  &  !E part
                                           TRIM(FParts(indxCol))//'/'                                            !F part
           iCount = iCount+1
         END DO
@@ -985,7 +985,5 @@ CONTAINS
     CALL RawFile%New(cFileName,OutputData,iStat)
     
   END SUBROUTINE AgRootZoneBudRawFile_New
-
-
-  
+ 
 END MODULE

@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2022  
+!  Copyright (C) 2005-2024  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -36,7 +36,8 @@ MODULE Class_AppDiverBypass
                                            ArrangeText            , &
                                            NormalizeArray         , &
                                            ConvertID_To_Index
-  USE IOInterface                  , ONLY: RealTSDataInFileType
+  USE IOInterface                  , ONLY: GenericFileType        , & 
+                                           RealTSDataInFileType
   USE Package_Misc                 , ONLY: f_iFlowDest_Outside    , &
                                            f_iFlowDest_Element    , &
                                            f_iFlowDest_ElementSet , &
@@ -60,7 +61,8 @@ MODULE Class_AppDiverBypass
   USE Class_Bypass                 , ONLY: BypassType             , &
                                            Bypass_New             , &
                                            f_iBypassDestTypes => f_iDestTypes
-  USE Class_RechargeZone           , ONLY: RechargeZoneType
+  USE Class_RechargeZone           , ONLY: RechargeZoneType       , &
+                                           RechargeZone_New
   USE Class_StrmReach              , ONLY: StrmReachType
   IMPLICIT NONE
   
@@ -119,7 +121,9 @@ MODULE Class_AppDiverBypass
     PROCEDURE,PASS   :: New                            
     PROCEDURE,PASS   :: Kill                           
     PROCEDURE,PASS   :: GetDiversionIDs
+    PROCEDURE,PASS   :: GetDiversionNames
     PROCEDURE,PASS   :: GetBypassIDs      
+    PROCEDURE,PASS   :: GetBypassNames    
     PROCEDURE,PASS   :: GetBypassDiverOriginDestData
     PROCEDURE,PASS   :: GetElemRecvLosses                  
     PROCEDURE,PASS   :: GetSubregionalRecvLosses           
@@ -132,7 +136,6 @@ MODULE Class_AppDiverBypass
     PROCEDURE,PASS   :: GetBudget_NColumns
     PROCEDURE,PASS   :: GetBudget_ColumnTitles
     PROCEDURE,PASS   :: GetBudget_TSData
-    PROCEDURE,PASS   :: GetActualDiversions_AtSomeDiversions
     PROCEDURE,PASS   :: GetBypassReceived_AtADestination                     
     PROCEDURE,PASS   :: GetBypassReceived_FromABypass
     PROCEDURE,PASS   :: GetBypassExportNode
@@ -140,10 +143,13 @@ MODULE Class_AppDiverBypass
     PROCEDURE,PASS   :: GetBypassRecoverableLossFactor
     PROCEDURE,PASS   :: GetBypassNonRecoverableLossFactor
     PROCEDURE,PASS   :: GetStrmBypassInflows
+    PROCEDURE,PASS   :: GetRequiredDiversions_AtSomeDiversions
+    PROCEDURE,PASS   :: GetActualDiversions_AtSomeDiversions
     PROCEDURE,PASS   :: GetDiversionsExportNodes
     PROCEDURE,PASS   :: GetDeliveryAtDiversion
     PROCEDURE,PASS   :: GetDiversionsForDeliveries
     PROCEDURE,PASS   :: GetDiversionPurpose
+    PROCEDURE,PASS   :: GetDiversionRechargeZone
     PROCEDURE,PASS   :: SetBypassFlows_AtABypass
     PROCEDURE,PASS   :: SetDiversionRead
     PROCEDURE,PASS   :: SetDiverRequired
@@ -525,6 +531,79 @@ CONTAINS
   
   
   ! -------------------------------------------------------------
+  ! --- GET RECHARGE ZONE FOR A DIVERSION
+  ! -------------------------------------------------------------
+  SUBROUTINE GetDiversionRechargeZone(AppDiverBypass,cDivSpecFileName,iElemIDs,iDiver,iElems,rFracs,iStat)
+    CLASS(AppDiverBypassType),INTENT(IN) :: AppDiverBypass
+    CHARACTER(LEN=*),INTENT(IN)          :: cDivSpecFileName
+    INTEGER,INTENT(IN)                   :: iElemIDs(:),iDiver
+    INTEGER,ALLOCATABLE,INTENT(OUT)      :: iElems(:)
+    REAL(8),ALLOCATABLE,INTENT(OUT)      :: rFracs(:)
+    INTEGER,INTENT(OUT)                  :: iStat
+    
+    !Local variables
+    INTEGER                            :: iErrorCode,iNDiver,indx,iDummy
+    INTEGER,ALLOCATABLE                :: iDiverIDs(:) 
+    TYPE(GenericFileType)              :: vDiverSpecFile
+    TYPE(RechargeZoneType),ALLOCATABLE :: RechargeZones(:)
+    
+    !Clear memory
+    DEALLOCATE (iElems , rFracs , STAT=iErrorCode)
+    
+    !If no diversion spec file, return
+    IF (cDivSpecFileName .EQ. '') THEN
+        ALLOCATE (iElems(0) , rFracs(0))
+        RETURN
+    END IF
+    
+    !If diversions are already specified retrieve data directly
+    IF (AppDiverBypass%NDiver .GT. 0) THEN    
+        ALLOCATE (iElems , SOURCE=AppDiverBypass%Diver(iDiver)%Recharge%Zones)
+        ALLOCATE (rFracs , SOURCE=AppDiverBypass%Diver(iDiver)%Recharge%Fracs)
+        GOTO 10
+    END IF
+    
+    !Otherwise, read the data from file
+    !----------------------------------
+    !Open file
+    CALL vDiverSpecFile%New(cDivSpecFileName,InputFile=.TRUE.,IsTSFile=.FALSE.,Descriptor='diversion specifications input file',iStat=iStat)
+    IF (iStat .NE. 0) GOTO 10
+    
+    !Number of diversions
+    CALL vDiverSpecFile%ReadData(iNDiver,iStat)  ;  IF (iStat .NE. 0) GOTO 10
+    IF (iNDiver .EQ. 0) THEN
+        ALLOCATE (iElems(0) , rFracs(0))
+        GOTO 10
+    END IF
+    
+    !Read diversion IDs
+    ALLOCATE (iDiverIDs(iNDiver))
+    DO indx=1,iNDiver
+        CALL vDiverSpecFile%ReadData(iDiverIDs(indx),iStat) 
+        IF (iStat .NE. 0) GOTO 10
+    END DO
+    
+    !Skip element group related data
+    CALL vDiverSpecFile%ReadData(iDummy,iStat)  ;  IF (iStat .NE. 0) GOTO 10
+    IF (iDummy .GT. 0) THEN
+        CALL vDiverSpecFile%SkipDataBlocks(1,iStat)
+        IF (iStat .NE. 0) GOTO 10
+    END IF
+    
+    !Now read recharge zone data
+    ALLOCATE (RechargeZones(iNDiver))
+    CALL RechargeZone_New(iNDiver,iDiverIDs,iElemIDs,'diversion',vDiverSpecFile,RechargeZones,iStat)
+    IF (iStat .NE. 0) GOTO 10
+    ALLOCATE (iElems , SOURCE=RechargeZones(iDiver)%Zones)
+    ALLOCATE (rFracs , SOURCE=RechargeZones(iDiver)%Fracs)
+    
+    !Close file
+10  CALL vDiverSpecFile%Kill()
+    
+  END SUBROUTINE GetDiversionRechargeZone
+
+  
+  ! -------------------------------------------------------------
   ! --- GET PURPOSE OF DIVERSIONS (IF THEY SERVE AG, URBAN OR BOTH) BEFORE ANY ADJUSTMENT
   ! -------------------------------------------------------------
   SUBROUTINE GetDiversionPurpose(AppDiverBypass,iDivers,iAgOrUrban,iStat)
@@ -553,6 +632,24 @@ CONTAINS
     rDivers = AppDiverBypass%Diver(iDivers)%DiverActual
     
   END SUBROUTINE GetActualDiversions_AtSomeDiversions
+  
+  
+  ! -------------------------------------------------------------
+  ! --- GET REQUIRED DIVERSIONS FOR A SET OF DIVERSIONS
+  ! -------------------------------------------------------------
+  SUBROUTINE GetRequiredDiversions_AtSomeDiversions(AppDiverBypass,iDivers,rDivers,iStat)
+    CLASS(AppDiverBypassType),INTENT(IN) :: AppDiverBypass
+    INTEGER,INTENT(IN)                   :: iDivers(:)
+    REAL(8),INTENT(OUT)                  :: rDivers(:)
+    INTEGER,INTENT(OUT)                  :: iStat
+    
+    !Local variables
+    CHARACTER(ModNameLen+38),PARAMETER :: ThisProcedure = ModName // 'GetRequiredDiversions_AtSomeDiversions'
+    
+    iStat   = 0    
+    rDivers = AppDiverBypass%Diver(iDivers)%DiverRequired
+    
+  END SUBROUTINE GetRequiredDiversions_AtSomeDiversions
   
   
   ! -------------------------------------------------------------
@@ -608,6 +705,20 @@ CONTAINS
   
   
   ! -------------------------------------------------------------
+  ! --- GET DIVERSION NAMES
+  ! -------------------------------------------------------------
+  PURE SUBROUTINE GetDiversionNames(AppDiverBypass,cNames)
+    CLASS(AppDiverBypassType),INTENT(IN) :: AppDiverBypass
+    CHARACTER(LEN=*),INTENT(OUT)         :: cNames(:)
+    
+    cNames = ''
+    IF (AppDiverBypass%NDiver .EQ. 0) RETURN
+    cNames = AppDiverBypass%Diver%cName
+    
+  END SUBROUTINE GetDiversionNames
+  
+  
+  ! -------------------------------------------------------------
   ! --- GET BYPASS IDs
   ! -------------------------------------------------------------
   PURE SUBROUTINE GetBypassIDs(AppDiverBypass,iBypassIDs)
@@ -618,6 +729,20 @@ CONTAINS
     iBypassIDs = AppDiverBypass%Bypasses%ID
     
   END SUBROUTINE GetBypassIDs
+  
+  
+  ! -------------------------------------------------------------
+  ! --- GET BYPASS NAMES
+  ! -------------------------------------------------------------
+  PURE SUBROUTINE GetBypassNames(AppDiverBypass,cNames)
+    CLASS(AppDiverBypassType),INTENT(IN) :: AppDiverBypass
+    CHARACTER(LEN=*),INTENT(OUT)         :: cNames(:)
+    
+    cNames = ''
+    IF (AppDiverBypass%NBypass .EQ. 0) RETURN
+    cNames = AppDiverBypass%Bypasses%cName
+    
+  END SUBROUTINE GetBypassNames
   
   
   ! -------------------------------------------------------------

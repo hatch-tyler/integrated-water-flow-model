@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2022  
+!  Copyright (C) 2005-2024  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -92,6 +92,7 @@ MODULE Class_StrmGWConnector
       PROCEDURE,PASS :: WritePreprocessedData
       PROCEDURE,PASS :: ConvertTimeUnit
       PROCEDURE,PASS :: ComputeStrmGWFlow_AtMinHead
+      PROCEDURE,PASS :: ComputeStrmGWFlow_GivenStrmFlow
       PROCEDURE,PASS :: Simulate
       PROCEDURE,PASS :: RegisterWithMatrix
       GENERIC        :: New      => ReadPreprocessedData              , &
@@ -762,16 +763,17 @@ CONTAINS
   ! --- SIMULATE STREAM-GW INTERACTION
   ! --- *** Note: + flow means loosing stream
   ! -------------------------------------------------------------
-  SUBROUTINE Simulate(Connector,iNNodes,rGWHeads,rStrmHeads,rAvailableFlows,Matrix,WetPerimeterFunction,rMaxElevs)
+  SUBROUTINE Simulate(Connector,iNNodes,rGWHeads,rStrmHeads,rAvailableFlows,lUpdateStrmEqns,Matrix,WetPerimeterFunction,rMaxElevs)
     CLASS(StrmGWConnectorType)                      :: Connector
     INTEGER,INTENT(IN)                              :: iNNodes
     REAL(8),INTENT(IN)                              :: rGWHeads(:),rStrmHeads(:),rAvailableFlows(:)
+    LOGICAL,INTENT(IN)                              :: lUpdateStrmEqns
     TYPE(MatrixType)                                :: Matrix
     CLASS(AbstractFunctionType),OPTIONAL,INTENT(IN) :: WetPerimeterFunction(:)                     
     REAL(8),OPTIONAL,INTENT(IN)                     :: rMaxElevs(:)
 
     IF (Connector%lDefined) THEN
-        CALL Connector%Me%Simulate(iNNodes,rGWHeads,rStrmHeads,rAvailableFlows,Matrix,WetPerimeterFunction,rMaxElevs)
+        CALL Connector%Me%Simulate(iNNodes,rGWHeads,rStrmHeads,rAvailableFlows,lUpdateStrmEqns,Matrix,WetPerimeterFunction,rMaxElevs)
     END IF
     
   END SUBROUTINE Simulate
@@ -798,6 +800,26 @@ CONTAINS
   
   
   ! -------------------------------------------------------------
+  ! --- COMPUTE STREAM-GW INTERACTION GIVEN GW HEAD, STREAM FLOW AND CORRESPONDING STREAM HEAD FOR A STREAM NODE
+  ! -------------------------------------------------------------
+  FUNCTION ComputeStrmGWFlow_GivenStrmFlow(Connector,iStrmNode,rStrmFlow,rStrmHead,rGWHeads,WetPerimeterFunction,rMaxElev) RESULT(rStrmGWFlow)
+    CLASS(StrmGWConnectorType),INTENT(IN)           :: Connector
+    INTEGER,INTENT(IN)                              :: iStrmNode
+    REAL(8),INTENT(IN)                              :: rStrmFlow,rStrmHead,rGWHeads(:)
+    CLASS(AbstractFunctionType),OPTIONAL,INTENT(IN) :: WetPerimeterFunction    !Not used in this version                
+    REAL(8),OPTIONAL,INTENT(IN)                     :: rMaxElev                !Not used in this version 
+    REAL(8)                                         :: rStrmGWFlow
+    
+    IF (Connector%lDefined) THEN
+       rStrmGWFlow = Connector%Me%ComputeStrmGWFlow_GivenStrmFlow(iStrmNode,rStrmFlow,rStrmHead,rGWHeads,WetPerimeterFunction,rMaxElev)
+    ELSE
+        rStrmGWFlow = 0.0
+    END IF
+    
+  END FUNCTION ComputeStrmGWFlow_GivenStrmFlow
+  
+  
+  ! -------------------------------------------------------------
   ! --- ADD STREAM-GW CONNECTIVITY TO MATRIX
   ! -------------------------------------------------------------
   SUBROUTINE RegisterWithMatrix(Connector,StrmConnectivity,AppGrid,Matrix,iStat)
@@ -820,6 +842,5 @@ CONTAINS
     CALL Connector%Me%RegisterWithMatrix(StrmConnectivity,AppGrid,Matrix,iStat)
     
   END SUBROUTINE RegisterWithMatrix
-
 
 END MODULE

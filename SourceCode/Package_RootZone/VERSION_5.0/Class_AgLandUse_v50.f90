@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2022  
+!  Copyright (C) 2005-2024  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -54,6 +54,7 @@ MODULE Class_AgLandUse_v50
   USE Class_BaseRootZone      , ONLY: TrackMoistureDueToSource
   USE Util_Package_RootZone   , ONLY: ReadRealData                            , &
                                       ReadPointerData                         , &
+                                      ReadLandUseAreasForTimePeriod           , &
                                       f_iDemandFromMoistAtBegin               , &
                                       f_iDemandFromMoistAtEnd                 , &
                                       f_iNoIrigPeriod                         , &
@@ -143,19 +144,20 @@ MODULE Class_AgLandUse_v50
       LOGICAL                       :: lWaterDemand_Defined   = .FALSE.                    !Flag to check if ag water demand is pre-defined or computed dynamically
       LOGICAL                       :: lAvgCropOutput_Defined = .FALSE.                    !Flag to check if output file for average crop characteristics is specified
   CONTAINS
-      PROCEDURE,PASS :: New
-      PROCEDURE,PASS :: Kill
-      PROCEDURE,PASS :: GetMaxAndMinNetReturnFlowFrac
-      PROCEDURE,PASS :: SetAreas
-      PROCEDURE,PASS :: ReadTSData
-      PROCEDURE,PASS :: ReadRestartData
-      PROCEDURE,PASS :: PrintResults
-      PROCEDURE,PASS :: PrintRestartData
-      PROCEDURE,PASS :: SoilMContent_To_Depth
-      PROCEDURE,PASS :: AdvanceAreas
-      PROCEDURE,PASS :: Simulate
-      PROCEDURE,PASS :: ComputeWaterDemand
-      PROCEDURE,PASS :: RewindTSInputFilesToTimeStamp
+      PROCEDURE,PASS   :: New
+      PROCEDURE,PASS   :: Kill
+      PROCEDURE,PASS   :: GetMaxAndMinNetReturnFlowFrac
+      PROCEDURE,NOPASS :: GetAreasForTimePeriod
+      PROCEDURE,PASS   :: SetAreas
+      PROCEDURE,PASS   :: ReadTSData
+      PROCEDURE,PASS   :: ReadRestartData
+      PROCEDURE,PASS   :: PrintResults
+      PROCEDURE,PASS   :: PrintRestartData
+      PROCEDURE,PASS   :: SoilMContent_To_Depth
+      PROCEDURE,PASS   :: AdvanceAreas
+      PROCEDURE,PASS   :: Simulate
+      PROCEDURE,PASS   :: ComputeWaterDemand
+      PROCEDURE,PASS   :: RewindTSInputFilesToTimeStamp
   END TYPE AgDatabase_v50_Type
 
 
@@ -664,6 +666,54 @@ CONTAINS
   END SUBROUTINE GetMaxAndMinNetReturnFlowFrac
   
   
+  ! -------------------------------------------------------------
+  ! --- GET AREAS OF AG FOR AT ALL ELEMENTS FOR A TIME PERIOD
+  ! --- Note: This method is not meant to be called during a Simulation
+  ! -------------------------------------------------------------
+  SUBROUTINE GetAreasForTimePeriod(cMainFileName,cWorkingDirectory,cBeginDate,cEndDate,TimeStep,AppGrid,rAreas,iStat)
+    CHARACTER(LEN=*),INTENT(IN)   :: cMainFileName,cWorkingDirectory,cBeginDate,cEndDate
+    TYPE(TimeStepType),INTENT(IN) :: TimeStep
+    TYPE(AppGridType),INTENT(IN)  :: AppGrid
+    REAL(8),INTENT(OUT)           :: rAreas(:,:)  !For each (element,time)
+    INTEGER,INTENT(OUT)           :: iStat
+    
+    !Local variables
+    INTEGER                  :: indx
+    CHARACTER                :: cALine*500
+    TYPE(GenericFileType)    :: MainFile
+    CHARACTER(:),ALLOCATABLE :: cAreaFileName
+   
+    !Return if no file name is specified
+    IF (cMainFileName .EQ. '') THEN
+        rAreas = 0.0
+        iStat  = 0
+        GOTO 10
+    END IF
+    
+    !Open main file
+    CALL MainFile%New(FileName=TRIM(cMainFileName),InputFile=.TRUE.,IsTSFile=.FALSE.,iStat=iStat)
+    IF (iStat .NE. 0) GOTO 10
+    
+    !Skip unnecessary data
+    DO indx=1,2
+        CALL MainFile%ReadData(cALine,iStat)  
+        IF (iStat .NE. 0) GOTO 10
+    END DO
+    
+    !Read area filename
+    CALL MainFile%ReadData(cALine,iStat)  
+    cALine = StripTextUntilCharacter(cALine,'/') 
+    CALL CleanSpecialCharacters(cALine)
+    CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(cALine)),cWorkingDirectory,cAreaFileName)
+    
+    !Retrieve areas
+    CALL ReadLandUseAreasForTimePeriod(cAreaFileName,cWorkingDirectory,cBeginDate,cEndDate,TimeStep,AppGrid,1,1,rAreas,iStat)
+
+10  CALL MainFile%Kill()
+    
+  END SUBROUTINE GetAreasForTimePeriod
+  
+  
 
   
 ! ******************************************************************
@@ -842,10 +892,10 @@ CONTAINS
                 FC    = FieldCapacity(indxSoil,indxRegion)
                 DO indxCrop=1,AgLand%NCrops
                     rFrac = AgLand%MinSoilMFile%rValues(AgLand%iColMinSoilM(indxCrop,indxRegion))
-                    IF (WP+rFrac*(FC-WP) .LT. 0.5d0*FC) THEN
+                    IF (WP+rFrac*(FC-WP) .LT. 0.5d0*(FC+WP)) THEN
                         MessageArray(1) = 'Deficit irrigation is being simulated for crop ID '//TRIM(IntToText(indxCrop))//' at soil type '//TRIM(IntToText(indxSoil))//' in subregion '//TRIM(IntToText(iSubregionIDs(indxRegion)))//'!'
-                        WRITE (MessageArray(2),'(A,F6.3)') 'Irrigation trigger minimum moisture = ' , WP + rFrac*(FC-WP)
-                        WRITE (MessageArray(3),'(A,F6.3)') 'Half of field capacity              = ' , 0.5D0 * FC
+                        WRITE (MessageArray(2),'(A,F6.3)') 'Irrigation trigger minimum moisture       = ' , WP + rFrac*(FC-WP)
+                        WRITE (MessageArray(3),'(A,F6.3)') 'Moisture at half of Total Available Water = ' , 0.5D0 * (FC+WP)
                         CALL LogMessage(MessageArray(1:3),f_iInfo,ThisProcedure)
                     END IF
                 END DO

@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2022  
+!  Copyright (C) 2005-2024  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -155,9 +155,12 @@ CONTAINS
   SUBROUTINE KillBaseFile(ThisFile)
     CLASS(BaseFileType) :: ThisFile
     
+    !Local variables
+    INTEGER :: iErrorCode
+    
     !Kill basefile
     ThisFile%UnitN = f_iDefaultUnitNumber
-    DEALLOCATE(ThisFile%Name)
+    DEALLOCATE(ThisFile%Name , STAT=iErrorCode)
     
   END SUBROUTINE KillBaseFile
 

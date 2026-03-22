@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2022  
+!  Copyright (C) 2005-2024  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -39,8 +39,7 @@ MODULE IWFM_Misc_Exports
                                           IncrementTimeStamp                       , &
                                           OPERATOR(.TSGT.)
   USE IOInterface                 , ONLY: GenericFileType
-  USE Package_Misc                , ONLY: Package_Misc_GetVersion                  , &
-                                          f_iFlowDest_Outside                      , &
+  USE Package_Misc                , ONLY: f_iFlowDest_Outside                      , &
                                           f_iFlowDest_StrmNode                     , &
                                           f_iFlowDest_Element                      , &
                                           f_iFlowDest_Lake                         , &
@@ -74,31 +73,22 @@ MODULE IWFM_Misc_Exports
                                           f_iLandUse_UrbIn                         , &
                                           f_iLandUse_UrbOut                        , &
                                           f_iLandUse_NonPondedAg                   , & 
+                                          f_iLandUse_PondedAg                      , & 
                                           f_iLandUse_Rice                          , & 
                                           f_iLandUse_Refuge                        , & 
                                           f_iLandUse_NVRV                                  
-  USE Package_Budget              , ONLY: Package_Budget_GetVersion
-  USE Package_ZBudget             , ONLY: Package_ZBudget_GetVersion               , &
-                                          f_iZoneHorizontal                        , &
+  USE Package_ZBudget             , ONLY: f_iZoneHorizontal                        , &
                                           f_iZoneVertical
   USE Package_Matrix              , ONLY: MatrixType
-  USE Package_Discretization      , ONLY: Package_Discretization_GetVersion
-  USE Package_PrecipitationET     , ONLY: Package_PrecipitationET_GetVersion
   USE Package_AppGW               , ONLY: f_iBudgetType_GW                         
-  USE Package_AppSubsidence       , ONLY: AppSubsidenceType
-  USE Package_ComponentConnectors , ONLY: Package_ComponentConnectors_GetVersion
   USE Package_GWZBudget           , ONLY: f_iZBudgetType_GW                     
-  USE Package_UnsatZone           , ONLY: Package_UnsatZone_GetVersion
   USE Package_AppUnsatZone        , ONLY: f_iBudgetType_UnsatZone                  , &
                                           f_iZBudgetType_UnsatZone                 
-  USE Package_AppStream           , ONLY: AppStreamType                            , &
-                                          f_iBudgetType_StrmNode                   , &
+  USE Package_AppStream           , ONLY: f_iBudgetType_StrmNode                   , &
                                           f_iBudgetType_StrmReach                  , &
                                           f_iBudgetType_DiverDetail                
-  USE Package_AppLake             , ONLY: AppLakeType                              , &
-                                          f_iBudgetType_Lake            
-  USE Package_RootZone            , ONLY: RootZoneType                             , &
-                                          f_iBudgetType_RootZone                   , &
+  USE Package_AppLake             , ONLY: f_iBudgetType_Lake            
+  USE Package_RootZone            , ONLY: f_iBudgetType_RootZone                   , &
                                           f_iBudgetType_LWU                        , &
                                           f_iBudgetType_NonPondedCrop_RZ           , &
                                           f_iBudgetType_NonPondedCrop_LWU          , &
@@ -107,8 +97,8 @@ MODULE IWFM_Misc_Exports
                                           f_iZBudgetType_RootZone                  , &
                                           f_iZBudgetType_LWU 
   USE Package_AppSmallWatershed   , ONLY: f_iBudgetType_SWShed 
-  USE IWFM_Core_Version           , ONLY: IWFM_Core
   USE IWFM_Util_VersionF          , ONLY: IWFM_Util
+  USE Package_Model               , ONLY: ModelType
   IMPLICIT NONE
     
   
@@ -169,30 +159,19 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT)         :: iStat
     
     !Local variables
-    TYPE(RootZoneType)      :: RootZone
-    TYPE(MatrixType)        :: Matrix
-    TYPE(AppStreamType)     :: AppStream
-    TYPE(AppLakeType)       :: AppLake
-    TYPE(AppSubsidenceType) :: AppSubsidence
-    CHARACTER               :: cVer_F*iLen
+    TYPE(ModelType)          :: DummyModel
+    CHARACTER                :: cVer_F*iLen
+    CHARACTER(:),ALLOCATABLE :: cVersion
     
-    iStat = 0
+    !Initialize
+    iStat  = 0
+    cVer_F = ''
     
-    cVer_F = 'IWFM Core: ' // TRIM(IWFM_Core%GetVersion())                                         // f_cLineFeed // &
-             'IWFM_Util.lib: ' // TRIM(IWFM_Util%GetVersion())                                     // f_cLineFeed // &
-             'Package_Misc.lib: ' // TRIM(Package_Misc_GetVersion())                               // f_cLineFeed // &
-             'Package_Discretization.lib: ' // TRIM(Package_Discretization_GetVersion())           // f_cLineFeed // &
-             'Package_ComponentConnectors.lib: ' // TRIM(Package_ComponentConnectors_GetVersion()) // f_cLineFeed // &
-             'Package_Budget.lib: ' // TRIM(Package_Budget_GetVersion())                           // f_cLineFeed // &
-             'Package_ZBudget.lib: ' // TRIM(Package_ZBudget_GetVersion())                         // f_cLineFeed // &
-             'Package_Matrix.lib: ' // TRIM(Matrix%GetVersion())                                   // f_cLineFeed // &
-             'Package_PrecipitationET.lib: ' // TRIM(Package_PrecipitationET_GetVersion())         // f_cLineFeed // &
-             'Package_AppStream.lib: ' // TRIM(AppStream%GetVersion())                             // f_cLineFeed // &
-             'Package_AppLake.lib: ' // TRIM(AppLake%GetVersion())                                 // f_cLineFeed // &
-             'Package_UnsatZone.lib: ' // TRIM(Package_UnsatZone_GetVersion())                     // f_cLineFeed // &
-             'Package_RootZone.lib: ' // TRIM(RootZone%GetVersion())                               // f_cLineFeed // &
-             'Package_AppSubsidence.lib: '//TRIM(AppSubsidence%GetVersion())
+    !Get version
+    CALL DummyModel%GetVersion(cVersion)
     
+    !Store version
+    cVer_F = cVersion    
     CALL String_Copy_F_C(cVer_F,cVer)
     
   END SUBROUTINE IW_GetVersion
@@ -293,13 +272,13 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET LAND USE TYPE IDs (Version 1)
   ! -------------------------------------------------------------
-  SUBROUTINE IW_GetLandUseTypeIDs_1(iLUTypeID_GenAg,iLUTypeID_GenUrb,iLUTypeID_NonPondedAg,iLUTypeID_Rice,iLUTypeID_Refuge,iLUTypeID_UrbIn,iLUTypeID_UrbOut,iLUTypeID_NVRV,iStat) BIND(C,NAME="IW_GetLandUseTypeIDs_1")
+  SUBROUTINE IW_GetLandUseTypeIDs_1(iLUTypeID_GenAg,iLUTypeID_Urb,iLUTypeID_NonPondedAg,iLUTypeID_Rice,iLUTypeID_Refuge,iLUTypeID_UrbIn,iLUTypeID_UrbOut,iLUTypeID_NVRV,iStat) BIND(C,NAME="IW_GetLandUseTypeIDs_1")
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_GetLandUseTypeIDs_1
-    INTEGER(C_INT),INTENT(OUT) :: iLUTypeID_GenAg,iLUTypeID_GenUrb,iLUTypeID_NonPondedAg,iLUTypeID_Rice,iLUTypeID_Refuge,iLUTypeID_UrbIn,iLUTypeID_UrbOut,iLUTypeID_NVRV,iStat
+    INTEGER(C_INT),INTENT(OUT) :: iLUTypeID_GenAg,iLUTypeID_Urb,iLUTypeID_NonPondedAg,iLUTypeID_Rice,iLUTypeID_Refuge,iLUTypeID_UrbIn,iLUTypeID_UrbOut,iLUTypeID_NVRV,iStat
     
     iStat                 = 0
     iLUTypeID_GenAg       = f_iLandUse_Ag
-    iLUTypeID_GenUrb      = f_iLandUse_Urb
+    iLUTypeID_Urb         = f_iLandUse_Urb
     iLUTypeID_UrbIn       = f_iLandUse_UrbIn
     iLUTypeID_UrbOut      = f_iLandUse_UrbOut
     iLUTypeID_NonPondedAg = f_iLandUse_NonPondedAg
@@ -308,6 +287,27 @@ CONTAINS
     iLUTypeID_NVRV        = f_iLandUse_NVRV
     
   END SUBROUTINE IW_GetLandUseTypeIDs_1
+  
+  
+  ! -------------------------------------------------------------
+  ! --- GET LAND USE TYPE IDs (Version 2)
+  ! -------------------------------------------------------------
+  SUBROUTINE IW_GetLandUseTypeIDs_2(iLUTypeID_GenAg,iLUTypeID_Urb,iLUTypeID_NonPondedAg,iLUTypeID_PondedAg,iLUTypeID_Rice,iLUTypeID_Refuge,iLUTypeID_UrbIn,iLUTypeID_UrbOut,iLUTypeID_NVRV,iStat) BIND(C,NAME="IW_GetLandUseTypeIDs_2")
+    !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_GetLandUseTypeIDs_2
+    INTEGER(C_INT),INTENT(OUT) :: iLUTypeID_GenAg,iLUTypeID_Urb,iLUTypeID_NonPondedAg,iLUTypeID_PondedAg,iLUTypeID_Rice,iLUTypeID_Refuge,iLUTypeID_UrbIn,iLUTypeID_UrbOut,iLUTypeID_NVRV,iStat
+    
+    iStat                 = 0
+    iLUTypeID_GenAg       = f_iLandUse_Ag
+    iLUTypeID_Urb         = f_iLandUse_Urb
+    iLUTypeID_UrbIn       = f_iLandUse_UrbIn
+    iLUTypeID_UrbOut      = f_iLandUse_UrbOut
+    iLUTypeID_NonPondedAg = f_iLandUse_NonPondedAg
+    iLUTypeID_PondedAg    = f_iLandUse_PondedAg
+    iLUTypeID_Rice        = f_iLandUse_Rice
+    iLUTypeID_Refuge      = f_iLandUse_Refuge
+    iLUTypeID_NVRV        = f_iLandUse_NVRV
+    
+  END SUBROUTINE IW_GetLandUseTypeIDs_2
   
   
   ! -------------------------------------------------------------
@@ -373,6 +373,19 @@ CONTAINS
     iLUTypeID_NonPondedAg = f_iLandUse_NonPondedAg
     
   END SUBROUTINE IW_GetLandUseTypeID_NonPondedAg
+  
+  
+  ! -------------------------------------------------------------
+  ! --- GET PONDED AG LAND USE TYPE ID
+  ! -------------------------------------------------------------
+  SUBROUTINE IW_GetLandUseTypeID_PondedAg(iLUTypeID_PondedAg,iStat) BIND(C,NAME="IW_GetLandUseTypeID_PondedAg")
+    !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_GetLandUseTypeID_PondedAg
+    INTEGER(C_INT),INTENT(OUT) :: iLUTypeID_PondedAg,iStat
+    
+    iStat              = 0
+    iLUTypeID_PondedAg = f_iLandUse_PondedAg
+    
+  END SUBROUTINE IW_GetLandUseTypeID_PondedAg
   
   
   ! -------------------------------------------------------------

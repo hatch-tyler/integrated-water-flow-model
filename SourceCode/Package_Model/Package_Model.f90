@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2022  
+!  Copyright (C) 2005-2024  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -104,6 +104,8 @@ MODULE Package_Model
                                           f_iLocationType_Diversion                   , &
                                           f_iLocationType_Bypass                      , &
                                           f_iLocationType_StrmNodeBud                 , &
+                                          f_iLocationType_Well                        , &
+                                          f_iLocationType_ElemPump                    , &
                                           f_iSupply_Diversion                         , &
                                           f_iSupply_ElemPump                          , &
                                           f_iSupply_Well                              , &
@@ -172,6 +174,7 @@ MODULE Package_Model
   USE Class_Model_ForInquiry      , ONLY: Model_ForInquiry_Type                       , &
                                           f_iFilePathLen                              , &
                                           f_iDataDescriptionLen
+  USE WSA_ANN                     , ONLY: WSA_ANN_Type
   IMPLICIT NONE
   
   
@@ -252,13 +255,16 @@ MODULE Package_Model
   ! --- MODEL DATA TYPE
   ! -------------------------------------------------------------
   TYPE ModelType
-      INTEGER                              :: iRestartOption               = iNoRestart
-      LOGICAL                              :: lIsForInquiry                = .FALSE.
-      LOGICAL                              :: lAppUnsatZone_Defined        = .FALSE.
-      LOGICAL                              :: lRootZone_Defined            = .FALSE.
-      LOGICAL                              :: lModel_ForInquiry_Defined    = .FALSE.
-      CHARACTER(:),ALLOCATABLE             :: cPPWorkingDirectory
-      CHARACTER(:),ALLOCATABLE             :: cSIMWorkingDirectory
+      INTEGER                              :: iRestartOption                 = iNoRestart
+      LOGICAL                              :: lIsForInquiry                  = .FALSE.
+      LOGICAL                              :: lAppUnsatZone_Defined          = .FALSE.
+      LOGICAL                              :: lRootZone_Defined              = .FALSE.
+      LOGICAL                              :: lModel_ForInquiry_Defined      = .FALSE.
+      CHARACTER(:),ALLOCATABLE             :: cPPWorkingDirectory            
+      CHARACTER(:),ALLOCATABLE             :: cSIMWorkingDirectory           
+      CHARACTER                            :: cGWMainInputFileName*500       = ''       
+      CHARACTER                            :: cStrmSimMainInputFileName*500  = ''       
+      CHARACTER                            :: cRootZoneMainInputFileName*500 = ''       
       TYPE(Model_ForInquiry_Type)          :: Model_ForInquiry
       TYPE(AppGridType)                    :: AppGrid
       TYPE(StratigraphyType)               :: Stratigraphy
@@ -281,36 +287,37 @@ MODULE Package_Model
       TYPE(SupplyDestinationConnectorType) :: WellDestinationConnector
       TYPE(SupplyDestinationConnectorType) :: ElemPumpDestinationConnector
       TYPE(ConvergenceType)                :: Convergence
-      INTEGER                              :: KDEB                         = Sim_KDEB_PrintTimeStep !Simulation debugging option
-      TYPE(TimeStepType)                   :: TimeStep
-      INTEGER                              :: NTIME                        = 0                     !Number of time steps in simulation
-      INTEGER                              :: JulianDate                   = 0                     !Current date in simulation in terms of Julian date (used only when date and time is tracked)
-      INTEGER                              :: MinutesAfterMidnight         = 0                     !In the current date in simulation, number of minutes past after midnight (used only when date and time is tracked)
-      LOGICAL                              :: lEndOfSimulation             = .FALSE.               !Flag to check if it is end of simulation
-      INTEGER                              :: iDemandCalcLocation          = f_iFlowDest_Element   !Location where water demand calculated (element or subregion)
-      LOGICAL                              :: lPumpingAdjusted             = .FALSE.               !Flag to check if pumping is adjusted to meet demand
-      LOGICAL                              :: lDiversionAdjusted           = .FALSE.               !Flag to check if diversions are adjusted to meet demand
-      REAL(8),ALLOCATABLE                  :: LakeRunoff(:)                                        !Rainfall runoff into each (lake)
-      REAL(8),ALLOCATABLE                  :: LakeReturnFlow(:)                                    !Irrigation return flow into each (lake)
-      REAL(8),ALLOCATABLE                  :: LakePondDrain(:)                                     !Ponded ag pond drains into each (lake)
-      REAL(8),ALLOCATABLE                  :: QTDRAIN(:)                                           !Tile drainage into each (stream node)
-      REAL(8),ALLOCATABLE                  :: QTRIB(:)                                             !Tributary inflows into each (stream node)
-      REAL(8),ALLOCATABLE                  :: QRPONDDRAIN(:)                                       !Ponded ag pond drain into each (stream node)
-      REAL(8),ALLOCATABLE                  :: QRTRN(:)                                             !Irrigation return flow into each (stream node)
-      REAL(8),ALLOCATABLE                  :: QROFF(:)                                             !Rainfall runoff into each (stream node)
-      REAL(8),ALLOCATABLE                  :: QRVET(:)                                             !Outflow due to riparian ET from each (stream node)
-      REAL(8),ALLOCATABLE                  :: QRVETFRAC(:)                                         !Fraction of riparian ET that is actually taken out from each (stream node)      
-      REAL(8),ALLOCATABLE                  :: QERELS(:)                                            !Recoverbale loss used as recharge to gw at each (element)
-      REAL(8),ALLOCATABLE                  :: QDEEPPERC(:)                                         !Deep percolation at each (element)
-      REAL(8),ALLOCATABLE                  :: QPERC(:)                                             !Percolation at each (element)
-      REAL(8),ALLOCATABLE                  :: SyElem(:)                                            !Average specific yield at each (element) for the top aquifre layer
-      REAL(8),ALLOCATABLE                  :: DepthToGW(:)                                         !Depth-to-groundwatr computed at each (element)
-      REAL(8),ALLOCATABLE                  :: GWToRZFlows(:)                                       !Groundwater inflow into root zone at each (element)
-      REAL(8),ALLOCATABLE                  :: NetElemSource(:)                                     !Net source to groundwater at each (element)
-      REAL(8),ALLOCATABLE                  :: FaceFlows(:,:)                                       !Groundwater face flows at each (face,layer)
-      REAL(8),ALLOCATABLE                  :: GWHeads(:,:)                                         !Groundwater heads at each (node,layer) used to transfer info between gw component and other components
-      REAL(8),ALLOCATABLE                  :: DestAgAreas(:)                                       !Ag areas at demand locations; (element) or (subregion)
-      REAL(8),ALLOCATABLE                  :: DestUrbAreas(:)                                      !Urban areas at demand locations; (element) or (subregion)
+      TYPE(WSA_ANN_Type)                   :: WSA
+      INTEGER                              :: KDEB                           = Sim_KDEB_PrintTimeStep !Simulation debugging option
+      TYPE(TimeStepType)                   :: TimeStep                       
+      INTEGER                              :: NTIME                          = 0                     !Number of time steps in simulation
+      INTEGER                              :: JulianDate                     = 0                     !Current date in simulation in terms of Julian date (used only when date and time is tracked)
+      INTEGER                              :: MinutesAfterMidnight           = 0                     !In the current date in simulation, number of minutes past after midnight (used only when date and time is tracked)
+      LOGICAL                              :: lEndOfSimulation               = .FALSE.               !Flag to check if it is end of simulation
+      INTEGER                              :: iDemandCalcLocation            = f_iFlowDest_Element   !Location where water demand calculated (element or subregion)
+      LOGICAL                              :: lPumpingAdjusted               = .FALSE.               !Flag to check if pumping is adjusted to meet demand
+      LOGICAL                              :: lDiversionAdjusted             = .FALSE.               !Flag to check if diversions are adjusted to meet demand
+      REAL(8),ALLOCATABLE                  :: LakeRunoff(:)                                          !Rainfall runoff into each (lake)
+      REAL(8),ALLOCATABLE                  :: LakeReturnFlow(:)                                      !Irrigation return flow into each (lake)
+      REAL(8),ALLOCATABLE                  :: LakePondDrain(:)                                       !Ponded ag pond drains into each (lake)
+      REAL(8),ALLOCATABLE                  :: QTDRAIN(:)                                             !Tile drainage into each (stream node)
+      REAL(8),ALLOCATABLE                  :: QTRIB(:)                                               !Tributary inflows into each (stream node)
+      REAL(8),ALLOCATABLE                  :: QRPONDDRAIN(:)                                         !Ponded ag pond drain into each (stream node)
+      REAL(8),ALLOCATABLE                  :: QRTRN(:)                                               !Irrigation return flow into each (stream node)
+      REAL(8),ALLOCATABLE                  :: QROFF(:)                                               !Rainfall runoff into each (stream node)
+      REAL(8),ALLOCATABLE                  :: QRVET(:)                                               !Outflow due to riparian ET from each (stream node)
+      REAL(8),ALLOCATABLE                  :: QRVETFRAC(:)                                           !Fraction of riparian ET that is actually taken out from each (stream node)      
+      REAL(8),ALLOCATABLE                  :: QERELS(:)                                              !Recoverbale loss used as recharge to gw at each (element)
+      REAL(8),ALLOCATABLE                  :: QDEEPPERC(:)                                           !Deep percolation at each (element)
+      REAL(8),ALLOCATABLE                  :: QPERC(:)                                               !Percolation at each (element)
+      REAL(8),ALLOCATABLE                  :: SyElem(:)                                              !Average specific yield at each (element) for the top aquifre layer
+      REAL(8),ALLOCATABLE                  :: DepthToGW(:)                                           !Depth-to-groundwatr computed at each (element)
+      REAL(8),ALLOCATABLE                  :: GWToRZFlows(:)                                         !Groundwater inflow into root zone at each (element)
+      REAL(8),ALLOCATABLE                  :: NetElemSource(:)                                       !Net source to groundwater at each (element)
+      REAL(8),ALLOCATABLE                  :: FaceFlows(:,:)                                         !Groundwater face flows at each (face,layer)
+      REAL(8),ALLOCATABLE                  :: GWHeads(:,:)                                           !Groundwater heads at each (node,layer) used to transfer info between gw component and other components
+      REAL(8),ALLOCATABLE                  :: DestAgAreas(:)                                         !Ag areas at demand locations; (element) or (subregion)
+      REAL(8),ALLOCATABLE                  :: DestUrbAreas(:)                                        !Urban areas at demand locations; (element) or (subregion)
   CONTAINS
       PROCEDURE,PASS   :: SetStaticComponent
       PROCEDURE,PASS   :: SetStaticComponent_FromBinFile
@@ -359,10 +366,14 @@ MODULE Package_Model
       PROCEDURE,PASS   :: GetGWHead_AtOneNodeLayer
       PROCEDURE,PASS   :: GetGWHeads_All
       PROCEDURE,PASS   :: GetGWHeads_ForALayer
+      PROCEDURE,PASS   :: GetGWHeadsIC
       PROCEDURE,PASS   :: GetSubsidence_All
       PROCEDURE,PASS   :: GetNWells
       PROCEDURE,PASS   :: GetWellIDs
-      PROCEDURE,PASS   :: GetWellXY
+      PROCEDURE,PASS   :: GetWellCoordinates
+      PROCEDURE,PASS   :: GetWellPerfTopBottom
+      PROCEDURE,PASS   :: GetWellNElems
+      PROCEDURE,PASS   :: GetWellElems
       PROCEDURE,PASS   :: GetNElemPumps
       PROCEDURE,PASS   :: GetElemPumpIDs
       PROCEDURE,PASS   :: GetNodalGWPumping_Actual
@@ -379,6 +390,12 @@ MODULE Package_Model
       PROCEDURE,PASS   :: GetAquiferSy
       PROCEDURE,PASS   :: GetAquiferSs
       PROCEDURE,PASS   :: GetAquiferParameters
+      PROCEDURE,PASS   :: GetGWNParametricGrids
+      PROCEDURE,PASS   :: GetGWNParametricNodes
+      PROCEDURE,PASS   :: GetGWNParametricElements
+      PROCEDURE,PASS   :: GetGWParametricNodeXY
+      PROCEDURE,PASS   :: GetGWParametricElementConfigData
+      PROCEDURE,PASS   :: GetGWParametricAquiferParameters
       PROCEDURE,PASS   :: GetAppStream
       PROCEDURE,PASS   :: GetStrmNodeIDs
       PROCEDURE,PASS   :: GetNStrmNodes
@@ -424,17 +441,21 @@ MODULE Package_Model
       PROCEDURE,PASS   :: GetStrmDiversionNElems
       PROCEDURE,PASS   :: GetStrmDiversionElems
       PROCEDURE,PASS   :: GetStrmDiversionReturnLocations
+      PROCEDURE,PASS   :: GetStrmDiversionRechargeZone
       PROCEDURE,PASS   :: GetStrmTributaryInflows
       PROCEDURE,PASS   :: GetStrmRainfallRunoff
       PROCEDURE,PASS   :: GetStrmReturnFlows
       PROCEDURE,PASS   :: GetStrmPondDrains
       PROCEDURE,PASS   :: GetStrmTileDrains
       PROCEDURE,PASS   :: GetStrmRiparianETs
+      PROCEDURE,PASS   :: GetStrmEvap
       PROCEDURE,PASS   :: GetStrmGainFromGW
       PROCEDURE,PASS   :: GetStrmGainFromLakes
       PROCEDURE,PASS   :: GetStrmNetBypassInflows
       PROCEDURE,PASS   :: GetStrmBypassInflows
+      PROCEDURE,PASS   :: GetStrmRequiredDiversions_AtSomeDiversions
       PROCEDURE,PASS   :: GetStrmActualDiversions_AtSomeDiversions
+      PROCEDURE,PASS   :: GetStrmWSAs
       PROCEDURE,PASS   :: GetNLakes
       PROCEDURE,PASS   :: GetLakeIDs
       PROCEDURE,PASS   :: GetNElementsInLake
@@ -443,6 +464,7 @@ MODULE Package_Model
       PROCEDURE,PASS   :: GetSubregionAgPumpingAverageDepthToGW
       PROCEDURE,PASS   :: GetZoneAgPumpingAverageDepthToGW
       PROCEDURE,PASS   :: GetNAgCrops
+      PROCEDURE,PASS   :: GetLandUseAreasForTimePeriod
       PROCEDURE,PASS   :: GetSupplyPurpose
       PROCEDURE,PASS   :: GetSupplyRequirement
       PROCEDURE,PASS   :: GetSupplyShortAtOrigin_ForSomeSupplies
@@ -458,6 +480,7 @@ MODULE Package_Model
       PROCEDURE,PASS   :: GetNLocations
       PROCEDURE,PASS   :: GetLocationIDs
       PROCEDURE,PASS   :: GetFutureWaterDemand_ForDiversion
+      PROCEDURE,NOPASS :: GetVersion
       PROCEDURE,PASS   :: SetStreamDiversionRead
       PROCEDURE,PASS   :: SetStreamFlow
       PROCEDURE,PASS   :: SetStreamInflow
@@ -552,9 +575,9 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- NEW MODEL (STATIC COMPONENT)
   ! -------------------------------------------------------------
-  SUBROUTINE SetStaticComponent(Model,cFilename,lRoutedStreams,lPrintBinFile,iStat)
+  SUBROUTINE SetStaticComponent(Model,cPPFilename,lRoutedStreams,lPrintBinFile,iStat)
     CLASS(ModelType),INTENT(OUT) :: Model
-    CHARACTER(LEN=*),INTENT(IN)  :: cFileName
+    CHARACTER(LEN=*),INTENT(IN)  :: cPPFileName
     LOGICAL,INTENT(IN)           :: lRoutedStreams,lPrintBinFile
     INTEGER,INTENT(OUT)          :: iStat
     
@@ -563,6 +586,7 @@ CONTAINS
     CHARACTER                              :: ProjectTitles(3)*200,ProjectFileNames(nPP_InputFiles)*1000,UNITLTOU*10,UNITAROU*10
     INTEGER                                :: indx,KOUT,KDEB,FileID,NNodes,NLayers,NStrmNodes,NLakes
     REAL(8)                                :: FACTLTOU,FACTAROU
+    LOGICAL                                :: lWSA 
     INTEGER,ALLOCATABLE                    :: iStrmNodeIDs(:),iLakeIDs(:)
     TYPE(ConnectivityListType),ALLOCATABLE :: StrmConnectivity(:)
     TYPE(GenericFileType)                  :: BinaryOutputFile
@@ -580,10 +604,10 @@ CONTAINS
     iStat = 0
 
     !Pre-processor working directory
-    CALL GetFileDirectory(cFileName,Model%cPPWorkingDirectory)
+    CALL GetFileDirectory(cPPFileName,Model%cPPWorkingDirectory)
     
     !Read in the main control data
-    CALL PP_ReadMainControlData(cFileName,Model%cPPWorkingDirectory,ProjectTitles,ProjectFileNames,KOUT,KDEB,FACTLTOU,UNITLTOU,FACTAROU,UNITAROU,iStat)
+    CALL PP_ReadMainControlData(cPPFileName,Model%cPPWorkingDirectory,ProjectTitles,ProjectFileNames,KOUT,KDEB,FACTLTOU,UNITLTOU,FACTAROU,UNITAROU,iStat)
     IF (iStat .EQ. -1) RETURN
     
     !Check if all required files are supplied
@@ -614,7 +638,8 @@ CONTAINS
     NLayers = Model%Stratigraphy%NLayers
    
     !Set the application streams
-    CALL Model%AppStream%New(ProjectFileNames(PP_StreamDataFileID),Model%AppGrid,Model%Stratigraphy,lRoutedStreams,Model%StrmGWConnector,Model%StrmLakeConnector,iStat)
+    lWSA = .FALSE.
+    CALL Model%AppStream%New(ProjectFileNames(PP_StreamDataFileID),Model%AppGrid,Model%Stratigraphy,lRoutedStreams,lWSA,Model%StrmGWConnector,Model%StrmLakeConnector,iStat)
     IF (iStat .EQ. -1) RETURN
     NStrmNodes = Model%AppStream%GetNStrmNodes()
     ALLOCATE (iStrmNodeIDs(NStrmNodes))
@@ -678,6 +703,7 @@ CONTAINS
     !Local variables
     CHARACTER(LEN=ModNameLen+34)           :: ThisProcedure = ModName // 'SetStaticComponent_AllDataSupplied'
     INTEGER                                :: indx,FileID,NNodes,NLayers,NStrmNodes,NLakes
+    LOGICAL                                :: lWSA
     INTEGER,ALLOCATABLE                    :: iStrmNodeIDs(:),iLakeIDs(:)
     TYPE(ConnectivityListType),ALLOCATABLE :: StrmConnectivity(:)
     TYPE(GenericFileType)                  :: BinaryOutputFile
@@ -722,7 +748,8 @@ CONTAINS
     NLayers = Model%Stratigraphy%NLayers
    
     !Set the application streams
-    CALL Model%AppStream%New(cPP_FileNames(PP_StreamDataFileID),Model%AppGrid,Model%Stratigraphy,lRoutedStreams,Model%StrmGWConnector,Model%StrmLakeConnector,iStat)
+    lWSA = .FALSE.
+    CALL Model%AppStream%New(cPP_FileNames(PP_StreamDataFileID),Model%AppGrid,Model%Stratigraphy,lRoutedStreams,lWSA,Model%StrmGWConnector,Model%StrmLakeConnector,iStat)
     IF (iStat .EQ. -1) RETURN
     NStrmNodes = Model%AppStream%GetNStrmNodes()
     ALLOCATE (iStrmNodeIDs(NStrmNodes))
@@ -780,8 +807,8 @@ CONTAINS
     TYPE(GenericFileType) :: BinaryFile
     INTEGER,INTENT(OUT)   :: iStat
     
-    !Initialize
-    iStat = 0
+    !Local variables
+    LOGICAL :: lWSA
     
     !Instantiate grid data 
     CALL Model%AppGrid%New(BinaryFile,iStat)  
@@ -801,7 +828,8 @@ CONTAINS
     IF (iStat .EQ. -1) RETURN
   
     !Instantiate streams 
-    CALL Model%AppStream%New(BinaryFile,iStat)
+    lWSA = .FALSE.
+    CALL Model%AppStream%New(BinaryFile,lWSA,iStat)
     IF (iStat .EQ. -1) RETURN
     
     !Matrix data 
@@ -813,12 +841,11 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- NEW MODEL (STATIC AND DYNAMIC COMPONENTS; STATIC PART FROM BINARY FILE)
   ! -------------------------------------------------------------
-  SUBROUTINE SetAllComponents(Model,cFileName,lForInquiry,iStat,cOptionalCommandArg)
-    CLASS(ModelType),INTENT(OUT)          :: Model
-    CHARACTER(LEN=*),INTENT(IN)           :: cFileName
-    LOGICAL,INTENT(IN)                    :: lForInquiry
-    INTEGER,INTENT(OUT)                   :: iStat
-    CHARACTER(LEN=*),OPTIONAL,INTENT(OUT) :: cOptionalCommandArg
+  SUBROUTINE SetAllComponents(Model,cProjectNameForDSS,cSimFileName,cWSAFileName,lForInquiry,iStat)
+    CLASS(ModelType),INTENT(OUT) :: Model
+    CHARACTER(LEN=*),INTENT(IN)  :: cProjectNameForDSS,cSimFileName,cWSAFileName
+    LOGICAL,INTENT(IN)           :: lForInquiry
+    INTEGER,INTENT(OUT)          :: iStat
     
     !Local variables
     CHARACTER(LEN=ModNameLen+16),PARAMETER           :: ThisProcedure = ModName // 'SetAllComponents'
@@ -826,7 +853,7 @@ CONTAINS
                                                         NFaces,NLayers,NLakes,NStrmNodes,ErrorCode,indxLake
     REAL(8)                                          :: RELAX,STOPCSP
     CHARACTER                                        :: ProjectTitles(3)*200,ProjectFileNames(nSIM_InputFiles)*1000,Text*70,cErrorMsg*300
-    LOGICAL                                          :: lDiversions_Defined,lDeepPerc_Defined
+    LOGICAL                                          :: lDiversions_Defined,lDeepPerc_Defined,lWSA
     INTEGER,ALLOCATABLE                              :: LakeElems(:),iStrmNodeIDs(:),iLakeIDs(:),iHydLocationTypeList(:),iHydCompList(:), &
                                                         iBudgetTypeList(:),iBudgetCompList(:),iBudgetLocationTypeList(:),iZBudgetTypeList(:)
     CHARACTER(LEN=f_iFilePathLen),ALLOCATABLE        :: cHydFiles(:),cBudgetFiles(:),cZBudgetFiles(:)
@@ -839,6 +866,13 @@ CONTAINS
     !Initialize
     iStat = 0
     
+    !Are WSAs simulated
+    IF (LEN_TRIM(cWSAFileName) .EQ. 0) THEN
+        lWSA = .FALSE.
+    ELSE
+        lWSA = .TRUE.
+    END IF
+    
     !IWFM version
     cIWFMVersion = IWFM_Core%GetVersion()
     
@@ -846,14 +880,10 @@ CONTAINS
     Model%lIsForInquiry = lForInquiry
     
     !Simulation working directory
-    CALL GetFileDirectory(cFileName,Model%cSIMWorkingDirectory)
+    CALL GetFileDirectory(cSimFileName,Model%cSIMWorkingDirectory)
     
     !Read simulation control data
-    IF (PRESENT(cOptionalCommandArg)) THEN
-        CALL SIM_ReadMainControlData(Model,cFileName,ProjectTitles,ProjectFileNames,MSOLVE,MXITERSP,RELAX,STOPCSP,iAdjustFlag,CACHE,iRestartModel,iStat,cOptionalCommandArg)
-    ELSE
-        CALL SIM_ReadMainControlData(Model,cFileName,ProjectTitles,ProjectFileNames,MSOLVE,MXITERSP,RELAX,STOPCSP,iAdjustFlag,CACHE,iRestartModel,iStat)
-    END IF
+    CALL SIM_ReadMainControlData(Model,cSimFileName,ProjectTitles,ProjectFileNames,MSOLVE,MXITERSP,RELAX,STOPCSP,iAdjustFlag,CACHE,iRestartModel,iStat)
     IF (iStat .EQ. -1) RETURN
     
     !Open binary file generated by Pre-processor
@@ -863,7 +893,7 @@ CONTAINS
     !If the model is instantiated for inquiry, check if it can be instantiated from a previously generated data file
     IF (lForInquiry) THEN
         IF (Model%Model_ForInquiry%IsInstantiableFromFile(Model%cSIMWorkingDirectory)) THEN
-            CALL Model%Model_ForInquiry%New(Model%cSIMWorkingDirectory,Model%TimeStep,Model%NTIME,iStat)
+            CALL Model%Model_ForInquiry%New(Model%cSIMWorkingDirectory,Model%cGWMainInputFileName,Model%cStrmSIMMainInputFileName,Model%cRootZoneMainInputFileName,Model%TimeStep,Model%NTIME,iStat)
             IF (iStat .EQ. -1) THEN
                 CALL Model%Model_ForInquiry%Kill()
                 RETURN
@@ -872,6 +902,12 @@ CONTAINS
             END IF
             !Instantiate static component from binary file
             CALL Model%SetStaticComponent_FromBinFile(PPBinaryFile,iStat)  
+            IF (iStat .NE. 0) RETURN
+            
+            !Set the global variable that stores the simulation time step length for unit conversions
+            CALL SetSimulationTimeStep(Model%TimeStep%DELTAT_InMinutes)
+   
+            !Return
             RETURN
         END IF
     END IF
@@ -970,7 +1006,7 @@ CONTAINS
             RETURN
         END IF
     END IF
-    CALL Model%AppStream%New(lForInquiry,ProjectFileNames(SIM_StrmDataFileID),Model%cSIMWorkingDirectory,Model%TimeStep,Model%NTIME,iLakeIDs,Model%AppGrid,Model%Stratigraphy,Model%ETData,PPBinaryFile,Model%StrmLakeConnector,Model%StrmGWConnector,iStat)
+    CALL Model%AppStream%New(lForInquiry,lWSA,ProjectFileNames(SIM_StrmDataFileID),Model%cSIMWorkingDirectory,Model%TimeStep,Model%NTIME,iLakeIDs,Model%AppGrid,Model%Stratigraphy,Model%ETData,PPBinaryFile,Model%StrmLakeConnector,Model%StrmGWConnector,iStat)
     IF (iStat .EQ. -1) RETURN
     NStrmNodes          = Model%AppStream%GetNStrmNodes()
     lDiversions_Defined = Model%AppStream%IsDiversionsDefined()
@@ -990,13 +1026,14 @@ CONTAINS
         RETURN
     END IF
     CALL Model%AppStream%GetStrmNodeIDs(iStrmNodeIDs)
-    Model%QTRIB       = 0.0
-    Model%QROFF       = 0.0
-    Model%QRTRN       = 0.0
-    Model%QRPONDDRAIN = 0.0
-    Model%QTDRAIN     = 0.0
-    Model%QRVET       = 0.0
-    Model%QRVETFRAC   = 0.0
+    Model%cStrmSimMainInputFileName = TRIM(ProjectFileNames(SIM_StrmDataFileID))
+    Model%QTRIB                     = 0.0
+    Model%QROFF                     = 0.0
+    Model%QRTRN                     = 0.0
+    Model%QRPONDDRAIN               = 0.0
+    Model%QTDRAIN                   = 0.0
+    Model%QRVET                     = 0.0
+    Model%QRVETFRAC                 = 0.0
     
     !Matrix
     CALL Model%Matrix%New(PPBinaryFile,iStat)
@@ -1014,6 +1051,7 @@ CONTAINS
     Model%FaceFlows   = 0.0
     CALL Model%AppGW%GetElementDepthToGW(Model%AppGrid,Model%Stratigraphy,.TRUE.,Model%DepthToGW)
     CALL Model%AppGW%GetElementSy(Model%AppGrid,Model%Stratigraphy,iLayer=1,Sy=Model%SyElem)
+    Model%cGWMainInputFileName = TRIM(ProjectFileNames(SIM_GWDataFileID))
     
     !Unsaturated zone
     CALL Model%AppUnsatZone%New(lForInquiry,ProjectFileNames(SIM_UnsatZoneDataFileID),Model%cSIMWorkingDirectory,Model%AppGrid,Model%Stratigraphy,Model%TimeStep,Model%NTIME,cIWFMVersion,Model%DepthToGW,iStat)
@@ -1021,12 +1059,12 @@ CONTAINS
     Model%lAppUnsatZone_Defined = Model%AppUnsatZone%IsDefined()
     
     !Small watersheds
-    CALL Model%AppSWShed%New(lForInquiry,ProjectFileNames(SIM_SmallWatershedDataFileID),Model%cSIMWorkingDirectory,Model%TimeStep,Model%NTIME,NStrmNodes,iStrmNodeIDs,Model%AppGrid,Model%Stratigraphy,Model%PrecipData,Model%ETData,cIWFMVersion,iStat)
+    CALL Model%AppSWShed%New(lForInquiry,ProjectFileNames(SIM_SmallWatershedDataFileID),Model%cSIMWorkingDirectory,Model%TimeStep,Model%NTIME,NStrmNodes,iStrmNodeIDs,Model%AppGrid,Model%Stratigraphy,Model%PrecipData,Model%ETData,iStat)
     IF (iStat .EQ. -1) RETURN
 
     !Root zone component (must be instantiated after gw and streams)
     IF (ProjectFileNames(SIM_RootZoneDataFileID) .NE. '') THEN
-        CALL Model%RootZone%New(lForInquiry,ProjectFileNames(SIM_RootZoneDataFileID),Model%cSIMWorkingDirectory,Model%AppGrid,Model%TimeStep,Model%NTIME,Model%ETData,Model%PrecipData,iStat,iStrmNodeIDs=iStrmNodeIDs,iLakeIDs=iLakeIDs)
+        CALL Model%RootZone%New(lForInquiry,cProjectNameForDSS,ProjectFileNames(SIM_RootZoneDataFileID),Model%cSIMWorkingDirectory,Model%AppGrid,Model%TimeStep,Model%NTIME,Model%ETData,Model%PrecipData,iStat,iStrmNodeIDs=iStrmNodeIDs,iLakeIDs=iLakeIDs)
         IF (iStat .EQ. -1) RETURN
     
         !Define the lake elements
@@ -1037,6 +1075,9 @@ CONTAINS
     
         !Demand calculation location (element or subregion)
         Model%iDemandCalcLocation = Model%RootZone%GetDemandCalcLocation()
+        
+        !Store root zone main file name
+        Model%cRootZoneMainInputFileName = TRIM(ProjectFileNames(SIM_RootZoneDataFileID))
       
     END IF
     Model%lRootZone_Defined = Model%RootZone%IsDefined()
@@ -1105,11 +1146,15 @@ CONTAINS
         CALL Model%GetBudget_List(cBudgetList,iBudgetTypeList,iBudgetCompList,iBudgetLocationTypeList,cBudgetFiles)
         CALL Model%GetZBudget_List(cZBudgetList,iZBudgetTypeList,cZBudgetFiles)
         CALL Model%Model_ForInquiry%PrintModelData(Model%cSIMWorkingDirectory      , &
+                                                   Model%cGWMainInputFileName      , &
+                                                   Model%cStrmSimMainInputFileName , &
+                                                   Model%cRootZoneMainInputFileName, &
                                                    Model%AppGW                     , &
                                                    Model%AppUnsatZone              , &
                                                    Model%AppStream                 , &
                                                    Model%AppSWShed                 , &
                                                    Model%DiverDestinationConnector , &
+                                                   Model%WellDestinationConnector  , &
                                                    Model%TimeStep                  , &
                                                    Model%NTIME                     , &
                                                    cHydTypeList                    , &
@@ -1128,6 +1173,10 @@ CONTAINS
         IF (iStat .EQ. -1) CALL Model%Model_ForInquiry%Kill()
     END IF
     
+    !Initialize WSA
+    IF (lWSA)  &
+        CALL Model%WSA%New(cWSAFileName,Model%cSIMWorkingDirectory,Model%TimeStep,Model%AppGrid,Model%AppStream,iStat)
+
     !Clear memory
     DEALLOCATE (StrmConnectivity , LakeElems , SupplyDest , cZBudRawFileName , cIWFMVersion , STAT=ErrorCode)
 
@@ -1137,12 +1186,11 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- NEW MODEL (STATIC AND DYNAMIC COMPONENTS)
   ! -------------------------------------------------------------
-  SUBROUTINE SetAllComponents_WithoutBinFile(Model,cPPFileName,cSIMFileName,lRoutedStreams,lForInquiry,iStat,cOptionalCommandArg)
-    CLASS(ModelType),INTENT(OUT)          :: Model
-    CHARACTER(LEN=*),INTENT(IN)           :: cPPFileName,cSIMFileName
-    LOGICAL,INTENT(IN)                    :: lRoutedStreams,lForInquiry
-    INTEGER,INTENT(OUT)                   :: iStat
-    CHARACTER(LEN=*),OPTIONAL,INTENT(OUT) :: cOptionalCommandArg
+  SUBROUTINE SetAllComponents_WithoutBinFile(Model,cProjectNameForDSS,cPPFileName,cSIMFileName,cWSAFileName,lRoutedStreams,lForInquiry,iStat)
+    CLASS(ModelType),INTENT(OUT) :: Model
+    CHARACTER(LEN=*),INTENT(IN)  :: cProjectNameForDSS,cPPFileName,cSIMFileName,cWSAFileName
+    LOGICAL,INTENT(IN)           :: lRoutedStreams,lForInquiry
+    INTEGER,INTENT(OUT)          :: iStat
     
     !Local variables
     CHARACTER(LEN=ModNameLen+32),PARAMETER           :: ThisProcedure = ModName // 'SetAllComponents_WithoutBinFile'
@@ -1176,7 +1224,7 @@ CONTAINS
     CALL PP_ReadMainControlData(cPPFileName,cPPWorkingDirectory,ProjectTitles,PP_ProjectFileNames,KOUT,KDEB,FACTLTOU,UNITLTOU,FACTAROU,UNITAROU,iStat)
     IF (iStat .EQ. -1) RETURN
     IF (DoesFileExist(PP_ProjectFileNames(PP_BinaryOutputFileID))) THEN
-        CALL SetAllComponents(Model,cSimFileName,lForInquiry,iStat)
+        CALL SetAllComponents(Model,cProjectNameForDSS,cSimFileName,cWSAFileName,lForInquiry,iStat)
         RETURN
     END IF
     
@@ -1184,19 +1232,29 @@ CONTAINS
     CALL SetStaticComponent(Model,cPPFileName,lRoutedStreams,lPrintBinFile=.FALSE.,iStat=iStat)
     IF (iStat .EQ. -1) RETURN
     
+    !Simulation working directory (Pre-processor working directory is established in the call above to set the static component)
+    CALL GetFileDirectory(cSIMFileName,Model%cSIMWorkingDirectory)
+    
+    !If the model is instantiated for inquiry, check if it can be instantiated from a previously generated data file
+    IF (lForInquiry) THEN
+        IF (Model%Model_ForInquiry%IsInstantiableFromFile(Model%cSIMWorkingDirectory)) THEN
+            CALL Model%Model_ForInquiry%New(Model%cSIMWorkingDirectory,Model%cGWMainInputFileName,Model%cStrmSIMMainInputFileName,Model%cRootZoneMainInputFileName,Model%TimeStep,Model%NTIME,iStat)
+            IF (iStat .EQ. -1) THEN
+                CALL Model%Model_ForInquiry%Kill()
+                RETURN
+            ELSE
+                Model%lModel_ForInquiry_Defined = .TRUE.
+            END IF
+            RETURN
+        END IF
+    END IF
+    
     !Flatten matrix and allocate relevant arrays
     CALL Model%Matrix%FlattenConnectivity(iStat)
     IF (iStat .EQ. -1) RETURN
     
-    !Simulation working directory (Pre-processor working directory is established in the call above to set the static component)
-    CALL GetFileDirectory(cSIMFileName,Model%cSIMWorkingDirectory)
-    
     !Read simulation control data
-    IF (PRESENT(cOptionalCommandArg)) THEN
-        CALL SIM_ReadMainControlData(Model,cSIMFileName,ProjectTitles,ProjectFileNames,MSOLVE,MXITERSP,RELAX,STOPCSP,iAdjustFlag,CACHE,iRestartModel,iStat,cOptionalCommandArg)
-    ELSE
-        CALL SIM_ReadMainControlData(Model,cSIMFileName,ProjectTitles,ProjectFileNames,MSOLVE,MXITERSP,RELAX,STOPCSP,iAdjustFlag,CACHE,iRestartModel,iStat)
-    END IF
+    CALL SIM_ReadMainControlData(Model,cSIMFileName,ProjectTitles,ProjectFileNames,MSOLVE,MXITERSP,RELAX,STOPCSP,iAdjustFlag,CACHE,iRestartModel,iStat)
     IF (iStat .EQ. -1) RETURN
     
     !Output option
@@ -1300,13 +1358,14 @@ CONTAINS
         RETURN
     END IF
     CALL Model%AppStream%GetStrmNodeIDs(iStrmNodeIDs)
-    Model%QTRIB       = 0.0
-    Model%QROFF       = 0.0
-    Model%QRTRN       = 0.0
-    Model%QRPONDDRAIN = 0.0
-    Model%QTDRAIN     = 0.0
-    Model%QRVET       = 0.0
-    Model%QRVETFRAC   = 0.0
+    Model%cStrmSimMainInputFileName = TRIM(ProjectFileNames(SIM_StrmDataFileID))
+    Model%QTRIB                     = 0.0
+    Model%QROFF                     = 0.0
+    Model%QRTRN                     = 0.0
+    Model%QRPONDDRAIN               = 0.0
+    Model%QTDRAIN                   = 0.0
+    Model%QRVET                     = 0.0
+    Model%QRVETFRAC                 = 0.0
     
     !Groundwater
     CALL Model%AppStream%GetStrmConnectivityInGWNodes(Model%StrmGWConnector,StrmConnectivity)
@@ -1332,6 +1391,7 @@ CONTAINS
     Model%FaceFlows   = 0.0
     CALL Model%AppGW%GetElementDepthToGW(Model%AppGrid,Model%Stratigraphy,.TRUE.,Model%DepthToGW)
     CALL Model%AppGW%GetElementSy(Model%AppGrid,Model%Stratigraphy,iLayer=1,Sy=Model%SyElem)
+    Model%cGWMainInputFileName = TRIM(ProjectFileNames(SIM_GWDataFileID))
     
     !Unsaturated zone
     CALL Model%AppUnsatZone%New(lForInquiry,ProjectFileNames(SIM_UnsatZoneDataFileID),Model%cSIMWorkingDirectory,Model%AppGrid,Model%Stratigraphy,Model%TimeStep,Model%NTIME,cIWFMVersion,Model%DepthToGW,iStat)
@@ -1339,12 +1399,12 @@ CONTAINS
     Model%lAppUnsatZone_Defined = Model%AppUnsatZone%IsDefined()
     
     !Small watersheds
-    CALL Model%AppSWShed%New(lForInquiry,ProjectFileNames(SIM_SmallWatershedDataFileID),Model%cSIMWorkingDirectory,Model%TimeStep,Model%NTIME,NStrmNodes,iStrmNodeIDs,Model%AppGrid,Model%Stratigraphy,Model%PrecipData,Model%ETData,cIWFMVersion,iStat)
+    CALL Model%AppSWShed%New(lForInquiry,ProjectFileNames(SIM_SmallWatershedDataFileID),Model%cSIMWorkingDirectory,Model%TimeStep,Model%NTIME,NStrmNodes,iStrmNodeIDs,Model%AppGrid,Model%Stratigraphy,Model%PrecipData,Model%ETData,iStat)
     IF (iStat .EQ. -1) RETURN
     
     !Root zone component (must be instantiated after gw and streams)
     IF (ProjectFileNames(SIM_RootZoneDataFileID) .NE. '') THEN
-        CALL Model%RootZone%New(lForInquiry,ProjectFileNames(SIM_RootZoneDataFileID),Model%cSIMWorkingDirectory,Model%AppGrid,Model%TimeStep,Model%NTIME,Model%ETData,Model%PrecipData,iStat,iStrmNodeIDs=iStrmNodeIDs,iLakeIDs=iLakeIDs)
+        CALL Model%RootZone%New(lForInquiry,cProjectNameForDSS,ProjectFileNames(SIM_RootZoneDataFileID),Model%cSIMWorkingDirectory,Model%AppGrid,Model%TimeStep,Model%NTIME,Model%ETData,Model%PrecipData,iStat,iStrmNodeIDs=iStrmNodeIDs,iLakeIDs=iLakeIDs)
         IF (iStat .EQ. -1) RETURN
     
         !Define the lake elements
@@ -1355,6 +1415,9 @@ CONTAINS
     
         !Demand calculation location (element or subregion)
         Model%iDemandCalcLocation = Model%RootZone%GetDemandCalcLocation()
+      
+        !Store root zone main file name
+        Model%cRootZoneMainInputFileName = TRIM(ProjectFileNames(SIM_RootZoneDataFileID))
       
     END IF
     Model%lRootZone_Defined = Model%RootZone%IsDefined()
@@ -1416,14 +1479,19 @@ CONTAINS
     
     !If the model is instantiated for inquiry, print the model data to instantiate it faster next time 
     IF (lForInquiry) THEN
+        CALL Model%GetHydrographTypeList(cHydTypeList,iHydLocationTypeList,iHydCompList,cHydFiles)
         CALL Model%GetBudget_List(cBudgetList,iBudgetTypeList,iBudgetCompList,iBudgetLocationTypeList,cBudgetFiles)
         CALL Model%GetZBudget_List(cZBudgetList,iZBudgetTypeList,cZBudgetFiles)
         CALL Model%Model_ForInquiry%PrintModelData(Model%cSIMWorkingDirectory      , &
+                                                   Model%cGWMainInputFileName      , &
+                                                   Model%cStrmSimMainInputFileName , &
+                                                   Model%cRootZoneMainInputFileName, &
                                                    Model%AppGW                     , &
                                                    Model%AppUnsatZone              , &
                                                    Model%AppStream                 , &
                                                    Model%AppSWShed                 , &
                                                    Model%DiverDestinationConnector , &
+                                                   Model%WellDestinationConnector  , &
                                                    Model%TimeStep                  , &
                                                    Model%NTIME                     , &
                                                    cHydTypeList                    , &
@@ -1451,9 +1519,9 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- NEW MODEL (STATIC AND DYNAMIC COMPONENTS) WITH ALL INFO SUPPLIED BY DUMMY ARGUMENTS
   ! -------------------------------------------------------------
-  SUBROUTINE SetAllComponents_WithoutBinFile_AllDataSupplied(Model,cPP_WorkingDirectory,cSIM_WorkingDirectory,cProjectTitles,cPPFileNames,cSIMFileNames,PP_KOUT,PP_KDEB,PP_FACTLTOU,PP_UNITLTOU,PP_FACTAROU,PP_UNITAROU,cSimBeginDateAndTime,cSimEndDateAndTime,cUnitT,iGenRestartFile,iRestartOption,CACHE,SIM_KDEB,MSOLVE,Relax,iMaxIter,iMaxIterSupply,Toler,TolerSupply,iAdjustFlag,IsRoutedStreams,lForInquiry,iStat)
+  SUBROUTINE SetAllComponents_WithoutBinFile_AllDataSupplied(Model,cProjectNameForDSS,cPP_WorkingDirectory,cSIM_WorkingDirectory,cProjectTitles,cPPFileNames,cSIMFileNames,PP_KOUT,PP_KDEB,PP_FACTLTOU,PP_UNITLTOU,PP_FACTAROU,PP_UNITAROU,cSimBeginDateAndTime,cSimEndDateAndTime,cUnitT,iGenRestartFile,iRestartOption,CACHE,SIM_KDEB,MSOLVE,Relax,iMaxIter,iMaxIterSupply,Toler,TolerSupply,iAdjustFlag,IsRoutedStreams,lForInquiry,iStat)
     CLASS(ModelType)            :: Model
-    CHARACTER(LEN=*),INTENT(IN) :: cPP_WorkingDirectory,cSIM_WorkingDirectory,cProjectTitles(3),cPPFileNames(nPP_InputFiles),cSIMFileNames(nSIM_InputFiles),PP_UNITLTOU,PP_UNITAROU,cSimBeginDateAndTime,cSimEndDateAndTime,cUnitT
+    CHARACTER(LEN=*),INTENT(IN) :: cProjectNameForDSS,cPP_WorkingDirectory,cSIM_WorkingDirectory,cProjectTitles(3),cPPFileNames(nPP_InputFiles),cSIMFileNames(nSIM_InputFiles),PP_UNITLTOU,PP_UNITAROU,cSimBeginDateAndTime,cSimEndDateAndTime,cUnitT
     INTEGER,INTENT(IN)          :: PP_KOUT,PP_KDEB,iGenRestartFile,iRestartOption,CACHE,SIM_KDEB,MSOLVE,iMaxIter,iMaxIterSupply,iAdjustFlag
     REAL(8),INTENT(IN)          :: PP_FACTLTOU,PP_FACTAROU,Relax,Toler,TolerSupply
     LOGICAL,INTENT(IN)          :: IsRoutedStreams,lForInquiry
@@ -1489,11 +1557,13 @@ CONTAINS
     !If being instantiated for inquiry, check if the inquiry model data file exists; if it does instantiate from that file
     IF (lForInquiry) THEN
         IF (Model%Model_ForInquiry%IsInstantiableFromFile(cSIM_WorkingDirectory)) THEN
-            CALL Model%Model_ForInquiry%New(cSIM_WorkingDirectory,Model%TimeStep,Model%NTIME,iStat)
+            CALL Model%Model_ForInquiry%New(cSIM_WorkingDirectory,Model%cGWMainInputFileName,Model%cStrmSimMainInputFileName,Model%cRootZoneMainInputFileName,Model%TimeStep,Model%NTIME,iStat)
             IF (iStat .EQ. -1) THEN
                 CALL Model%Model_ForInquiry%Kill()
             ELSE
                 Model%lModel_ForInquiry_Defined = .TRUE.
+                !Set the global variable that stores the simulation time step length for unit conversions
+                CALL SetSimulationTimeStep(Model%TimeStep%DELTAT_InMinutes)
             END IF
             RETURN
         END IF
@@ -1643,13 +1713,14 @@ CONTAINS
         RETURN
     END IF
     CALL Model%AppStream%GetStrmNodeIDs(iStrmNodeIDs)
-    Model%QTRIB       = 0.0
-    Model%QROFF       = 0.0
-    Model%QRTRN       = 0.0
-    Model%QRPONDDRAIN = 0.0
-    Model%QTDRAIN     = 0.0
-    Model%QRVET       = 0.0
-    Model%QRVETFRAC   = 0.0
+    Model%cStrmSimMainInputFileName = TRIM(cSIMFileNames(SIM_StrmDataFileID))
+    Model%QTRIB                     = 0.0
+    Model%QROFF                     = 0.0
+    Model%QRTRN                     = 0.0
+    Model%QRPONDDRAIN               = 0.0
+    Model%QTDRAIN                   = 0.0
+    Model%QRVET                     = 0.0
+    Model%QRVETFRAC                 = 0.0
     
     !Groundwater
     CALL Model%AppStream%GetStrmConnectivityInGWNodes(Model%StrmGWConnector,StrmConnectivity)
@@ -1675,6 +1746,7 @@ CONTAINS
     Model%FaceFlows   = 0.0
     CALL Model%AppGW%GetElementDepthToGW(Model%AppGrid,Model%Stratigraphy,.TRUE.,Model%DepthToGW)
     CALL Model%AppGW%GetElementSy(Model%AppGrid,Model%Stratigraphy,iLayer=1,Sy=Model%SyElem)
+    Model%cGWMainInputFileName = TRIM(cSIMFileNames(SIM_GWDataFileID))
     
     !Unsaturated zone
     CALL Model%AppUnsatZone%New(lForInquiry,cSIMFileNames(SIM_UnsatZoneDataFileID),Model%cSIMWorkingDirectory,Model%AppGrid,Model%Stratigraphy,Model%TimeStep,Model%NTIME,cIWFMVersion,Model%DepthToGW,iStat)
@@ -1682,12 +1754,12 @@ CONTAINS
     Model%lAppUnsatZone_Defined = Model%AppUnsatZone%IsDefined()
     
     !Small watersheds
-    CALL Model%AppSWShed%New(lForInquiry,cSIMFileNames(SIM_SmallWatershedDataFileID),Model%cSIMWorkingDirectory,Model%TimeStep,Model%NTIME,NStrmNodes,iStrmNodeIDs,Model%AppGrid,Model%Stratigraphy,Model%PrecipData,Model%ETData,cIWFMVersion,iStat)
+    CALL Model%AppSWShed%New(lForInquiry,cSIMFileNames(SIM_SmallWatershedDataFileID),Model%cSIMWorkingDirectory,Model%TimeStep,Model%NTIME,NStrmNodes,iStrmNodeIDs,Model%AppGrid,Model%Stratigraphy,Model%PrecipData,Model%ETData,iStat)
     IF (iStat .EQ. -1) RETURN
 
     !Root zone component (must be instantiated after gw and streams)
     IF (cSIMFileNames(SIM_RootZoneDataFileID) .NE. '') THEN
-        CALL Model%RootZone%New(lForInquiry,cSIMFileNames(SIM_RootZoneDataFileID),Model%cSIMWorkingDirectory,Model%AppGrid,Model%TimeStep,Model%NTIME,Model%ETData,Model%PrecipData,iStat,iStrmNodeIDs=iStrmNodeIDs,iLakeIDs=iLakeIDs)
+        CALL Model%RootZone%New(lForInquiry,cProjectNameForDSS,cSIMFileNames(SIM_RootZoneDataFileID),Model%cSIMWorkingDirectory,Model%AppGrid,Model%TimeStep,Model%NTIME,Model%ETData,Model%PrecipData,iStat,iStrmNodeIDs=iStrmNodeIDs,iLakeIDs=iLakeIDs)
         IF (iStat .EQ. -1) RETURN
         
         !Define the lake elements
@@ -1698,6 +1770,9 @@ CONTAINS
     
         !Demand calculation location (element or subregion)
         Model%iDemandCalcLocation = Model%RootZone%GetDemandCalcLocation()
+      
+        !Store root zone main file name
+        Model%cRootZoneMainInputFileName = TRIM(cSIMFileNames(SIM_RootZoneDataFileID))
       
     END IF
     Model%lRootZone_Defined = Model%RootZone%IsDefined()
@@ -1759,14 +1834,19 @@ CONTAINS
        
     !If the model is instantiated for inquiry, print the model data to instantiate it faster next time 
     IF (lForInquiry) THEN
+        CALL Model%GetHydrographTypeList(cHydTypeList,iHydLocationTypeList,iHydCompList,cHydFiles)
         CALL Model%GetBudget_List(cBudgetList,iBudgetTypeList,iBudgetCompList,iBudgetLocationTypeList,cBudgetFiles)
         CALL Model%GetZBudget_List(cZBudgetList,iZBudgetTypeList,cZBudgetFiles)
         CALL Model%Model_ForInquiry%PrintModelData(Model%cSIMWorkingDirectory      , &
+                                                   Model%cGWMainInputFileName      , &
+                                                   Model%cStrmSimMainInputFileName , &
+                                                   Model%cRootZoneMainInputFileName, &
                                                    Model%AppGW                     , &
                                                    Model%AppUnsatZone              , &
                                                    Model%AppStream                 , &
                                                    Model%AppSWShed                 , &
                                                    Model%DiverDestinationConnector , &
+                                                   Model%WellDestinationConnector  , &
                                                    Model%TimeStep                  , &
                                                    Model%NTIME                     , &
                                                    cHydTypeList                    , &
@@ -1835,6 +1915,7 @@ CONTAINS
     CALL Model%DiverDestinationConnector%Kill()
     CALL Model%WellDestinationConnector%Kill()
     CALL Model%ElemPumpDestinationConnector%Kill()
+    CALL Model%WSA%Kill()
     
     !Deallocate allocatble variables
     DEALLOCATE (Model%cPPWorkingDirectory       , &
@@ -1883,6 +1964,44 @@ CONTAINS
 ! ******************************************************************
 ! ******************************************************************
 
+  ! -------------------------------------------------------------
+  ! --- GET VERSION
+  ! -------------------------------------------------------------
+  SUBROUTINE GetVersion(cVersion)
+    CHARACTER(:),ALLOCATABLE :: cVersion
+    
+    !Local variables
+    TYPE(RootZoneType)          :: RootZone
+    TYPE(MatrixType)            :: Matrix
+    TYPE(AppSmallWatershedType) :: AppSmallWatershed
+    TYPE(AppStreamType)         :: AppStream
+    TYPE(AppLakeType)           :: AppLake
+    TYPE(AppSubsidenceType)     :: AppSubsidence
+    CHARACTER                   :: cVersionLocal*1000
+    
+    cVersionLocal = 'IWFM Core: ' // TRIM(IWFM_Core%GetVersion())                                         // f_cLineFeed // &
+                    'IWFM_Util.lib: ' // TRIM(IWFM_Util%GetVersion())                                     // f_cLineFeed // &
+                    'Package_Misc.lib: ' // TRIM(Package_Misc_GetVersion())                               // f_cLineFeed // &
+                    'Package_Discretization.lib: ' // TRIM(Package_Discretization_GetVersion())           // f_cLineFeed // &
+                    'Package_ComponentConnectors.lib: ' // TRIM(Package_ComponentConnectors_GetVersion()) // f_cLineFeed // &
+                    'Package_Budget.lib: ' // TRIM(Package_Budget_GetVersion())                           // f_cLineFeed // &
+                    'Package_ZBudget.lib: ' // TRIM(Package_ZBudget_GetVersion())                         // f_cLineFeed // &
+                    'Package_Matrix.lib: ' // TRIM(Matrix%GetVersion())                                   // f_cLineFeed // &
+                    'Package_PrecipitationET.lib: ' // TRIM(Package_PrecipitationET_GetVersion())         // f_cLineFeed // &
+                    'Package_AppSmallWatershed.lib: ' // TRIM(AppSmallWatershed%GetVersion())             // f_cLineFeed // &
+                    'Package_AppStream.lib: ' // TRIM(AppStream%GetVersion())                             // f_cLineFeed // &
+                    'Package_AppLake.lib: ' // TRIM(AppLake%GetVersion())                                 // f_cLineFeed // &
+                    'Package_UnsatZone.lib: ' // TRIM(Package_UnsatZone_GetVersion())                     // f_cLineFeed // &
+                    'Package_RootZone.lib: ' // TRIM(RootZone%GetVersion())                               // f_cLineFeed // &
+                    'Package_AppSubsidence.lib: '//TRIM(AppSubsidence%GetVersion())
+    
+    IF (ALLOCATED(cVersion)) DEALLOCATE (cVersion)
+    ALLOCATE (CHARACTER(LEN=LEN_TRIM(cVersionLocal)) :: cVersion)
+    cVersion = TRIM(cVersionLocal)
+
+  END SUBROUTINE GetVersion
+  
+  
   ! -------------------------------------------------------------
   ! --- GET NUMBER OF TILE DRAIN NODES
   ! -------------------------------------------------------------
@@ -2437,11 +2556,10 @@ CONTAINS
     !Local variables
     CHARACTER(LEN=ModNameLen+29) :: ThisProcedure = ModName // 'GetBudget_MonthlyAverageFlows'
     INTEGER                      :: iNCols,iNYears,indxTime,indxCol,iErrorCode,iDay,iMonth,iYear,iJulianDate, &
-                                    iDeltaT_InMInutes,ID
+                                    iDeltaT_InMinutes
     REAL(8)                      :: rDummy,rDiff  
     CHARACTER                    :: cBeginDate_Local*f_iTimeStampLength,cEndDate_Local*f_iTimeStampLength    , &
                                     cAdjustedBeginDate*f_iTimeStampLength,cAdjustedEndDate*f_iTimeStampLength
-    INTEGER,ALLOCATABLE          :: iSubregionIDs(:),iLakeIDs(:)
     REAL(8),ALLOCATABLE          :: rFlowsWork(:,:)
     
     !Adjust beginning date so that we start from Oct
@@ -2493,10 +2611,7 @@ CONTAINS
     
     !If inquiry model is defined
     IF (Model%lModel_ForInquiry_Defined) THEN
-        ALLOCATE (iSubregionIDs(Model%AppGrid%NSubregions) , iLakeIDs(Model%AppLake%GetNLakes()))
-        CALL Model%AppGrid%GetSubregionIDs(iSubregionIDs)
-        CALL Model%AppLake%GetLakeIDs(iLakeIDs)
-        CALL Model%Model_ForInquiry%GetBudget_MonthlyAverageFlows(iSubregionIDs,iLakeIDs,iBudgetType,iLocationIndex,iLUType,iSWShedBudType,cAdjustedBeginDate,cAdjustedEndDate,rFactVL,rFlows,rSDFlows,cFlowNames,iStat)
+        CALL Model%Model_ForInquiry%GetBudget_MonthlyAverageFlows(iBudgetType,iLocationIndex,iLUType,iSWShedBudType,cAdjustedBeginDate,cAdjustedEndDate,rFactVL,rFlows,rSDFlows,cFlowNames,iStat)
         RETURN
     END IF
     
@@ -2505,32 +2620,26 @@ CONTAINS
     SELECT CASE (iBudgetType)
         !GW Budget
         CASE (f_iBudgetType_GW)
-            ID = Model%AppGrid%AppSubregion(iLocationIndex)%ID
-            CALL Model%AppGW%GetBudget_MonthlyFlows(ID,cAdjustedBeginDate,cAdjustedEndDate,rFactVL,rFlowsWork,cFlowNames,iStat)
+            CALL Model%AppGW%GetBudget_MonthlyFlows(iLocationIndex,cAdjustedBeginDate,cAdjustedEndDate,rFactVL,rFlowsWork,cFlowNames,iStat)
             
         !Budgets for streams
         CASE (f_iBudgetType_StrmNode , f_iBudgetType_StrmReach , f_iBudgetType_DiverDetail)
-            !Index-to-ID conversion will be done in AppStream package
             CALL Model%AppStream%GetBudget_MonthlyFlows(iBudgetType,iLocationIndex,cAdjustedBeginDate,cAdjustedEndDate,rFactVL,rFlowsWork,cFlowNames,iStat)
         
         !Budgets for root zone
         CASE (f_iBudgetType_RootZone , f_iBudgetType_LWU , f_iBudgetType_NonPondedCrop_RZ , f_iBudgetType_NonPondedCrop_LWU  , f_iBudgetType_PondedCrop_RZ , f_iBudgetType_PondedCrop_LWU)
-            ID = Model%AppGrid%AppSubregion(iLocationIndex)%ID
-            CALL Model%RootZone%GetBudget_MonthlyFlows(iBudgetType,iLUType,ID,cAdjustedBeginDate,cAdjustedEndDate,rFactVL,rFlowsWork,cFlowNames,iStat)
+            CALL Model%RootZone%GetBudget_MonthlyFlows(iBudgetType,iLUType,iLocationIndex,cAdjustedBeginDate,cAdjustedEndDate,rFactVL,rFlowsWork,cFlowNames,iStat)
         
         !Unsaturated zone budget
         CASE (f_iBudgetType_UnsatZone)
-            ID = Model%AppGrid%AppSubregion(iLocationIndex)%ID
             CALL Model%AppUnsatZone%GetBudget_MonthlyFlows(iLocationIndex,cAdjustedBeginDate,cAdjustedEndDate,rFactVL,rFlowsWork,cFlowNames,iStat)
         
         !Lake budget
         CASE (f_iBudgetType_Lake)
-            !Index-to-ID conversion will be done in AppLake package
             CALL Model%AppLake%GetBudget_MonthlyFlows(iLocationIndex,cAdjustedBeginDate,cAdjustedEndDate,rFactVL,rFlowsWork,cFlowNames,iStat)
         
         !Budget list for small watersheds
         CASE (f_iBudgetType_SWShed)
-            !Index-to-ID conversion will be done in AppSmallWatershed package
             CALL Model%AppSWShed%GetBudget_MonthlyFlows(iSWShedBudType,iLocationIndex,cAdjustedBeginDate,cAdjustedEndDate,rFactVL,rFlowsWork,cFlowNames,iStat)
 
     END SELECT
@@ -2577,24 +2686,24 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET ANNUAL BUDGET OUTPUTS FROM A BUDGET FILE FOR A SELECTED LOCATION
   ! -------------------------------------------------------------
-  SUBROUTINE GetBudget_AnnualFlows(Model,iBudgetType,iLocationIndex,iLUType,iSWShedBudType,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iWaterYears,iStat)
+  SUBROUTINE GetBudget_AnnualFlows(Model,iBudgetType,iLocationIndex,iLUType,iSWShedBudType,cBeginDate,cEndDate,lForCalendarYear,rFactVL,rFlows,cFlowNames,iOutputYears,iStat)
     CLASS(ModelType),INTENT(IN)              :: Model
     INTEGER,INTENT(IN)                       :: iBudgetType,iLocationIndex,iLUType,iSWShedBudType
     CHARACTER(LEN=*),INTENT(IN)              :: cBeginDate,cEndDate
+    LOGICAL,INTENT(IN)                       :: lForCalendarYear
     REAL(8),INTENT(IN)                       :: rFactVL
     REAL(8),ALLOCATABLE,INTENT(OUT)          :: rFlows(:,:)    !rFlows is in (column,month) format
     CHARACTER(LEN=*),ALLOCATABLE,INTENT(OUT) :: cFlowNames(:)
-    INTEGER,ALLOCATABLE,INTENT(OUT)          :: iWaterYears(:)
+    INTEGER,ALLOCATABLE,INTENT(OUT)          :: iOutputYears(:)
     INTEGER,INTENT(OUT)                      :: iStat
     
     !Local variables
     CHARACTER(LEN=ModNameLen+21) :: ThisProcedure = ModName // 'GetBudget_AnnualFlows'
     INTEGER                      :: indx,iDay,iMonth,iYear,iJulianDate,iDELTAT_InMinutes,iNCols,indxTime,     &
-                                    iNYears,iWYBegin,iWYEnd,iErrorCode,ID
+                                    iNYears,iYearBegin,iYearEnd,iErrorCode
     CHARACTER                    :: cBeginDate_Local*f_iTimeStampLength,cEndDate_Local*f_iTimeStampLength,    &
                                     cAdjustedBeginDate*f_iTimeStampLength,cAdjustedEndDate*f_iTimeStampLength
     REAL(8)                      :: rDummy
-    INTEGER,ALLOCATABLE          :: iSubregionIDs(:),iLakeIDs(:)
     REAL(8),ALLOCATABLE          :: rFlowsWork(:,:)
     
     !Adjust beginning date so that we start from Oct
@@ -2605,12 +2714,17 @@ CONTAINS
     END IF
     iDay   = 31
     iMonth = ExtractMonth(cBeginDate_Local)
-    IF (iMonth .NE. 10) THEN
-        iYear = ExtractYear(cBeginDate_Local)
-        IF (iMonth .GT. 10) iYear = iYear + 1
-        iMonth = 10
+    iYear  = ExtractYear(cBeginDate_Local)
+    IF (lForCalendarYear) THEN
+        IF (iMonth .NE. 1) THEN
+            iYear  = iYear + 1
+            iMonth = 1
+        END IF
     ELSE
-        iYear = ExtractYear(cBeginDate_Local)
+        IF (iMonth .NE. 10) THEN
+            IF (iMonth .GT. 10) iYear = iYear + 1
+            iMonth = 10
+        END IF
     END IF
     CALL DayMonthYearToJulianDate(iDay,iMonth,iYear,iJulianDate)
     iJulianDate        = iJulianDate + 1  !Add 1 because above procedure returns Julian date for 1 day before what we want
@@ -2623,14 +2737,20 @@ CONTAINS
     ELSE
         cEndDate_Local = cEndDate
     END IF
-    iDay   = 30
     iMonth = ExtractMonth(cEndDate_Local)
-    IF (iMonth .NE. 9) THEN
-        iYear = ExtractYear(cEndDate_Local)
-        IF (iMonth .LT. 9) iYear = iYear - 1
-        iMonth = 9
+    iYear  = ExtractYear(cEndDate_Local)
+    IF (lForCalendarYear) THEN
+        iDay = 31
+        IF (iMonth .NE. 12) THEN
+            iYear  = iYear - 1
+            iMonth = 12
+        END IF
     ELSE
-        iYear = ExtractYear(cEndDate_Local)
+        iDay = 30
+        IF (iMonth .NE. 9) THEN
+            IF (iMonth .LT. 9) iYear = iYear - 1
+            iMonth = 9
+        END IF
     END IF
     CALL DayMonthYearToJulianDate(iDay,iMonth,iYear,iJulianDate)
     iJulianDate      = iJulianDate + 1  !Add 1 because above procedure returns Julian date for 1 day before what we want
@@ -2639,24 +2759,29 @@ CONTAINS
     !Make sure we have at least 1 year to process
     CALL CTimeStep_To_RTimeStep('1YEAR',rDummy,iDELTAT_InMinutes,iStat)
     IF (NPeriods(iDELTAT_InMinutes,cAdjustedBeginDate,cAdjustedEndDate) .LT. 1) THEN
-        CALL SetLastMessage('At least 1 year of simulation period must be selected to obtain annual Budget flows!',f_iFatal,ThisProcedure)
+        IF (lForCalendarYear) THEN
+            CALL SetLastMessage('At least 1 calendar year of simulation period must be selected to obtain annual ZBudget flows!',f_iFatal,ThisProcedure)
+        ELSE
+            CALL SetLastMessage('At least 1 water year of simulation period must be selected to obtain annual ZBudget flows!',f_iFatal,ThisProcedure)
+        END IF
         iStat = -1
         RETURN
     END IF   
     
     !Compile water years for output
-    iWYBegin = ExtractYear(cAdjustedBeginDate) + 1
-    iWYEnd   = ExtractYear(cAdjustedEndDate)
-    iNYears  = iWYEnd - iWYBegin + 1
-    ALLOCATE (iWaterYears(iNYears))
-    iWaterYears = [(indx,indx=iWYBegin,iWYEnd)]
+    IF (lForCalendarYear) THEN
+        iYearBegin = ExtractYear(cAdjustedBeginDate)
+    ELSE
+        iYearBegin = ExtractYear(cAdjustedBeginDate) + 1
+    END IF
+    iYearEnd = ExtractYear(cAdjustedEndDate)
+    iNYears  = iYearEnd - iYearBegin + 1
+    ALLOCATE (iOutputYears(iNYears))
+    iOutputYears = [(indx,indx=iYearBegin,iYearEnd)]
 
     !If inquiry model is defined
     IF (Model%lModel_ForInquiry_Defined) THEN
-        ALLOCATE (iSubregionIDs(Model%AppGrid%NSubregions) , iLakeIDs(Model%AppLake%GetNLakes()))
-        CALL Model%AppGrid%GetSubregionIDs(iSubregionIDs)
-        CALL Model%AppLake%GetLakeIDs(iLakeIDs)
-        CALL Model%Model_ForInquiry%GetBudget_AnnualFlows(iSubregionIDs,iLakeIDs,iBudgetType,iLocationIndex,iLUType,iSWShedBudType,iNYears,cAdjustedBeginDate,cAdjustedEndDate,rFactVL,rFlows,cFlowNames,iStat)
+        CALL Model%Model_ForInquiry%GetBudget_AnnualFlows(iBudgetType,iLocationIndex,iLUType,iSWShedBudType,iNYears,cAdjustedBeginDate,cAdjustedEndDate,rFactVL,rFlows,cFlowNames,iStat)
         RETURN
     END IF
     
@@ -2665,32 +2790,27 @@ CONTAINS
     SELECT CASE (iBudgetType)
         !GW Budget
         CASE (f_iBudgetType_GW)
-            ID = Model%AppGrid%AppSubregion(iLocationIndex)%ID
-            CALL Model%AppGW%GetBudget_MonthlyFlows(ID,cAdjustedBeginDate,cAdjustedEndDate,rFactVL,rFlowsWork,cFlowNames,iStat)
+            CALL Model%AppGW%GetBudget_MonthlyFlows(iLocationIndex,cAdjustedBeginDate,cAdjustedEndDate,rFactVL,rFlowsWork,cFlowNames,iStat)
             
         !Budgets for streams
         CASE (f_iBudgetType_StrmNode , f_iBudgetType_StrmReach , f_iBudgetType_DiverDetail)
-            !Index-to-ID conversion will be done in AppStream package
             CALL Model%AppStream%GetBudget_MonthlyFlows(iBudgetType,iLocationIndex,cAdjustedBeginDate,cAdjustedEndDate,rFactVL,rFlowsWork,cFlowNames,iStat)
         
-        !Budgets for root zone
+        !Budgets for root zone; these ones are retrieved directly as annual flows to avoid double-counting LWU flow terms during accumulation
         CASE (f_iBudgetType_RootZone , f_iBudgetType_LWU , f_iBudgetType_NonPondedCrop_RZ , f_iBudgetType_NonPondedCrop_LWU  , f_iBudgetType_PondedCrop_RZ , f_iBudgetType_PondedCrop_LWU)
-            ID = Model%AppGrid%AppSubregion(iLocationIndex)%ID
-            CALL Model%RootZone%GetBudget_MonthlyFlows(iBudgetType,iLUType,ID,cAdjustedBeginDate,cAdjustedEndDate,rFactVL,rFlowsWork,cFlowNames,iStat)
-        
+            CALL Model%RootZone%GetBudget_AnnualFlows(iBudgetType,iLUType,iLocationIndex,cAdjustedBeginDate,cAdjustedEndDate,rFactVL,rFlows,cFlowNames,iStat)
+            RETURN
+            
         !Unsaturated zone budget
         CASE (f_iBudgetType_UnsatZone)
-            ID = Model%AppGrid%AppSubregion(iLocationIndex)%ID
             CALL Model%AppUnsatZone%GetBudget_MonthlyFlows(iLocationIndex,cAdjustedBeginDate,cAdjustedEndDate,rFactVL,rFlowsWork,cFlowNames,iStat)
         
         !Lake budget
         CASE (f_iBudgetType_Lake)
-            !Index-to-ID conversion will be done in AppLake package
             CALL Model%AppLake%GetBudget_MonthlyFlows(iLocationIndex,cAdjustedBeginDate,cAdjustedEndDate,rFactVL,rFlowsWork,cFlowNames,iStat)
         
         !Budget list for small watersheds
         CASE (f_iBudgetType_SWShed)
-            !Index-to-ID conversion will be done in AppSmallWatershed package
             CALL Model%AppSWShed%GetBudget_MonthlyFlows(iSWShedBudType,iLocationIndex,cAdjustedBeginDate,cAdjustedEndDate,rFactVL,rFlowsWork,cFlowNames,iStat)
 
     END SELECT
@@ -2728,19 +2848,9 @@ CONTAINS
     REAL(8),INTENT(OUT)         :: rOutputDates(:),rOutputValues(:,:)    !rOutputValues is in (timestep,column) format
     INTEGER,INTENT(OUT)         :: iDataTypes(:),inActualOutput,iStat
     
-    !Local variables
-    INTEGER             :: ID
-    INTEGER,ALLOCATABLE :: iSubregionIDs(:),iLakeIDs(:)
-    
     !If inquiry model is defined
     IF (Model%lModel_ForInquiry_Defined) THEN
-        !Retrieve subregion and lake IDs
-        ALLOCATE (iSubregionIDs(Model%AppGrid%NSubregions) , iLakeIDs(Model%AppLake%GetNLakes()))
-        CALL Model%AppGrid%GetSubregionIDs(iSubregionIDs)
-        CALL Model%AppLake%GetLakeIDs(iLakeIDs)
-        CALL Model%Model_ForInquiry%GetBudget_TSData(iSubregionIDs    , &
-                                                     iLakeIDs         , &
-                                                     iBudgetType      , &
+        CALL Model%Model_ForInquiry%GetBudget_TSData(iBudgetType      , &
                                                      iLocationIndex   , &
                                                      iCols            , &
                                                      cBeginDate       , &
@@ -2762,32 +2872,26 @@ CONTAINS
     SELECT CASE (iBudgetType)
         !GW Budget
         CASE (f_iBudgetType_GW)
-            ID = Model%AppGrid%AppSubregion(iLocationIndex)%ID
-            CALL Model%AppGW%GetBudget_TSData(ID,iCols,cBeginDate,cEndDate,cInterval,rFactLT,rFactAR,rFactVL,rOutputDates,rOutputValues,iDataTypes,iNActualOutput,iStat)
+            CALL Model%AppGW%GetBudget_TSData(iLocationIndex,iCols,cBeginDate,cEndDate,cInterval,rFactLT,rFactAR,rFactVL,rOutputDates,rOutputValues,iDataTypes,iNActualOutput,iStat)
             
         !Budgets for streams
         CASE (f_iBudgetType_StrmNode , f_iBudgetType_StrmReach , f_iBudgetType_DiverDetail)
-            !Index-to-ID conversion will be done in AppStream package
             CALL Model%AppStream%GetBudget_TSData(iBudgetType,iLocationIndex,iCols,cBeginDate,cEndDate,cInterval,rFactLT,rFactAR,rFactVL,rOutputDates,rOutputValues,iDataTypes,iNActualOutput,iStat)
         
         !Budgets for root zone
         CASE (f_iBudgetType_RootZone , f_iBudgetType_LWU , f_iBudgetType_NonPondedCrop_RZ , f_iBudgetType_NonPondedCrop_LWU  , f_iBudgetType_PondedCrop_RZ , f_iBudgetType_PondedCrop_LWU)
-            ID = Model%AppGrid%AppSubregion(iLocationIndex)%ID
-            CALL Model%RootZone%GetBudget_TSData(iBudgetType,ID,iCols,cBeginDate,cEndDate,cInterval,rFactLT,rFactAR,rFactVL,rOutputDates,rOutputValues,iDataTypes,iNActualOutput,iStat)
+            CALL Model%RootZone%GetBudget_TSData(iBudgetType,iLocationIndex,iCols,cBeginDate,cEndDate,cInterval,rFactLT,rFactAR,rFactVL,rOutputDates,rOutputValues,iDataTypes,iNActualOutput,iStat)
         
         !Unsaturated zone budget
         CASE (f_iBudgetType_UnsatZone)
-            ID = Model%AppGrid%AppSubregion(iLocationIndex)%ID
-            CALL Model%AppUnsatZone%GetBudget_TSData(ID,iCols,cBeginDate,cEndDate,cInterval,rFactLT,rFactAR,rFactVL,rOutputDates,rOutputValues,iDataTypes,iNActualOutput,iStat)
+            CALL Model%AppUnsatZone%GetBudget_TSData(iLocationIndex,iCols,cBeginDate,cEndDate,cInterval,rFactLT,rFactAR,rFactVL,rOutputDates,rOutputValues,iDataTypes,iNActualOutput,iStat)
         
         !Lake budget
         CASE (f_iBudgetType_Lake)
-            !Index-to-ID conversion will be done in AppLake package
             CALL Model%AppLake%GetBudget_TSData(iLocationIndex,iCols,cBeginDate,cEndDate,cInterval,rFactLT,rFactAR,rFactVL,rOutputDates,rOutputValues,iDataTypes,iNActualOutput,iStat)
         
-        !Budget list for small watersheds
+        !Small watershed budget
         CASE (f_iBudgetType_SWShed)
-            !Index-to-ID conversion will be done in AppSmallwatershed package
             CALL Model%AppSWShed%GetBudget_TSData(iLocationIndex,iCols,cBeginDate,cEndDate,cInterval,rFactLT,rFactAR,rFactVL,rOutputDates,rOutputValues,iDataTypes,iNActualOutput,iStat)
 
     END SELECT    
@@ -2806,21 +2910,15 @@ CONTAINS
     REAL(8),ALLOCATABLE,INTENT(OUT) :: rOutputDates(:),rCumGWStorChange(:)    
     INTEGER,INTENT(OUT)             :: iStat
     
-    !Local variables
-    INTEGER :: ID
-    
-    !Convert index to ID
-    ID = Model%AppGrid%AppSubregion(iSubregionIndex)%ID
-    
     !If inquiry model is defined
     IF (Model%lModel_ForInquiry_Defined) THEN
-        CALL Model%Model_ForInquiry%GetBudget_CumGWStorChange(ID,cBeginDate,cEndDate,cInterval,rFactVL,rOutputDates,rCumGWStorChange,iStat)
+        CALL Model%Model_ForInquiry%GetBudget_CumGWStorChange(iSubregionIndex,cBeginDate,cEndDate,cInterval,rFactVL,rOutputDates,rCumGWStorChange,iStat)
         RETURN
     END IF
     
     !Otherwise...
     !Get the data
-    CALL Model%AppGW%GetBudget_CumGWStorChange(ID,cBeginDate,cEndDate,cInterval,rFactVL,rOutputDates,rCumGWStorChange,iStat)
+    CALL Model%AppGW%GetBudget_CumGWStorChange(iSubregionIndex,cBeginDate,cEndDate,cInterval,rFactVL,rOutputDates,rCumGWStorChange,iStat)
 
   END SUBROUTINE GetBudget_CumGWStorChange
   
@@ -2828,18 +2926,19 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET ANNUAL CUMULATIVE GW STORAGE CHANGE FROM BUDGET FILE
   ! -------------------------------------------------------------
-  SUBROUTINE GetBudget_AnnualCumGWStorChange(Model,iSubregionIndex,cBeginDate,cEndDate,rFactVL,rCumGWStorChange,iWaterYears,iStat)
+  SUBROUTINE GetBudget_AnnualCumGWStorChange(Model,iSubregionIndex,cBeginDate,cEndDate,lForCalendarYear,rFactVL,rCumGWStorChange,iOutputYears,iStat)
     CLASS(ModelType),INTENT(IN)     :: Model
     INTEGER,INTENT(IN)              :: iSubregionIndex
     CHARACTER(LEN=*),INTENT(IN)     :: cBeginDate,cEndDate
+    LOGICAL,INTENT(IN)              :: lForCalendarYear
     REAL(8),INTENT(IN)              :: rFactVL
     REAL(8),ALLOCATABLE,INTENT(OUT) :: rCumGWStorChange(:)  
-    INTEGER,ALLOCATABLE,INTENT(OUT) :: iWaterYears(:)
+    INTEGER,ALLOCATABLE,INTENT(OUT) :: iOutputYears(:)
     INTEGER,INTENT(OUT)             :: iStat
     
     !Local variables
     CHARACTER(LEN=ModNameLen+31)      :: ThisProcedure = ModName // 'GetBudget_AnnualCumGWStorChange'
-    INTEGER                           :: iDay,iMonth,iYear,iJulianDate,iDeltaT_InMinutes,iWYBegin,iWYEnd,iNYears,indx,iErrorCode  
+    INTEGER                           :: iDay,iMonth,iYear,iJulianDate,iDeltaT_InMinutes,iYearBegin,iYearEnd,iNYears,indx,iErrorCode  
     REAL(8)                           :: rDummy
     CHARACTER(LEN=f_iTimeStampLength) :: cBeginDate_Local,cEndDate_Local,cAdjustedBeginDate,cAdjustedEndDate
     TYPE(AppGWType)                   :: AppGW
@@ -2853,12 +2952,17 @@ CONTAINS
     END IF
     iDay   = 31
     iMonth = ExtractMonth(cBeginDate_Local)
-    IF (iMonth .NE. 10) THEN
-        iYear = ExtractYear(cBeginDate_Local)
-        IF (iMonth .GT. 10) iYear = iYear + 1
-        iMonth = 10
+    iYear  = ExtractYear(cBeginDate_Local)
+    IF (lForCalendarYear) THEN
+        IF (iMonth .NE. 1) THEN
+            iYear  = iYear + 1
+            iMonth = 1
+        END IF
     ELSE
-        iYear = ExtractYear(cBeginDate_Local)
+        IF (iMonth .NE. 10) THEN
+            IF (iMonth .GT. 10) iYear = iYear + 1
+            iMonth = 10
+        END IF
     END IF
     CALL DayMonthYearToJulianDate(iDay,iMonth,iYear,iJulianDate)
     iJulianDate        = iJulianDate + 1  !Add 1 because above procedure returns Julian date for 1 day before what we want
@@ -2871,14 +2975,20 @@ CONTAINS
     ELSE
         cEndDate_Local = cEndDate
     END IF
-    iDay   = 30
     iMonth = ExtractMonth(cEndDate_Local)
-    IF (iMonth .NE. 9) THEN
-        iYear = ExtractYear(cEndDate_Local)
-        IF (iMonth .LT. 9) iYear = iYear - 1
-        iMonth = 9
+    iYear  = ExtractYear(cEndDate_Local)
+    IF (lForCalendarYear) THEN
+        iDay = 31
+        IF (iMonth .NE. 12) THEN
+            iYear  = iYear - 1
+            iMonth = 12
+        END IF
     ELSE
-        iYear = ExtractYear(cEndDate_Local)
+        iDay = 30
+        IF (iMonth .NE. 9) THEN
+            IF (iMonth .LT. 9) iYear = iYear - 1
+            iMonth = 9
+        END IF
     END IF
     CALL DayMonthYearToJulianDate(iDay,iMonth,iYear,iJulianDate)
     iJulianDate      = iJulianDate + 1  !Add 1 because above procedure returns Julian date for 1 day before what we want
@@ -2887,17 +2997,25 @@ CONTAINS
     !Make sure we have at least 1 year to process
     CALL CTimeStep_To_RTimeStep('1YEAR',rDummy,iDELTAT_InMinutes,iStat)
     IF (NPeriods(iDELTAT_InMinutes,cAdjustedBeginDate,cAdjustedEndDate) .LT. 1) THEN
-        CALL SetLastMessage('At least 1 year of simulation period must be selected to obtain annual cumulatibe chnage in groundwater storage!',f_iFatal,ThisProcedure)
+        IF (lForCalendarYear) THEN
+            CALL SetLastMessage('At least 1 calendar year of simulation period must be selected to obtain annual cumulative change in groundwater storage!',f_iFatal,ThisProcedure)
+        ELSE
+            CALL SetLastMessage('At least 1 water year of simulation period must be selected to obtain annual cumulative change in groundwater storage!',f_iFatal,ThisProcedure)
+        END IF      
         iStat = -1
         RETURN
     END IF   
     
     !Compile water years for output
-    iWYBegin = ExtractYear(cAdjustedBeginDate) + 1
-    iWYEnd   = ExtractYear(cAdjustedEndDate)
-    iNYears  = iWYEnd - iWYBegin + 1
-    ALLOCATE (iWaterYears(iNYears+1))
-    iWaterYears = [(indx,indx=iWYBegin-1,iWYEnd)]
+    IF (lForCalendarYear) THEN
+        iYearBegin = ExtractYear(cAdjustedBeginDate)
+    ELSE
+        iYearBegin = ExtractYear(cAdjustedBeginDate) + 1
+    END IF
+    iYearEnd = ExtractYear(cAdjustedEndDate)
+    iNYears  = iYearEnd - iYearBegin + 1
+    ALLOCATE (iOutputYears(iNYears+1))
+    iOutputYears = [(indx,indx=iYearBegin-1,iYearEnd)]
 
     !If inquiry model is defined
     IF (Model%lModel_ForInquiry_Defined) THEN
@@ -3215,26 +3333,27 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET ANNUAL ZONE BUDGET FLOWS FROM A ZBUDGET FILE FOR A SELECTED ZONE 
   ! -------------------------------------------------------------
-  SUBROUTINE GetZBudget_AnnualFlows(Model,iZBudgetType,iZoneID,iLUType,iZExtent,iElems,iLayers,iZoneIDs,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iWaterYears,iStat)
+  SUBROUTINE GetZBudget_AnnualFlows(Model,iZBudgetType,iZoneID,iLUType,iZExtent,iElems,iLayers,iZoneIDs,cBeginDate,cEndDate,lForCalendarYear,rFactVL,rFlows,cFlowNames,iOutputYears,iStat)
     CLASS(ModelType),TARGET,INTENT(IN)       :: Model
     INTEGER,INTENT(IN)                       :: iZBudgetType,iZoneID,iLUType,iZExtent,iElems(:),iLayers(:),iZoneIDs(:)
     CHARACTER(LEN=*),INTENT(IN)              :: cBeginDate,cEndDate
+    LOGICAL,INTENT(IN)                       :: lForCalendarYear
     REAL(8),INTENT(IN)                       :: rFactVL
     REAL(8),ALLOCATABLE,INTENT(OUT)          :: rFlows(:,:)  !rFlows is in (column,year) format
     CHARACTER(LEN=*),ALLOCATABLE,INTENT(OUT) :: cFlowNames(:)
-    INTEGER,ALLOCATABLE,INTENT(OUT)          :: iWaterYears(:)
+    INTEGER,ALLOCATABLE,INTENT(OUT)          :: iOutputYears(:)
     INTEGER,INTENT(OUT)                      :: iStat
     
     !Local variables
     CHARACTER(LEN=ModNameLen+21) :: ThisProcedure = ModName // 'GetBudget_AnnualFlows'
-    INTEGER                      :: iDay,iMonth,iYear,iJulianDate,iDELTAT_InMinutes,iWYBegin,iWYEnd,iNYears, &
+    INTEGER                      :: iDay,iMonth,iYear,iJulianDate,iDELTAT_InMinutes,iYearBegin,iYearEnd,iNYears, &
                                     indx,iNCols,indxTime,iErrorCode
     REAL(8)                      :: rDummy
     CHARACTER                    :: cAdjustedBeginDate*f_iTimeStampLength,cAdjustedEndDate*f_iTimeStampLength,cBeginDate_Local*f_iTimeStampLength, &
                                     cEndDate_Local*f_iTimeStampLength
     REAL(8),ALLOCATABLE          :: rFlows_Work(:,:)
     
-    !Adjust beginning date so that we start from Oct
+    !Adjust beginning date so that we start from Oct (or Jan if for calendar year)
     IF (cBeginDate .TSLT. Model%TimeStep%CurrentDateAndTime) THEN
         cBeginDate_Local = Model%TimeStep%CurrentDateAndTime
     ELSE
@@ -3242,12 +3361,17 @@ CONTAINS
     END IF
     iDay   = 31
     iMonth = ExtractMonth(cBeginDate_Local)
-    IF (iMonth .NE. 10) THEN
-        iYear = ExtractYear(cBeginDate_Local)
-        IF (iMonth .GT. 10) iYear = iYear + 1
-        iMonth = 10
+    iYear  = ExtractYear(cBeginDate_Local)
+    IF (lForCalendarYear) THEN
+        IF (iMonth .NE. 1) THEN
+            iYear  = iYear + 1
+            iMonth = 1
+        END IF
     ELSE
-        iYear = ExtractYear(cBeginDate_Local)
+        IF (iMonth .NE. 10) THEN
+            IF (iMonth .GT. 10) iYear = iYear + 1
+            iMonth = 10
+        END IF
     END IF
     CALL DayMonthYearToJulianDate(iDay,iMonth,iYear,iJulianDate)
     iJulianDate        = iJulianDate + 1  !Add 1 because above procedure returns Julian date for 1 day before what we want
@@ -3260,14 +3384,20 @@ CONTAINS
     ELSE
         cEndDate_Local = cEndDate
     END IF
-    iDay   = 30
     iMonth = ExtractMonth(cEndDate_Local)
-    IF (iMonth .NE. 9) THEN
-        iYear = ExtractYear(cEndDate_Local)
-        IF (iMonth .LT. 9) iYear = iYear - 1
-        iMonth = 9
+    iYear  = ExtractYear(cEndDate_Local)
+    IF (lForCalendarYear) THEN
+        iDay = 31
+        IF (iMonth .NE. 12) THEN
+            iYear  = iYear - 1
+            iMonth = 12
+        END IF
     ELSE
-        iYear = ExtractYear(cEndDate_Local)
+        iDay = 30
+        IF (iMonth .NE. 9) THEN
+            IF (iMonth .LT. 9) iYear = iYear - 1
+            iMonth = 9
+        END IF
     END IF
     CALL DayMonthYearToJulianDate(iDay,iMonth,iYear,iJulianDate)
     iJulianDate      = iJulianDate + 1  !Add 1 because above procedure returns Julian date for 1 day before what we want
@@ -3276,17 +3406,25 @@ CONTAINS
     !Make sure we have at least 1 year to process
     CALL CTimeStep_To_RTimeStep('1YEAR',rDummy,iDELTAT_InMinutes,iStat)
     IF (NPeriods(iDELTAT_InMinutes,cAdjustedBeginDate,cAdjustedEndDate) .LT. 1) THEN
-        CALL SetLastMessage('At least 1 year of simulation period must be selected to obtain annual ZBudget flows!',f_iFatal,ThisProcedure)
+        IF (lForCalendarYear) THEN
+            CALL SetLastMessage('At least 1 calendar year of simulation period must be selected to obtain annual ZBudget flows!',f_iFatal,ThisProcedure)
+        ELSE
+            CALL SetLastMessage('At least 1 water year of simulation period must be selected to obtain annual ZBudget flows!',f_iFatal,ThisProcedure)
+        END IF
         iStat = -1
         RETURN
     END IF 
     
-    !Compile water years for output
-    iWYBegin = ExtractYear(cAdjustedBeginDate) + 1
-    iWYEnd   = ExtractYear(cAdjustedEndDate)
-    iNYears  = iWYEnd - iWYBegin + 1
-    ALLOCATE (iWaterYears(iNYears))
-    iWaterYears = [(indx,indx=iWYBegin,iWYEnd)]
+    !Compile output years
+    IF (lForCalendarYear) THEN
+        iYearBegin = ExtractYear(cAdjustedBeginDate)
+    ELSE
+        iYearBegin = ExtractYear(cAdjustedBeginDate) + 1
+    END IF
+    iYearEnd   = ExtractYear(cAdjustedEndDate)
+    iNYears    = iYearEnd - iYearBegin + 1
+    ALLOCATE (iOutputYears(iNYears))
+    iOutputYears = [(indx,indx=iYearBegin,iYearEnd)]
     
     !If the data is being retrieved from inquiry model
     IF (Model%lModel_ForInquiry_Defined) THEN
@@ -3303,7 +3441,8 @@ CONTAINS
             
         !Process root zone ZBudgets
         CASE (f_iZBudgetType_LWU , f_iZBudgetType_RootZone)  
-            CALL Model%RootZone%GetZBudget_MonthlyFlows(iZBudgetType,iLUType,iZoneID,iZExtent,iElems,iLayers,iZoneIDs,cAdjustedBeginDate,cAdjustedEndDate,rFactVL,rFlows_Work,cFlowNames,iStat)
+            CALL Model%RootZone%GetZBudget_AnnualFlows(iZBudgetType,iLUType,iZoneID,iZExtent,iElems,iLayers,iZoneIDs,cAdjustedBeginDate,cAdjustedEndDate,rFactVL,rFlows,cFlowNames,iStat)
+            RETURN
             
         !Process unsat zone ZBudget
         CASE (f_iZBudgetType_UnsatZone)
@@ -3408,18 +3547,19 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET ANNUAL CUMULATIVE GW STORAGE CHANGE FROM Z-BUDGET FILE 
   ! -------------------------------------------------------------
-  SUBROUTINE GetZBudget_AnnualCumGWStorChange(Model,iZoneID,iZExtent,iElems,iLayers,iZoneIDs,cBeginDate,cEndDate,rFactVL,rCumStorChange,iWaterYears,iStat)
+  SUBROUTINE GetZBudget_AnnualCumGWStorChange(Model,iZoneID,iZExtent,iElems,iLayers,iZoneIDs,cBeginDate,cEndDate,lForCalendarYear,rFactVL,rCumStorChange,iOutputYears,iStat)
     CLASS(ModelType),TARGET,INTENT(IN) :: Model
     INTEGER,INTENT(IN)                 :: iZoneID,iZExtent,iElems(:),iLayers(:),iZoneIDs(:)
     CHARACTER(LEN=*),INTENT(IN)        :: cBeginDate,cEndDate
+    LOGICAL,INTENT(IN)                 :: lForCalendarYear
     REAL(8),INTENT(IN)                 :: rFactVL
     REAL(8),ALLOCATABLE,INTENT(OUT)    :: rCumStorChange(:) 
-    INTEGER,ALLOCATABLE,INTENT(OUT)    :: iWaterYears(:)
+    INTEGER,ALLOCATABLE,INTENT(OUT)    :: iOutputYears(:)
     INTEGER,INTENT(OUT)                :: iStat
     
     !Local variables
     CHARACTER(LEN=ModNameLen+32)      :: ThisProcedure = ModName // 'GetZBudget_AnnualCumGWStorChange'
-    INTEGER                           :: iDay,iMonth,iYear,iJulianDate,iDELTAT_InMinutes,iWYBegin,iWYEnd,iNYears,indx
+    INTEGER                           :: iDay,iMonth,iYear,iJulianDate,iDELTAT_InMinutes,iYearBegin,iYearEnd,iNYears,indx
     CHARACTER(LEN=f_iTimeStampLength) :: cBeginDate_Local,cEndDate_Local,cAdjustedBeginDate,cAdjustedEndDate
     REAL(8)                           :: rDummy
     REAL(8),ALLOCATABLE               :: rDates(:)
@@ -3432,12 +3572,17 @@ CONTAINS
     END IF
     iDay   = 31
     iMonth = ExtractMonth(cBeginDate_Local)
-    IF (iMonth .NE. 10) THEN
-        iYear = ExtractYear(cBeginDate_Local)
-        IF (iMonth .GT. 10) iYear = iYear + 1
-        iMonth = 10
+    iYear  = ExtractYear(cBeginDate_Local)
+    IF (lForCalendarYear) THEN
+        IF (iMonth .NE. 1) THEN
+            iYear  = iYear + 1
+            iMonth = 1
+        END IF
     ELSE
-        iYear = ExtractYear(cBeginDate_Local)
+        IF (iMonth .NE. 10) THEN
+            IF (iMonth .GT. 10) iYear = iYear + 1
+            iMonth = 10
+        END IF
     END IF
     CALL DayMonthYearToJulianDate(iDay,iMonth,iYear,iJulianDate)
     iJulianDate        = iJulianDate + 1  !Add 1 because above procedure returns Julian date for 1 day before what we want
@@ -3450,14 +3595,20 @@ CONTAINS
     ELSE
         cEndDate_Local = cEndDate
     END IF
-    iDay   = 30
     iMonth = ExtractMonth(cEndDate_Local)
-    IF (iMonth .NE. 9) THEN
-        iYear = ExtractYear(cEndDate_Local)
-        IF (iMonth .LT. 9) iYear = iYear - 1
-        iMonth = 9
+    iYear  = ExtractYear(cEndDate_Local)
+    IF (lForCalendarYear) THEN
+        iDay = 31
+        IF (iMonth .NE. 12) THEN
+            iYear  = iYear - 1
+            iMonth = 12
+        END IF
     ELSE
-        iYear = ExtractYear(cEndDate_Local)
+        iDay = 30
+        IF (iMonth .NE. 9) THEN
+            IF (iMonth .LT. 9) iYear = iYear - 1
+            iMonth = 9
+        END IF
     END IF
     CALL DayMonthYearToJulianDate(iDay,iMonth,iYear,iJulianDate)
     iJulianDate      = iJulianDate + 1  !Add 1 because above procedure returns Julian date for 1 day before what we want
@@ -3466,17 +3617,25 @@ CONTAINS
     !Make sure we have at least 1 year to process
     CALL CTimeStep_To_RTimeStep('1YEAR',rDummy,iDELTAT_InMinutes,iStat)
     IF (NPeriods(iDELTAT_InMinutes,cAdjustedBeginDate,cAdjustedEndDate) .LT. 1) THEN
-        CALL SetLastMessage('At least 1 year of simulation period must be selected to obtain annual cumulatibe chnage in groundwater storage!',f_iFatal,ThisProcedure)
+        IF (lForCalendarYear) THEN
+            CALL SetLastMessage('At least 1 calendar year of simulation period must be selected to obtain annual cumulative change in groundwater storage!',f_iFatal,ThisProcedure)
+        ELSE
+            CALL SetLastMessage('At least 1 water year of simulation period must be selected to obtain annual cumulative change in groundwater storage!',f_iFatal,ThisProcedure)
+        END IF      
         iStat = -1
         RETURN
     END IF   
     
     !Compile water years for output
-    iWYBegin = ExtractYear(cAdjustedBeginDate) + 1
-    iWYEnd   = ExtractYear(cAdjustedEndDate)
-    iNYears  = iWYEnd - iWYBegin + 1
-    ALLOCATE (iWaterYears(iNYears+1))
-    iWaterYears = [(indx,indx=iWYBegin-1,iWYEnd)]
+    IF (lForCalendarYear) THEN
+        iYearBegin = ExtractYear(cAdjustedBeginDate)
+    ELSE
+        iYearBegin = ExtractYear(cAdjustedBeginDate) + 1
+    END IF
+    iYearEnd = ExtractYear(cAdjustedEndDate)
+    iNYears  = iYearEnd - iYearBegin + 1
+    ALLOCATE (iOutputYears(iNYears+1))
+    iOutputYears = [(indx,indx=iYearBegin-1,iYearEnd)]
 
     !If inquiry model is defined
     IF (Model%lModel_ForInquiry_Defined) THEN
@@ -3503,41 +3662,52 @@ CONTAINS
     !Local variables
     CHARACTER(LEN=ModNameLen+8),PARAMETER :: ThisProcedure = ModName // 'GetNames'
     
-    !Is this full model or model for inquiry
+    !Initialize
+    cNamesList = ''
+    iStat      = 0
+    
+    !If model for inquiry is defined
     IF (Model%lModel_ForInquiry_Defined) THEN
-        CALL SetLastMessage('Model is instantiated only partially. Feature names cannot be retrieved from a partially instantiated model.',f_iWarn,ThisProcedure)
-        cNamesList = ''
-        iStat      = -1
-        RETURN
-    ELSE
-        iStat = 0
-    END IF
-        
-    !Proceed based on location type
-    SELECT CASE (iLocationType)
-        CASE DEFAULT
-            cNamesList = ''
-            
-        CASE (f_iLocationType_Subregion)     
-            cNamesList = Model%AppGrid%AppSubregion%Name
-            
-        CASE (f_iLocationType_GWHeadObs)
-            CALL Model%AppGW%GetHydrographNames(f_iLocationType_GWHeadObs,cNamesList)
-            
-        CASE (f_iLocationType_SubsidenceObs)
-            CALL Model%AppGW%GetHydrographNames(f_iLocationType_SubsidenceObs,cNamesList)
-            
-        CASE (f_iLocationType_StrmReach , f_iLocationType_StrmHydObs , f_iLocationType_StrmNodeBud , f_iLocationType_Bypass) 
-            CALL Model%AppStream%GetNames(iLocationType,cNamesList)
-
-        CASE (f_iLocationType_Lake)
-            CALL Model%AppLake%GetNames(cNamesList)
-            
-        CASE (f_iLocationType_TileDrainObs)
-            CALL Model%AppGW%GetHydrographNames(f_iLocationType_TileDrainObs,cNamesList)
-            
-    END SELECT
+        !Proceed based on location type
+        SELECT CASE (iLocationType)
+            CASE (f_iLocationType_Subregion)     
+                cNamesList = Model%AppGrid%AppSubregion%Name
                 
+            CASE (f_iLocationType_GWHeadObs     , &
+                  f_iLocationType_SubsidenceObs , &
+                  f_iLocationType_TileDrainObs  , &
+                  f_iLocationType_StrmReach     , &
+                  f_iLocationType_StrmHydObs    , &
+                  f_iLocationType_StrmNodeBud   , &
+                  f_iLocationType_Bypass        , &
+                  f_iLocationType_Diversion     ) 
+                CALL Model%Model_ForInquiry%GetNames(iLocationType,cNamesList)
+        END SELECT
+   
+    !Otherwise
+    ELSE
+        !Proceed based on location type
+        SELECT CASE (iLocationType)
+            CASE (f_iLocationType_Subregion)     
+                cNamesList = Model%AppGrid%AppSubregion%Name
+                
+            CASE (f_iLocationType_GWHeadObs)
+                CALL Model%AppGW%GetNames(f_iLocationType_GWHeadObs,cNamesList)
+                
+            CASE (f_iLocationType_SubsidenceObs)
+                CALL Model%AppGW%GetNames(f_iLocationType_SubsidenceObs,cNamesList)
+                
+            CASE (f_iLocationType_StrmReach , f_iLocationType_StrmHydObs , f_iLocationType_StrmNodeBud , f_iLocationType_Bypass , f_iLocationType_Diversion) 
+                CALL Model%AppStream%GetNames(iLocationType,cNamesList)
+    
+            CASE (f_iLocationType_Lake)
+                CALL Model%AppLake%GetNames(cNamesList)
+                
+            CASE (f_iLocationType_TileDrainObs)
+                CALL Model%AppGW%GetNames(f_iLocationType_TileDrainObs,cNamesList)
+        END SELECT
+    END IF
+    
   END SUBROUTINE GetNames
   
   
@@ -3569,6 +3739,26 @@ CONTAINS
     END IF
     
   END SUBROUTINE GetGWHeads_ForALayer
+  
+  
+  ! -------------------------------------------------------------
+  ! --- GET INITIAL GW HEADS
+  ! -------------------------------------------------------------
+  SUBROUTINE GetGWHeadsIC(Model,rGWHeadsIC,iStat)
+    CLASS(ModelType)    :: Model
+    REAL(8),INTENT(OUT) :: rGWHeadsIC(:,:)
+    INTEGER,INTENT(OUT) :: iStat
+    
+    !Local variables
+    INTEGER :: iNodeIDs(Model%AppGrid%NNodes)
+    
+    !Retrieve node IDs
+    CALL Model%AppGrid%GetNodeIDs(iNodeIDs)
+    
+    !Retrieve initial gw heads
+    CALL Model%AppGW%GetGWHeadsIC(Model%cGWMainInputFileName,iNodeIDs,Model%Stratigraphy,rGWHeadsIC,iStat)
+    
+  END SUBROUTINE GetGWHeadsIC
   
   
   ! -------------------------------------------------------------
@@ -3909,6 +4099,9 @@ CONTAINS
     !Local variables
     CHARACTER(LEN=ModNameLen+20),PARAMETER :: ThisProcedure = ModName // 'GetAquiferParameters'
     
+    !Initialize
+    iStat = 0
+    
     !Is this full model or model for inquiry
     IF (Model%lModel_ForInquiry_Defined) THEN
         CALL SetLastMessage('Model is instantiated only partially. Aquifer parameters cannot be retrieved from a partially instantiated model.',f_iWarn,ThisProcedure)
@@ -3917,10 +4110,7 @@ CONTAINS
         AquitardKv = -999.9
         Sy         = -999.9
         Ss         = -999.9
-        iStat      = -1
         RETURN
-    ELSE
-        iStat = 0
     END IF
         
     CALL Model%AppGW%GetAquiferKh(Kh)
@@ -3930,6 +4120,97 @@ CONTAINS
     CALL Model%AppGW%GetAquiferSs(Model%AppGrid,Ss)
     
   END SUBROUTINE GetAquiferParameters
+  
+  
+  ! -------------------------------------------------------------
+  ! --- GET NUMBER OF PARAMETRIC GRIDS USED FOR GW 
+  ! -------------------------------------------------------------
+  SUBROUTINE GetGWNParametricGrids(Model,iNParamGrids,iStat)
+    CLASS(ModelType)    :: Model
+    INTEGER,INTENT(OUT) :: iNParamGrids,iStat
+    
+    !Retrieve number of gw parametric grids
+    CALL Model%AppGW%GetGWNParametricGrids(Model%cGWMainInputFileName,iNParamGrids,iStat)
+    
+  END SUBROUTINE GetGWNParametricGrids
+  
+  
+  ! -------------------------------------------------------------
+  ! --- GET NUMBER OF PARAMETRIC NODES FOR A PARAMETRIC GRID USED FOR GW 
+  ! -------------------------------------------------------------
+  SUBROUTINE GetGWNParametricNodes(Model,iParamGridID,iNParamGridNodes,iStat)
+    CLASS(ModelType)    :: Model
+    INTEGER,INTENT(IN)  :: iParamGridID
+    INTEGER,INTENT(OUT) :: iNParamGridNodes,iStat
+    
+    !Retrieve number of gw parametric nodes for the parametric grid
+    CALL Model%AppGW%GetGWNParametricNodes(Model%cGWMainInputFileName,iParamGridID,iNParamGridNodes,iStat)
+    
+  END SUBROUTINE GetGWNParametricNodes
+  
+  
+  ! -------------------------------------------------------------
+  ! --- GET NUMBER OF PARAMETRIC ELEMENTS FOR A PARAMETRIC GRID USED FOR GW 
+  ! -------------------------------------------------------------
+  SUBROUTINE GetGWNParametricElements(Model,iParamGridID,iNParamGridElements,iStat)
+    CLASS(ModelType)    :: Model
+    INTEGER,INTENT(IN)  :: iParamGridID
+    INTEGER,INTENT(OUT) :: iNParamGridElements,iStat
+    
+    !Retrieve number of gw parametric elements for the parametric grid
+    CALL Model%AppGW%GetGWNParametricElements(Model%cGWMainInputFileName,iParamGridID,iNParamGridElements,iStat)
+    
+  END SUBROUTINE GetGWNParametricElements
+  
+  
+  ! -------------------------------------------------------------
+  ! --- GET PARAMETRIC NODE COORDINATES FOR A PARAMETRIC GRID USED FOR GW 
+  ! -------------------------------------------------------------
+  SUBROUTINE GetGWParametricNodeXY(Model,iParamGridID,rX,rY,iStat)
+    CLASS(ModelType)    :: Model
+    INTEGER,INTENT(IN)  :: iParamGridID
+    REAL(8),INTENT(OUT) :: rX(:),rY(:)
+    INTEGER,INTENT(OUT) :: iStat
+    
+    !Local variables
+    INTEGER :: iNLayers
+    
+    !Number of aquifer layers
+    iNLayers = Model%Stratigraphy%GetNLayers()
+    
+    !Retrieve gw parametric node coordinates
+    CALL Model%AppGW%GetGWParametricNodeXY(Model%cGWMainInputFileName,iParamGridID,iNLayers,rX,rY,iStat)
+    
+  END SUBROUTINE GetGWParametricNodeXY
+  
+  
+  ! -------------------------------------------------------------
+  ! --- GET VERTICES OF A SPECIFIED PARAMETRIC ELEMENT FOR A PARAMETRIC GRID USED FOR GW 
+  ! -------------------------------------------------------------
+  SUBROUTINE GetGWParametricElementConfigData(Model,iParamGridID,iParamElemID,iVertices,iStat)
+    CLASS(ModelType)    :: Model
+    INTEGER,INTENT(IN)  :: iParamGridID,iParamElemID
+    INTEGER,INTENT(OUT) :: iVertices(4),iStat
+    
+    !Retrieve vertices of parameteric element
+    CALL Model%AppGW%GetGWParametricElementConfigData(Model%cGWMainInputFileName,iParamGridID,iParamElemID,iVertices,iStat)
+    
+  END SUBROUTINE GetGWParametricElementConfigData
+  
+  
+  ! -------------------------------------------------------------
+  ! --- GET PARAMETERIC AQUIFER PARAMETERS FOR A PARAMETRIC GRID  
+  ! -------------------------------------------------------------
+  SUBROUTINE GetGWParametricAquiferParameters(Model,iParamGridID,rKh,rAquiferKv,rAquitardKv,rSy,rSs,iStat)
+    CLASS(ModelType)    :: Model
+    INTEGER,INTENT(IN)  :: iParamGridID
+    REAL(8),INTENT(OUT) :: rKh(:,:),rAquiferKv(:,:),rAquitardKv(:,:),rSy(:,:),rSs(:,:)
+    INTEGER,INTENT(OUT) :: iStat
+    
+    !Retrieve aquifer parameters
+    CALL Model%AppGW%GetGWParametricAquiferParameters(Model%cGWMainInputFileName,iParamGridID,rKh,rAquiferKv,rAquitardKv,rSy,rSs,iStat)
+    
+  END SUBROUTINE GetGWParametricAquiferParameters
   
   
   ! -------------------------------------------------------------
@@ -3992,7 +4273,11 @@ CONTAINS
     CLASS(ModelType),INTENT(IN) :: Model
     INTEGER                     :: N
     
-    N = Model%AppGW%GetNWells()
+    IF (Model%lModel_ForInquiry_Defined) THEN
+        N = Model%Model_ForInquiry%GetNLocations(f_iLocationType_Well)
+    ELSE
+        N = Model%AppGW%GetNWells()
+    END IF
     
   END FUNCTION GetNWells
   
@@ -4004,23 +4289,89 @@ CONTAINS
     CLASS(ModelType),INTENT(IN) :: Model
     INTEGER,INTENT(OUT)         :: IDs(:)
     
-    CALL Model%AppGW%GetWellIDs(IDs)
+    !Local variables
+    INTEGER,ALLOCATABLE :: iWellIDs(:)
+    
+    IF (Model%lModel_ForInquiry_Defined) THEN
+        CALL Model%Model_ForInquiry%GetLocationIDs(0,f_iLocationType_Well,iWellIDs)
+        IDs = iWellIDs
+    ELSE
+        CALL Model%AppGW%GetWellIDs(IDs)
+    END IF
     
   END SUBROUTINE GetWellIDs
   
-  
+   
   ! -------------------------------------------------------------
-  ! --- GET WELL XY
+  ! --- GET WELL COORDINATES
   ! -------------------------------------------------------------
-  PURE SUBROUTINE GetWellXY(Model,X,Y)
+  PURE SUBROUTINE GetWellCoordinates(Model,rX,rY)
     CLASS(ModelType),INTENT(IN) :: Model
-    REAL(8),INTENT(OUT)         :: X(:), Y(:)
+    REAL(8),INTENT(OUT)         :: rX(:),rY(:)
     
-    CALL Model%AppGW%GetWellXY(X,Y)
+    IF (Model%lModel_ForInquiry_Defined) THEN
+        CALL Model%Model_ForInquiry%GetWellCoordinates(rX,rY)
+    ELSE
+        CALL Model%AppGW%GetWellCoordinates(rX,rY)
+    END IF
     
-  END SUBROUTINE GetWellXY
+  END SUBROUTINE GetWellCoordinates
   
    
+  ! -------------------------------------------------------------
+  ! --- GET ALL WELL PERFORATION TOP AND BOTTOM ELEVATIONS
+  ! -------------------------------------------------------------
+  PURE SUBROUTINE GetWellPerfTopBottom(Model,rTop,rBottom)
+    CLASS(ModelType),INTENT(IN) :: Model
+    REAL(8),INTENT(OUT)         :: rTop(:),rBottom(:)
+    
+    IF (Model%lModel_ForInquiry_Defined) THEN
+        CALL Model%Model_ForInquiry%GetWellPerfTopBottom(rTop,rBottom)
+    ELSE
+        CALL Model%AppGW%GetWellPerfTopBottom(rTop,rBottom)
+    END IF
+    
+  END SUBROUTINE GetWellPerfTopBottom
+  
+   
+  ! -------------------------------------------------------------
+  ! --- GET NUMBER OF ELEMENTS SERVED BY A WELL
+  ! -------------------------------------------------------------
+  FUNCTION GetWellNElems(Model,iWell) RESULT(iNElems)
+    CLASS(ModelType),INTENT(IN) :: Model
+    INTEGER,INTENT(IN)          :: iWell
+    INTEGER                     :: iNElems
+    
+    !Local variables
+    INTEGER,ALLOCATABLE :: iElems(:)
+    
+    IF (Model%lModel_ForInquiry_Defined) THEN
+ !       iNElems = Model%Model_ForInquiry%GetWellNElems(iWell)
+    ELSE
+        CALL Model%WellDestinationConnector%GetServedElemList(iWell,iElems)
+        iNElems = SIZE(iElems)
+    END IF
+    
+  END FUNCTION GetWellNElems
+
+
+  ! -------------------------------------------------------------
+  ! --- GET INDICES OF ELEMENTS SERVED BY A WELL
+  ! -------------------------------------------------------------
+  SUBROUTINE GetWellElems(Model,iWell,iElems)
+    CLASS(ModelType),INTENT(IN)     :: Model
+    INTEGER,INTENT(IN)              :: iWell
+    INTEGER,ALLOCATABLE,INTENT(OUT) :: iElems(:)
+    
+    IF (Model%lModel_ForInquiry_Defined) THEN
+ !       CALL Model%Model_ForInquiry%GetWellElems(iWell,iElems)
+    ELSE
+        CALL Model%WellDestinationConnector%GetServedElemList(iWell,iElems)
+    END IF
+    
+  END SUBROUTINE GetWellElems
+
+
   ! -------------------------------------------------------------
   ! --- GET NUMBER OF ELEMENT PUMPING 
   ! -------------------------------------------------------------
@@ -4028,7 +4379,11 @@ CONTAINS
     CLASS(ModelType),INTENT(IN) :: Model
     INTEGER                     :: N
     
-    N = Model%AppGW%GetNElemPumps() 
+    IF (Model%lModel_ForInquiry_Defined) THEN
+        N = Model%Model_ForInquiry%GetNLocations(f_iLocationType_ElemPump)
+    ELSE 
+        N = Model%AppGW%GetNElemPumps() 
+    END IF
     
   END FUNCTION GetNElemPumps
   
@@ -4040,7 +4395,15 @@ CONTAINS
     CLASS(ModelType),INTENT(IN) :: Model
     INTEGER,INTENT(OUT)         :: IDs(:)
     
-    CALL Model%AppGW%GetElemPumpIDs(IDs)
+    !Local variables
+    INTEGER,ALLOCATABLE :: iElemPumpIDs(:)
+    
+    IF (Model%lModel_ForInquiry_Defined) THEN
+        CALL Model%Model_ForInquiry%GetLocationIDs(0,f_iLocationType_ElemPump,iElemPumpIDs)
+        IDs = iElemPumpIDs
+    ELSE
+        CALL Model%AppGW%GetElemPumpIDs(IDs)
+    END IF
     
   END SUBROUTINE GetElemPumpIDs
   
@@ -4823,6 +5186,33 @@ CONTAINS
   
   
   ! -------------------------------------------------------------
+  ! --- GET STREAM SURFACE EVAPORATION FROM ALL STREAM NODES
+  ! -------------------------------------------------------------
+  SUBROUTINE GetStrmEvap(Model,rStrmEvap,iStat)
+    CLASS(ModelType),INTENT(IN) :: Model
+    REAL(8),INTENT(OUT)         :: rStrmEvap(:)
+    INTEGER,INTENT(OUT)         :: iStat
+    
+    !Local variables
+    CHARACTER(LEN=ModNameLen+11) :: ThisProcedure = ModName // 'GetStrmEvap'
+    
+    !Initialize
+    iStat = 0
+    
+    !Make sure it is not Model_ForInquiry
+    IF (Model%lModel_ForInquiry_Defined) THEN
+        CALL SetLastMessage('Stream surface evaporation cannot be retrieved from the model when it is instantiated for inquiry!',f_iWarn,ThisProcedure)
+        rStrmEvap = 0.0
+        iStat     = -1
+        RETURN
+    END IF
+    
+    CALL Model%AppStream%GetStrmEvap(rStrmEvap)
+    
+  END SUBROUTINE GetStrmEvap
+  
+  
+  ! -------------------------------------------------------------
   ! --- GET GAIN FROM GROUNDWATER AT ALL STREAM NODES
   ! -------------------------------------------------------------
   SUBROUTINE GetStrmGainFromGW(Model,rGainFromGW,iStat)
@@ -4940,6 +5330,35 @@ CONTAINS
     CALL Model%AppStream%GetStrmBypassInflows(rBPINflows)
 
   END SUBROUTINE GetStrmBypassInflows
+  
+  
+  ! -------------------------------------------------------------
+  ! --- GET REQUIRED DIVERSIONS AT SOME DIVERSIONS
+  ! -------------------------------------------------------------
+  SUBROUTINE GetStrmRequiredDiversions_AtSomeDiversions(Model,iDivs,rDivs,iStat)
+    CLASS(ModelType),INTENT(IN) :: Model
+    INTEGER,INTENT(IN)          :: iDivs(:)
+    REAL(8),INTENT(OUT)         :: rDivs(:)
+    INTEGER,INTENT(OUT)         :: iStat
+    
+    !Local variables
+    CHARACTER(LEN=ModNameLen+42),PARAMETER :: ThisProcedure = ModName // 'GetStrmRequiredDiversions_AtSomeDiversions'
+    
+    !Initialize
+    iStat = 0
+    
+    !Make sure it is not Model_ForInquiry
+    IF (Model%lModel_ForInquiry_Defined) THEN
+        CALL SetLastMessage('Required diversions cannot be retrieved from the model when it is instantiated for inquiry!',f_iWarn,ThisProcedure)
+        rDivs = 0.0
+        iStat = -1
+        RETURN
+    END IF
+
+    !Retrieve info
+    CALL Model%AppStream%GetRequiredDiversions_AtSomeDiversions(iDivs,rDivs,iStat)
+
+  END SUBROUTINE GetStrmRequiredDiversions_AtSomeDiversions
   
   
   ! -------------------------------------------------------------
@@ -5109,6 +5528,26 @@ CONTAINS
   
   
   ! -------------------------------------------------------------
+  ! --- GET RECAHRGE ZONE FOR A STREAM DIVERSION
+  ! -------------------------------------------------------------
+  SUBROUTINE GetStrmDiversionRechargeZone(Model,iDiv,iElems,rFracs,iStat)
+    CLASS(ModelType),INTENT(IN)     :: Model
+    INTEGER,INTENT(IN)              :: iDiv
+    INTEGER,ALLOCATABLE,INTENT(OUT) :: iElems(:)
+    REAL(8),ALLOCATABLE,INTENT(OUT) :: rFracs(:)
+    INTEGER,INTENT(OUT)             :: iStat
+    
+    !Local variables
+    INTEGER :: iElemIDs(Model%AppGrid%GetNElements())
+    
+    CALL Model%AppGrid%GetElementIDs(iElemIDs)
+    
+    CALL Model%AppStream%GetDiversionRechargeZone(Model%cStrmSimMainInputFileName,Model%cSIMWorkingDirectory,iElemIDs,iDiv,iElems,rFracs,iStat)
+    
+  END SUBROUTINE GetStrmDiversionRechargeZone
+  
+    
+  ! -------------------------------------------------------------
   ! --- GET STREAM RATING TABLE
   ! -------------------------------------------------------------
   SUBROUTINE GetStrmRatingTable(Model,iStrmNode,NPoints,Stage,Flow)
@@ -5150,6 +5589,26 @@ CONTAINS
     Head = Model%AppStream%GetHead_AtOneNode(iStrmNode,lPrevious)
     
   END FUNCTION GetStrmHead_AtOneNode
+  
+  
+  ! -------------------------------------------------------------
+  ! --- RETRIEVE WSA AT EACH STREAM NODE
+  ! -------------------------------------------------------------
+  SUBROUTINE GetStrmWSAs(Model,rWSAs,iStat)
+    CLASS(ModelType)    :: Model
+    REAL(8),INTENT(OUT) :: rWSAs(:)
+    INTEGER,INTENT(OUT) :: iStat
+    
+    !Local variables
+    INTEGER :: iNodes(SIZE(rWSAs)),indx
+    
+    !Initialize
+    iStat  = 0
+    iNodes = [(indx,indx=1,SIZE(iNodes))]
+    
+    CALL Model%AppStream%GetWSAs_AtSomeNodes(iNodes,rWSAs)
+    
+  END SUBROUTINE GetStrmWSAs
   
   
   ! -------------------------------------------------------------
@@ -5704,6 +6163,42 @@ CONTAINS
   END SUBROUTINE GetFutureWaterDemand_ForDiversion
        
   
+  ! -------------------------------------------------------------
+  ! --- GET AREAS OF A SPECIFIED LAND USE FOR ALL ELEMENTS FOR A RANGE OF TIME
+  ! --- Note: This method is intended to be called outside of a Simulation run
+  ! -------------------------------------------------------------
+  SUBROUTINE GetLandUseAreasForTimePeriod(Model,cBeginDate,cEndDate,iLUType,iLU,rFactArea,rLUAreas,iStat)
+    CLASS(ModelType),INTENT(IN)     :: Model
+    CHARACTER(LEN=*),INTENT(IN)     :: cBeginDate,cEndDate
+    INTEGER,INTENT(IN)              :: iLUType,iLU
+    REAL(8),INTENT(IN)              :: rFactArea
+    REAL(8),ALLOCATABLE,INTENT(OUT) :: rLUAreas(:,:)  !For each (element,time)
+    INTEGER,INTENT(OUT)             :: iStat
+    
+    !Local variables
+    INTEGER :: iNPeriods
+    
+    !Calculate number of timesteps between BeginDate and EndDate
+    iNPeriods = NPeriods(Model%TimeStep%DELTAT_InMinutes,cBeginDate,cEndDate) + 1
+    
+    !Allocate memory for return array
+    ALLOCATE (rLUAreas(Model%AppGrid%GetNElements(),iNPeriods))
+    
+    CALL Model%RootZone%GetLandUseAreasForTimePeriod(Model%cRootZoneMainInputFileName , &
+                                                     Model%cSIMWorkingDirectory       , &
+                                                     cBeginDate                       , &
+                                                     cEndDate                         , &
+                                                     Model%TimeStep                   , &
+                                                     Model%AppGrid                    , &
+                                                     iLUType                          , &
+                                                     iLU                              , &
+                                                     rLUAreas                         , &
+                                                     iStat                            )
+    rLUAreas = rLUAreas * rFactArea
+    
+  END SUBROUTINE GetLandUseAreasForTimePeriod
+  
+  
   
   
 ! ******************************************************************
@@ -5758,9 +6253,10 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- SET GW BOUNDARY CONDITION NODES
   ! -------------------------------------------------------------
-  SUBROUTINE SetGWBCNodes(Model,iNodes,iLayers,iBCType,iStat,iTSCols,iTSColsMaxBCFlow,rConductances,rConstrainingBCHeads)
+  SUBROUTINE SetGWBCNodes(Model,iNodes,iLayers,iBCType,lUpdateGWZBudget,iStat,iTSCols,iTSColsMaxBCFlow,rConductances,rConstrainingBCHeads)
     CLASS(ModelType)            :: Model
     INTEGER,INTENT(IN)          :: iNodes(:),iLayers(:),iBCType
+    LOGICAL,INTENT(IN)          :: lUpdateGWZBudget     !Flag to update the GWZBudget output file; if RemoveGWBCNodes and SetGWBCNodes are called multiple times, we don't want to update the ZGWZBudget everytime
     INTEGER,INTENT(OUT)         :: iStat
     INTEGER,OPTIONAL,INTENT(IN) :: iTSCols(:),iTSColsMaxBCFlow(:)
     REAL(8),OPTIONAL,INTENT(IN) :: rConductances(:),rConstrainingBCHeads(:)
@@ -5774,24 +6270,26 @@ CONTAINS
     IF (iStat .EQ. -1) RETURN
     
     !Update GWZBudget if necessary
-    IF (Model%GWZBudget%IsOutFileDefined()) THEN
-        CALL Model%GWZBudget%GetOutFileName(cOutFileName)
-        lDeepPerc_Defined = Model%lRootZone_Defined .OR. Model%lAppUnsatZone_Defined
-        CALL Model%GWZBudget%Kill()
-        CALL Model%GWZBudget%New(.FALSE.                             , &
-                                 cOutFileName                        , &
-                                 Model%AppGrid                       , &
-                                 Model%Stratigraphy                  , &
-                                 Model%AppGW                         , &
-                                 Model%AppStream                     , &
-                                 Model%AppLake                       , &
-                                 Model%AppSWShed                     , &
-                                 Model%StrmGWConnector               , &
-                                 Model%TimeStep                      , &
-                                 Model%NTIME                         , &
-                                 lDeepPerc_Defined                   , &
-                                 Model%lRootZone_Defined             , &
-                                 iStat                               )
+    IF (lUpdateGWZBudget) THEN
+        IF (Model%GWZBudget%IsOutFileDefined()) THEN
+            CALL Model%GWZBudget%GetOutFileName(cOutFileName)
+            lDeepPerc_Defined = Model%lRootZone_Defined .OR. Model%lAppUnsatZone_Defined
+            CALL Model%GWZBudget%Kill()
+            CALL Model%GWZBudget%New(.FALSE.                             , &
+                                     cOutFileName                        , &
+                                     Model%AppGrid                       , &
+                                     Model%Stratigraphy                  , &
+                                     Model%AppGW                         , &
+                                     Model%AppStream                     , &
+                                     Model%AppLake                       , &
+                                     Model%AppSWShed                     , &
+                                     Model%StrmGWConnector               , &
+                                     Model%TimeStep                      , &
+                                     Model%NTIME                         , &
+                                     lDeepPerc_Defined                   , &
+                                     Model%lRootZone_Defined             , &
+                                     iStat                               )
+        END IF
     END IF
     
   END SUBROUTINE SetGWBCNodes
@@ -5800,13 +6298,13 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- SET GW BOUNDARY CONDITION
   ! -------------------------------------------------------------
-  SUBROUTINE SetGWBC(Model,iNode,iLayer,iBCType,iStat,rFlow,rHead,rMaxBCFlow)
+  SUBROUTINE SetGWBC(Model,iNode,iLayer,iBCType,iStat,rFlow,rHead,rMaxBCFlow,rConductance,rConstrainingHeadBC)
     CLASS(ModelType)            :: Model
     INTEGER,INTENT(IN)          :: iNode,iLayer,iBCType
     INTEGER,INTENT(OUT)         :: iStat
-    REAL(8),OPTIONAL,INTENT(IN) :: rFlow,rHead,rMaxBCFlow
+    REAL(8),OPTIONAL,INTENT(IN) :: rFlow,rHead,rMaxBCFlow,rConductance,rConstrainingHeadBC
     
-    CALL Model%AppGW%SetBC(iNode,iLayer,iBCType,iStat,rFlow,rHead,rMaxBCFlow) 
+    CALL Model%AppGW%SetBC(iNode,iLayer,iBCType,Model%AppGrid%AppNode%ID,iStat,rFlow,rHead,rMaxBCFlow,rConductance,rConstrainingHeadBC) 
     
   END SUBROUTINE SetGWBC
   
@@ -5868,35 +6366,23 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- READ IN PRE-PROCESSOR MAIN CONTROL DATA
   ! -------------------------------------------------------------
-  SUBROUTINE PP_ReadMainControlData(cFileName,cWorkingDirectory,ProjectTitles,ProjectFileNames,KOUT,KDEB,FACTLTOU,UNITLTOU,FACTAROU,UNITAROU,iStat)
-    CHARACTER(LEN=*),INTENT(IN)  :: cFileName,cWorkingDirectory
+  SUBROUTINE PP_ReadMainControlData(cPPFileName,cWorkingDirectory,ProjectTitles,ProjectFileNames,KOUT,KDEB,FACTLTOU,UNITLTOU,FACTAROU,UNITAROU,iStat)
+    CHARACTER(LEN=*),INTENT(IN)  :: cPPFileName,cWorkingDirectory
     CHARACTER(LEN=*),INTENT(OUT) :: ProjectTitles(:),ProjectFileNames(:),UNITLTOU,UNITAROU
     INTEGER,INTENT(OUT)          :: KOUT,KDEB,iStat
     REAL(8),INTENT(OUT)          :: FACTLTOU,FACTAROU
 
     !Local variables
     INTEGER                  :: indx
-    CHARACTER(LEN=500)       :: cMainFileName,ALine
+    CHARACTER(LEN=500)       :: ALine
     CHARACTER(:),ALLOCATABLE :: cAbsPathFileName
     TYPE(GenericFileType)    :: MainControlFile
     
     !Initialize
     iStat = 0
     
-    !Prompt user for the name of the main input file
-    IF (cFileName .NE. '') THEN
-        cMainFileName = cFileName
-    ELSE
-        CALL Print_screen('Program: Pre-Processor',IWFM_Core)
-        CALL Get_Main_File(' Enter the Name of the Main Input File >  ',cMainFileName)
-        IF (TRIM(cMainFileName) .EQ. '-about') THEN
-           CALL PrintVersionNumbers()
-           STOP
-        END IF
-    END IF
-    
     !Initialize main control file
-    CALL MainControlFile%New(FileName=cMainFileName,InputFile=.TRUE.,Descriptor='Pre-processor main control input',FileType='TXT',iStat=iStat)
+    CALL MainControlFile%New(FileName=cPPFileName,InputFile=.TRUE.,Descriptor='Pre-processor main control input',FileType='TXT',iStat=iStat)
     IF (iStat .EQ. -1) RETURN
 
     !Read in the project title
@@ -5937,43 +6423,26 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- READ IN SIMULATION MAIN CONTROL DATA
   ! -------------------------------------------------------------
-  SUBROUTINE SIM_ReadMainControlData(Model,cFileName,ProjectTitles,ProjectFileNames,MSOLVE,MXITERSP,RELAX,STOPCSP,iAdjustFlag,CACHE,iRestartModel,iStat,cOptionalCommandArg)
+  SUBROUTINE SIM_ReadMainControlData(Model,cSimFileName,ProjectTitles,ProjectFileNames,MSOLVE,MXITERSP,RELAX,STOPCSP,iAdjustFlag,CACHE,iRestartModel,iStat)
     CLASS(ModelType)                      :: Model
-    CHARACTER(LEN=*),INTENT(IN)           :: cFileName
+    CHARACTER(LEN=*),INTENT(IN)           :: cSimFileName
     CHARACTER(LEN=*),INTENT(OUT)          :: ProjectTitles(:),ProjectFileNames(:)
     INTEGER,INTENT(OUT)                   :: CACHE,MSOLVE,MXITERSP,iAdjustFlag,iRestartModel
     REAL(8),INTENT(OUT)                   :: RELAX,STOPCSP
     INTEGER,INTENT(OUT)                   :: iStat
-    CHARACTER(LEN=*),OPTIONAL,INTENT(OUT) :: cOptionalCommandArg
     
     !Local variables
     CHARACTER(LEN=ModNameLen+23),PARAMETER :: ThisProcedure = ModName // 'SIM_ReadMainControlData'
     INTEGER                                :: indx
-    CHARACTER                              :: cMainFileName*500,ALine*1000
+    CHARACTER                              :: ALine*1000
     CHARACTER(:),ALLOCATABLE               :: cAbsPathFileName
     TYPE(GenericFileType)                  :: MainControlFile
     
     !Initialize
     iStat = 0
 
-    !Prompt user for the name of the main input file
-    IF (cFileName .NE. '') THEN
-        cMainFileName = cFileName
-    ELSE
-        CALL Print_screen('Program: Simulation',IWFM_Core)
-        IF (PRESENT(cOptionalCommandArg)) THEN
-            CALL Get_Main_File(' Enter the Name of the Main Input File >  ',cMainFileName,cOptionalCommandArg)
-        ELSE
-            CALL Get_Main_File(' Enter the Name of the Main Input File >  ',cMainFileName)
-        END IF            
-        IF (TRIM(cMainFileName) .EQ. '-about') THEN
-            CALL Model%PrintVersionNumbers()
-            STOP
-        END IF
-    END IF
-
     !Open main control file
-    CALL MainControlFile%New(FileName=cMainFileName,InputFile=.TRUE.,Descriptor='Simulation main control input',FileType='TXT',iStat=iStat)
+    CALL MainControlFile%New(FileName=cSimFileName,InputFile=.TRUE.,Descriptor='Simulation main control input',FileType='TXT',iStat=iStat)
     IF (iStat .EQ. -1) RETURN
   
     !Read in the project title
@@ -6003,7 +6472,7 @@ CONTAINS
         iStat = -1
         RETURN
     END IF
-
+    
     !Read in data related to model simulation period and time tracking options
     !Simulation begin date and time
     CALL MainControlFile%ReadData(ALine,iStat)  ;  IF (iStat .EQ. -1) RETURN 
@@ -6011,9 +6480,9 @@ CONTAINS
     ALine = ADJUSTL(ALine)
     ALine = ALine(1:f_iTimeStampLength)
     IF (IsTimeStampValid(ALine)) THEN
-      Model%TimeStep%CurrentDateAndTime = StripTimeStamp(ALine)
-      CALL TimeStampToJulianDateAndMinutes(Model%TimeStep%CurrentDateAndTime,Model%JulianDate,Model%MinutesAfterMidnight)
-      Model%TimeStep%TrackTime          = .TRUE.
+        Model%TimeStep%CurrentDateAndTime = StripTimeStamp(ALine)
+        CALL TimeStampToJulianDateAndMinutes(Model%TimeStep%CurrentDateAndTime,Model%JulianDate,Model%MinutesAfterMidnight)
+        Model%TimeStep%TrackTime          = .TRUE.
     END IF
     
     !Is the model being restarted?
@@ -6025,6 +6494,7 @@ CONTAINS
       CASE (.TRUE.)
         !Get UNITT
         CALL MainControlFile%ReadData(ALine,iStat)  ;  IF (iStat .EQ. -1) RETURN
+        CALL CleanSpecialCharacters(ALine)
         Model%TimeStep%Unit = UpperCase(ADJUSTL(StripTextUntilCharacter(ALine,'/')))
         !Based on UNITT, compute DELTAT in terms of minutes
         CALL DELTAT_To_Minutes(Model%TimeStep,iStat)
@@ -6275,6 +6745,9 @@ CONTAINS
     !Initialize
     iStat = 0
     
+    !Print ANN input variables
+    CALL Model%WSA%PrintResults(Model%lEndOfSimulation,Model%TimeStep,Model%AppStream)
+    
     !Print restart file, if asked for
     IF (Model%iRestartOption .EQ. iRestart) THEN
         CALL PrintRestartData(Model,iStat)
@@ -6283,8 +6756,8 @@ CONTAINS
 
     !Get data from root zone to pass it to other components 
     IF (Model%lRootZone_Defined) THEN
-      Model%QPERC = Model%RootZone%GetPercAll(Model%AppGrid)
-      CALL Model%RootZone%GetActualRiparianET_AtStrmNodes(Model%QRVET)
+        CALL Model%RootZone%GetElementPerc(Model%AppGrid%AppElement%Subregion,Model%QPERC)
+        CALL Model%RootZone%GetActualRiparianET_AtStrmNodes(Model%QRVET)
     END IF
   
     !Print out GW Z-Budget data and related results (this must be done first because face flows are also calculated here)
@@ -6386,7 +6859,7 @@ CONTAINS
   
     !Write data to binary file
     CALL EchoProgress('Writing the binary data...')
-
+    
     !Grid data
     CALL Model%AppGrid%WritePreProcessedData(BinaryOutputFile)
     
@@ -6566,26 +7039,14 @@ CONTAINS
   SUBROUTINE PrintVersionNumbers()
   
     !Local variables
-    TYPE(ModelType)         :: Model
-    TYPE(AppSubsidenceType) :: DummySubs
-  
-    MessageArray(1)  = NEW_LINE('x')//'VERSION NUMBERS FOR IWFM AND ITS COMPONENTS:'//NEW_LINE('x')
-    MessageArray(2)  = '  IWFM Core                      : '//TRIM(IWFM_Core%GetVersion())
-    MessageArray(3)  = '  IWFM_Util.lib                  : '//TRIM(IWFM_Util%GetVersion())
-    MessageArray(4)  = '  Package_Misc.lib               : '//TRIM(Package_Misc_GetVersion())
-    MessageArray(5)  = '  Package_Discretization.lib     : '//TRIM(Package_Discretization_GetVersion())
-    MessageArray(6)  = '  Package_ComponentConnectors.lib: '//TRIM(Package_ComponentConnectors_GetVersion())
-    MessageArray(7)  = '  Package_Budget.lib             : '//TRIM(Package_Budget_GetVersion())
-    MessageArray(8)  = '  Package_ZBudget.lib            : '//TRIM(Package_ZBudget_GetVersion())
-    MessageArray(9)  = '  Package_Matrix.lib             : '//TRIM(Model%Matrix%GetVersion())
-    MessageArray(10) = '  Package_PrecipitationET.lib    : '//TRIM(Package_PrecipitationET_GetVersion())
-    MessageArray(11) = '  Package_AppStream.lib          : '//TRIM(Model%AppStream%GetVersion())
-    MessageArray(12) = '  Package_AppLake.lib            : '//TRIM(Model%AppLake%GetVersion())
-    MessageArray(13) = '  Package_UnsatZone.lib          : '//TRIM(Package_UnsatZone_GetVersion())
-    MessageArray(14) = '  Package_RootZone.lib           : '//TRIM(Model%RootZone%GetVersion())
-    MessageArray(15) = '  Package_AppSubsidence.lib      : '//TRIM(DummySubs%GetVersion())
+    CHARACTER(:),ALLOCATABLE :: cVersionNumbers
     
-    CALL LogMessage(MessageArray(1:15),f_iMessage,'',Destination=f_iSCREEN)
+    CALL GetVersion(cVersionNumbers)
+  
+    MessageArray(1) = f_cLineFeed // 'VERSION NUMBERS FOR IWFM AND ITS COMPONENTS:' // f_cLineFeed
+    MessageArray(2) = cVersionNumbers
+    
+    CALL LogMessage(MessageArray(1:2),f_iMessage,'',iDestination=f_iSCREEN)
 
   END SUBROUTINE PrintVersionNumbers
   
@@ -6666,6 +7127,10 @@ CONTAINS
     !Initialize
     iStat    = 0
     TimeStep = Model%TimeStep
+    
+    !Read  WSA-related time series variables
+    CALL Model%WSA%ReadTSData(Model%TimeStep,iStat)
+    IF (iStat .NE. 0) RETURN
     
     !Rainfall data
     CALL Model%PrecipData%ReadTSData(TimeStep,.TRUE.,iStat)   
@@ -7066,14 +7531,26 @@ CONTAINS
     INTEGER,INTENT(OUT) :: iStat
     
     !Local variables
-    INTEGER :: ITERX,NStrmNodes,NLakes,ITERX_BT
-    LOGICAL :: lEndIteration,lBackTrack
-    REAL(8) :: AgDemand(Model%RootZone%GetNDemandLocations()),UrbDemand(Model%RootZone%GetNDemandLocations()),RHSL2_BT
+    INTEGER                  :: ITERX,NStrmNodes,NLakes,ITERX_BT,iWSAStrmNodes(Model%WSA%GetNWSA())
+    LOGICAL                  :: lEndIteration,lBackTrack
+    REAL(8)                  :: AgDemand(Model%RootZone%GetNDemandLocations()),UrbDemand(Model%RootZone%GetNDemandLocations()),RHSL2_BT, &
+                                rWSAStrmFlows(Model%WSA%GetNWSA()),rStrmWSAs(Model%AppStream%GetNStrmNodes()),rElemPerc(Model%AppGrid%NElements)
+    INTEGER,SAVE,ALLOCATABLE :: iStrmNodeIDs(:),iLakeIDs(:),iGWNodeIDs(:)
     
     !Initialize
     iStat      = 0
     NStrmNodes = Model%AppStream%GetNStrmNodes()
     NLakes     = Model%AppLake%GetNLakes()
+    
+    !Retreive stream node, lake and gw node IDs
+    IF (.NOT. ALLOCATED(iStrmNodeIDs)) THEN
+        ALLOCATE (iStrmNodeIDs(NStrmNodes)              , &
+                  iLakeIDs(NLakes)                      , &
+                  iGWNodeIDs(Model%AppGrid%GetNNodes()) )
+        CALL Model%AppStream%GetStrmNodeIDs(iStrmNodeIDs)
+        CALL Model%AppLake%GetLakeIDs(iLakeIDs)
+        CALL Model%AppGrid%GetNodeIDs(iGWNodeIDs)
+    END IF
     
     !Compute depth to gw if needed
     IF (Model%lAppUnsatZone_Defined  .OR.  Model%lRootZone_Defined)   &
@@ -7111,6 +7588,9 @@ CONTAINS
             CALL LogMessage(MessageArray(1),f_iMessage,'',Destination=f_iFILE)
         END IF
 
+        !Zero out WSAs
+        CALL Model%WSA%ZeroOut()
+
         !Start the Newton-Raphson iterative solution of the physical system
         ITERX_BT   = 0
         ITERX      = 0
@@ -7131,18 +7611,14 @@ CONTAINS
 ! ***** SIMULATE STREAMS AND UPDATE MATRIX COEFF AND RHS ACCORDINGLY
             CALL Model%RootZone%GetFlowsToStreams(Model%AppGrid , Model%QROFF , Model%QRTRN , Model%QRPONDDRAIN , Model%QRVET)
             CALL Model%AppGW%GetTileDrainFlowsToStreams(Model%QTDRAIN)
-            CALL Model%AppStream%Simulate(Model%GWHeads           , &
-                                          Model%QROFF             , &
-                                          Model%QRTRN             , &
-                                          Model%QRPONDDRAIN       , &
-                                          Model%QTRIB             , &
-                                          Model%QTDRAIN           , &
-                                          Model%QRVET             , &
-                                          Model%ETData            , &
-                                          Model%QRVETFRAC         , &
-                                          Model%StrmGWConnector   , &
-                                          Model%StrmLakeConnector , &
-                                          Model%Matrix            )
+            IF (Model%WSA%IsHistoricalRun()) THEN
+                CALL Model%WSA%GetStrmNodes(iWSAStrmNodes)
+                CALL Model%WSA%GetSpecifiedStrmFlows(rWSAStrmFlows)
+                CALL Model%AppStream%Simulate(Model%GWHeads,Model%QROFF,Model%QRTRN,Model%QRPONDDRAIN,Model%QTRIB,Model%QTDRAIN,Model%QRVET,Model%ETData,Model%QRVETFRAC,Model%StrmGWConnector,Model%StrmLakeConnector,Model%Matrix,iStrmFlowNodes=iWSAStrmNodes,rStrmFlows=rWSAStrmFlows)
+            ELSE
+                CALL Model%WSA%GetWSAs_AtAllNodes(rStrmWSAs)
+                CALL Model%AppStream%Simulate(Model%GWHeads,Model%QROFF,Model%QRTRN,Model%QRPONDDRAIN,Model%QTRIB,Model%QTDRAIN,Model%QRVET,Model%ETData,Model%QRVETFRAC,Model%StrmGWConnector,Model%StrmLakeConnector,Model%Matrix,rWSA=rStrmWSAs)
+            END IF
                      
             IF (Model%lRootZone_Defined) THEN      
 ! ***** COMPUTE THE ACTUAL WATER SUPPLY TO AGRICULTURAL AND URBAN LANDS
@@ -7155,12 +7631,13 @@ CONTAINS
             END IF
             
 ! ***** SIMULATE UNSATURATED ZONE AND COMPUTE NET DEEP PERC
+            CALL Model%RootZone%GetElementPerc(Model%AppGrid%AppElement%Subregion,rElemPerc)
             IF (Model%lAppUnsatZone_Defined) THEN
-                CALL Model%AppUnsatZone%Simulate(Model%RootZone%GetPercAll(Model%AppGrid),Model%DepthToGW,Model%AppGrid,iStat)
+                CALL Model%AppUnsatZone%Simulate(rElemPerc,Model%DepthToGW,Model%AppGrid,iStat)
                 IF (iStat .EQ. -1) RETURN
                 Model%QDEEPPERC = Model%AppUnsatZone%GetDeepPerc(Model%AppGrid%NElements)
             ELSE
-                IF (Model%lRootZone_Defined) Model%QDEEPPERC = Model%RootZone%GetPercAll(Model%AppGrid)
+                IF (Model%lRootZone_Defined) Model%QDEEPPERC = rElemPerc
             END IF
 
 ! ***** SIMULATE APPLICATION LAKES AND UPDATE MATRIX COEFF AND RHS ACCORDINGLY
@@ -7182,7 +7659,7 @@ CONTAINS
             !Element level recoverable losses
             IF (NStrmNodes .GT. 0) Model%QERELS = Model%AppStream%GetElemRecvLosses(Model%AppGrid%NElements,f_iAllRecvLoss)
             !Element level gw inflow into root zone
-            IF (Model%lRootZone_Defined) Model%GWToRZFlows = Model%RootZone%GetElemGWInflows(Model%AppGrid%NElements)
+            IF (Model%lRootZone_Defined) Model%GWToRZFlows = Model%RootZone%GetElementGWInflows(Model%AppGrid%NElements)
             !Element level net source to top active aquifer layer
             Model%NetElemSource = Model%QERELS + Model%QDEEPPERC - Model%GWToRZFlows
             CALL Model%AppGW%Simulate(Model%AppGrid                             , &
@@ -7191,6 +7668,22 @@ CONTAINS
                                       Model%Matrix                              )
             
 
+! ***** CALCULATE WSAs
+            CALL Model%WSA%Calculate(Model%QROFF           , &
+                                     Model%QRTRN           , &
+                                     Model%QRPONDDRAIN     , &
+                                     Model%QTRIB           , &
+                                     Model%QERELS          , &
+                                     Model%QDEEPPERC       , &
+                                     Model%TimeStep        , &
+                                     Model%AppGrid         , &
+                                     Model%RootZone        , &
+                                     Model%AppStream       , &
+                                     Model%AppGW           , &
+                                     Model%StrmGWConnector , &
+                                     iStat                 )
+            IF (iStat .NE. 0) RETURN
+      
 ! ***** BACTRACKING IF NECESSARY
             !IF (ITERX .GT. 15) THEN
             !    CALL BackTrack(ITERX,ITERX_BT,RHSL2_BT,Model%AppStream,Model%AppLake,Model%AppGW,Model%Matrix,lBackTrack)
@@ -7199,7 +7692,7 @@ CONTAINS
                      
 ! ***** SOLVE THE SET OF EQUATION
             CALL EchoProgress('Solving set of equations')
-            CALL Model%Matrix%Solve(ITERX,iStat)
+            CALL Model%Matrix%Solve(ITERX,iStrmNodeIDs,iLakeIDs,iGWNodeIDs,iStat)
             IF (iStat .EQ. -1) RETURN
 
 ! ***** CHECK CONVERGENCE OF ITERATIVE SOLUTION METHODS
@@ -7584,9 +8077,10 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- REMOVE ALL GW BOUNDARY CONDITIONS AT A NODE, LAYER
   ! -------------------------------------------------------------
-  SUBROUTINE RemoveGWBC(Model,iNodes,iLayers,iStat)
+  SUBROUTINE RemoveGWBC(Model,iNodes,iLayers,lUpdateGWZBudget,iStat)
     CLASS(ModelType)    :: Model
     INTEGER,INTENT(IN)  :: iNodes(:),iLayers(:)
+    LOGICAL,INTENT(IN)  :: lUpdateGWZBudget
     INTEGER,INTENT(OUT) :: iStat
     
     !Localk variables
@@ -7597,26 +8091,27 @@ CONTAINS
     IF (iStat .EQ. -1) RETURN
     
     !Update GWZBudget if necessary
-    IF (Model%GWZBudget%IsOutFileDefined()) THEN
-        CALL Model%GWZBudget%GetOutFileName(cOutFileName)
-        lDeepPerc_Defined = Model%lRootZone_Defined .OR. Model%lAppUnsatZone_Defined
-        CALL Model%GWZBudget%Kill()
-        CALL Model%GWZBudget%New(.FALSE.                             , &
-                                 cOutFileName                        , &
-                                 Model%AppGrid                       , &
-                                 Model%Stratigraphy                  , &
-                                 Model%AppGW                         , &
-                                 Model%AppStream                     , &
-                                 Model%AppLake                       , &
-                                 Model%AppSWShed                     , &
-                                 Model%StrmGWConnector               , &
-                                 Model%TimeStep                      , &
-                                 Model%NTIME                         , &
-                                 lDeepPerc_Defined                   , &
-                                 Model%lRootZone_Defined             , &
-                                 iStat                               )
+    IF (lUpdateGWZBudget) THEN
+        IF (Model%GWZBudget%IsOutFileDefined()) THEN
+            CALL Model%GWZBudget%GetOutFileName(cOutFileName)
+            lDeepPerc_Defined = Model%lRootZone_Defined .OR. Model%lAppUnsatZone_Defined
+            CALL Model%GWZBudget%Kill()
+            CALL Model%GWZBudget%New(.FALSE.                             , &
+                                     cOutFileName                        , &
+                                     Model%AppGrid                       , &
+                                     Model%Stratigraphy                  , &
+                                     Model%AppGW                         , &
+                                     Model%AppStream                     , &
+                                     Model%AppLake                       , &
+                                     Model%AppSWShed                     , &
+                                     Model%StrmGWConnector               , &
+                                     Model%TimeStep                      , &
+                                     Model%NTIME                         , &
+                                     lDeepPerc_Defined                   , &
+                                     Model%lRootZone_Defined             , &
+                                     iStat                               )
+        END IF
     END IF
-    
   END SUBROUTINE RemoveGWBC
   
   
@@ -7742,5 +8237,36 @@ CONTAINS
     END IF
     
   END SUBROUTINE ComputeFutureWaterDemands
+    
+    
+  ! -------------------------------------------------------------
+  ! --- CHECK ENGINE VERSION NUMBER STORED IN PreProcessor BIN FILE AND THE SIMULATION
+  ! -------------------------------------------------------------
+  FUNCTION CheckEngineVersion(PPBinFile) RESULT(iStat)
+    TYPE(GenericFileType) :: PPBinFile
+    INTEGER               :: iStat
+    
+    !Local variables
+    CHARACTER(LEN=ModNameLen+18) :: ThisProcedure = ModName // 'CheckEngineVersion'
+    INTEGER                      :: iLen
+    CHARACTER(:),ALLOCATABLE     :: cVersionRead,cVersionCurrent
+    
+    !Initialize
+    iStat = 0
+    
+    !Compare versions
+    CALL PPBinFile%ReadData(iLen,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    ALLOCATE (CHARACTER(LEN=iLen) :: cVersionRead)
+    CALL PPBinFile%ReadData(cVersionRead,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    CALL GetVersion(cVersionCurrent)
+    IF (cVersionCurrent .NE. cVersionRead) THEN
+        MessageArray(1) = 'Engine version numbers from Preprocessor and Simulation (or IWFM DLL) do not match!'
+        MessageArray(2) = 'Make sure that Preprocessor and Simulation executables (or IWFM DLL) are from the same'
+        MessageArray(3) = 'IWFM engine distribution to avoid any errors in reading the Preprocessor binary file.'
+        CALL SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+        iStat = -1
+    END IF
+    
+  END FUNCTION CheckEngineVersion
 
 END MODULE

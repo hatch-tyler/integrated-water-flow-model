@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2022  
+!  Copyright (C) 2005-2024  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -22,7 +22,6 @@
 !***********************************************************************
 MODULE Package_Misc
   USE Class_Version              , ONLY: VersionType
-  USE Class_GeneralHeadBoundary  , ONLY: GeneralHeadBoundaryType
   USE Class_PairedData           , ONLY: PairedDataType
   USE Class_SolverData           , ONLY: SolverDataType
   USE Opening_screen             , ONLY: PRINT_SCREEN            ,  &
@@ -107,7 +106,9 @@ MODULE Package_Misc
                        f_iLocationType_Bypass         = 15 , &
                        f_iLocationType_Diversion      = 16 , &
                        f_iLocationType_TileDrain      = 17 , &  !Any tile drain, with or without hydrograph print-out
-                       f_iLocationType_StrmNodeBud    = 18
+                       f_iLocationType_StrmNodeBud    = 18 , &
+                       f_iLocationType_Well           = 19 , &
+                       f_iLocationType_ElemPump       = 20
  
   
   ! -------------------------------------------------------------
@@ -159,8 +160,8 @@ MODULE Package_Misc
   ! -------------------------------------------------------------
   ! --- VERSION RELEATED DATA
   ! -------------------------------------------------------------
-  INTEGER,PRIVATE,PARAMETER                    :: iLenVersion = 8
-  CHARACTER(LEN=iLenVersion),PRIVATE,PARAMETER :: cVersion ='4.0.0000'
+  INTEGER,PRIVATE,PARAMETER                    :: iLenVersion = 11
+  CHARACTER(LEN=iLenVersion),PRIVATE,PARAMETER :: cVersion ='2024.0.0000'
   INCLUDE 'Package_Misc_Revision.fi'
 
 

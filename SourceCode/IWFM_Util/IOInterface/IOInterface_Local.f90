@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2022  
+!  Copyright (C) 2005-2024  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -146,6 +146,7 @@ MODULE IOInterface_Local
     PROCEDURE,PASS :: RewindFile   
     PROCEDURE,PASS :: RewindFile_To_BeginningOfTSData
     PROCEDURE,PASS :: BackspaceFile
+    PROCEDURE,PASS :: SkipDataBlocks
     PROCEDURE,PASS :: CreateHDFGroup
     PROCEDURE,PASS :: CreateHDFDataSet
     PROCEDURE,PASS :: WriteHDFAttribute
@@ -221,12 +222,13 @@ CONTAINS
     CHARACTER(LEN=ModNameLen+3),PARAMETER :: ThisProcedure = ModName // 'New'
     CHARACTER                             :: LocalDescriptor*50,LocalAccessType*10
     LOGICAL                               :: LocalIsTSFile
-    CHARACTER(LEN=LEN(FileName))          :: TempFileName
+    CHARACTER(LEN=LEN(FileName)+10)       :: TempFileName
+    CHARACTER(:),ALLOCATABLE              :: cFileNameExtension
 
     !Initialize
     iStat           = 0
     LocalIsTSFile   = .FALSE.      ; IF (PRESENT(IsTSFile))   LocalIsTSFile   = IsTSFile
-    LocalDescriptor = ''           ; IF (PRESENT(Descriptor)) LocalDescriptor = Descriptor
+    LocalDescriptor = 'a file'     ; IF (PRESENT(Descriptor)) LocalDescriptor = Descriptor
     LocalAccessType = 'SEQUENTIAL' ; IF (PRESENT(AccessType)) LocalAccessType = AccessType
     
     SELECT CASE (ThisFile%FileType)
@@ -238,7 +240,7 @@ CONTAINS
                   iStat = -1
               ELSE
                   TempFileName      = FileName(1:FirstLocation('.',FileName,Back=.TRUE.))//ADJUSTL(FileType)
-                  ThisFile%FileType = IdentifyFileType(TempFileName,InputFile,LocalIsTSFile,LocalDescriptor)
+                  ThisFile%FileType = IdentifyFileType(TRIM(TempFileName),InputFile,LocalIsTSFile)
                   IF (ThisFile%FileType .EQ. f_iUNKNOWN) THEN
                       CALL SetLastMessage('File type '//UpperCase(FileType)//' is not a recognized type for '//TRIM(LowerCase(LocalDescriptor))//'!',f_iFatal,ThisProcedure) 
                       iStat = -1
@@ -246,9 +248,10 @@ CONTAINS
               END IF
               IF (iStat .EQ. -1) RETURN
           ELSE
-              ThisFile%FileType = IdentifyFileType(FileName,InputFile,LocalIsTSFile,LocalDescriptor)
+              ThisFile%FileType = IdentifyFileType(FileName,InputFile,LocalIsTSFile)
               IF (ThisFile%FileType .EQ. f_iUNKNOWN) THEN
-                  CALL SetLastMessage('File type '//UpperCase(FileType)//' is not a recognized type for '//TRIM(LowerCase(LocalDescriptor))//'!',f_iFatal,ThisProcedure) 
+                  CALL GetFileNameExtension(FileName,cFileNameExtension)
+                  CALL SetLastMessage('File type '//UpperCase(cFileNameExtension)//' is not a recognized type for '//TRIM(LowerCase(LocalDescriptor))//'!',f_iFatal,ThisProcedure) 
                   iStat = -1
                   RETURN
               END IF
@@ -401,6 +404,32 @@ CONTAINS
 ! ******************************************************************
     
   ! -------------------------------------------------------------
+  ! --- GET FILENAME EXTENSION
+  ! -------------------------------------------------------------
+  SUBROUTINE GetFileNameExtension(cFileName,cFileNameExtension)
+    CHARACTER(LEN=*),INTENT(IN)          :: cFileName
+    CHARACTER(:),ALLOCATABLE,INTENT(OUT) :: cFileNameExtension
+    
+    !Local variables
+    CHARACTER(LEN=LEN(cFileName)) :: cTrimmedFileName
+    CHARACTER                     :: cFileNameExtensionLocal*10
+    INTEGER                       :: iBeginLocation
+    
+    !Trim the file name and find its length
+    cTrimmedFileName = TRIM(ADJUSTL(cFileName))
+
+    !Find the file name extension
+    cFileNameExtensionLocal = ''
+    iBeginLocation          = SCAN(TRIM(cTrimmedFileName),'.',BACK=.TRUE.)
+    IF (iBeginLocation .GT. 0) cFileNameExtensionLocal = UpperCase(cTrimmedFileName(iBeginLocation+1:))
+    
+    !Store data in return argument
+    ALLOCATE (cFileNameExtension , SOURCE=TRIM(cFileNameExtensionLocal))
+
+  END SUBROUTINE GetFileNameExtension
+  
+  
+  ! -------------------------------------------------------------
   ! --- GET TIMESTEP RELATED DATA
   ! -------------------------------------------------------------
   SUBROUTINE GetTimeStepRelatedData(ThisFile,NTimeSteps,TimeStep)
@@ -540,7 +569,7 @@ CONTAINS
     !Local variables
     INTEGER :: FileTypeTemp
     
-    FileTypeTemp = IdentifyFileType(cFileName,InputFile=.TRUE.,IsTSFile=.TRUE.,cDescriptor='file type identification')
+    FileTypeTemp = IdentifyFileType(cFileName,lInputFile=.TRUE.,lIsTSFile=.TRUE.)
     
     SELECT CASE (FileTypeTemp)
       CASE (f_iUNKNOWN)
@@ -792,18 +821,13 @@ CONTAINS
     CHARACTER(LEN=ModNameLen+12),PARAMETER :: ThisProcedure = ModName // 'SetCacheSize'
     
     SELECT TYPE (p => ThisFile%Me)
-      TYPE IS (AsciiTSDOutFileType)  !ASCII Time series data output file
-        IF (PRESENT(NRowsOfData)) THEN
-          CALL p%SetCacheSize(NColumnsOfData,NRowsOfData)
-        ELSE
-          CALL p%SetCacheSize(NColumnsOfData)
-        END IF
-        iStat = 0
+        TYPE IS (AsciiTSDOutFileType)  !ASCII Time series data output file
+            CALL p%SetCacheSize(NColumnsOfData,NRowsOfData)
+            iStat = 0
         
-      CLASS DEFAULT
-        CALL SetLastMessage('SetCacheSize method is not defined for file '//ThisFile%Me%Name//'!',f_iFatal,ThisProcedure) 
-        iStat = -1
-
+        CLASS DEFAULT
+            CALL SetLastMessage('SetCacheSize method is not defined for file '//ThisFile%Me%Name//'!',f_iFatal,ThisProcedure) 
+            iStat = -1
     END SELECT
 
   END SUBROUTINE SetCacheSize
@@ -1840,67 +1864,60 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- IDENTIFY FILE TYPE FROM ITS EXTENSION
   ! -------------------------------------------------------------
-  FUNCTION IdentifyFileType(FileName,InputFile,IsTSFile,cDescriptor) RESULT(FileType)
-    CHARACTER(LEN=*),INTENT(IN) :: FileName,cDescriptor
-    LOGICAL,INTENT(IN)          :: InputFile
-    LOGICAL                     :: IsTSFile
-    INTEGER                     :: FileType
+  FUNCTION IdentifyFileType(cFileName,lInputFile,lIsTSFile) RESULT(iFileType)
+    CHARACTER(LEN=*),INTENT(IN) :: cFileName
+    LOGICAL,INTENT(IN)          :: lInputFile
+    LOGICAL                     :: lIsTSFile
+    INTEGER                     :: iFileType
 
     !Local variables
-    CHARACTER(LEN=ModNameLen+16),PARAMETER :: ThisProcedure            = ModName // 'IdentifyFileType'
-    CHARACTER(LEN=3),PARAMETER             :: AsciiFileExtensions(7)   = ['TXT','DAT','IN ','IN1','IN2','OUT','BUD']
-    CHARACTER(LEN=3),PARAMETER             :: FortBinFileExtensions(1) = ['BIN']
-    CHARACTER(LEN=3),PARAMETER             :: DSSFileExtensions(1)     = ['DSS']
-    CHARACTER(LEN=4),PARAMETER             :: HDF5FileExtensions(4)    = ['HDF ','H5  ','HE5 ','HDF5']
-    CHARACTER(LEN=LEN(FileName))           :: TrimmedFileName
-    CHARACTER(LEN=3)                       :: FileNameExtension
-    INTEGER                                :: BeginLocation
+    CHARACTER(LEN=ModNameLen+16),PARAMETER :: ThisProcedure             = ModName // 'IdentifyFileType'
+    CHARACTER(LEN=3),PARAMETER             :: cAsciiFileExtensions(7)   = ['TXT','DAT','IN ','IN1','IN2','OUT','BUD']
+    CHARACTER(LEN=3),PARAMETER             :: cFortBinFileExtensions(1) = ['BIN']
+    CHARACTER(LEN=3),PARAMETER             :: cDSSFileExtensions(1)     = ['DSS']
+    CHARACTER(LEN=4),PARAMETER             :: cHDF5FileExtensions(4)    = ['HDF ','H5  ','HE5 ','HDF5']
+    CHARACTER(:),ALLOCATABLE               :: cFileNameExtension
     
-    !Trim the file name and find its length
-    TrimmedFileName = TRIM(ADJUSTL(FileName))
-
-    !Find the file name extension
-    FileNameExtension = ''
-    BeginLocation     = SCAN(TRIM(TrimmedFileName),'.',BACK=.TRUE.)
-    IF (BeginLocation .GT. 0) FileNameExtension = UpperCase(TrimmedFileName(BeginLocation+1:))
+    !Retrieve the file name extension
+    CALL GetFileNameExtension(cFileName,cFileNameExtension)
 
     !Find the file type based on its extension
-    FileType = f_iUNKNOWN
+    iFileType = f_iUNKNOWN
     
     !ASCII file
-    IF (ANY(AsciiFileExtensions .EQ. FileNameExtension)) THEN        
-        IF (IsTSFile) THEN
-            SELECT CASE (InputFile)
+    IF (ANY(cAsciiFileExtensions .EQ. cFileNameExtension)) THEN        
+        IF (lIsTSFile) THEN
+            SELECT CASE (lInputFile)
                 CASE (.TRUE.)
-                    FileType = f_iAsciiTSDInFile
+                    iFileType = f_iAsciiTSDInFile
                 CASE (.FALSE.)
-                    FileType = f_iAsciiTSDOutFile
+                    iFileType = f_iAsciiTSDOutFile
             END SELECT
         ELSE
-            SELECT CASE (InputFile)
+            SELECT CASE (lInputFile)
                 CASE (.TRUE.)
-                    FileType = f_iAsciiInFile
+                    iFileType = f_iAsciiInFile
                 CASE (.FALSE.)
-                    FileType = f_iAsciiOutFile
+                    iFileType = f_iAsciiOutFile
             END SELECT
         END IF
     
     !Fortran binary file  
-    ELSE IF (ANY(FortBinFileExtensions .EQ. FileNameExtension)) THEN  
-        FileType = f_iFortBinFile
+    ELSE IF (ANY(cFortBinFileExtensions .EQ. cFileNameExtension)) THEN  
+        iFileType = f_iFortBinFile
         
     !DSS File
-    ELSE IF (ANY(DSSFileExtensions .EQ. FileNameExtension)) THEN      
-        SELECT CASE (InputFile)
+    ELSE IF (ANY(cDSSFileExtensions .EQ. cFileNameExtension)) THEN      
+        SELECT CASE (lInputFile)
             CASE (.TRUE.)
-                FileType = f_iDSSInFile
+                iFileType = f_iDSSInFile
             CASE (.FALSE.)
-                FileType = f_iDSSOutFile
+                iFileType = f_iDSSOutFile
         END SELECT
             
     !HDF5 file
-    ELSE IF (ANY(HDF5FileExtensions .EQ. FileNameExtension)) THEN  !Is it HDF5 
-        FileType = f_iHDFFile
+    ELSE IF (ANY(cHDF5FileExtensions .EQ. cFileNameExtension)) THEN  !Is it HDF5 
+        iFileType = f_iHDFFile
     END IF
 
   END FUNCTION IdentifyFileType
@@ -2010,6 +2027,38 @@ CONTAINS
       END SELECT
       
   END SUBROUTINE BackspaceFile
+
+
+  ! -------------------------------------------------------------
+  ! --- SKIP BLOCKS OF DATA IN A ASCII INPUT FILE
+  ! -------------------------------------------------------------
+  SUBROUTINE SkipDataBlocks(ThisFile,iNDataBlocks,iStat)
+    CLASS(GenericFileType) :: ThisFile
+    INTEGER,INTENT(IN)     :: iNDataBlocks
+    INTEGER,INTENT(OUT)    :: iStat
+
+    !Local variables
+    CHARACTER(LEN=ModNameLen+14),PARAMETER :: ThisProcedure = ModName // 'SkipDataBlocks'
+    
+    !Initialize
+    iStat = 0
+    
+    !File is not defined
+    IF (.NOT. ALLOCATED(ThisFile%Me)) THEN
+        CALL LogMessage('Cannot skip blocks of data in an unopened file!',f_iWarn,ThisProcedure)
+        RETURN
+    END IF
+
+    SELECT TYPE (p => ThisFile%Me)
+        TYPE IS (AsciiInFileType)  !ASCII input file type
+            CALL p%SkipDataBlocks(iNDataBlocks,iStat)
+        
+        CLASS DEFAULT 
+            CALL LogMessage('SkipDataBlocks method for file '//ThisFile%Me%Name//' is not defined!',f_iWarn,ThisProcedure)
+        
+    END SELECT
+      
+  END SUBROUTINE SkipDataBlocks
 
 
 ! ! -------------------------------------------------------------

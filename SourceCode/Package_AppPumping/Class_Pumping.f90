@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2022  
+!  Copyright (C) 2005-2024  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -453,80 +453,77 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- DISTRIBUTE PUMPING TO NODES
   ! -------------------------------------------------------------
-  SUBROUTINE DistributePumpToNodes(Pumping,AppGrid,Stratigraphy,HHydCond,HeadGW,NodePump)
+  SUBROUTINE DistributePumpToNodes(Pumping,AppGrid,Stratigraphy,rHHydCond,rHeadGW,rNodePump)
     CLASS(PumpingType)                :: Pumping(:)
     TYPE(AppGridType),INTENT(IN)      :: AppGrid
     TYPE(StratigraphyType),INTENT(IN) :: Stratigraphy
-    REAL(8),INTENT(IN)                :: HHydCond(:,:),HeadGW(:,:)
-    REAL(8)                           :: NodePump(:,:)
+    REAL(8),INTENT(IN)                :: rHHydCond(:,:),rHeadGW(:,:)
+    REAL(8)                           :: rNodePump(:,:)
     
     !Local variables
-    INTEGER :: iElem,NVertex,indxVertex,indxLayer,NLayers,iNode,Vertex(4),indxPump, &
-               NNodes
-    REAL(8) :: rNodeFactor,rLayerFactor,PumpDist(4,Stratigraphy%NLayers),PumpTotal, &
-               TopElev,BottomElev,Head,PumpRequired
+    INTEGER :: iElem,iNVertex,indxVertex,indxLayer,iNLayers,iNode,iVertex(4),indxPump, &
+               iNNodes
+    REAL(8) :: rNodeFactor,rLayerFactor,rPumpDist(4,Stratigraphy%NLayers),rPumpTotal(Stratigraphy%NLayers), &
+               rTopElev,rBottomElev,rHead,rPumpRequired
     
     !Initialize
-    NNodes  = AppGrid%NNodes
-    NLayers = Stratigraphy%NLayers
+    iNNodes  = AppGrid%NNodes
+    iNLayers = Stratigraphy%NLayers
     
     !Distribute pumping to nodes and layers
     Pump_Loop : DO indxPump=1,SIZE(Pumping)
-                    Pumping(indxPump)%rNodePumpRequired   = 0.0
-                    Pumping(indxPump)%rNodePumpActual     = 0.0
-                    iElem                                 = Pumping(indxPump)%Element
-                    PumpRequired                          = 0.0
+                    Pumping(indxPump)%rNodePumpRequired = 0.0
+                    Pumping(indxPump)%rNodePumpActual   = 0.0
+                    iElem                               = Pumping(indxPump)%Element
+                    rPumpRequired                       = 0.0
                     !Pumping or recharge?
                     IF (Pumping(indxPump)%SupplyRequired .GT. 0.0) THEN
-                        PumpRequired = -Pumping(indxPump)%SupplyRequired                                    !Pumping
+                        rPumpRequired = -Pumping(indxPump)%SupplyRequired                                    !Pumping
                     ELSE
-                        IF (Pumping(indxPump)%PumpRead .GT. 0.0) PumpRequired = Pumping(indxPump)%PumpRead  !Recharge
+                        IF (Pumping(indxPump)%PumpRead .GT. 0.0) rPumpRequired = Pumping(indxPump)%PumpRead  !Recharge
                     END IF
-                    NVertex   = AppGrid%NVertex(iElem)
-                    Vertex    = AppGrid%Vertex(:,iElem)
-                    PumpDist  = 0.0
-                    PumpTotal = 0.0
-    Layer_Loop:     DO indxLayer=1,NLayers
-                        rLayerFactor = Pumping(indxPump)%rLayerFactor(indxLayer)
-    Node_Loop :         DO indxVertex=1,NVertex
+                    iNVertex   = AppGrid%NVertex(iElem)
+                    iVertex    = AppGrid%Vertex(:,iElem)
+                    rPumpDist  = 0.0
+                    rPumpTotal = 0.0
+    Layer_Loop:     DO indxLayer=1,iNLayers
+    Node_Loop :         DO indxVertex=1,iNVertex
                             rNodeFactor = AppGrid%AppElement(iElem)%VertexAreaFraction(indxVertex)
-                            iNode       = Vertex(indxVertex)
-                            TopElev     = Stratigraphy%TopElev(iNode,indxLayer)
-                            BottomElev  = Stratigraphy%BottomElev(iNode,indxLayer)
-                            Head        = HeadGW(iNode,indxLayer)
+                            iNode       = iVertex(indxVertex)
+                            rTopElev    = Stratigraphy%TopElev(iNode,indxLayer)
+                            rBottomElev = Stratigraphy%BottomElev(iNode,indxLayer)
+                            rHead       = rHeadGW(iNode,indxLayer)
                             
                             !If inactive node, cycle
                             IF (.NOT. Stratigraphy%ActiveNode(iNode,indxLayer)) CYCLE
                             
                             !Recharge
-                            IF (PumpRequired .GT. 0.0) THEN
-                                PumpDist(indxVertex,indxLayer) = rNodeFactor * rLayerFactor * HHydCond(iNode,indxLayer)*(TopElev-BottomElev)
+                            IF (rPumpRequired .GT. 0.0) THEN
+                                rPumpDist(indxVertex,indxLayer) = rNodeFactor * rHHydCond(iNode,indxLayer)*(rTopElev-rBottomElev)
                             
                             !Pumping
                             ELSE
-                                IF (Head .GT. BottomElev) &
-                                    PumpDist(indxVertex,indxLayer) = rNodeFactor * rLayerFactor * HHydCond(iNode,indxLayer)*(MIN(Head,TopELev) - BottomElev)
+                                IF (rHead .GT. rBottomElev) &
+                                    rPumpDist(indxVertex,indxLayer) = rNodeFactor * rHHydCond(iNode,indxLayer)*(MIN(rHead,rTopElev) - rBottomElev)
                             END IF
-                        END DO Node_Loop
+                        END DO Node_Loop     
                     END DO Layer_Loop
                     
-                    !Total of distribution fractions
-                    PumpTotal = SUM(PACK(PumpDist,MASK=.TRUE.))
-                    
+                    !Total of distribution fractions; if all nodes are dry, use area vertex fractions
+                    rPumpTotal = SUM(rPumpDist , DIM=1)
+
                     !Now, compute pumping at each node
-                    IF (PumpTotal .GT. 0.0) THEN
-                        DO indxLayer=1,NLayers
-                            DO indxVertex=1,NVertex
-                                iNode                                                     = Vertex(indxVertex)
-                                Pumping(indxPump)%rNodePumpRequired(indxVertex,indxLayer) = PumpRequired * PumpDist(indxVertex,indxLayer) / PumpTotal
-                                Pumping(indxPump)%rNodePumpActual(indxVertex,indxLayer)   = Pumping(indxPump)%rNodePumpRequired(indxVertex,indxLayer)
-                                NodePump(iNode,indxLayer)                                 = NodePump(iNode,indxLayer) + PumpRequired*PumpDist(indxVertex,indxLayer)/PumpTotal
-                            END DO
+                    DO indxLayer=1,iNLayers
+                        IF (rPumpTotal(indxLayer) .EQ. 0.0) CYCLE
+                        rLayerFactor = Pumping(indxPump)%rLayerFactor(indxLayer)
+                        DO indxVertex=1,iNVertex
+                            iNode                                                     = iVertex(indxVertex)
+                            Pumping(indxPump)%rNodePumpRequired(indxVertex,indxLayer) = rPumpRequired * rLayerFactor * rPumpDist(indxVertex,indxLayer) / rPumpTotal(indxLayer)
+                            Pumping(indxPump)%rNodePumpActual(indxVertex,indxLayer)   = Pumping(indxPump)%rNodePumpRequired(indxVertex,indxLayer)
+                            rNodePump(iNode,indxLayer)                                = rNodePump(iNode,indxLayer) + Pumping(indxPump)%rNodePumpRequired(indxVertex,indxLayer)
                         END DO
-                    ELSE
-                        Pumping(indxPump)%SupplyActual = 0.0
-                    END IF
-                END DO Pump_Loop
+                    END DO
+    END DO Pump_Loop
 
   END SUBROUTINE DistributePumpToNodes
   

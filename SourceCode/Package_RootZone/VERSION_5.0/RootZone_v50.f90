@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2022  
+!  Copyright (C) 2005-2024  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -163,20 +163,33 @@ MODULE RootZone_v50
       PROCEDURE,PASS   :: GetBudget_ColumnTitles                => RootZone_v50_GetBudget_ColumnTitles
       PROCEDURE,PASS   :: GetBudget_MonthlyFlows_GivenRootZone  => RootZone_v50_GetBudget_MonthlyFlows_GivenRootZone
       PROCEDURE,NOPASS :: GetBudget_MonthlyFlows_GivenFile      => RootZone_v50_GetBudget_MonthlyFlows_GivenFile
+      PROCEDURE,PASS   :: GetBudget_AnnualFlows_GivenRootZone   => RootZone_v50_GetBudget_AnnualFlows_GivenRootZone
+      PROCEDURE,NOPASS :: GetBudget_AnnualFlows_GivenFile       => RootZone_v50_GetBudget_AnnualFlows_GivenFile
       PROCEDURE,PASS   :: GetBudget_TSData_RZImplementation     => RootZone_v50_GetBudget_TSData
       PROCEDURE,PASS   :: GetZBudget_List                       => RootZone_v50_GetZBudget_List
       PROCEDURE,PASS   :: GetZBudget_NColumns                   => RootZone_v50_GetZBudget_NColumns
       PROCEDURE,PASS   :: GetZBudget_ColumnTitles               => RootZone_v50_GetZBudget_ColumnTitles
       PROCEDURE,PASS   :: GetZBudget_MonthlyFlows_GivenRootZone => RootZone_v50_GetZBudget_MonthlyFlows_GivenRootZone
       PROCEDURE,NOPASS :: GetZBudget_MonthlyFlows_GivenFile     => RootZone_v50_GetZBudget_MonthlyFlows_GivenFile
+      PROCEDURE,PASS   :: GetZBudget_AnnualFlows_GivenRootZone  => RootZone_v50_GetZBudget_AnnualFlows_GivenRootZone
+      PROCEDURE,NOPASS :: GetZBudget_AnnualFlows_GivenFile      => RootZone_v50_GetZBudget_AnnualFlows_GivenFile
       PROCEDURE,PASS   :: GetZBudget_TSData                     => RootZone_v50_GetZBudget_TSData
       PROCEDURE,PASS   :: GetNAgCrops                           => RootZone_v50_GetNAgCrops 
       PROCEDURE,PASS   :: GetNDemandLocations                   => RootZone_v50_GetNDemandLocations 
+      PROCEDURE,PASS   :: GetElementRunoff                      => RootZone_v50_GetElementRunoff 
+      PROCEDURE,PASS   :: GetElementAppliedWater                => RootZone_v50_GetElementAppliedWater
+      PROCEDURE,PASS   :: GetElementAppliedWater_ForLUType      => RootZone_v50_GetElementAppliedWater_ForLUType
+      PROCEDURE,PASS   :: GetElementReturnFlow                  => RootZone_v50_GetElementReturnFlow
+      PROCEDURE,PASS   :: GetElementReturnFlow_ForLUType        => RootZone_v50_GetElementReturnFlow_ForLUType
       PROCEDURE,PASS   :: GetElementPrecipInfilt                => RootZone_v50_GetElementPrecipInfilt 
+      PROCEDURE,PASS   :: GetElementInfilt                      => RootZone_v50_GetElementInfilt 
       PROCEDURE,PASS   :: GetElementActualET                    => RootZone_v50_GetElementActualET 
+      PROCEDURE,PASS   :: GetElementPondDrain                   => RootZone_v50_GetElementPondDrain
+      PROCEDURE,PASS   :: GetElementPondDrain_ForLUType         => RootZone_v50_GetElementPondDrain_ForLUType
       PROCEDURE,PASS   :: GetWaterDemandAll                     => RootZone_v50_GetWaterDemand 
       PROCEDURE,PASS   :: GetWaterDemandAtLocations             => RootZone_v50_GetWaterDemandAtLocations 
       PROCEDURE,PASS   :: GetWaterSupply                        => RootZone_v50_GetWaterSupply 
+      PROCEDURE,NOPASS :: GetLandUseAreasForTimePeriod          => RootZone_v50_GetLandUseAreasForTimePeriod
       PROCEDURE,PASS   :: GetElementAgAreas                     => RootZone_v50_GetElementAgAreas
       PROCEDURE,PASS   :: GetElementUrbanAreas                  => RootZone_v50_GetElementUrbanAreas
       PROCEDURE,PASS   :: GetElementNativeVegAreas              => RootZone_v50_GetElementNativeVegAreas
@@ -188,7 +201,7 @@ MODULE RootZone_v50
       PROCEDURE,PASS   :: GetDemandAgAreas                      => RootZone_v50_GetDemandAgAreas
       PROCEDURE,PASS   :: GetdemandUrbanAreas                   => RootZone_v50_GetDemandUrbanAreas
       PROCEDURE,PASS   :: GetElementSoilMVolume                 => RootZone_v50_GetElementSoilMVolume
-      PROCEDURE,PASS   :: GetPercAll                            => RootZone_v50_GetPercAll
+      PROCEDURE,PASS   :: GetElementPerc                        => RootZone_v50_GetElementPerc
       PROCEDURE,PASS   :: GetPercElement                        => RootZone_v50_GetPercElement
       PROCEDURE,PASS   :: GetFlowsToStreams                     => RootZone_v50_GetFlowsToStreams
       PROCEDURE,PASS   :: GetFlowsToLakes                       => RootZone_v50_GetFlowsToLakes
@@ -218,22 +231,22 @@ MODULE RootZone_v50
   ! -------------------------------------------------------------
   INTEGER,PARAMETER           :: f_iNLWUseBudColumns                              = 16  , &
                                  f_iNRootZoneBudColumns                           = 45
-  CHARACTER(LEN=30),PARAMETER :: f_cLWUseBudgetColumnTitles(f_iNLWUseBudColumns)  = ['Ag. Area'                           , &
+  CHARACTER(LEN=34),PARAMETER :: f_cLWUseBudgetColumnTitles(f_iNLWUseBudColumns)  = ['Ag. Area'                           , &
                                                                                      'Potential CUAW'                     , &
-                                                                                     'Ag. Supply Requirement'             , &
-                                                                                     'Ag. Pumping'                        , &
-                                                                                     'Ag. Deliveries'                     , &
-                                                                                     'Ag. Inflow as Surface Runoff'       , &
-                                                                                     'Ag. Shortage'                       , &
+                                                                                     'Ag. Supply Requirement (+)'         , &
+                                                                                     'Ag. Pumping (-)'                    , &
+                                                                                     'Ag. Deliveries (-)'                 , &
+                                                                                     'Ag. Inflow as Surface Runoff (-)'   , &
+                                                                                     'Ag. Shortage (=)'                   , &
                                                                                      'Ag. ETAW'                           , &
                                                                                      'Ag. Effective Precipitation'        , &
                                                                                      'Ag. ET from Other Sources'          , &
                                                                                      'Urban Area'                         , &
-                                                                                     'Urban Supply Requirement'           , &
-                                                                                     'Urban Pumping'                      , &
-                                                                                     'Urban Deliveries'                   , &
-                                                                                     'Urban Inflow as Surface Runoff'     , &
-                                                                                     'Urban Shortage'                     ]
+                                                                                     'Urban Supply Requirement (+)'       , &
+                                                                                     'Urban Pumping (-)'                  , &
+                                                                                     'Urban Deliveries (-)'               , &
+                                                                                     'Urban Inflow as Surface Runoff (-)' , &
+                                                                                     'Urban Shortage (=)'                 ]
   CHARACTER(LEN=53),PARAMETER :: f_cRootZoneBudgetColumnTitles(f_iNRootZoneBudColumns) = ['Ag. Area'                                               , &
                                                                                           'Ag. Potential ET'                                       , &
                                                                                           'Ag. Precipitation'                                      , &
@@ -307,10 +320,10 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- NEW ROOT ZONE DATA
   ! -------------------------------------------------------------
-  SUBROUTINE RootZone_v50_New(RootZone,IsForInquiry,cFileName,cWorkingDirectory,cPackageVersion,AppGrid,TimeStep,NTIME,ET,Precip,iStat,iStrmNodeIDs,iLakeIDs)
+  SUBROUTINE RootZone_v50_New(RootZone,IsForInquiry,cProjectNameForDSS,cFileName,cWorkingDirectory,cPackageVersion,AppGrid,TimeStep,NTIME,ET,Precip,iStat,iStrmNodeIDs,iLakeIDs)
     CLASS(RootZone_v50_Type)           :: RootZone
     LOGICAL,INTENT(IN)                 :: IsForInquiry
-    CHARACTER(LEN=*),INTENT(IN)        :: cFileName,cWorkingDirectory,cPackageVersion
+    CHARACTER(LEN=*),INTENT(IN)        :: cProjectNameForDSS,cFileName,cWorkingDirectory,cPackageVersion
     TYPE(AppGridType),INTENT(IN)       :: AppGrid
     TYPE(TimeStepType),INTENT(IN)      :: TimeStep
     INTEGER,INTENT(IN)                 :: NTIME
@@ -496,7 +509,7 @@ CONTAINS
     CALL CleanSpecialCharacters(ALine)
     IF (ALine .NE. '') THEN
         CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(ALine)),cWorkingDirectory,cAbsPathFileName)
-        CALL LWUseBudRawFile_New(IsForInquiry,cAbsPathFileName,TimeStep,NTIME,NRegion+1,RegionArea,RegionNames,'land and water use budget',TRIM(cVersionFull),RootZone%LWUseBudRawFile,iStat)
+        CALL LWUseBudRawFile_New(IsForInquiry,cProjectNameForDSS,cAbsPathFileName,TimeStep,NTIME,NRegion+1,RegionArea,RegionNames,'land and water use budget',TRIM(cVersionFull),RootZone%LWUseBudRawFile,iStat)
         IF (iStat .EQ. -1) RETURN
         RootZone%Flags%LWUseBudRawFile_Defined = .TRUE.      
     END IF
@@ -507,7 +520,7 @@ CONTAINS
     CALL CleanSpecialCharacters(ALine)
     IF (ALine .NE. '') THEN
         CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(ALine)),cWorkingDirectory,cAbsPathFileName)
-        CALL RootZoneBudRawFile_New(IsForInquiry,cAbsPathFileName,TimeStep,NTIME,NRegion+1,RegionArea,RegionNames,'root zone budget',TRIM(cVersionFull),RootZone%RootZoneBudRawFile,iStat)
+        CALL RootZoneBudRawFile_New(IsForInquiry,cProjectNameForDSS,cAbsPathFileName,TimeStep,NTIME,NRegion+1,RegionArea,RegionNames,'root zone budget',TRIM(cVersionFull),RootZone%RootZoneBudRawFile,iStat)
         IF (iStat .EQ. -1) RETURN
         RootZone%Flags%RootZoneBudRawFile_Defined = .TRUE.
     END IF
@@ -935,9 +948,9 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- NEW HDF5 LAND AND WATER USE BUDGET FILE FOR POST-PROCESSING
   ! -------------------------------------------------------------
-  SUBROUTINE LWUseBudRawFile_New(IsForInquiry,cFileName,TimeStep,NTIME,NRegion,RegionArea,cRegionNames,cDescriptor,cVersion,RawFile,iStat)
+  SUBROUTINE LWUseBudRawFile_New(IsForInquiry,cProjectNameForDSS,cFileName,TimeStep,NTIME,NRegion,RegionArea,cRegionNames,cDescriptor,cVersion,RawFile,iStat)
     LOGICAL,INTENT(IN)            :: IsForInquiry
-    CHARACTER(LEN=*),INTENT(IN)   :: cFileName,cRegionNames(NRegion)
+    CHARACTER(LEN=*),INTENT(IN)   :: cProjectNameForDSS,cFileName,cRegionNames(NRegion)
     TYPE(TimeStepType),INTENT(IN) :: TimeStep
     INTEGER,INTENT(IN)            :: NTIME,NRegion
     REAL(8),INTENT(IN)            :: RegionArea(NRegion)
@@ -1091,11 +1104,11 @@ CONTAINS
       iCount = 1
       DO indxLocation=1,NRegion
         DO indxCol=1,f_iNLWUseBudColumns
-          pDSSOutput%cPathNames(iCount) = '/IWFM_L&W_USE_BUD/'                                           //  &  !A part
+          pDSSOutput%cPathNames(iCount) = '/'//TRIM(UpperCase(cProjectNameForDSS))//'_L&W_USE_BUD/'      //  &  !A part
                                           TRIM(UpperCase(OutputData%cLocationNames(indxLocation)))//'/'  //  &  !B part
                                           TRIM(CParts(indxCol))//'/'                                     //  &  !C part
                                           '/'                                                            //  &  !D part
-                                           TRIM(TimeStep%Unit)//'/'                                      //  &  !E part
+                                          TRIM(TimeStep%Unit)//'/'                                       //  &  !E part
                                           TRIM(FParts(indxCol))//'/'                                            !F part
           iCount = iCount+1
         END DO
@@ -1361,9 +1374,9 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- NEW HDF5 ROOT ZONE BUDGET FILE FOR POST-PROCESSING
   ! -------------------------------------------------------------
-  SUBROUTINE RootZoneBudRawFile_New(IsForInquiry,cFileName,TimeStep,NTIME,NRegion,RegionArea,cRegionNames,cDescriptor,cVersion,RawFile,iStat)
+  SUBROUTINE RootZoneBudRawFile_New(IsForInquiry,cProjectNameForDSS,cFileName,TimeStep,NTIME,NRegion,RegionArea,cRegionNames,cDescriptor,cVersion,RawFile,iStat)
     LOGICAL,INTENT(IN)            :: IsForInquiry
-    CHARACTER(LEN=*),INTENT(IN)   :: cFileName,cRegionNames(NRegion)
+    CHARACTER(LEN=*),INTENT(IN)   :: cProjectNameForDSS,cFileName,cRegionNames(NRegion)
     TYPE(TimeStepType),INTENT(IN) :: TimeStep
     INTEGER,INTENT(IN)            :: NTIME,NRegion
     REAL(8),INTENT(IN)            :: RegionArea(NRegion)
@@ -1605,11 +1618,11 @@ CONTAINS
       iCount = 1
       DO indxLocation=1,NRegion
         DO indxCol=1,f_iNRootZoneBudColumns
-          pDSSOutput%cPathNames(iCount) = '/IWFM_ROOTZN_BUD/'                                            //  &  !A part
+          pDSSOutput%cPathNames(iCount) = '/'//TRIM(UpperCase(cProjectNameForDSS))//'_ROOTZN_BUD/'       //  &  !A part
                                           TRIM(UpperCase(OutputData%cLocationNames(indxLocation)))//'/'  //  &  !B part
                                           TRIM(CParts(indxCol))//'/'                                     //  &  !C part
                                           '/'                                                            //  &  !D part
-                                           TRIM(TimeStep%Unit)//'/'                                      //  &  !E part
+                                          TRIM(TimeStep%Unit)//'/'                                       //  &  !E part
                                           TRIM(FParts(indxCol))//'/'                                            !F part
           iCount = iCount+1
         END DO
@@ -1823,14 +1836,14 @@ CONTAINS
   END SUBROUTINE RootZone_v50_GetBudget_ColumnTitles
      
      
-   ! -------------------------------------------------------------
+  ! -------------------------------------------------------------
   ! --- GET MONTHLY BUDGET FLOWS FROM RootZone OBJECT
   ! --- (Assumes cBeginDate and cEndDate are adjusted properly)
   ! -------------------------------------------------------------
-  SUBROUTINE RootZone_v50_GetBudget_MonthlyFlows_GivenRootZone(RootZone,iBudgetType,iLUType,iSubregionID,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
+  SUBROUTINE RootZone_v50_GetBudget_MonthlyFlows_GivenRootZone(RootZone,iBudgetType,iLUType,iSubregionIndex,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
     CLASS(RootZone_v50_Type),TARGET,INTENT(IN) :: RootZone
     CHARACTER(LEN=*),INTENT(IN)                :: cBeginDate,cEndDate
-    INTEGER,INTENT(IN)                         :: iBudgetType,iLUType,iSubregionID
+    INTEGER,INTENT(IN)                         :: iBudgetType,iLUType,iSubregionIndex
     REAL(8),INTENT(IN)                         :: rFactVL
     REAL(8),ALLOCATABLE,INTENT(OUT)            :: rFlows(:,:)  !In (column,month) format
     CHARACTER(LEN=*),ALLOCATABLE,INTENT(OUT)   :: cFlowNames(:)
@@ -1858,19 +1871,19 @@ CONTAINS
     END IF
   
     !Get the values
-    CALL RootZone_v50_GetBudget_MonthlyFlows_GivenFile(pBudget,iBudgetType,iLUType,iSubregionID,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat) 
+    CALL RootZone_v50_GetBudget_MonthlyFlows_GivenFile(pBudget,iBudgetType,iLUType,iSubregionIndex,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat) 
     
   END SUBROUTINE RootZone_v50_GetBudget_MonthlyFlows_GivenRootZone
 
   
- ! -------------------------------------------------------------
+  ! -------------------------------------------------------------
   ! --- GET MONTHLY BUDGET FLOWS FROM A DEFINED BUDGET FILE
   ! --- (Assumes cBeginDate and cEndDate are adjusted properly)
   ! -------------------------------------------------------------
-  SUBROUTINE RootZone_v50_GetBudget_MonthlyFlows_GivenFile(Budget,iBudgetType,iLUType,iSubregionID,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
+  SUBROUTINE RootZone_v50_GetBudget_MonthlyFlows_GivenFile(Budget,iBudgetType,iLUType,iSubregionIndex,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
     TYPE(BudgetType),INTENT(IN)              :: Budget      !Assumes Budget file is already open
     CHARACTER(LEN=*),INTENT(IN)              :: cBeginDate,cEndDate
-    INTEGER,INTENT(IN)                       :: iBudgetType,iLUType,iSubregionID
+    INTEGER,INTENT(IN)                       :: iBudgetType,iLUType,iSubregionIndex
     REAL(8),INTENT(IN)                       :: rFactVL
     REAL(8),ALLOCATABLE,INTENT(OUT)          :: rFlows(:,:)  !In (column,month) format
     CHARACTER(LEN=*),ALLOCATABLE,INTENT(OUT) :: cFlowNames(:)
@@ -1928,7 +1941,7 @@ CONTAINS
         END SELECT
             
         !Read data
-        CALL Budget%ReadData(iSubregionID,piReadCols,'1MON',cBeginDate,cEndDate,0d0,0d0,0d0,1d0,1d0,rFactVL,iDimActual,rValues,iStat)
+        CALL Budget%ReadData(iSubregionIndex,piReadCols,'1MON',cBeginDate,cEndDate,0d0,0d0,0d0,1d0,1d0,rFactVL,iDimActual,rValues,iStat)
         IF (iStat .NE. 0) RETURN
         
         !Store values in return argument
@@ -1981,7 +1994,7 @@ CONTAINS
         END SELECT
 
         !Read data
-        CALL Budget%ReadData(iSubregionID,piReadCols,'1MON',cBeginDate,cEndDate,0d0,0d0,0d0,1d0,1d0,rFactVL,iDimActual,rValues,iStat)
+        CALL Budget%ReadData(iSubregionIndex,piReadCols,'1MON',cBeginDate,cEndDate,0d0,0d0,0d0,1d0,1d0,rFactVL,iDimActual,rValues,iStat)
         IF (iStat .NE. 0) RETURN
         
         !Store values in return argument
@@ -1998,12 +2011,186 @@ CONTAINS
 
   
   ! -------------------------------------------------------------
+  ! --- GET ANNUAL BUDGET FLOWS FROM RootZone OBJECT
+  ! --- (Assumes cBeginDate and cEndDate are adjusted properly)
+  ! -------------------------------------------------------------
+  SUBROUTINE RootZone_v50_GetBudget_AnnualFlows_GivenRootZone(RootZone,iBudgetType,iLUType,iSubregionIndex,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
+    CLASS(RootZone_v50_Type),TARGET,INTENT(IN) :: RootZone
+    CHARACTER(LEN=*),INTENT(IN)                :: cBeginDate,cEndDate
+    INTEGER,INTENT(IN)                         :: iBudgetType,iLUType,iSubregionIndex
+    REAL(8),INTENT(IN)                         :: rFactVL
+    REAL(8),ALLOCATABLE,INTENT(OUT)            :: rFlows(:,:)  !In (column,month) format
+    CHARACTER(LEN=*),ALLOCATABLE,INTENT(OUT)   :: cFlowNames(:)
+    INTEGER,INTENT(OUT)                        :: iStat
+    
+    !Local variables
+    TYPE(BudgetType),POINTER :: pBudget
+    
+    !Initailize
+    iStat   =  0
+    pBudget => NULL()
+    
+    !Select the Budget file
+    SELECT CASE (iBudgetType)
+        CASE (f_iBudgetType_LWU)
+            IF (RootZone%Flags%LWUseBudRawFile_Defined) pBudget => RootZone%LWUseBudRawFile
+        CASE (f_iBudgetType_RootZone)
+            IF (RootZone%Flags%RootZoneBudRawFile_Defined) pBudget => RootZone%RootZoneBudRawFile
+    END SELECT
+        
+    !Return if there is no budget file
+    IF (.NOT.ASSOCIATED(pBudget)) THEN
+        ALLOCATE (rFlows(0,0) , cFlowNames(0))
+        RETURN
+    END IF
+  
+    !Get the values
+    CALL RootZone_v50_GetBudget_AnnualFlows_GivenFile(pBudget,iBudgetType,iLUType,iSubregionIndex,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat) 
+    
+  END SUBROUTINE RootZone_v50_GetBudget_AnnualFlows_GivenRootZone
+
+  
+  ! -------------------------------------------------------------
+  ! --- GET ANNUAL BUDGET FLOWS FROM A DEFINED BUDGET FILE
+  ! --- (Assumes cBeginDate and cEndDate are adjusted properly)
+  ! -------------------------------------------------------------
+  SUBROUTINE RootZone_v50_GetBudget_AnnualFlows_GivenFile(Budget,iBudgetType,iLUType,iSubregionIndex,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
+    TYPE(BudgetType),INTENT(IN)              :: Budget      !Assumes Budget file is already open
+    CHARACTER(LEN=*),INTENT(IN)              :: cBeginDate,cEndDate
+    INTEGER,INTENT(IN)                       :: iBudgetType,iLUType,iSubregionIndex
+    REAL(8),INTENT(IN)                       :: rFactVL
+    REAL(8),ALLOCATABLE,INTENT(OUT)          :: rFlows(:,:)  !In (column,month) format
+    CHARACTER(LEN=*),ALLOCATABLE,INTENT(OUT) :: cFlowNames(:)
+    INTEGER,INTENT(OUT)                      :: iStat
+    
+    !Local variables
+    CHARACTER(LEN=ModNameLen+44) :: ThisProcedure = ModName // 'RootZone_v50_GetBudget_AnnualFlows_GivenFile'
+    INTEGER,TARGET               :: iDimActual,iNTimeSteps,                         &
+                                    iReadCols_LWU_Ag(5) = [3,4,5,6,7],              &
+                                    iReadCols_LWU_Urb(5) = [12,13,14,15,16],        &
+                                    iReadCols_RZ_Ag(7) = [9,10,11,12,13,14,15],     &
+                                    iReadCols_RZ_Urb(7) = [25,26,27,28,29,30,31],   &
+                                    iReadCols_RZ_NVRV(7) = [38,39,40,41,42,43,44]
+    REAL(8),ALLOCATABLE          :: rValues(:,:)
+    INTEGER,POINTER              :: piReadCols(:)
+    
+    !Number of time steps
+    iNTimeSteps = Budget%GetNTimeSteps()
+
+    !Land&Water Use Budget
+    IF (iBudgetType .EQ. f_iBudgetType_LWU) THEN
+        !Allocate arrays
+        ALLOCATE (rValues(6,iNTimeSteps) , cFlowNames(5))  !Adding 1 to the first dimension for Time column; it will be removed later
+        
+        !Flow names
+        cFlowNames     = ''
+        cFlowNames(1)  = 'Supply Requirement'      
+        cFlowNames(2)  = 'Pumping'                 
+        cFlowNames(3)  = 'Deliveries'              
+        cFlowNames(4)  = 'Inflow as Surface Runoff'
+        cFlowNames(5)  = 'Shortage'  
+        
+        !Columns to read based on land use type
+        SELECT CASE (iLUType)
+            CASE (f_iLandUse_Ag)
+                piReadCols => iReadCols_LWU_Ag
+            CASE (f_iLandUse_Urb)
+                piReadCols => iReadCols_LWU_Urb
+            CASE (f_iLandUse_NonPondedAg) 
+                CALL SetLastMessage('Non-ponded-crop-specific Land & Water Use Budget cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
+                iStat = -1
+                RETURN
+            CASE (f_iLandUse_Rice)
+                CALL SetLastMessage('Land & Water Use Budget for rice cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
+                iStat = -1
+                RETURN
+            CASE (f_iLandUse_Refuge)
+                CALL SetLastMessage('Land & Water Use Budget for refuges cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
+                iStat = -1
+                RETURN
+            CASE (f_iLandUse_NVRV)
+                CALL SetLastMessage('Land & Water Use Budget does not exist for native and riparian vegetation!',f_iFatal,ThisProcedure)
+                iStat = -1
+                RETURN
+        END SELECT
+            
+        !Read data
+        CALL Budget%ReadData(iSubregionIndex,piReadCols,'1YEAR',cBeginDate,cEndDate,0d0,0d0,0d0,1d0,1d0,rFactVL,iDimActual,rValues,iStat)
+        IF (iStat .NE. 0) RETURN
+        
+        !Store values in return argument
+        ALLOCATE (rFlows(5,iDimActual) , cFlowNames(5))
+        rFlows(1,:)  = -rValues(2,1:iDimActual)       !Supply Requirement              
+        rFlows(2,:)  = rValues(3,1:iDimActual)        !Pumping                          
+        rFlows(3,:)  = rValues(4,1:iDimActual)        !Deliveries                       
+        rFlows(4,:)  = rValues(5,1:iDimActual)        !Inflow as Surface Runoff         
+        rFlows(5,:)  = rValues(6,1:iDimActual)        !Shortage 
+
+    !Root Zone Budget 
+    ELSEIF (iBudgetType .EQ. f_iBudgetType_RootZone) THEN
+        !Allocate arrays
+        ALLOCATE (rValues(8,iNTimeSteps) , cFlowNames(6))  !Adding 1 to the first dimension for Time column; it will be removed later
+        
+        !Flow names
+        cFlowNames     = ''
+        cFlowNames(1)  = 'Change in Storage'      
+        cFlowNames(2)  = 'Net Gain from Land Expansion'
+        cFlowNames(3)  = 'Infiltration'           
+        cFlowNames(4)  = 'Other Inflow'           
+        cFlowNames(5)  = 'Actual ET'              
+        cFlowNames(6)  = 'Percolation'            
+        
+        !Columns to read based on land use type
+        SELECT CASE (iLUType)
+            CASE (f_iLandUse_Ag)
+                piReadCols => iReadCols_RZ_Ag
+
+            CASE (f_iLandUse_Urb)      
+                piReadCols => iReadCols_RZ_Urb
+
+            CASE (f_iLandUse_NVRV)
+                piReadCols => iReadCols_RZ_NVRV
+
+            CASE (f_iLandUse_NonPondedAg) 
+                CALL SetLastMessage('Non-ponded-crop-specific Root Zone Budget cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
+                iStat = -1
+                RETURN
+            
+            CASE (f_iLandUse_Rice)
+                CALL SetLastMessage('Root Zone Budget for rice cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
+                iStat = -1
+                RETURN
+            
+            CASE (f_iLandUse_Refuge)
+                CALL SetLastMessage('Root Zone Budget for refuges cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
+                iStat = -1
+                RETURN
+        END SELECT
+
+        !Read data
+        CALL Budget%ReadData(iSubregionIndex,piReadCols,'1YEAR',cBeginDate,cEndDate,0d0,0d0,0d0,1d0,1d0,rFactVL,iDimActual,rValues,iStat)
+        IF (iStat .NE. 0) RETURN
+        
+        !Store values in return argument
+        ALLOCATE (rFlows(6,iDimActual))
+        rFlows(1,:)  = rValues(2,1:iDimActual) - rValues(8,1:iDimActual)      !Change in Storage              
+        rFlows(2,:)  = rValues(3,1:iDimActual)                                !Net Gain from Land Expansion       
+        rFlows(3,:)  = rValues(4,1:iDimActual)                                !Infiltration                  
+        rFlows(4,:)  = rValues(5,1:iDimActual)                                !Other Inflow                  
+        rFlows(5,:)  = -rValues(6,1:iDimActual)                               !Actual ET              
+        rFlows(6,:)  = -rValues(7,1:iDimActual)                               !Percolation            
+    END IF
+        
+  END SUBROUTINE RootZone_v50_GetBudget_AnnualFlows_GivenFile
+
+  
+  ! -------------------------------------------------------------
   ! --- GET BUDGET TIME SERIES DATA FOR A SET OF COLUMNS 
   ! --- Note: There is no new data to retrieve for this version of RootZone
   ! -------------------------------------------------------------
-  SUBROUTINE RootZone_v50_GetBudget_TSData(RootZone,iBudgetType,iSubregionID,iCols,cBeginDate,cEndDate,cInterval,rFactLT,rFactAR,rFactVL,rOutputDates,rOutputValues,iDataTypes,inActualOutput,iStat)
+  SUBROUTINE RootZone_v50_GetBudget_TSData(RootZone,iBudgetType,iSubregionIndex,iCols,cBeginDate,cEndDate,cInterval,rFactLT,rFactAR,rFactVL,rOutputDates,rOutputValues,iDataTypes,inActualOutput,iStat)
     CLASS(RootZone_v50_Type),INTENT(IN) :: RootZone
-    INTEGER,INTENT(IN)                  :: iBudgetType,iSubregionID,iCols(:)
+    INTEGER,INTENT(IN)                  :: iBudgetType,iSubregionIndex,iCols(:)
     CHARACTER(LEN=*),INTENT(IN)         :: cBeginDate,cEndDate,cInterval
     REAL(8),INTENT(IN)                  :: rFactLT,rFactAR,rFactVL
     REAL(8),INTENT(OUT)                 :: rOutputDates(:),rOutputValues(:,:)    !rOutputValues is in (timestep,column) format
@@ -2280,7 +2467,7 @@ CONTAINS
         CALL ZBudget%ReadData(ZoneList,iZoneID,iColList,'1MON',cBeginDate,cEndDate,1d0,rFactVL,iDataUnitTypes,iNPopulatedValues,rValues,iStat)
         IF (iStat .NE. 0) RETURN
         
-        !Calculate monthly averages
+        !Store values in return argument
         ALLOCATE (rFlows(5,iNPopulatedValues))
         DO indxTime=1,iNPopulatedValues
             rFlows(1,indxTime) = -rValues(2,indxTime)
@@ -2303,7 +2490,7 @@ CONTAINS
                 CALL ZBudget%ReadData(ZoneList,iZoneID,iColList,'1MON',cBeginDate,cEndDate,1d0,rFactVL,iDataUnitTypes,iNPopulatedValues,rValues,iStat)
                 IF (iStat .NE. 0) RETURN
                 
-                !Calculate monthly averages
+                !Store values in return argument
                 ALLOCATE (rFlows(6,iNPopulatedValues))
                 DO indxTime=1,iNPopulatedValues
                     rFlows(1,indxTime) =  rValues(2,indxTime) - rValues(8,indxTime)  !Change in storage
@@ -2323,7 +2510,7 @@ CONTAINS
                 CALL ZBudget%ReadData(ZoneList,iZoneID,iColList,'1MON',cBeginDate,cEndDate,1d0,rFactVL,iDataUnitTypes,iNPopulatedValues,rValues,iStat)
                 IF (iStat .NE. 0) RETURN
                 
-                !Calculate monthly averages
+                !Store values in return argument
                 ALLOCATE (rFlows(6,iNPopulatedValues))
                 DO indxTime=1,iNPopulatedValues
                     rFlows(1,indxTime) =  rValues(2,indxTime) - rValues(8,indxTime)  !Change in storage
@@ -2343,7 +2530,7 @@ CONTAINS
                 CALL ZBudget%ReadData(ZoneList,iZoneID,iColList,'1MON',cBeginDate,cEndDate,1d0,rFactVL,iDataUnitTypes,iNPopulatedValues,rValues,iStat)
                 IF (iStat .NE. 0) RETURN
                 
-                !Calculate monthly averages
+                !Store values in return argument
                 ALLOCATE (rFlows(6,iNPopulatedValues))
                 DO indxTime=1,iNPopulatedValues
                     rFlows(1,indxTime) =  rValues(2,indxTime) - rValues(8,indxTime)  !Change in storage
@@ -2364,6 +2551,188 @@ CONTAINS
     END IF  
      
   END SUBROUTINE RootZone_v50_GetZBudget_MonthlyFlows_GivenFile
+     
+  
+  ! -------------------------------------------------------------
+  ! --- GET ANNUAL ZBUDGET FLOWS FROM RootZone OBJECT 
+  ! -------------------------------------------------------------
+  SUBROUTINE RootZone_v50_GetZBudget_AnnualFlows_GivenRootZone(RootZone,iZBudgetType,iLUType,iZoneID,iZExtent,iElems,iLayers,iZoneIDs,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
+    CLASS(RootZone_v50_Type),TARGET,INTENT(IN) :: RootZone              
+    INTEGER,INTENT(IN)                         :: iZBudgetType,iZoneID,iLUType,iZExtent,iElems(:),iLayers(:),iZoneIDs(:)
+    CHARACTER(LEN=*),INTENT(IN)                :: cBeginDate,cEndDate  
+    REAL(8),INTENT(IN)                         :: rFactVL
+    REAL(8),ALLOCATABLE,INTENT(OUT)            :: rFlows(:,:)          
+    CHARACTER(LEN=*),ALLOCATABLE,INTENT(OUT)   :: cFlowNames(:)
+    INTEGER,INTENT(OUT)                        :: iStat
+    
+    !Local variables
+    INTEGER                   :: iZonesWithNames(0)
+    CHARACTER                 :: cZoneNames(0)*1 
+    TYPE(ZBudgetType),POINTER :: pZBudget
+    TYPE(ZoneListType)        :: ZoneList
+    
+    !Initialize
+    NULLIFY(pZBudget)
+    
+    !Get a pointer to ZBudget file
+    SELECT CASE (iZBudgetType)
+        CASE (f_iZBudgetType_LWU)
+            IF (RootZone%Flags%LWUseZoneBudRawFile_Defined) pZBudget => RootZone%LWUZoneBudRawFile
+        CASE (f_iZBudgetType_RootZone)
+            IF (RootZone%Flags%RootZoneZoneBudRawFile_Defined) pZBudget => RootZone%RootZoneZoneBudRawFile
+    END SELECT
+    
+    !Return if ZBudget file does not exist
+    IF (.NOT.ASSOCIATED(pZBudget)) THEN
+        iStat = 0
+        ALLOCATE (rFlows(0,0) , cFlowNames(0))
+        RETURN
+    END IF
+    
+    !Generate zone list
+    CALL ZoneList%New(pZBudget%Header%iNData,pZBudget%Header%lFaceFlows_Defined,pZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)
+    IF (iStat .NE. 0) RETURN
+    
+    !Retrieve data
+    CALL RootZone_v50_GetZBudget_AnnualFlows_GivenFile(pZBudget,iZBudgetType,ZoneList,iZoneID,iLUType,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
+
+    !Clear memory
+    CALL ZoneList%Kill()
+    NULLIFY(pZBudget)
+    
+  END SUBROUTINE RootZone_v50_GetZBudget_AnnualFlows_GivenRootZone
+     
+     
+  ! -------------------------------------------------------------
+  ! --- GET ANNUAL ZBUDGET FLOWS FROM ZBUDGET OUTPUT 
+  ! -------------------------------------------------------------
+  SUBROUTINE RootZone_v50_GetZBudget_AnnualFlows_GivenFile(ZBudget,iZBudgetType,ZoneList,iZoneID,iLUType,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
+    TYPE(ZBudgetType),INTENT(IN)             :: ZBudget              
+    TYPE(ZoneListType),INTENT(IN)            :: ZoneList
+    INTEGER,INTENT(IN)                       :: iZBudgetType,iZoneID,iLUType
+    CHARACTER(LEN=*),INTENT(IN)              :: cBeginDate,cEndDate  
+    REAL(8),INTENT(IN)                       :: rFactVL
+    REAL(8),ALLOCATABLE,INTENT(OUT)          :: rFlows(:,:)          
+    CHARACTER(LEN=*),ALLOCATABLE,INTENT(OUT) :: cFlowNames(:)
+    INTEGER,INTENT(OUT)                      :: iStat
+    
+    !Local variables
+    CHARACTER(LEN=ModNameLen+45) :: ThisProcedure = ModName // 'RootZone_v50_GetZBudget_AnnualFlows_GivenFile'
+    INTEGER                      :: iNTimeSteps,indx,ErrorCode,iNPopulatedValues,indxTime
+    TYPE(TimeStepType)           :: TimeStep
+    INTEGER,ALLOCATABLE          :: iColList(:),iDataUnitTypes(:)
+    REAL(8),ALLOCATABLE          :: rValues(:,:)
+    
+    !Get number of time steps stored in the ZBudget file
+    CALL ZBudget%GetTimeStepRelatedData(iNTimeSteps,TimeStep)
+    
+    !Land and water use z-budget
+    IF (iZBudgetType .EQ. f_iZBudgetType_LWU) THEN
+        ALLOCATE (iColList(5) , iDataUnitTypes(5) , cFlowNames(5) , rValues(6,iNTimeSteps))
+        cFlowNames = ['Supply Requirement' , 'Pumping' , 'Deliveries' , 'Inflow as Surface Runoff' , 'Shortage']
+        SELECT CASE (iLUType)
+            CASE (f_iLandUse_Ag , f_iLandUse_NonPondedAg , f_iLandUse_Rice , f_iLandUse_Refuge)
+                iColList = [(indx,indx=3,7)]
+                
+            CASE (f_iLandUse_Urb)
+                iColList = [(indx,indx=12,16)]
+                
+            CASE DEFAULT
+                CALL SetLastMessage('Land&Water Use ZBudget is not available for the selected land use type!',f_iFatal,ThisProcedure)
+                DEALLOCATE (rFlows , cFlowNames , STAT=ErrorCode)
+                ALLOCATE (rFlows(0,0) , cFlowNames(0))
+                iStat = -1
+                RETURN
+        END SELECT
+        
+        !Read data for the interval
+        CALL ZBudget%ReadData(ZoneList,iZoneID,iColList,'1YEAR',cBeginDate,cEndDate,1d0,rFactVL,iDataUnitTypes,iNPopulatedValues,rValues,iStat)
+        IF (iStat .NE. 0) RETURN
+        
+        !Store values in return argument
+        ALLOCATE (rFlows(5,iNPopulatedValues))
+        DO indxTime=1,iNPopulatedValues
+            rFlows(1,indxTime) = -rValues(2,indxTime)
+            rFlows(2,indxTime) =  rValues(3,indxTime) 
+            rFlows(3,indxTime) =  rValues(4,indxTime)
+            rFlows(4,indxTime) =  rValues(5,indxTime)
+            rFlows(5,indxTime) =  rValues(6,indxTime)
+        END DO
+    
+    
+    !Root zone budget
+    ELSEIF (iZBudgetType .EQ. f_iZBudgetType_RootZone) THEN
+        SELECT CASE (iLUType)
+            CASE (f_iLandUse_Ag , f_iLandUse_NonPondedAg , f_iLandUse_Rice , f_iLandUse_Refuge)
+                ALLOCATE (iColList(7) , iDataUnitTypes(7) , cFlowNames(6) , rValues(8,iNTimeSteps))
+                cFlowNames = ['Change in Storage' , 'Gain from Land Expansion' , 'Infiltration' , 'Other Inflow' , 'ET' , 'Percolation']
+                iColList   = [(indx,indx=9,15)]
+                    
+                !Read data for the interval
+                CALL ZBudget%ReadData(ZoneList,iZoneID,iColList,'1YEAR',cBeginDate,cEndDate,1d0,rFactVL,iDataUnitTypes,iNPopulatedValues,rValues,iStat)
+                IF (iStat .NE. 0) RETURN
+                
+                !Store values in return argument
+                ALLOCATE (rFlows(6,iNPopulatedValues))
+                DO indxTime=1,iNPopulatedValues
+                    rFlows(1,indxTime) =  rValues(2,indxTime) - rValues(8,indxTime)  !Change in storage
+                    rFlows(2,indxTime) =  rValues(3,indxTime)                        !Gain from land expansion
+                    rFlows(3,indxTime) =  rValues(4,indxTime)                        !Infiltration
+                    rFlows(4,indxTime) =  rValues(5,indxTime)                        !Other Inflow
+                    rFlows(5,indxTime) = -rValues(6,indxTime)                        !ET
+                    rFlows(6,indxTime) = -rValues(7,indxTime)                        !Percolation
+                END DO
+                                
+            CASE (f_iLandUse_Urb)
+                ALLOCATE (iColList(7) , iDataUnitTypes(7) , cFlowNames(6) , rValues(8,iNTimeSteps))
+                cFlowNames = ['Change in Storage' , 'Gain from Land Expansion' , 'Infiltration' , 'Other Inflow' , 'ET' , 'Percolation']
+                iColList   = [(indx,indx=25,31)]
+                
+                !Read data for the interval
+                CALL ZBudget%ReadData(ZoneList,iZoneID,iColList,'1YEAR',cBeginDate,cEndDate,1d0,rFactVL,iDataUnitTypes,iNPopulatedValues,rValues,iStat)
+                IF (iStat .NE. 0) RETURN
+                
+                !Store values in return argument
+                ALLOCATE (rFlows(6,iNPopulatedValues))
+                DO indxTime=1,iNPopulatedValues
+                    rFlows(1,indxTime) =  rValues(2,indxTime) - rValues(8,indxTime)  !Change in storage
+                    rFlows(2,indxTime) =  rValues(3,indxTime)                        !Gain from land expansion
+                    rFlows(3,indxTime) =  rValues(4,indxTime)                        !Infiltration
+                    rFlows(4,indxTime) =  rValues(5,indxTime)                        !Other Inflow
+                    rFlows(5,indxTime) = -rValues(6,indxTime)                        !ET
+                    rFlows(6,indxTime) = -rValues(7,indxTime)                        !Percolation
+                END DO
+                
+            CASE (f_iLandUse_NVRV)
+                ALLOCATE (iColList(7) , iDataUnitTypes(7) , cFlowNames(6) , rValues(8,iNTimeSteps))
+                cFlowNames = ['Change in Storage' , 'Gain from Land Expansion' , 'Infiltration' , 'Other Inflow' , 'ET' , 'Percolation']
+                iColList   = [(indx,indx=38,44)]
+                
+                !Read data for the interval
+                CALL ZBudget%ReadData(ZoneList,iZoneID,iColList,'1YEAR',cBeginDate,cEndDate,1d0,rFactVL,iDataUnitTypes,iNPopulatedValues,rValues,iStat)
+                IF (iStat .NE. 0) RETURN
+                
+                !Store values in return argument
+                ALLOCATE (rFlows(6,iNPopulatedValues))
+                DO indxTime=1,iNPopulatedValues
+                    rFlows(1,indxTime) =  rValues(2,indxTime) - rValues(8,indxTime)  !Change in storage
+                    rFlows(2,indxTime) =  rValues(3,indxTime)                        !Gain from land expansion
+                    rFlows(3,indxTime) =  rValues(4,indxTime)                        !Infiltration
+                    rFlows(4,indxTime) =  rValues(5,indxTime)                        !Other Inflow
+                    rFlows(5,indxTime) = -rValues(6,indxTime)                        !ET
+                    rFlows(6,indxTime) = -rValues(7,indxTime)                        !Percolation
+                END DO
+                
+            CASE DEFAULT
+                CALL SetLastMessage('Root Zone ZBudget is not available for the selected land use type!',f_iFatal,ThisProcedure)
+                DEALLOCATE (rFlows , cFlowNames , STAT=ErrorCode)
+                ALLOCATE (rFlows(0,0) , cFlowNames(0))
+                iStat = -1
+                RETURN
+        END SELECT        
+    END IF  
+     
+  END SUBROUTINE RootZone_v50_GetZBudget_AnnualFlows_GivenFile
      
   
   ! -------------------------------------------------------------
@@ -2447,6 +2816,78 @@ CONTAINS
     Ratio = 1.0
     
   END SUBROUTINE RootZone_v50_GetRatio_DestSupplyToRegionSupply_Urb
+  
+  
+  ! -------------------------------------------------------------
+  ! --- GET AREAS OF A LAND USE AT ALL ELEMENTS FOR A TIME PERIOD
+  ! --- Note: This method is not meant to be called during a Simulation
+  ! -------------------------------------------------------------
+  SUBROUTINE RootZone_v50_GetLandUseAreasForTimePeriod(cRootZoneMainFileName,cWorkingDirectory,cBeginDate,cEndDate,TimeStep,AppGrid,iLUType,iLU,rLUAreas,iStat)
+    CHARACTER(LEN=*),INTENT(IN)   :: cRootZoneMainFileName,cWorkingDirectory,cBeginDate,cEndDate
+    TYPE(TimeStepType),INTENT(IN) :: TimeStep 
+    TYPE(AppGridType),INTENT(IN)  :: AppGrid
+    INTEGER,INTENT(IN)            :: iLUType,iLU
+    REAL(8),INTENT(OUT)           :: rLUAreas(:,:)  !For each (element,time); the array must be pre-dimensioned properly
+    INTEGER,INTENT(OUT)           :: iStat
+    
+    !Local variables
+    CHARACTER(LEN=ModNameLen+41)          :: ThisProcedure = ModName // 'RootZone_v50_GetLandUseAreasForTimePeriod'
+    TYPE(GenericFileType)                 :: RootZoneMainFile
+    INTEGER                               :: indx
+    CHARACTER                             :: cALine*500
+    CHARACTER(:),ALLOCATABLE              :: cAgFileName,cUrbanFileName,cNVRVFileName
+    TYPE(AgDatabase_v50_Type)             :: DummyAg
+    TYPE(UrbanDatabase_v50_Type)          :: DummyUrban
+    TYPE(NativeRiparianDatabase_v50_Type) :: DummyNVRV
+    
+    !Open main root zone file
+    CALL RootZoneMainFile%New(FileName=cRootZoneMainFileName,InputFile=.TRUE.,IsTSFile=.FALSE.,iStat=iStat)  ;  IF (iStat .NE. 0) RETURN
+    
+    !Read the version number and skip 4 lines of input data (total of 5 lines)
+    DO indx=1,5
+        CALL RootZoneMainFile%ReadData(cALine,iStat)  
+        IF (iStat .NE. 0) GOTO 10
+    END DO
+    
+    !Read the ag main file name
+    CALL RootZoneMainFile%ReadData(cALine,iStat)  ;  IF (iStat .NE. 0) GOTO 10 
+    cALine = StripTextUntilCharacter(cALine,'/') 
+    CALL CleanSpecialCharacters(cALine)
+    CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(cALine)),cWorkingDirectory,cAgFileName)
+    
+    !Read the urban main file name
+    CALL RootZoneMainFile%ReadData(cALine,iStat)  ;  IF (iStat .NE. 0) GOTO 10 
+    cALine = StripTextUntilCharacter(cALine,'/') 
+    CALL CleanSpecialCharacters(cALine)
+    CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(cALine)),cWorkingDirectory,cUrbanFileName)
+    
+    !Read the NVRV main file name
+    CALL RootZoneMainFile%ReadData(cALine,iStat)  ;  IF (iStat .NE. 0) GOTO 10 
+    cALine = StripTextUntilCharacter(cALine,'/') 
+    CALL CleanSpecialCharacters(cALine)
+    CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(cALine)),cWorkingDirectory,cNVRVFileName)
+
+    !Based on desired land use type, call the appropriate function
+    SELECT CASE (iLUType)
+        CASE (f_iLandUse_Ag)
+            CALL DummyAg%GetAreasForTimePeriod(cAgFileName,cWorkingDirectory,cBeginDate,cEndDate,TimeStep,AppGrid,rLUAreas,iStat)
+            
+        CASE (f_iLandUse_Urb)
+            CALL DummyUrban%GetAreasForTimePeriod(cUrbanFileName,cWorkingDirectory,cBeginDate,cEndDate,TimeStep,AppGrid,rLUAreas,iStat) 
+            
+        CASE (f_iLandUse_NVRV)
+            CALL DummyNVRV%GetAreasForTimePeriod(cNVRVFileName,cWorkingDirectory,cBeginDate,cEndDate,TimeStep,AppGrid,iLU,rLUAreas,iStat)            
+            
+        CASE DEFAULT
+            MessageArray(1) = 'Land use type for which element areas are being retrieved is not recognized!'
+            MessageArray(2) = 'Land use type identifier must be one of the flags that describe general ag, urban or native&riparian vegetation.'
+            CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+    END SELECT
+
+    !Close main file
+10  CALL RootZoneMainFile%Kill() 
+
+  END SUBROUTINE RootZone_v50_GetLandUseAreasForTimePeriod
   
   
   ! -------------------------------------------------------------
@@ -2644,6 +3085,200 @@ CONTAINS
   
   
   ! -------------------------------------------------------------
+  ! --- GET RUNOFF AT ALL ELEMENTS
+  ! -------------------------------------------------------------
+  SUBROUTINE RootZone_v50_GetElementRunoff(RootZone,iElemRegions,rRunoff)
+    CLASS(RootZone_v50_Type),INTENT(IN) :: RootZone
+    INTEGER,INTENT(IN)                  :: iElemRegions(:)
+    REAL(8),INTENT(OUT)                 :: rRunoff(:)
+
+    !Local variables
+    INTEGER :: indxElem,iRegion,iSoil
+    
+    ASSOCIATE (pFlags    => RootZone%Flags         , &
+               pAg       => RootZone%AgRootZone    , &
+               pUrban    => RootZone%UrbanRootZone , &
+               pNVRV     => RootZone%NVRVRootZone  )
+        DO indxElem=1,SIZE(iElemRegions)
+            iRegion = iElemRegions(indxElem)
+            iSoil   = RootZone%ElemSoilType(indxElem)
+   
+            !Ag lands
+            IF (pFlags%lAg_Defined) THEN
+                rRunoff(indxElem) = pAg%AgData%Runoff(iSoil,iRegion) * pAg%ElementalArea(indxElem)
+            ELSE
+                rRunoff(indxElem) = 0.0
+            END IF
+
+            !Urban 
+            IF (pFlags%lUrban_Defined) rRunoff(indxElem) = rRunoff(indxElem) + pUrban%UrbData%Runoff(iSoil,iRegion) * pUrban%ElementalArea(indxElem)
+
+            !Native and riparian vegetation areas
+            IF (pFlags%lNVRV_Defined) rRunoff(indxElem) = rRunoff(indxElem) + pNVRV%NativeVeg%Runoff(iSoil,iRegion)   * pNVRV%ElementalArea_NV(indxElem)   &
+                                                                            + pNVRV%RiparianVeg%Runoff(iSoil,iRegion) * pNVRV%ElementalArea_RV(indxElem) 
+
+        END DO
+    END ASSOCIATE
+               
+  END SUBROUTINE RootZone_v50_GetElementRunoff
+  
+  
+  ! -------------------------------------------------------------
+  ! --- GET APPLIED WATER AT ALL ELEMENTS
+  ! -------------------------------------------------------------
+  SUBROUTINE RootZone_v50_GetElementAppliedWater(RootZone,iElemRegions,rAW)
+    CLASS(RootZone_v50_Type),INTENT(IN) :: RootZone
+    INTEGER,INTENT(IN)                  :: iElemRegions(:)  
+    REAL(8),INTENT(OUT)                 :: rAW(:)
+
+    !Local variables
+    INTEGER :: indxElem,iRegion
+    REAL(8) :: rElemFrac,rAgArea(SIZE(iElemRegions)),rUrbArea(SIZE(iElemRegions)), &
+               rRegionAW_Ag(SIZE(RootZone%WaterSupply)),rRegionAW_Urb(SIZE(RootZone%WaterSupply))
+    
+    !Ag area and subregional applied water
+    IF (RootZone%Flags%lAg_Defined) THEN
+        CALL RootZone%GetElementAgAreas(rAgArea)
+        rRegionAW_Ag = RootZone%WaterSupply%Diversion_Ag + RootZone%WaterSupply%Pumping_Ag
+    END IF
+    
+    !Urban area and subregional applied water
+    IF (RootZone%Flags%lUrban_Defined) THEN
+        CALL RootZone%GetElementUrbanAreas(rUrbArea)
+        rRegionAW_Urb = RootZone%WaterSupply%Diversion_Urb + RootZone%WaterSupply%Pumping_Urb
+    END IF
+            
+    DO indxElem=1,SIZE(iElemRegions)
+        iRegion = iElemRegions(indxElem)
+        
+        !Ag data
+        IF (RootZone%Flags%lAg_Defined) THEN
+            rElemFrac     = rAgArea(indxElem) / RootZone%AgRootZone%SubregionalArea(iRegion)
+            rAW(indxElem) = rRegionAW_Ag(iRegion) * rElemFrac
+        ELSE
+            rAW(indxElem) = 0.0
+        END IF
+        
+        !Urban data
+        IF (RootZone%Flags%lUrban_Defined) THEN
+            rElemFrac     = rUrbArea(indxElem) / RootZone%UrbanRootZone%SubregionalArea(iRegion)
+            rAW(indxElem) = rAW(indxElem) + rRegionAW_Urb(iRegion) * rElemFrac
+        END IF
+    END DO
+    
+  END SUBROUTINE RootZone_v50_GetElementAppliedWater
+  
+  
+  ! -------------------------------------------------------------
+  ! --- GET APPLIED WATER AT ALL ELEMENTS FOR A SPECIFIED LAND USE TYPE 
+  ! --- Note: This is a placeholder for now. Will develop if needed
+  ! -------------------------------------------------------------
+  RECURSIVE SUBROUTINE RootZone_v50_GetElementAppliedWater_ForLUType(RootZone,iElemRegions,iLUType,rAW)
+    CLASS(RootZone_v50_Type),INTENT(IN) :: RootZone
+    INTEGER,INTENT(IN)                  :: iElemRegions(:)  
+    INTEGER,INTENT(IN)                  :: iLUType
+    REAL(8),INTENT(OUT)                 :: rAW(:)  
+    
+    rAW = -999.0
+    
+  END SUBROUTINE RootZone_v50_GetElementAppliedWater_ForLUType
+  
+  
+  ! -------------------------------------------------------------
+  ! --- GET RETURN FLOW AT ALL ELEMENTS
+  ! -------------------------------------------------------------
+  SUBROUTINE RootZone_v50_GetElementReturnFlow(RootZone,iElemRegions,rReturn)
+    CLASS(RootZone_v50_Type),INTENT(IN) :: RootZone
+    INTEGER,INTENT(IN)                  :: iElemRegions(:)
+    REAL(8),INTENT(OUT)                 :: rReturn(:)
+
+    !Local variables
+    INTEGER :: indxElem,iRegion,iSoil
+    
+    ASSOCIATE (pFlags    => RootZone%Flags         , &
+               pAg       => RootZone%AgRootZone    , &
+               pUrban    => RootZone%UrbanRootZone )
+        DO indxElem=1,SIZE(iElemRegions)
+            iRegion = iElemRegions(indxElem)
+            iSoil   = RootZone%ElemSoilType(indxElem)
+   
+            !Ag lands
+            IF (pFlags%lAg_Defined) THEN
+                rReturn(indxElem) = pAg%AgData%ReturnFlow(iSoil,iRegion) * pAg%ElementalArea(indxElem)
+            ELSE
+                rReturn(indxElem) = 0.0
+            END IF
+
+            !Urban 
+            IF (pFlags%lUrban_Defined) rReturn(indxElem) = rReturn(indxElem) + pUrban%UrbData%ReturnFlow(iSoil,iRegion) * pUrban%ElementalArea(indxElem)
+
+        END DO
+    END ASSOCIATE
+               
+  END SUBROUTINE RootZone_v50_GetElementReturnFlow
+  
+  
+  ! -------------------------------------------------------------
+  ! --- GET RETURN FLOW AT ALL ELEMENTS FOR A SPECIFIED LAND USE TYPE 
+  ! --- Note: This is a placeholder for now. Will develop if needed
+  ! -------------------------------------------------------------
+  RECURSIVE SUBROUTINE RootZone_v50_GetElementReturnFlow_ForLUType(RootZone,iElemRegions,iLUType,rReturn)
+    CLASS(RootZone_v50_Type),INTENT(IN) :: RootZone
+    INTEGER,INTENT(IN)                  :: iElemRegions(:)  
+    INTEGER,INTENT(IN)                  :: iLUType
+    REAL(8),INTENT(OUT)                 :: rReturn(:)  
+    
+    rReturn = -999.0
+    
+  END SUBROUTINE RootZone_v50_GetElementReturnFlow_ForLUType
+  
+  
+  
+  
+  ! -------------------------------------------------------------
+  ! --- GET INFILTRATION DUE TO PRECIP AND APPLIED WATER AT ALL ELEMENTS
+  ! -------------------------------------------------------------
+  SUBROUTINE RootZone_v50_GetElementInfilt(RootZone,iElemRegion,rInfilt)
+    CLASS(RootZone_v50_Type),INTENT(IN) :: RootZone
+    INTEGER,INTENT(IN)                  :: iElemRegion(:)
+    REAL(8),INTENT(OUT)                 :: rInfilt(:)
+    
+    !Local variables
+    INTEGER :: indxElem,iRegion,iSoil,indx,iElem
+    
+    DO indxElem=1,SIZE(iElemRegion)
+        iRegion = iElemRegion(indxElem)
+        iSoil   = RootZone%ElemSoilType(indxElem)
+        
+        !From ag
+        IF (RootZone%Flags%lAg_Defined) THEN
+            rInfilt(indxElem) = RootZone%AgRootZone%AgData%PrecipInfilt(iSoil,iRegion) + RootZone%AgRootZone%AgData%IrigInfilt(iSoil,iRegion)
+        ELSE
+            rInfilt(indxElem) = 0.0
+        END IF
+    
+        !From urban
+        IF (RootZone%Flags%lUrban_Defined) &
+            rInfilt(indxElem) = rInfilt(indxElem) + RootZone%UrbanRootZone%UrbData%PrecipInfilt(iSoil,iRegion) + RootZone%UrbanRootZone%UrbData%IrigInfilt(iSoil,iRegion)
+        
+        !From native and riparian veg
+        IF (RootZone%Flags%lNVRV_Defined) &
+            rInfilt(indxElem) = rInfilt(indxElem) + RootZone%NVRVRootZone%NativeVeg%PrecipInfilt(iSoil,iRegion) + RootZone%NVRVRootZone%RiparianVeg%PrecipInfilt(iSoil,iRegion)
+    END DO
+    
+    !Add urban surface flows going into gw
+    DO indx=1,SIZE(RootZone%UrbanRootZone%ElemToGW)
+        iElem = RootZone%UrbanRootZone%ElemToGW(indx)
+        IF (RootZone%UrbanRootZone%ElementalArea(iElem) .EQ. 0.0) CYCLE
+        iSoil          = RootZone%ElemSoilType(iElem)
+        iRegion        = iElemRegion(iElem)
+        rInfilt(iElem) = rInfilt(iElem) + (RootZone%UrbanRootZone%UrbData%Runoff(iSoil,iRegion) + RootZone%UrbanRootZone%UrbData%ReturnFlow(iSoil,iRegion)) * RootZone%UrbanRootZone%ElementalArea(iElem)
+    END DO
+
+  END SUBROUTINE RootZone_v50_GetElementInfilt
+  
+  
+  ! -------------------------------------------------------------
   ! --- GET PRECIP INFILTRATION AT ALL ELEMENTS
   ! -------------------------------------------------------------
   SUBROUTINE RootZone_v50_GetElementPrecipInfilt(RootZone,ElemRegion,PrecipInfilt)
@@ -2711,6 +3346,34 @@ CONTAINS
     END DO
     
   END SUBROUTINE RootZone_v50_GetElementActualET
+  
+  
+  ! -------------------------------------------------------------
+  ! --- GET POND DRAIN AT ALL ELEMENTS
+  ! --- Note: This will be all zero since rice and refuges are not explicitly simulated in this version
+  ! -------------------------------------------------------------
+  SUBROUTINE RootZone_v50_GetElementPondDrain(RootZone,iElemRegions,rDrain)
+    CLASS(RootZone_v50_Type),INTENT(IN) :: RootZone
+    INTEGER,INTENT(IN)                  :: iElemRegions(:)  
+    REAL(8),INTENT(OUT)                 :: rDrain(:)
+
+    rDrain = 0.0
+    
+  END SUBROUTINE RootZone_v50_GetElementPondDrain
+  
+  
+  ! -------------------------------------------------------------
+  ! --- GET POND DRAIN AT ALL ELEMENTS FORA SPECIFIED LAND USE TYPE
+  ! --- Note: This will be all zero since rice and refuges are not explicitly simulated in this version
+  ! -------------------------------------------------------------
+  SUBROUTINE RootZone_v50_GetElementPondDrain_ForLUType(RootZone,iElemRegions,iLUType,rDrain)
+    CLASS(RootZone_v50_Type),INTENT(IN) :: RootZone
+    INTEGER,INTENT(IN)                  :: iElemRegions(:),iLUType  
+    REAL(8),INTENT(OUT)                 :: rDrain(:)
+
+    rDrain = 0.0
+    
+  END SUBROUTINE RootZone_v50_GetElementPondDrain_ForLUType
   
   
   ! -------------------------------------------------------------
@@ -2849,23 +3512,33 @@ CONTAINS
   ! -------------------------------------------------------------
   ! ---GET ELEMENTAL VOLUMETRIC SOIL MOISTURE
   ! -------------------------------------------------------------
-  SUBROUTINE RootZone_v50_GetElementSoilMVolume(RootZone,AppGrid,SoilM)
-    CLASS(RootZone_v50_Type),INTENT(IN) :: RootZone
-    TYPE(AppGridType),INTENT(IN)        :: AppGrid
-    REAL(8),INTENT(OUT)                 :: SoilM(:)
+  SUBROUTINE RootZone_v50_GetElementSoilMVolume(RootZone,AppGrid,lBeginSoilM,SoilM)
+    CLASS(RootZone_v50_Type),TARGET,INTENT(IN) :: RootZone
+    TYPE(AppGridType),INTENT(IN)               :: AppGrid
+    LOGICAL,INTENT(IN)                         :: lBeginSoilM
+    REAL(8),INTENT(OUT)                        :: SoilM(:)
     
     !Local variables
     INTEGER :: indxElem,iSoil,iRegion
+    REAL(8),POINTER :: pSoilM_Precip(:,:),pSoilM_AW(:,:),pSoilM_Oth(:,:)
     
     !Soil moisture from ag lands
     IF (RootZone%Flags%lAg_Defined) THEN
-        SoilM = 0.0
+        IF (lBeginSoilM) THEN
+            pSoilM_Precip => RootZone%AgRootZone%AgData%SoilM_Precip_P
+            pSoilM_AW     => RootZone%AgRootZone%AgData%SoilM_AW_P
+            pSoilM_Oth    => RootZone%AgRootZone%AgData%SoilM_Oth_P
+        ELSE
+            pSoilM_Precip => RootZone%AgRootZone%AgData%SoilM_Precip
+            pSoilM_AW     => RootZone%AgRootZone%AgData%SoilM_AW
+            pSoilM_Oth    => RootZone%AgRootZone%AgData%SoilM_Oth
+        END IF
         DO indxElem=1,AppGrid%NElements
             iSoil           = RootZone%ElemSoilType(indxElem)
             iRegion         = AppGrid%AppElement(indxElem)%Subregion
-            SoilM(indxElem) = SoilM(indxElem) + ( RootZone%AgRootZone%AgData%SoilM_Precip(iSoil,iRegion)  &
-                                                + RootZone%AgRootZone%AgData%SoilM_AW(iSoil,iRegion)      &
-                                                + RootZone%AgRootZone%AgData%SoilM_Oth(iSoil,iRegion)   ) * RootZone%AgRootZone%ElementalArea(indxElem)  
+            SoilM(indxElem) = ( pSoilM_Precip(iSoil,iRegion)  &
+                              + pSoilM_AW(iSoil,iRegion)      &
+                              + pSoilM_Oth(iSoil,iRegion)     ) * RootZone%AgRootZone%ElementalArea(indxElem)  
         END DO
     ELSE
         SoilM = 0.0
@@ -2873,26 +3546,60 @@ CONTAINS
     
     !Soil moisture from urban lands
     IF (RootZone%Flags%lUrban_Defined) THEN
+        IF (lBeginSoilM) THEN
+            pSoilM_Precip => RootZone%UrbanRootZone%UrbData%SoilM_Precip_P
+            pSoilM_AW     => RootZone%UrbanRootZone%UrbData%SoilM_AW_P
+            pSoilM_Oth    => RootZone%UrbanRootZone%UrbData%SoilM_Oth_P
+        ELSE
+            pSoilM_Precip => RootZone%UrbanRootZone%UrbData%SoilM_Precip
+            pSoilM_AW     => RootZone%UrbanRootZone%UrbData%SoilM_AW
+            pSoilM_Oth    => RootZone%UrbanRootZone%UrbData%SoilM_Oth
+        END IF
         DO indxElem=1,AppGrid%NElements
             iSoil           = RootZone%ElemSoilType(indxElem)
             iRegion         = AppGrid%AppElement(indxElem)%Subregion
-            SoilM(indxElem) = SoilM(indxElem) + ( RootZone%UrbanRootZone%UrbData%SoilM_Precip(iSoil,iRegion)  &
-                                                + RootZone%UrbanRootZone%UrbData%SoilM_AW(iSoil,iRegion)      &
-                                                + RootZone%UrbanRootZone%UrbData%SoilM_Oth(iSoil,iRegion)   ) * RootZone%UrbanRootZone%ElementalArea(indxElem) * RootZone%UrbanRootZone%PerviousFrac(iRegion)
+            SoilM(indxElem) = SoilM(indxElem) + ( pSoilM_Precip(iSoil,iRegion)  &
+                                                + pSoilM_AW(iSoil,iRegion)      &
+                                                + pSoilM_Oth(iSoil,iRegion)     ) * RootZone%UrbanRootZone%ElementalArea(indxElem) * RootZone%UrbanRootZone%PerviousFrac(iRegion)
         END DO
     END IF
 
     !Soil moisture from native and riparian veg
     IF (RootZone%Flags%lNVRV_Defined) THEN
+        !Native veg
+        IF (lBeginSoilM) THEN
+            pSoilM_Precip => RootZone%NVRVRootZone%NativeVeg%SoilM_Precip_P
+            pSoilM_AW     => RootZone%NVRVRootZone%NativeVeg%SoilM_AW_P
+            pSoilM_Oth    => RootZone%NVRVRootZone%NativeVeg%SoilM_Oth_P
+        ELSE
+            pSoilM_Precip => RootZone%NVRVRootZone%NativeVeg%SoilM_Precip
+            pSoilM_AW     => RootZone%NVRVRootZone%NativeVeg%SoilM_AW
+            pSoilM_Oth    => RootZone%NVRVRootZone%NativeVeg%SoilM_Oth
+        END IF
         DO indxElem=1,AppGrid%NElements
             iSoil           = RootZone%ElemSoilType(indxElem)
             iRegion         = AppGrid%AppElement(indxElem)%Subregion
-            SoilM(indxElem) = SoilM(indxElem) + ( RootZone%NVRVRootZone%NativeVeg%SoilM_Precip(iSoil,iRegion)    &
-                                                + RootZone%NVRVRootZone%NativeVeg%SoilM_AW(iSoil,iRegion)        &
-                                                + RootZone%NVRVRootZone%NativeVeg%SoilM_Oth(iSoil,iRegion)     ) * RootZone%NVRVRootZone%ElementalArea_NV(indxElem)  &
-                                              + ( RootZone%NVRVRootZone%RiparianVeg%SoilM_Precip(iSoil,iRegion)  &
-                                                + RootZone%NVRVRootZone%RiparianVeg%SoilM_AW(iSoil,iRegion)      &
-                                                + RootZone%NVRVRootZone%RiparianVeg%SoilM_Oth(iSoil,iRegion)   ) * RootZone%NVRVRootZone%ElementalArea_RV(indxElem)
+            SoilM(indxElem) = SoilM(indxElem) + ( pSoilM_Precip(iSoil,iRegion)  &
+                                                + pSoilM_AW(iSoil,iRegion)      &
+                                                + pSoilM_Oth(iSoil,iRegion)     ) * RootZone%NVRVRootZone%ElementalArea_NV(indxElem) 
+        END DO
+
+        !Riparian veg
+        IF (lBeginSoilM) THEN
+            pSoilM_Precip => RootZone%NVRVRootZone%RiparianVeg%SoilM_Precip_P
+            pSoilM_AW     => RootZone%NVRVRootZone%RiparianVeg%SoilM_AW_P
+            pSoilM_Oth    => RootZone%NVRVRootZone%RiparianVeg%SoilM_Oth_P
+        ELSE
+            pSoilM_Precip => RootZone%NVRVRootZone%RiparianVeg%SoilM_Precip
+            pSoilM_AW     => RootZone%NVRVRootZone%RiparianVeg%SoilM_AW
+            pSoilM_Oth    => RootZone%NVRVRootZone%RiparianVeg%SoilM_Oth
+        END IF
+        DO indxElem=1,AppGrid%NElements
+            iSoil           = RootZone%ElemSoilType(indxElem)
+            iRegion         = AppGrid%AppElement(indxElem)%Subregion
+            SoilM(indxElem) = SoilM(indxElem) + ( pSoilM_Precip(iSoil,iRegion)  &
+                                                + pSoilM_AW(iSoil,iRegion)      &
+                                                + pSoilM_Oth(iSoil,iRegion)     ) * RootZone%NVRVRootZone%ElementalArea_RV(indxElem)  
         END DO
     END IF
 
@@ -2902,16 +3609,13 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET PERCOLATION AT ALL ELEMENTS
   ! -------------------------------------------------------------
-  FUNCTION RootZone_v50_GetPercAll(RootZone,AppGrid) RESULT(Perc)
+  SUBROUTINE RootZone_v50_GetElementPerc(RootZone,iElemRegions,rPerc)
     CLASS(RootZone_v50_Type),INTENT(IN) :: RootZone
-    TYPE(AppGridType),INTENT(IN)        :: AppGrid
-    REAL(8)                             :: Perc(AppGrid%NElements)
+    INTEGER,INTENT(IN)                  :: iElemRegions(:)
+    REAL(8),INTENT(OUT)                 :: rPerc(:)
 
     !Local variables
     INTEGER :: indxElem,iRegion,iSoil,indx,iElem
-    
-    !Initialize
-    Perc = 0.0
     
     ASSOCIATE (pFlags       => RootZone%Flags                  , &
                pElemSoil    => RootZone%ElemSoilType           , &
@@ -2920,36 +3624,40 @@ CONTAINS
                pNVRV        => RootZone%NVRVRootZone           , &
                pUrbElemToGW => RootZone%UrbanRootZone%ElemToGW )
         
-        DO indxElem=1,AppGrid%NElements
-            iRegion = AppGrid%AppElement(indxElem)%Subregion
+        DO indxElem=1,SIZE(iElemRegions)
+            iRegion = iElemRegions(indxElem)
             iSoil   = pElemSoil(indxElem)
    
             !Ag lands
-            IF (pFlags%lAg_Defined) Perc(indxElem) = (pAg%AgData%Perc(iSoil,iRegion) + pAg%AgData%PercCh(iSoil,iRegion)) * pAg%ElementalArea(indxElem)
+            IF (pFlags%lAg_Defined) THEN
+                rPerc(indxElem) = (pAg%AgData%Perc(iSoil,iRegion) + pAg%AgData%PercCh(iSoil,iRegion)) * pAg%ElementalArea(indxElem)
+            ELSE
+                rPerc(indxElem) = 0.0
+            END IF
 
             !Urban 
-            IF (pFlags%lUrban_Defined) Perc(indxElem) = Perc(indxElem) + (pUrban%UrbData%Perc(iSoil,iRegion) + pUrban%UrbData%PercCh(iSoil,iRegion)) * pUrban%ElementalArea(indxElem)
+            IF (pFlags%lUrban_Defined) rPerc(indxElem) = rPerc(indxElem) + (pUrban%UrbData%Perc(iSoil,iRegion) + pUrban%UrbData%PercCh(iSoil,iRegion)) * pUrban%ElementalArea(indxElem)
 
             !Native and riparian vegetation areas
-            IF (pFlags%lNVRV_Defined) Perc(indxElem) = Perc(indxElem) + (pNVRV%NativeVeg%Perc(iSoil,iRegion)   + pNVRV%NativeVeg%PercCh(iSoil,iRegion)) * pNVRV%ElementalArea_NV(indxElem)   &
-                                                                      + (pNVRV%RiparianVeg%Perc(iSoil,iRegion) + pNVRV%RiparianVeg%PercCh(iSoil,iRegion)) * pNVRV%ElementalArea_RV(indxElem) 
+            IF (pFlags%lNVRV_Defined) rPerc(indxElem) = rPerc(indxElem) + (pNVRV%NativeVeg%Perc(iSoil,iRegion)   + pNVRV%NativeVeg%PercCh(iSoil,iRegion)) * pNVRV%ElementalArea_NV(indxElem)   &
+                                                                        + (pNVRV%RiparianVeg%Perc(iSoil,iRegion) + pNVRV%RiparianVeg%PercCh(iSoil,iRegion)) * pNVRV%ElementalArea_RV(indxElem) 
 
         END DO
         
         !Include urban surface runoff in perc if it goes to groundwater
         IF (pFlags%lUrban_Defined) THEN
             DO indx=1,SIZE(pUrbElemToGW)
-                iElem       = pUrbElemToGW(indx)
+                iElem        = pUrbElemToGW(indx)
                 IF (pUrban%ElementalArea(iElem) .EQ. 0.0) CYCLE
-                iRegion     = AppGrid%AppElement(iElem)%Subregion
-                iSoil       = pElemSoil(iElem)
-                Perc(iElem) = Perc(iElem) + (pUrban%UrbData%Runoff(iSoil,iRegion) + pUrban%UrbData%ReturnFlow(iSoil,iRegion)) * pUrban%ElementalArea(iElem)
+                iRegion      = iElemRegions(iElem)
+                iSoil        = pElemSoil(iElem)
+                rPerc(iElem) = rPerc(iElem) + (pUrban%UrbData%Runoff(iSoil,iRegion) + pUrban%UrbData%ReturnFlow(iSoil,iRegion)) * pUrban%ElementalArea(iElem)
             END DO
         END IF
         
     END ASSOCIATE
                
-  END FUNCTION RootZone_v50_GetPercAll
+  END SUBROUTINE RootZone_v50_GetElementPerc
   
   
   ! -------------------------------------------------------------

@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2022 
+!  Copyright (C) 2005-2024 
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -189,9 +189,9 @@ CONTAINS
     INTEGER,INTENT(OUT)         :: iStat
 
     !Local variables
-    CHARACTER(LEN=ModNameLen+33)  :: ThisProcedure = ModName // 'GetAquiferParamFromParametricGrid'
+    CHARACTER(LEN=ModNameLen+27)  :: ThisProcedure = ModName // 'GetValuesFromParametricGrid'
     INTEGER                       :: indxGrid,indxFENode,indxLayer,indxParamElem,indxParamNode,indxNodeStart,indxNodeEnd,indxNorm, &
-                                     NDP,NEP,DummyIntArray(5),NVertex,ConvexNode,NParam,NLayers,ErrorCode,Vertex(4)
+                                     NDP,NEP,DummyIntArray(5),NVertex,ConvexNode,NParam,NLayers,ErrorCode,Vertex(4),iNode,ID
     INTEGER,ALLOCATABLE           :: NodesInterp(:),Param_NVertex(:),Param_Vertex(:,:)
     REAL(8)                       :: DummyRealArray(3+SIZE(ParamValues,2)*SIZE(ParamValues,3)),LocalParamValues(SIZE(ParamValues,2),SIZE(ParamValues,3)),XP,YP,X(4),Y(4)
     REAL(8),ALLOCATABLE           :: ParamNode_X(:),ParamNode_Y(:)
@@ -208,118 +208,119 @@ CONTAINS
     ParamGridLoop: &
     DO indxGrid=1,NParamGrids
 
-      !Initialize variables
-      CALL KillParamGrid(ParamGrid)
-      DEALLOCATE (ParamNode_X , ParamNode_Y , Param_NVertex , Param_Vertex , STAT=ErrorCode)
-      
-      !Read grid node/element numbers for which parameter values will be computed
-      IF (CellCentered) THEN  !Element numbers are entered
-          CALL READCH(DataFile,indxGrid,SIZE(Grid%NVertex),FeatureIDs,'Element',cDescription,NodesInterp,iStat)
-      ELSE    !Node numbers are entered
-          CALL READCH(DataFile,indxGrid,SIZE(Grid%X),FeatureIDs,'Node',cDescription,NodesInterp,iStat)
-      END IF
-      IF (iStat .NE. 0) RETURN
-
-      !Read parametric grid dimensions and allocate arrays
-      CALL DataFile%ReadData(NDP,iStat)  ;  IF (iStat .EQ. -1) RETURN      !Number of parametric nodes in the group
-      CALL DataFile%ReadData(NEP,iStat)  ;  IF (iStat .EQ. -1) RETURN      !Number of parametric elements in the group
-      IF (NDP.GT.1 .AND. NEP.EQ.0) THEN 
-          CALL SetLastMessage('NDP in parameteric group '//TRIM(IntToText(indxGrid))//' should be zero!',f_iFatal,ThisProcedure)
-          iStat = -1
-          RETURN
-      END IF
-      indxNodeEnd = indxNodeStart+NDP-1
-      ALLOCATE (ParamNode_X(indxNodeStart:indxNodeEnd) , ParamNode_Y(indxNodeStart:indxNodeEnd) , Param_NVertex(NEP) , Param_Vertex(4,NEP) , STAT=ErrorCode)
-      IF (ErrorCode .NE. 0) THEN
-          CALL SetLastMessage('Error in allocating memory for the nodes and/or elements of parametric grid '//TRIM(IntToText(indxGrid))//' for aquifer parameters!',f_iFatal,ThisProcedure)
-          iStat = -1
-          RETURN
-      END IF
-
-      !Create storage for parametric grid
-      CALL NewParametricGrid(ParamNode_X,ParamNode_Y,Param_NVertex,Param_Vertex,NLayers,NParam,ParamGrid,iStat)
-      IF (iStat .EQ. -1) RETURN
-
-      !Read parametric elements and surrounding nodes
-      DO indxParamElem=1,NEP
-        CALL DataFile%ReadData(DummyIntArray,iStat)  ;  IF (iStat .EQ. -1) RETURN 
-        IF (DummyIntArray(1) .NE. indxParamElem)  THEN
-          MessageArray(1) = 'Parametric elements should be entered sequentially!'
-          MessageArray(2) = 'Expected element number = '//TRIM(IntToText(indxParamElem))
-          MessageArray(3) = 'Entered element number  = '//TRIM(IntToText(DummyIntArray(1)))
-          CALL SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
-          iStat = -1
-          RETURN
+        !Initialize variables
+        CALL KillParamGrid(ParamGrid)
+        DEALLOCATE (ParamNode_X , ParamNode_Y , Param_NVertex , Param_Vertex , STAT=ErrorCode)
+        
+        !Read grid node/element numbers for which parameter values will be computed
+        IF (CellCentered) THEN  !Element numbers are entered
+            CALL READCH(DataFile,indxGrid,SIZE(Grid%NVertex),FeatureIDs,'Element',cDescription,NodesInterp,iStat)
+        ELSE    !Node numbers are entered
+            CALL READCH(DataFile,indxGrid,SIZE(Grid%X),FeatureIDs,'Node',cDescription,NodesInterp,iStat)
         END IF
-        NVertex = 4 ; IF (DummyIntArray(5) .EQ. 0) NVertex = 3
-        ParamGrid%GridData%NVertex(indxParamElem)  = NVertex
-        ParamGrid%GridData%Vertex(:,indxParamElem) = DummyIntArray(2:)-indxNodeStart+1
-      END DO 
-
-      !Read coordinates and parameter values at parametric nodes
-      DO indxParamNode=indxNodeStart,indxNodeEnd
-        indxNorm = indxParamNode-indxNodeStart+1
-        CALL DataFile%ReadData(DummyRealArray,iStat)  ;  IF (iStat .EQ. -1) RETURN 
-        IF (INT(DummyRealArray(1)) .NE. indxParamNode) THEN
-            MessageArray(1) = 'Parametric node data should be entered sequentially!'
-            MessageArray(2) = 'Parametric grid      = '//TRIM(IntToText(indxGrid))
-            MessageArray(3) = 'Expected node number = '//TRIM(IntToText(indxParamNode))
-            MessageArray(4) = 'Entered node number  = '//TRIM(IntToText(INT(DummyRealArray(1))))
-            CALL SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
+        IF (iStat .NE. 0) RETURN
+        
+        !Read parametric grid dimensions and allocate arrays
+        CALL DataFile%ReadData(NDP,iStat)  ;  IF (iStat .EQ. -1) RETURN      !Number of parametric nodes in the group
+        CALL DataFile%ReadData(NEP,iStat)  ;  IF (iStat .EQ. -1) RETURN      !Number of parametric elements in the group
+        IF (NDP.GT.1 .AND. NEP.EQ.0) THEN 
+            CALL SetLastMessage('NDP in parameteric group '//TRIM(IntToText(indxGrid))//' should be zero!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
-
-        !Store coordinates of parametric nodes
-        ParamGrid%GridData%X(indxNorm) = DummyRealArray(2) * ConversionFactor(1) 
-        ParamGrid%GridData%Y(indxNorm) = DummyRealArray(3) * ConversionFactor(1)
-
-        !Reshape the 1-D DummyRealArray to 2-D LocalParamValues
-        LocalParamValues = RESHAPE(DummyRealArray(4:),[NLayers,NParam],ORDER=[2,1])
-
-        !Store parameter values at parametric nodes
-        DO indxLayer=1,NLayers
-          ParamGrid%ParamNode(indxNorm)%Layer(indxLayer)%ParamValue = LocalParamValues(indxLayer,:)*ConversionFactor(2:)
+        indxNodeEnd = indxNodeStart+NDP-1
+        ALLOCATE (ParamNode_X(indxNodeStart:indxNodeEnd) , ParamNode_Y(indxNodeStart:indxNodeEnd) , Param_NVertex(NEP) , Param_Vertex(4,NEP) , STAT=ErrorCode)
+        IF (ErrorCode .NE. 0) THEN
+            CALL SetLastMessage('Error in allocating memory for the nodes and/or elements of parametric grid '//TRIM(IntToText(indxGrid))//' for aquifer parameters!',f_iFatal,ThisProcedure)
+            iStat = -1
+            RETURN
+        END IF
+        
+        !Create storage for parametric grid
+        CALL NewParametricGrid(ParamNode_X,ParamNode_Y,Param_NVertex,Param_Vertex,NLayers,NParam,ParamGrid,iStat)
+        IF (iStat .EQ. -1) RETURN
+        
+        !Read parametric elements and surrounding nodes
+        DO indxParamElem=1,NEP
+            CALL DataFile%ReadData(DummyIntArray,iStat)  ;  IF (iStat .EQ. -1) RETURN 
+            IF (DummyIntArray(1) .NE. indxParamElem)  THEN
+                MessageArray(1) = 'Parametric elements should be entered sequentially!'
+                MessageArray(2) = 'Expected element number = '//TRIM(IntToText(indxParamElem))
+                MessageArray(3) = 'Entered element number  = '//TRIM(IntToText(DummyIntArray(1)))
+                CALL SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+                iStat = -1
+                RETURN
+            END IF
+            NVertex = 4 ; IF (DummyIntArray(5) .EQ. 0) NVertex = 3
+            ParamGrid%GridData%NVertex(indxParamElem)  = NVertex
+            ParamGrid%GridData%Vertex(:,indxParamElem) = DummyIntArray(2:)-indxNodeStart+1
+        END DO 
+        
+        !Read coordinates and parameter values at parametric nodes
+        DO indxParamNode=indxNodeStart,indxNodeEnd
+            indxNorm = indxParamNode-indxNodeStart+1
+            CALL DataFile%ReadData(DummyRealArray,iStat)  ;  IF (iStat .EQ. -1) RETURN 
+            IF (INT(DummyRealArray(1)) .NE. indxParamNode) THEN
+                MessageArray(1) = 'Parametric node data should be entered sequentially!'
+                MessageArray(2) = 'Parametric grid      = '//TRIM(IntToText(indxGrid))
+                MessageArray(3) = 'Expected node number = '//TRIM(IntToText(indxParamNode))
+                MessageArray(4) = 'Entered node number  = '//TRIM(IntToText(INT(DummyRealArray(1))))
+                CALL SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
+                iStat = -1
+                RETURN
+            END IF
+            
+            !Store coordinates of parametric nodes
+            ParamGrid%GridData%X(indxNorm) = DummyRealArray(2) * ConversionFactor(1) 
+            ParamGrid%GridData%Y(indxNorm) = DummyRealArray(3) * ConversionFactor(1)
+            
+            !Reshape the 1-D DummyRealArray to 2-D LocalParamValues
+            LocalParamValues = RESHAPE(DummyRealArray(4:),[NLayers,NParam],ORDER=[2,1])
+            
+            !Store parameter values at parametric nodes
+            DO indxLayer=1,NLayers
+                ParamGrid%ParamNode(indxNorm)%Layer(indxLayer)%ParamValue = LocalParamValues(indxLayer,:)*ConversionFactor(2:)
+            END DO
         END DO
-
-      END DO
-
-      !Check for parametric element convexity
-      pGridData => ParamGrid%GridData
-      DO indxParamElem=1,NEP
-        NVertex  =  pGridData%NVertex(indxParamElem)
-        IF (NVertex .EQ. 3) CYCLE
-        Vertex   = pGridData%Vertex(:,indxParamElem)
-        X = pGridData%X(Vertex)
-        Y = pGridData%Y(Vertex)
-        CALL CheckElementConvexity(NVertex,Vertex,X,Y,ConvexNode)
-        IF (ConvexNode .NE. 0) THEN
-          MessageArray(1) = 'Parametric element '//TRIM(IntToText(indxParamElem))//' in parametric grid '//TRIM(IntToText(indxGrid))
-          MessageArray(2) = 'is not convex (has an angle greater than 180 degrees) at node '//TRIM(IntToText(ConvexNode+indxNodeStart-1))//'!'
-          CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
-          iStat = -1
-          RETURN
-        END IF
-      END DO
-
-      !Interpolate parametric values onto desired nodes
-      DO indxFENode=1,SIZE(NodesInterp)
-        IF (CellCentered) THEN
-          CALL Grid%Centroid(NodesInterp(indxFENode),XP,YP)
-        ELSE
-          XP = Grid%X(NodesInterp(indxFENode))
-          YP = Grid%Y(NodesInterp(indxFENode))
-        END IF
-        CALL InterpolateParametricGrid( XP , YP , ParamValues(NodesInterp(indxFENode),:,:) , Stat)
-        IF (Stat .EQ. .FALSE.) THEN
-            CALL SetLastMessage('FE node/element ' // TRIM(IntTotext(NodesInterp(indxFENode))) // ' cannot be located in parametric grid number ' // TRIM(IntToText(indxGrid)) // ' for ' // TRIM(cDescription) // '!',f_iFatal,Thisprocedure)
-            iStat = -1
-            RETURN
-        END IF
-      END DO
-
-      !Increment indx_s
-      indxNodeStart = indxNodeEnd+1
+        
+        !Check for parametric element convexity
+        pGridData => ParamGrid%GridData
+        DO indxParamElem=1,NEP
+            NVertex  =  pGridData%NVertex(indxParamElem)
+            IF (NVertex .EQ. 3) CYCLE
+            Vertex   = pGridData%Vertex(:,indxParamElem)
+            X = pGridData%X(Vertex)
+            Y = pGridData%Y(Vertex)
+            CALL CheckElementConvexity(NVertex,Vertex,X,Y,ConvexNode)
+            IF (ConvexNode .NE. 0) THEN
+                MessageArray(1) = 'Parametric element '//TRIM(IntToText(indxParamElem))//' in parametric grid '//TRIM(IntToText(indxGrid))
+                MessageArray(2) = 'is not convex (has an angle greater than 180 degrees) at node '//TRIM(IntToText(ConvexNode+indxNodeStart-1))//'!'
+                CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                iStat = -1
+                RETURN
+            END IF
+        END DO
+        
+        !Interpolate parametric values onto desired nodes
+        DO indxFENode=1,SIZE(NodesInterp)
+            iNode = NodesInterp(indxFENode)
+            IF (CellCentered) THEN
+                CALL Grid%Centroid(iNode,XP,YP)
+            ELSE
+                XP = Grid%X(iNode)
+                YP = Grid%Y(iNode)
+            END IF
+            CALL InterpolateParametricGrid( XP , YP , ParamValues(iNode,:,:) , Stat)
+            IF (Stat .EQ. .FALSE.) THEN
+                ID = FeatureIDs(iNode)
+                CALL SetLastMessage('FE node/element ' // TRIM(IntTotext(ID)) // ' cannot be located in parametric grid number ' // TRIM(IntToText(indxGrid)) // ' for ' // TRIM(cDescription) // '!',f_iFatal,Thisprocedure)
+                iStat = -1
+                RETURN
+            END IF
+        END DO
+        
+        !Increment indx_s
+        indxNodeStart = indxNodeEnd+1
 
     END DO ParamGridLoop
 
@@ -445,7 +446,7 @@ CONTAINS
     CHARACTER(LEN=ModNameLen+6)           :: ThisProcedure = ModName // 'READCH'
     INTEGER                               :: indx,INDX_S_ID,INDX_L_ID,LTH,IPOS,IPOS_DASH,N,ErrorCode,iLoc, &
                                              LocationsForInterp(NLocations),LocationList(NLocations), &
-                                             ID
+                                             ID,iFeatureIDs_Min,iFeatureIDs_Max
     INTEGER,PARAMETER                     :: LineLength=3000
     CHARACTER(LEN=LineLength),ALLOCATABLE :: DataLines(:)
     CHARACTER(LEN=LineLength)             :: WorkLine
@@ -454,6 +455,8 @@ CONTAINS
     iStat              = 0
     LocationsForInterp = -1
     LocationList       = [(indx,indx=1,NLocations)]
+    iFeatureIDs_Min    = MINVAL(iFeatureIDs)
+    iFeatureIDs_Max    = MAXVAL(iFeatureIDs)
 
     !Read in the FE nodes for which data will be interpolated
     CALL ParameterFile%ReadData(DataLines,iStat)  ;  IF (iStat .EQ. -1) RETURN 
@@ -495,11 +498,15 @@ CONTAINS
                 DO ID=INDX_S_ID,INDX_L_ID
                     iLoc = LocateInList(ID,iFeatureIDs)
                     IF (iLoc .EQ. 0) THEN
-                        CALL SetLastMessage(cNodeOrElem // ' ID number ' // TRIM(IntToText(ID)) // ', listed in parametric grid number '// TRIM(IntToText(iParamGridNo)) // ' for ' // TRIM(cDescriptor) // ', is not in the model!',f_iFatal,ThisProcedure)
-                        iStat = -1
-                        RETURN
+                        !Allow the user to use dash even when location IDs are skipping numbers, as long as ID number is in-between the smallest and largest ID number
+                        IF (ID.LT.iFeatureIDs_Min  .OR.  ID.GT.iFeatureIDs_Max) THEN
+                            CALL SetLastMessage(cNodeOrElem // ' ID number ' // TRIM(IntToText(ID)) // ', listed in parametric grid number '// TRIM(IntToText(iParamGridNo)) // ' for ' // TRIM(cDescriptor) // ', is not in the model!',f_iFatal,ThisProcedure)
+                            iStat = -1
+                            RETURN
+                        END IF
+                    ELSE
+                        LocationsForInterp(iLoc) = 0
                     END IF
-                    LocationsForInterp(iLoc) = 0
                 END DO
             END IF
             !Delete the number(s) from DataLine

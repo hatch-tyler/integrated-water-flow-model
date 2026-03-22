@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2022  
+!  Copyright (C) 2005-2024  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -54,7 +54,7 @@ MODULE Class_StrmNode
       INTEGER                    :: ID           = 0                !Stream node ID
       REAL(8)                    :: rLength      = 0.0              !Length of stream associated with node
       REAL(8)                    :: BottomElev                      !Stream bottom elevation
-      TYPE(PairedDataType)       :: RatingTable                     !Stage vs. flow rating table
+      TYPE(PairedDataType)       :: RatingTable                     !Head vs. flow rating table
       TYPE(ConnectivityListType) :: Connectivity                    !List of stream nodes upstream from this node
   END TYPE StrmNodeType 
   

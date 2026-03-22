@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2022  
+!  Copyright (C) 2005-2024  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -129,7 +129,8 @@ MODULE Package_AppPumping
       PROCEDURE,PASS :: GetNElemPumps 
       PROCEDURE,PASS :: GetElemPumpIDs
       PROCEDURE,PASS :: GetWellIDs
-      PROCEDURE,PASS :: GetWellXY
+      PROCEDURE,PASS :: GetWellCoordinates
+      PROCEDURE,PASS :: GetWellPerfTopBottom
       PROCEDURE,PASS :: GetElement                   
       PROCEDURE,PASS :: GetLayerFactors
       PROCEDURE,PASS :: GetActualNodeLayerPump_ForAPump
@@ -148,7 +149,8 @@ MODULE Package_AppPumping
       PROCEDURE,PASS :: GetiColAdjust                
       PROCEDURE,PASS :: IsDestinationToModelDomain   
       PROCEDURE,PASS :: SetIrigFracsRead             
-      PROCEDURE,PASS :: SetSupplySpecs               
+      PROCEDURE,PASS :: SetSupplySpecs
+      PROCEDURE,PASS :: SetPumpRequired
       PROCEDURE,PASS :: ReadTSData                            
       PROCEDURE,PASS :: UpdatePumpDistFactors        
       PROCEDURE,PASS :: ResetIrigFracs               
@@ -210,7 +212,7 @@ CONTAINS
     IF (cFileName .EQ. '') RETURN
     
     !Inform user
-    CALL EchoProgress('Instantiating pumping data')
+    CALL EchoProgress('   Instantiating pumping data...')
     
     !Initialize
     NElements = AppGrid%NElements
@@ -805,19 +807,6 @@ CONTAINS
     
   END SUBROUTINE GetWellIDs
   
-  
-  ! -------------------------------------------------------------
-  ! --- GET WELL XY
-  ! -------------------------------------------------------------
-  PURE SUBROUTINE GetWellXY(AppPumping, X, Y)
-    CLASS(AppPumpingType),INTENT(IN) :: AppPumping
-    REAL(8),INTENT(OUT)              :: X(:), Y(:)
-    
-    X = AppPumping%Wells%X
-    Y = AppPumping%Wells%Y
-    
-  END SUBROUTINE GetWellXY
-  
    
   ! -------------------------------------------------------------
   ! --- GET ELEMENT PUMPING IDs
@@ -829,6 +818,32 @@ CONTAINS
     IDs = AppPumping%ElemPumps%ID
     
   END SUBROUTINE GetElemPumpIDs
+  
+   
+  ! -------------------------------------------------------------
+  ! --- GET ALL WELL COORDINATES
+  ! -------------------------------------------------------------
+  PURE SUBROUTINE GetWellCoordinates(AppPumping,rX,rY)
+    CLASS(AppPumpingType),INTENT(IN) :: AppPumping
+    REAL(8),INTENT(OUT)              :: rX(:),rY(:)
+    
+    rX = AppPumping%Wells%X
+    rY = AppPumping%Wells%Y
+    
+  END SUBROUTINE GetWellCoordinates
+  
+   
+  ! -------------------------------------------------------------
+  ! --- GET ALL WELL COORDINATES
+  ! -------------------------------------------------------------
+  PURE SUBROUTINE GetWellPerfTopBottom(AppPumping,rTop,rBottom)
+    CLASS(AppPumpingType),INTENT(IN) :: AppPumping
+    REAL(8),INTENT(OUT)              :: rTop(:),rBottom(:)
+    
+    rTop    = AppPumping%Wells%PerfTop
+    rBottom = AppPumping%Wells%PerfBottom
+    
+  END SUBROUTINE GetWellPerfTopBottom
   
    
   ! -------------------------------------------------------------
@@ -1013,6 +1028,46 @@ CONTAINS
 ! ******************************************************************
 ! ******************************************************************
 
+  ! -------------------------------------------------------------
+  ! --- SET REQUIRED PUMPING VALUES FOR A LIST OF WELLS/ELEMENT PUMPS
+  ! -------------------------------------------------------------
+  SUBROUTINE SetPumpRequired(AppPumping,iPumpType,iPumpList,rPumpRequired)
+    CLASS(AppPumpingType) :: AppPumping
+    INTEGER,INTENT(IN)    :: iPumpType,iPumpList(:)
+    REAL(8),INTENT(IN)    :: rPumpRequired(:)
+    
+    !Local variables
+    INTEGER :: indx,iPump
+    
+    IF (iPumpType .EQ. f_iPump_Well) THEN
+        DO indx=1,SIZE(iPumpList) 
+            iPump = iPumpList(indx)
+            AppPumping%Wells(iPump)%PumpRead = rPumpRequired(indx)
+            IF (rPumpRequired(indx) .LT. 0.0) THEN
+                AppPumping%Wells(iPump)%SupplyRequired = -rPumpRequired(indx)
+                AppPumping%Wells(iPump)%SupplyActual   = -rPumpRequired(indx)
+            ELSE
+                AppPumping%Wells(iPump)%SupplyRequired = 0.0
+                AppPumping%Wells(iPump)%SupplyActual   = 0.0
+            END IF
+        END DO
+    ELSE
+        DO indx=1,SIZE(iPumpList) 
+            iPump = iPumpList(indx)
+            AppPumping%ElemPumps(iPump)%PumpRead = rPumpRequired(indx)
+            IF (rPumpRequired(indx) .LT. 0.0) THEN
+                AppPumping%ElemPumps(iPump)%SupplyRequired = -rPumpRequired(indx)
+                AppPumping%ElemPumps(iPump)%SupplyActual   = -rPumpRequired(indx)
+            ELSE
+                AppPumping%ElemPumps(iPump)%SupplyRequired = 0.0
+                AppPumping%ElemPumps(iPump)%SupplyActual   = 0.0
+            END IF
+        END DO
+    END IF
+    
+  END SUBROUTINE SetPumpRequired
+  
+  
   ! -------------------------------------------------------------
   ! --- SET IRRIGATION FRACTIONS
   ! -------------------------------------------------------------

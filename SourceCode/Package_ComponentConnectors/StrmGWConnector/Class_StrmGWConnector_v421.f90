@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2022 
+!  Copyright (C) 2005-2024 
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -452,10 +452,11 @@ CONTAINS
   ! --- SIMULATE STREAM-GW INTERACTION
   ! --- *** Note: + flow means losing stream
   ! -------------------------------------------------------------
-  SUBROUTINE StrmGWConnector_v421_Simulate(Connector,iNNodes,rGWHeads,rStrmHeads,rAvailableFlows,Matrix,WetPerimeterFunction,rMaxElevs)
+  SUBROUTINE StrmGWConnector_v421_Simulate(Connector,iNNodes,rGWHeads,rStrmHeads,rAvailableFlows,lUpdateStrmEqns,Matrix,WetPerimeterFunction,rMaxElevs)
     CLASS(StrmGWConnector_v421_Type)                :: Connector
     INTEGER,INTENT(IN)                              :: iNNodes
     REAL(8),INTENT(IN)                              :: rGWHeads(:),rStrmHeads(:),rAvailableFlows(:)
+    LOGICAL,INTENT(IN)                              :: lUpdateStrmEqns
     TYPE(MatrixType)                                :: Matrix
     CLASS(AbstractFunctionType),OPTIONAL,INTENT(IN) :: WetPerimeterFunction(:)                   
     REAL(8),OPTIONAL,INTENT(IN)                     :: rMaxElevs(:)             !Not used in this versions
@@ -549,12 +550,16 @@ CONTAINS
                     rUpdateCOEFF_Keep(1) = rConductance(indxGW)
                     rUpdateCOEFF_Keep(2) = -0.5d0 * rConductance(indxGW) * (1d0+rDiff_GW/rDiffGWSQRT) 
                     rUpdateCOEFF         = rUpdateCOEFF_Keep
-                    CALL Matrix%UpdateCOEFF(f_iStrmComp,indxStrm,2,iCompIDs_Connect,iNodes_Connect,rUpdateCOEFF)
+                    IF (lUpdateStrmEqns) CALL Matrix%UpdateCOEFF(f_iStrmComp,indxStrm,2,iCompIDs_Connect,iNodes_Connect,rUpdateCOEFF)
                     
                     !Update Jacobian - entries for groundwater node
                     rUpdateCOEFF = -pData%rFractionForGW(indxGW) * rUpdateCOEFF_Keep
-                    CALL Matrix%UpdateCOEFF(f_iGWComp,iGWNode,2,iCompIDs_Connect,iNodes_Connect,rUpdateCOEFF)
-                                        
+                    IF (lUpdateStrmEqns) THEN
+                        CALL Matrix%UpdateCOEFF(f_iGWComp,iGWNode,2,iCompIDs_Connect,iNodes_Connect,rUpdateCOEFF)
+                    ELSE
+                        CALL Matrix%UpdateCOEFF(f_iGWComp,iGWNode,1,iCompIDs_Connect(2:2),iNodes_Connect(2:2),rUpdateCOEFF(2:2))
+                    END IF
+                    
                 !Stream is losing; we need to limit stream loss to available flow
                 ELSE
                     rStrmGWFlowAdj     = rNodeAvailableFlow - rStrmGWFlow 
@@ -567,11 +572,15 @@ CONTAINS
                     rUpdateCOEFF_Keep(1) = rConductance(indxGW) * rDStrmGWFlowAdj
                     rUpdateCOEFF_Keep(2) = -0.5d0 * rConductance(indxGW) * (1d0+rDiff_GW/rDiffGWSQRT) * rDStrmGWFlowAdj
                     rUpdateCOEFF         = rUpdateCOEFF_Keep
-                    CALL Matrix%UpdateCOEFF(f_iStrmComp,indxStrm,2,iCompIDs_Connect,iNodes_Connect,rUpdateCOEFF)
+                    IF (lUpdateStrmEqns) CALL Matrix%UpdateCOEFF(f_iStrmComp,indxStrm,2,iCompIDs_Connect,iNodes_Connect,rUpdateCOEFF)
                     
                     !Update Jacobian - entries for groundwater node
                     rUpdateCOEFF = -pData%rFractionForGW(indxGW) * rUpdateCOEFF_Keep
-                    CALL Matrix%UpdateCOEFF(f_iGWComp,iGWNode,2,iCompIDs_Connect,iNodes_Connect,rUpdateCOEFF)
+                    IF (lUpdateStrmEqns) THEN
+                        CALL Matrix%UpdateCOEFF(f_iGWComp,iGWNode,2,iCompIDs_Connect,iNodes_Connect,rUpdateCOEFF)
+                    ELSE
+                        CALL Matrix%UpdateCOEFF(f_iGWComp,iGWNode,1,iCompIDs_Connect(2:2),iNodes_Connect(2:2),rUpdateCOEFF(2:2))
+                    END IF
                     
                     !Store flow exchange
                     pData%StrmGWFlow(indxGW) = MIN(rNodeAvailableFlow , rStrmGWFlow)
@@ -585,7 +594,11 @@ CONTAINS
             !Update RHS 
             rUpdateRHS(1)            = Connector%StrmGWFlow(indxStrm)
             rUpdateRHS(2:1+nGWNodes) = -pData%StrmGWFlow * pData%rFractionForGW
-            CALL Matrix%UpdateRHS(iCompIDs_RHS(1:1+nGWNodes),iNodes_RHS(1:1+nGWNodes),rUpdateRHS(1:1+nGWNodes))
+            IF (lUpdateStrmEqns) THEN
+                CALL Matrix%UpdateRHS(iCompIDs_RHS(1:1+nGWNodes),iNodes_RHS(1:1+nGWNodes),rUpdateRHS(1:1+nGWNodes))
+            ELSE
+                CALL Matrix%UpdateRHS(iCompIDs_RHS(2:1+nGWNodes),iNodes_RHS(2:1+nGWNodes),rUpdateRHS(2:1+nGWNodes))
+            END IF
         END ASSOCIATE
         
         !Update iOffset

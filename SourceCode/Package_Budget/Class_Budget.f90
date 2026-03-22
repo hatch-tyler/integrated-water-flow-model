@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2022  
+!  Copyright (C) 2005-2024  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -134,6 +134,7 @@ MODULE Class_Budget
     PROCEDURE,PASS   :: PrintResults  
     PROCEDURE,PASS   :: WriteMatrixData
     PROCEDURE,PASS   :: IsDefined
+    PROCEDURE,PASS   :: AreNColumnsSame
     PROCEDURE,PASS   :: ModifyASCIITitles              
     PROCEDURE,NOPASS :: ModifyFullColumnHeaders
     GENERIC          :: New                     => Create                             , &
@@ -470,7 +471,7 @@ CONTAINS
                                                 iDataTypes(SIZE(Budget%Header%DSSOutput%cPathNames)),iTimeCounter,       &
                                                 NDataColumns(Budget%Header%NLocations),iPrintDeltaT_InMinutes,           &
                                                 NPrintIntervals,indxCol,iAgShortCol,iAgSupReqCol,iAgPumpCol,iAgDivCol,   &
-                                                iAgOtherInflowCol,nReadTimes
+                                                iAgOtherInflowCol,nReadTimes,iColPrev
     REAL(8)                                  :: CurrentTime,DeltaT,rPrintDeltaT,rAgShortPrevious,rAgSupReq_Modified
     REAL(8),ALLOCATABLE                      :: rTempValues(:,:),rValues(:)
     CHARACTER(LEN=f_iTimeStampLength)        :: CurrentDateAndTime,PrintTimeStamp,cTime
@@ -547,7 +548,6 @@ CONTAINS
     
     !ASCII output
     IF (iFileType .EQ. f_iTXT) THEN
-        CALL OutputFile%SetCacheSize(MAXVAL(Budget%Header%Locations%NDataColumns),1,iStat)  ;  IF(iStat .EQ. -1) RETURN
         CALL OutputFile%SetPrintFormatSpec(Budget%Header%ASCIIOutput%cFormatSpec,iStat)     ;  IF(iStat .EQ. -1) RETURN
     !DSS output
     ELSE IF (iFileType .EQ. f_iDSS) THEN
@@ -562,6 +562,7 @@ CONTAINS
     !Loop over locations
     NTimeSteps = Budget%Header%NTimeSteps
     indxS      = 0
+    iColPrev   = 0
     DO indxLocation=1,SIZE(iLocationsLocal)
       iLoc = iLocationsLocal(indxLocation)
       
@@ -574,6 +575,15 @@ CONTAINS
       
       !Number of columns for the location
       iCol = pLocationData%NDataColumns
+      
+      !If column number has changed, reset the cache size for ASCII output file
+      IF (iCol .NE. iColPrev) THEN
+          IF (iFileType .EQ. f_iTXT) THEN
+              CALL OutputFile%SetCacheSize(pLocationData%NDataColumns,1,iStat)  
+              IF(iStat .EQ. -1) RETURN
+          END IF
+          iColPrev = iCol
+      END IF  
       
       !If this is Land & Water Use Budget, there will be special accumulation of some columns
       !Check if this Land & Water Use Budget, and identify special data columns
@@ -613,15 +623,16 @@ CONTAINS
           pcDataUnits => cDataUnits(1:iCol)
 
           !Define data units
-          WHERE (pLocationData%iDataColumnTypes .EQ. f_iLT)
-              pcDataUnits = LengthUnit
-          ELSE WHERE (pLocationData%iDataColumnTypes .EQ. f_iAR)
-              pcDataUnits = AreaUnit
-          ELSE WHERE (pLocationData%iDataColumnTypes .EQ. f_iVR  .OR.  &
-                      pLocationData%iDataColumnTypes .EQ. f_iVLB .OR.  &
-                      pLocationData%iDataColumnTypes .EQ. f_iVLE       )
-              pcDataUnits = VolumeUnit
-          END WHERE
+          DO indxCol=1,iCol
+              SELECT CASE(pLocationData%iDataColumnTypes(indxCol))
+                  CASE (f_iLT)
+                      pcDataUnits(indxCol) = LengthUnit
+                  CASE (f_iAR)
+                      pcDataUnits(indxCol) = AreaUnit
+                  CASE DEFAULT
+                      pcDataUnits(indxCol) = VolumeUnit
+              END SELECT
+          END DO
         
           !Redefine the E part of the pathnames according to print-out interval specified by user
           IF (DeltaT_InMinutes .NE. iPrintDeltaT_InMinutes) THEN
@@ -1817,22 +1828,25 @@ CONTAINS
     
     !Local variables
     INTEGER                                        :: TitleLenArray(OutputData%ASCIIOutput%NTitles),indxLine
-    CHARACTER(LEN=OutputData%ASCIIOutput%TitleLen) :: cTitles(OutputData%ASCIIOutput%NTitles),cColumnHeaderLine
+    CHARACTER(LEN=OutputData%ASCIIOutput%TitleLen) :: cTitles(OutputData%ASCIIOutput%NTitles)
     CHARACTER(LEN=f_iColumnHeaderLen),ALLOCATABLE  :: cColumnHeaders(:,:),cTempHeaders(:)
     CHARACTER(LEN=15)                              :: AreaChar
+    CHARACTER(:),ALLOCATABLE                       :: cColumnHeaderLine
     TYPE(LocationDataType),POINTER                 :: pLocation
     
     !Initialize
     TitleLenArray = OutputData%ASCIIOutput%TitleLen
     cTitles       = OutputData%ASCIIOutput%cTitles
     IF (SIZE(OutputData%Locations) .EQ. 1) THEN
-      pLocation => OutputData%Locations(1)
+        pLocation => OutputData%Locations(1)
     ELSE
-      pLocation => OutputData%Locations(iLocation)
+        pLocation => OutputData%Locations(iLocation)
     END IF
     ALLOCATE (cColumnHeaders(pLocation%NDataColumns+1,OutputData%ASCIIOutput%NColumnHeaderLines) , &
-              cTempHeaders(pLocation%NDataColumns+1)                                             )  
-    cColumnHeaders = pLocation%cColumnHeaders
+              cTempHeaders(pLocation%NDataColumns+1)                                             )
+    cColumnHeaders    = pLocation%cColumnHeaders
+    ALLOCATE (CHARACTER(LEN=f_iColumnHeaderLen*(pLocation%NDataColumns+1)) :: cColumnHeaderLine)  
+    cColumnHeaderLine = REPEAT(' ',LEN(cColumnHeaderLine)) !Compiler bug: simply setting variable to '' re-allocates it as zero length string
     
     !Modify the titles for location name, area, area unit, volume unit and length unit
     CALL InsertTextToTitles(OutputData%cLocationNames(iLocation),f_cLocationNameMarker,TitleLenArray,cTitles,f_iCenter)
@@ -1840,25 +1854,27 @@ CONTAINS
     CALL InsertTextToTitles(AreaUnit,f_cAreaUnitMarker,TitleLenArray,cTitles,f_iCenter)
     CALL InsertTextToTitles(VolumeUnit,f_cVolumeUnitMarker,TitleLenArray,cTitles,f_iCenter)
     IF (OutputData%NAreas .GT. 0) THEN
-      WRITE (AreaChar,'(F15.2)') OutputData%Areas(iLocation)*FactArea
-      CALL InsertTextToTitles(TRIM(ADJUSTL(AreaChar)),f_cAreaMarker,TitleLenArray,cTitles,f_iCenter)
+        WRITE (AreaChar,'(F15.2)') OutputData%Areas(iLocation)*FactArea
+        CALL InsertTextToTitles(TRIM(ADJUSTL(AreaChar)),f_cAreaMarker,TitleLenArray,cTitles,f_iCenter)
     END IF
     
     !Modify column headers for area unit, volume unit and length unit
     DO indxLine=1,OutputData%ASCIIOutput%NColumnHeaderLines
-      CALL InsertTextToTitles(LengthUnit,f_cLengthUnitMarker,pLocation%iColWidth,cColumnHeaders(:,indxLine),f_iRight)
-      CALL InsertTextToTitles(AreaUnit,f_cAreaUnitMarker,pLocation%iColWidth,cColumnHeaders(:,indxLine),f_iRight)
-      CALL InsertTextToTitles(VolumeUnit,f_cVolumeUnitMarker,pLocation%iColWidth,cColumnHeaders(:,indxLine),f_iRight)
+        CALL InsertTextToTitles(LengthUnit,f_cLengthUnitMarker,pLocation%iColWidth,cColumnHeaders(:,indxLine),f_iRight)
+        CALL InsertTextToTitles(AreaUnit,f_cAreaUnitMarker,pLocation%iColWidth,cColumnHeaders(:,indxLine),f_iRight)
+        CALL InsertTextToTitles(VolumeUnit,f_cVolumeUnitMarker,pLocation%iColWidth,cColumnHeaders(:,indxLine),f_iRight)
     END DO
     
     !Print titles
-    CALL File%WriteData(cTitles)
+    DO indxLine=1,SIZE(cTitles)
+       CALL File%WriteData(TRIM(cTitles(indxLine)))
+    END DO
     
     !Prepare column header lines and print
     DO indxLine=1,OutputData%ASCIIOutput%NColumnHeaderLines
-      cTempHeaders = cColumnHeaders(:,indxLine)
-      WRITE (cColumnHeaderLine,TRIM(pLocation%cColumnHeadersFormatSpec(indxLine))) cTempHeaders 
-      CALL File%WriteData(cColumnHeaderLine)
+        cTempHeaders = cColumnHeaders(:,indxLine)
+        WRITE (cColumnHeaderLine,TRIM(pLocation%cColumnHeadersFormatSpec(indxLine))) cTempHeaders 
+        CALL File%WriteData(TRIM(cColumnHeaderLine))
     END DO
     
   END SUBROUTINE PrintASCIITitles
@@ -1876,6 +1892,34 @@ CONTAINS
 ! ******************************************************************
 ! ******************************************************************
 
+  ! -------------------------------------------------------------
+  ! --- DO ALL LOCATIONS HAVE THE SAME NUMBER OF COLUMNS?
+  ! -------------------------------------------------------------
+  FUNCTION AreNColumnsSame(Budget) RESULT(lSame)
+    CLASS(BudgetType),INTENT(IN) :: Budget
+    LOGICAL                      :: lSame
+    
+    !Local variables
+    INTEGER :: indx,iNCols
+    
+    !Initialize
+    lSame = .TRUE.
+    
+    !Return if no locations
+    IF (Budget%Header%NLocations .EQ. 0) RETURN
+        
+    !Check if other locations have the same number of columns
+    iNCols = Budget%Header%Locations(1)%NDataColumns
+    DO indx=2,Budget%Header%NLocations
+        IF (Budget%Header%Locations(indx)%NDataColumns .NE. iNCols) THEN
+            lSame = .FALSE.
+            EXIT
+        END IF
+    END DO
+  
+  END FUNCTION AreNColumnsSame
+  
+  
   ! -------------------------------------------------------------
   ! ---IS BUDGET RAW FILE DEFINED?
   ! -------------------------------------------------------------

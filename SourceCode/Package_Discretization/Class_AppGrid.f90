@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2022  
+!  Copyright (C) 2005-2024  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -540,7 +540,7 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET NUMBER OF ELEMENTS
   ! -------------------------------------------------------------
-  FUNCTION GetNElements(AppGrid) RESULT(ElementCount)
+  PURE FUNCTION GetNElements(AppGrid) RESULT(ElementCount)
     CLASS(AppGridType),INTENT(IN) :: AppGrid
     INTEGER                       :: ElementCount
 
@@ -706,6 +706,8 @@ CONTAINS
         X(indx) = Dummy2DRealArray(indx,2) * Factor 
         Y(indx) = Dummy2DRealArray(indx,3) * Factor
         
+        !$OMP PARALLEL DEFAULT(PRIVATE) SHARED(indx,ID,ID1,X,Y,ThisProcedure,iStat) 
+        !$OMP DO SCHEDULE(STATIC,500) 
         DO indx1=1,indx-1
             ID2 = ID(indx1)
             
@@ -713,7 +715,6 @@ CONTAINS
             IF (ID1 .EQ. ID2) THEN
                  CALL SetLastMessage('Node ID ' // TRIM(IntToText(ID1)) // ' is defined more than once!',f_iFatal,ThisProcedure)
                  iStat = -1
-                 RETURN
             END IF
        
             !Check if two nodes have the same coordinates
@@ -721,11 +722,12 @@ CONTAINS
                 IF (Y(indx1) .EQ. Y(indx)) THEN
                     CALL SetLastMessage('Nodes '//TRIM(IntToText(ID1))//' and '//TRIM(IntToText(ID2))//' have the same coordinates!',f_iFatal,ThisProcedure)
                     iStat = -1
-                    RETURN
                 END IF
             END IF
         END DO
-      
+        !$OMP END DO
+        !$OMP END PARALLEL
+        IF (iStat .EQ. -1) RETURN
     END DO
 
     !Release memory from dummy array
@@ -750,7 +752,7 @@ CONTAINS
     CHARACTER(LEN=ModNameLen+21) :: ThisProcedure = ModName//'ReadElementConfigData'
     TYPE(GenericFileType)        :: ElementDataFile
     INTEGER,ALLOCATABLE          :: Dummy2DIntArray(:,:),TDummy2DIntArray(:,:),UniqueSubregionID(:)
-    INTEGER                      :: indx,indx1,NElements,ErrorCode,NRegions,ID1,ID2,iCheck,iLen
+    INTEGER                      :: indx,indx1,NElements,ErrorCode,NRegions,ID1,ID2,iCheck,iLen,iMaxID
     CHARACTER(LEN=500)           :: ALine
     
     !Initailize
@@ -778,8 +780,9 @@ CONTAINS
     
     !Read subregion names
     !BACKWARD COMPATIBILITY: Check if ID numbers are provided along with subregion names 
-    CALL ElementDataFile%ReadData(iCheck,iStat)
+    CALL ElementDataFile%ReadData(ALine,iStat)  ;  IF (iStat .NE. 0) RETURN
     CALL ElementDataFile%BackspaceFile()
+    READ (ALine,*,IOSTAT=iStat) iCheck
     IF (iStat .EQ. 0) THEN
         ALLOCATE(iSubregionIDs(NRegions))
         DO indx=1,NRegions
@@ -807,6 +810,7 @@ CONTAINS
     TDummy2DIntArray = TRANSPOSE(Dummy2DIntArray)
 
     !Check for consistency, transfer info to data type
+    iMaxID = 0
     DO indx=1,NElements
         !Element ID
         ID(indx) = INT(TDummy2DIntArray(1,indx))
@@ -821,15 +825,26 @@ CONTAINS
             END IF
         END DO
         
-        !Same element ID should not be defined
-        DO indx1=1,indx-1
-            ID2 = ID(indx1)
-            IF (ID1 .EQ. ID2) THEN
-                 CALL SetLastMessage('Element ID ' // TRIM(IntToText(ID1)) // ' is defined more than once!',f_iFatal,ThisProcedure)
-                 iStat = -1
-                 RETURN                
-            END IF
-        END DO
+        !Same element ID should not be defined; check only if the element ID is less than the previous ID
+        IF (ID1 .LT. iMaxID) THEN
+            !$OMP PARALLEL DEFAULT(PRIVATE) SHARED(indx,ID1,ID,ThisProcedure,iStat) 
+            !$OMP DO SCHEDULE(STATIC,500) 
+            DO indx1=1,indx-1
+                ID2 = ID(indx1)
+                IF (ID1 .EQ. ID2) THEN
+                     CALL SetLastMessage('Element ID ' // TRIM(IntToText(ID1)) // ' is defined more than once!',f_iFatal,ThisProcedure)
+                     iStat = -1
+                END IF
+            END DO
+            !$OMP END DO
+            !$OMP END PARALLEL
+        ELSE IF (ID1 .EQ. iMaxID) THEN
+            CALL SetLastMessage('Element ID ' // TRIM(IntToText(ID1)) // ' is defined more than once!',f_iFatal,ThisProcedure)
+            iStat = -1
+        ELSE
+            iMaxID = ID1
+        END IF
+        IF (iStat .EQ. -1) RETURN
         
         !Subregion number should be non-zero
         IF (TDummy2DIntArray(6,indx) .LE. 0) THEN
@@ -1198,7 +1213,7 @@ CONTAINS
     INTEGER,INTENT(OUT)           :: iStat
     
     !Local variables
-    CHARACTER(LEN=ModNameLen+13)  :: ThisProcedure = ModName//'ConstructGrid'
+    CHARACTER(LEN=ModNameLen+16)  :: ThisProcedure = ModName//'ConstructAppGrid'
     INTEGER                       :: indx,ConvexNode,indxVertex,ErrorCode,NElements,NNodes,iCount,indxFace,iStatParallel,Vertexc(4),    &
                                      Vertex(SIZE(Vertex_IDs,DIM=1),SIZE(Vertex_IDs,DIM=2)),Vertex_1D(SIZE(Vertex_IDs)),ID,              &
                                      iSubregion_Indices(SIZE(iElemSubregionIDs)),indxElem,iaNodeID,iLoc
@@ -1298,7 +1313,7 @@ CONTAINS
         CALL CheckElementConvexity(NVertex(indx),Vertexc,Xc,Yc,ConvexNode)
         IF (ConvexNode .NE. 0) THEN
             MessageArray(1)='Element '//TRIM(IntToText(AppGrid%AppElement(indx)%ID))//' is not convex'
-            MessageArray(2)='(has an angle larger than or equal to 180 degrees) at node '//TRIM(IntToText(ConvexNode)) 
+            MessageArray(2)='(has an angle larger than or equal to 180 degrees) at node '//TRIM(IntToText(NodeID(ConvexNode))) 
             CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
             iStat = -1
         END IF
@@ -1323,15 +1338,17 @@ CONTAINS
             iStatParallel = -1
         END IF
         !Check if all faces are boundary faces
-        IF (ALL(AppGrid%AppFace%BoundaryFace(AppGrid%AppElement(indx)%FaceID))) THEN
-            IF (NElements .GT. 1) THEN
-                !$OMP CRITICAL
-                ID              = AppGrid%AppElement(indx)%ID
-                MessageArray(1) = 'All faces of element '// TRIM(IntToText(ID)) // ' are boundary faces!'
-                MessageArray(2) = 'Such a grid setup is not allowed.'
-                CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
-                iStatParallel = -1
-                !$OMP END CRITICAL
+        IF (iStatParallel .EQ. 0) THEN
+            IF (ALL(AppGrid%AppFace%BoundaryFace(AppGrid%AppElement(indx)%FaceID))) THEN
+                IF (NElements .GT. 1) THEN
+                    !$OMP CRITICAL
+                    ID              = AppGrid%AppElement(indx)%ID
+                    MessageArray(1) = 'All faces of element '// TRIM(IntToText(ID)) // ' are boundary faces!'
+                    MessageArray(2) = 'Such a grid setup is not allowed.'
+                    CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                    iStatParallel = -1
+                    !$OMP END CRITICAL
+                END IF
             END IF
         END IF
     END DO
@@ -2430,7 +2447,7 @@ CONTAINS
 
     !Local variables
     CHARACTER(LEN=ModNameLen+19)  :: ThisProcedure = ModName // 'ListFacesForElement'
-    INTEGER                       :: NVertex,indxFace,icount
+    INTEGER                       :: NVertex,indxFace,icount,indx,iElemID
 
     !Initialize
     iStat   = 0
@@ -2447,6 +2464,19 @@ CONTAINS
         TheList(icount) = indxFace
         IF (icount .EQ. NVertex) EXIT
       END IF
+    END DO
+    
+    !Make sure that all parts of TheList is populated with non-zero values
+    DO indx=1,SIZE(TheList)
+        IF (TheList(indx) .EQ. 0) THEN
+            iElemID = AppGrid%AppElement(ElemNo)%ID
+            MessageArray(1) = 'Something is wrong with element '//TRIM(IntToText(iElemID))//'!'
+            MessageArray(2) = 'Cannot identify its element faces.'
+            MessageArray(3) = 'Please check.'
+            CALL SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+            iStat = -1
+            RETURN
+        END IF
     END DO
       
   END SUBROUTINE ListFacesForElement

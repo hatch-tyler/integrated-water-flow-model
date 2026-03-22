@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2022  
+!  Copyright (C) 2005-2024  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -30,6 +30,8 @@ MODULE Class_BaseAppStream
                                           ArrangeText                            , &
                                           IntToText                              , &
                                           UpperCase                              , &
+                                          LocateInList                           , &
+                                          ShellSort                              , &
                                           ConvertID_To_Index
   USE TimeSeriesUtilities         , ONLY: TimeStepType                           , &
                                           IncrementTimeStamp                     
@@ -93,12 +95,13 @@ MODULE Class_BaseAppStream
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: BaseAppStreamType         , &
-            PrepareStreamBudgetHeader , &
-            CalculateNStrmNodes       , &
-            ReadFractionsForGW        , &
-            f_iBudgetType_StrmNode    , &
-            f_iBudgetType_StrmReach   , &
+  PUBLIC :: BaseAppStreamType                               , &
+            PrepareStreamBudgetHeader                       , &
+            CalculateNStrmNodes                             , &
+            ReadFractionsForGW                              , &
+            RoutingOrderedReachIndex_To_IDOrderedReachIndex , &
+            f_iBudgetType_StrmNode                          , &
+            f_iBudgetType_StrmReach                         , &
             f_iBudgetType_DiverDetail 
   
 
@@ -126,6 +129,7 @@ MODULE Class_BaseAppStream
       PROCEDURE(Abstract_SetAllComponents),PASS,DEFERRED               :: SetAllComponents
       PROCEDURE(Abstract_SetAllComponentsWithoutBinFile),PASS,DEFERRED :: SetAllComponentsWithoutBinFile
       PROCEDURE(Abstract_SetDynamicComponent),PASS,DEFERRED            :: SetDynamicComponent
+      PROCEDURE(Abstract_SetStrmFlow),PASS,DEFERRED                    :: SetStrmFlow
       PROCEDURE(Abstract_GetStrmNodeIDs),PASS,DEFERRED                 :: GetStrmNodeIDs
       PROCEDURE(Abstract_GetStrmNodeID),PASS,DEFERRED                  :: GetStrmNodeID
       PROCEDURE(Abstract_GetStrmNodeIndex),PASS,DEFERRED               :: GetStrmNodeIndex
@@ -134,6 +138,8 @@ MODULE Class_BaseAppStream
       PROCEDURE(Abstract_GetNRatingTablePoints),PASS,DEFERRED          :: GetNRatingTablePoints
       PROCEDURE(Abstract_GetNUpstrmNodes),PASS,DEFERRED                :: GetNUpstrmNodes
       PROCEDURE(Abstract_GetUpstrmNodes),PASS,DEFERRED                 :: GetUpstrmNodes
+      PROCEDURE(Abstract_GetDiversionRechargeZone),PASS,DEFERRED       :: GetDiversionRechargeZone
+      PROCEDURE(Abstract_GetStrmGWFlow_GivenStrmFlow),PASS,DEFERRED    :: GetStrmGWFlow_GivenStrmFlow
       PROCEDURE(Abstract_KillImplementation),PASS,DEFERRED             :: KillImplementation
       PROCEDURE(Abstract_WritePreprocessedData),PASS,DEFERRED          :: WritePreprocessedData
       PROCEDURE(Abstract_WriteDataToTextFile),PASS,DEFERRED            :: WriteDataToTextFile
@@ -172,6 +178,7 @@ MODULE Class_BaseAppStream
       PROCEDURE,PASS                                                   :: GetDiversionPurpose
       PROCEDURE,PASS                                                   :: GetDeliveryAtDiversion
       PROCEDURE,PASS                                                   :: GetDiversionsForDeliveries
+      PROCEDURE,PASS                                                   :: GetRequiredDiversions_AtSomeDiversions
       PROCEDURE,PASS                                                   :: GetActualDiversions_AtSomeDiversions
       PROCEDURE,PASS                                                   :: GetActualDiversions_AtSomeNodes
       PROCEDURE,PASS                                                   :: GetDiversionsExportNodes
@@ -180,6 +187,7 @@ MODULE Class_BaseAppStream
       PROCEDURE,PASS                                                   :: GetBypassDiverOriginDestData
       PROCEDURE,PASS                                                   :: GetBypassReceived_FromABypass
       PROCEDURE,PASS                                                   :: GetNetBypassInflows
+      PROCEDURE,PASS                                                   :: GetStrmEvap
       PROCEDURE,PASS                                                   :: GetStrmBypassInflows
       PROCEDURE,PASS                                                   :: GetBypassOutflows
       PROCEDURE,PASS                                                   :: GetReachDownstrmNode
@@ -205,7 +213,6 @@ MODULE Class_BaseAppStream
       PROCEDURE,PASS                                                   :: GetElemsWithRecvLoss
       PROCEDURE,PASS                                                   :: SetSupplySpecs
       PROCEDURE,PASS                                                   :: SetIrigFracsRead
-      PROCEDURE,PASS                                                   :: SetStreamFlow
       PROCEDURE,PASS                                                   :: SetStreamInflow
       PROCEDURE,PASS                                                   :: SetBypassFlows_AtABypass
       PROCEDURE,PASS                                                   :: SetDiversionRead
@@ -333,10 +340,10 @@ MODULE Class_BaseAppStream
      END SUBROUTINE Abstract_SetAllComponents
 
      
-     SUBROUTINE Abstract_SetAllComponentsWithoutBinFile(AppStream,IsRoutedStreams,IsForInquiry,cPPFileName,cSimFileName,cSimWorkingDirectory,cPackageVersion,AppGrid,Stratigraphy,ETData,TimeStep,NTIME,iLakeIDs,StrmLakeConnector,StrmGWConnector,iStat)
+     SUBROUTINE Abstract_SetAllComponentsWithoutBinFile(AppStream,IsForInquiry,IsRoutedStreams,cPPFileName,cSimFileName,cSimWorkingDirectory,cPackageVersion,AppGrid,Stratigraphy,ETData,TimeStep,NTIME,iLakeIDs,StrmLakeConnector,StrmGWConnector,iStat)
         IMPORT                                :: BaseAppStreamType,TimeStepType,StratigraphyType,AppGridType,StrmLakeConnectorType,StrmGWConnectorType,ETType
         CLASS(BaseAppStreamType),INTENT(OUT)  :: AppStream
-        LOGICAL,INTENT(IN)                    :: IsRoutedStreams,IsForInquiry
+        LOGICAL,INTENT(IN)                    :: IsForInquiry,IsRoutedStreams
         CHARACTER(LEN=*),INTENT(IN)           :: cPPFileName,cSimFileName,cSimWorkingDirectory,cPackageVersion
         TYPE(AppGridType),INTENT(IN)          :: AppGrid
         TYPE(StratigraphyType),INTENT(IN)     :: Stratigraphy
@@ -349,6 +356,14 @@ MODULE Class_BaseAppStream
      END SUBROUTINE Abstract_SetAllComponentsWithoutBinFile
      
      
+     SUBROUTINE Abstract_SetStrmFlow(AppStream,iStrmNode,rFlow)
+        IMPORT                   :: BaseAppStreamType
+        CLASS(BaseAppStreamType) :: AppStream
+        INTEGER,INTENT(IN)       :: iStrmNode
+        REAL(8),INTENT(IN)       :: rFlow
+     END SUBROUTINE Abstract_SetStrmFlow
+
+  
      PURE SUBROUTINE Abstract_GetStrmNodeIDs(AppStream,iStrmNodeIDs)
         IMPORT                              :: BaseAppStreamType
         CLASS(BaseAppStreamType),INTENT(IN) :: AppStream
@@ -409,6 +424,27 @@ MODULE Class_BaseAppStream
         INTEGER,INTENT(IN)                  :: iNode
         INTEGER,ALLOCATABLE,INTENT(OUT)     :: UpstrmNodes(:)
      END SUBROUTINE Abstract_GetUpstrmNodes
+     
+     
+     SUBROUTINE Abstract_GetDiversionRechargeZone(AppStream,cStrmSimMainFileName,cWorkingDirectory,iElemIDs,iDiver,iElems,rFracs,iStat)
+        IMPORT                              :: BaseAppStreamType 
+        CLASS(BaseAppStreamType),INTENT(IN) :: AppStream
+        CHARACTER(LEN=*),INTENT(IN)         :: cStrmSimMainFileName,cWorkingDirectory
+        INTEGER,INTENT(IN)                  :: iElemIDs(:),iDiver
+        INTEGER,ALLOCATABLE,INTENT(OUT)     :: iElems(:)
+        REAL(8),ALLOCATABLE,INTENT(OUT)     :: rFracs(:)
+        INTEGER,INTENT(OUT)                 :: iStat
+     END SUBROUTINE Abstract_GetDiversionRechargeZone
+
+  
+     FUNCTION Abstract_GetStrmGWFlow_GivenStrmFlow(AppStream,iStrmNode,rStrmFlow,rGWHeads,StrmGWConnector) RESULT(rStrmGWFlow)
+        IMPORT                               :: BaseAppStreamType,StrmGWConnectorType
+        CLASS(BaseAppStreamType),INTENT(IN)  :: AppStream
+        INTEGER,INTENT(IN)                   :: iStrmNode
+        REAL(8),INTENT(IN)                   :: rStrmFlow,rGWHeads(:,:)
+        TYPE(StrmGWConnectorType),INTENT(IN) :: StrmGWConnector
+        REAL(8)                              :: rStrmGWFlow
+     END FUNCTION Abstract_GetStrmGWFlow_GivenStrmFlow
      
      
      SUBROUTINE Abstract_KillImplementation(AppStream)
@@ -730,22 +766,20 @@ CONTAINS
     
     !Local variables
     CHARACTER(LEN=ModNameLen+37) :: ThisProcedure = ModName // 'GetBudget_MonthlyFlows_GivenAppStream'
-    INTEGER                      :: ID
     
     !Initialize
     iStat =  0
     
     SELECT CASE (iBudgetType)
         CASE (f_iBudgetType_StrmNode)
-            ID = AppStream%GetStrmNodeID(iLocationIndex)
-            CALL AppStream%StrmNodeBudget%GetBudget_MonthlyFlows(ID,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
+            CALL AppStream%StrmNodeBudget%GetBudget_MonthlyFlows(iLocationIndex,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
             
         CASE (f_iBudgetType_StrmReach)
             IF (AppStream%StrmReachBudRawFile_Defined) THEN
-                ID = AppStream%Reaches(iLocationIndex)%ID
-                CALL GetBudget_MonthlyFlows_GivenFile(AppStream%StrmReachBudRawFile,iBudgetType,ID,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
+                CALL GetBudget_MonthlyFlows_GivenFile(AppStream%StrmReachBudRawFile,iBudgetType,iLocationIndex,AppStream%Reaches%ID,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
             ELSE
                 CALL SetLastMessage('Stream reach budget is not defined to retrieve monthly budget flows!',f_iFatal,ThisProcedure)
+                ALLOCATE (rFlows(0,0) , cFlowNames(0))
                 iStat = -1
             END IF
             
@@ -762,10 +796,10 @@ CONTAINS
   ! --- GET MONTHLY BUDGET FLOWS FROM A DEFINED BUDGET FILE
   ! --- (Assumes cBeginDate and cEndDate are adjusted properly)
   ! -------------------------------------------------------------
-  SUBROUTINE GetBudget_MonthlyFlows_GivenFile(Budget,iBudgetType,iLocationID,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
+  SUBROUTINE GetBudget_MonthlyFlows_GivenFile(Budget,iBudgetType,iLocationIndex,iStrmReachIDs,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
     TYPE(BudgetType),INTENT(IN)              :: Budget      !Assumes Budget file is already open
     CHARACTER(LEN=*),INTENT(IN)              :: cBeginDate,cEndDate
-    INTEGER,INTENT(IN)                       :: iBudgetType,iLocationID  !Location can be stream node, reach or diversion
+    INTEGER,INTENT(IN)                       :: iBudgetType,iStrmReachIDs(:),iLocationIndex  !Location can be stream node, reach or diversion
     REAL(8),INTENT(IN)                       :: rFactVL
     REAL(8),ALLOCATABLE,INTENT(OUT)          :: rFlows(:,:)  !In (column,month) format
     CHARACTER(LEN=*),ALLOCATABLE,INTENT(OUT) :: cFlowNames(:)
@@ -774,25 +808,33 @@ CONTAINS
     !Local variables
     CHARACTER(LEN=ModNameLen+32) :: ThisProcedure = ModName // 'GetBudget_MonthlyFlows_GivenFile'
     INTEGER,PARAMETER            :: iReadCols(14) = [1,2,3,4,5,6,7,8,9,10,11,12,13,14]
-    INTEGER                      :: iDimActual,iNTimeSteps
+    INTEGER                      :: iNTimeSteps,iLocationIndexOrdered,iDimActual
     REAL(8),ALLOCATABLE          :: rValues(:,:)
     TYPE(StrmNodeBudgetType)     :: StrmNodeBudget
     
     SELECT CASE (iBudgetType)
         CASE (f_iBudgetType_StrmNode)
-            CALL StrmNodeBudget%GetBudget_MonthlyFlows(Budget,iLocationID,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
+            CALL StrmNodeBudget%GetBudget_MonthlyFlows(Budget,iLocationIndex,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
   
+            
         CASE (f_iBudgetType_DiverDetail)
             CALL SetLastMessage('Monthly budget values cannot be retrieved from Diversion Details file!',f_iWarn,ThisProcedure)
+            ALLOCATE (rFlows(0,0) , cFlowNames(0))
             iStat = -1
             
+            
         CASE (f_iBudgetType_StrmReach)
+            !Stream reach index, iLocationIndex, is based on the routing schedule;
+            !However, reaches are odered based on their reach IDs in Budget file
+            !Update the index based on the ordered reach numbers in Budget file
+            iLocationIndexOrdered = RoutingOrderedReachIndex_To_IDOrderedReachIndex(iStrmReachIDs,iLocationIndex)
+            
             !Get simulation time steps and allocate array to read data
             iNTimeSteps = Budget%GetNTimeSteps()
             ALLOCATE (rValues(SIZE(iReadCols)+1,iNTimeSteps)) !Adding 1 to the first dimension for Time column; it will be removed later
             
             !Read data
-            CALL Budget%ReadData(iLocationID,iReadCols,'1MON',cBeginDate,cEndDate,0d0,0d0,0d0,1d0,1d0,rFactVL,iDimActual,rValues,iStat)
+            CALL Budget%ReadData(iLocationIndexOrdered,iReadCols,'1MON',cBeginDate,cEndDate,0d0,0d0,0d0,1d0,1d0,rFactVL,iDimActual,rValues,iStat)
             IF (iStat .NE. 0) RETURN
             
             !Store values in return argument
@@ -843,19 +885,23 @@ CONTAINS
     INTEGER,INTENT(OUT)                 :: iDataTypes(:),inActualOutput,iStat
     
     !Local variables
-    INTEGER :: indx,ID
+    INTEGER :: indx,iLocationIndexOrdered
     
     SELECT CASE (iBudgetType)
         CASE (f_iBudgetType_StrmNode)
-            ID = AppStream%GetStrmNodeID(iLocationIndex)
-            CALL AppStream%StrmNodeBudget%GetBudget_TSData(ID,iCols,cBeginDate,cEndDate,cInterval,rFactLT,rFactAR,rFactVL,rOutputDates,rOutputValues,iDataTypes,inActualOutput,iStat)
+            CALL AppStream%StrmNodeBudget%GetBudget_TSData(iLocationIndex,iCols,cBeginDate,cEndDate,cInterval,rFactLT,rFactAR,rFactVL,rOutputDates,rOutputValues,iDataTypes,inActualOutput,iStat)
+            
             
         CASE (f_iBudgetType_StrmReach)
             IF (AppStream%StrmReachBudRawFile_Defined) THEN
-                ID = AppStream%Reaches(iLocationIndex)%ID
+                !Stream reach index, iLocationIndex, is based on the routing schedule;
+                !However, reaches are odered based on their reach IDs in Budget file
+                !Update the index based on the ordered reach numbers in Budget file
+                iLocationIndexOrdered = RoutingOrderedReachIndex_To_IDOrderedReachIndex(AppStream%Reaches%ID,iLocationIndex)
+                
                 !Read data
                 DO indx=1,SIZE(iCols)
-                    CALL AppStream%StrmReachBudRawFile%ReadData(ID,iCols(indx),cInterval,cBeginDate,cEndDate,1d0,0d0,0d0,rFactLT,rFactAR,rFactVL,iDataTypes(indx),inActualOutput,rOutputDates,rOutputValues(:,indx),iStat)
+                    CALL AppStream%StrmReachBudRawFile%ReadData(iLocationIndexOrdered,iCols(indx),cInterval,cBeginDate,cEndDate,1d0,0d0,0d0,rFactLT,rFactAR,rFactVL,iDataTypes(indx),inActualOutput,rOutputDates,rOutputValues(:,indx),iStat)
                     IF (iStat .NE. 0) RETURN
                 END DO
             ELSE
@@ -969,6 +1015,20 @@ CONTAINS
     CALL AppStream%AppDiverBypass%GetActualDiversions_AtSomeDiversions(iDivers,rDivers,iStat)
     
   END SUBROUTINE GetActualDiversions_AtSomeDiversions
+  
+  
+  ! -------------------------------------------------------------
+  ! --- GET REQUIRED DIVERSIONS FOR SOME DIVERSIONS
+  ! -------------------------------------------------------------
+  SUBROUTINE GetRequiredDiversions_AtSomeDiversions(AppStream,iDivers,rDivers,iStat)
+    CLASS(BaseAppStreamType),INTENT(IN) :: AppStream
+    INTEGER,INTENT(IN)                  :: iDivers(:)
+    REAL(8),INTENT(OUT)                 :: rDivers(:)
+    INTEGER,INTENT(OUT)                 :: iStat
+    
+    CALL AppStream%AppDiverBypass%GetRequiredDiversions_AtSomeDiversions(iDivers,rDivers,iStat)
+    
+  END SUBROUTINE GetRequiredDiversions_AtSomeDiversions
   
   
   ! -------------------------------------------------------------
@@ -1338,6 +1398,18 @@ CONTAINS
   
   
   ! -------------------------------------------------------------
+  ! --- GET SURFACE EVAPORTAION AT ALL STREAM NODES
+  ! -------------------------------------------------------------
+  SUBROUTINE GetStrmEvap(AppStream,rEvap)
+    CLASS(BaseAppStreamType),INTENT(IN) :: AppStream
+    REAL(8),INTENT(OUT)                 :: rEvap(:)
+    
+    rEvap = AppStream%StrmEvap%rEvap
+    
+  END SUBROUTINE GetStrmEvap
+  
+  
+  ! -------------------------------------------------------------
   ! --- GET BYPASS INFLOWS AT ALL STREAM NODES
   ! -------------------------------------------------------------
   SUBROUTINE GetStrmBypassInflows(AppStream,rBPInflows)
@@ -1367,29 +1439,32 @@ CONTAINS
   SUBROUTINE GetNames(AppStream,iLocationType,cNamesList)
     CLASS(BaseAppStreamType),INTENT(IN) :: AppStream
     INTEGER,INTENT(IN)                  :: iLocationType
-    CHARACTER(LEN=*),INTENT(OUT)        :: cNamesList(:)  !Assumes array is previously dimensioned based on the number of reaches
+    CHARACTER(LEN=*),INTENT(OUT)        :: cNamesList(:)  !Assumes array is previously dimensioned based on the number of locations
     
     !Local variables
     INTEGER             :: indx,ID 
     INTEGER,ALLOCATABLE :: iBudNodes(:)
     
     SELECT CASE (iLocationType)
-            CASE (f_iLocationType_StrmReach)
-                cNamesList = Appstream%Reaches%cName
+        CASE (f_iLocationType_StrmReach)
+            cNamesList = Appstream%Reaches%cName
+        
+        CASE (f_iLocationType_StrmHydObs)
+            CALL AppStream%StrmHyd%GetNames(cNamesList)
             
-            CASE (f_iLocationType_StrmHydObs)
-                CALL AppStream%StrmHyd%GetNames(cNamesList)
-                
-            CASE (f_iLocationType_Bypass)
-                cNamesList = AppStream%AppDiverBypass%Bypasses%cName
-                
-            CASE (f_iLocationType_StrmNodeBud)
-                cNamesList = ''
-                CALL AppStream%StrmNodeBudget%GetBudNodes(iBudNodes)
-                DO indx=1,SIZE(iBudNodes)
-                    ID               = AppStream%GetStrmNodeID(iBudNodes(indx))
-                    cNamesList(indx) = TRIM(IntToText(ID))
-                END DO
+        CASE (f_iLocationType_Bypass)
+            CALL AppStream%AppDiverBypass%GetBypassNames(cNamesList)
+            
+        CASE (f_iLocationType_Diversion)
+            CALL AppStream%AppDiverBypass%GetDiversionNames(cNamesList)
+            
+        CASE (f_iLocationType_StrmNodeBud)
+            cNamesList = ''
+            CALL AppStream%StrmNodeBudget%GetBudNodes(iBudNodes)
+            DO indx=1,SIZE(iBudNodes)
+                ID               = AppStream%GetStrmNodeID(iBudNodes(indx))
+                cNamesList(indx) = TRIM(IntToText(ID))
+            END DO
     END SELECT
     
   END SUBROUTINE GetNames
@@ -1810,19 +1885,6 @@ CONTAINS
   END SUBROUTINE SetIrigFracsRead
 
 
-  ! -------------------------------------------------------------
-  ! --- SET STREAM FLOW AT A NODE (ALLOWED ONLY WHEN STREAMS ARE NON-ROUTED)
-  ! -------------------------------------------------------------
-  SUBROUTINE SetStreamFlow(AppStream,iStrmNode,rFlow)
-    CLASS(BaseAppStreamType) :: AppStream
-    INTEGER,INTENT(IN)       :: iStrmNode
-    REAL(8),INTENT(IN)       :: rFlow
-    
-    AppStream%State(iStrmNode)%Flow = rFlow
-    
-  END SUBROUTINE SetStreamFlow
-
-  
   ! -------------------------------------------------------------
   ! --- SET STREAM INFLOW AT A NODE
   ! -------------------------------------------------------------
@@ -2699,4 +2761,24 @@ CONTAINS
   END SUBROUTINE AddBypass
 
 
+  ! -------------------------------------------------------------
+  ! --- CONVERT ROUTING-ORDERED REACH INDEX TO ID-ORDERED INDEX
+  ! --- Note: Reach IDs are ordered based on the flow routing (upstream to downstream)
+  ! ---       Reach budget output in Budget file is ordered based on reach ID numbers
+  ! ---       To retrieve correct budget information, routing-ordered index must be converted to ID-ordered index for a reach
+  ! -------------------------------------------------------------
+  FUNCTION RoutingOrderedReachIndex_To_IDOrderedReachIndex(iStrmReachIDs,iRoutingOrderedIndex) RESULT(IDOrderedIndex)
+    INTEGER,INTENT(IN) :: iStrmReachIDs(:),iRoutingOrderedIndex
+    INTEGER            :: IDOrderedIndex
+    
+    !Local variables
+    INTEGER :: ID,IDOrderedList(SIZE(iStrmReachIDs))
+    
+    ID           = iStrmReachIDs(iRoutingOrderedIndex)
+    IDOrderedList = iStrmReachIDs
+    CALL ShellSort(IDOrderedList)
+    IDOrderedIndex = LocateInList(ID,IDOrderedList)
+    
+  END FUNCTION RoutingOrderedReachIndex_To_IDOrderedReachIndex
+  
 END MODULE

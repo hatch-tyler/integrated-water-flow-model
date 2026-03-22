@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(VERSION_JSON='{\"version\":\"2024.2.1594\",\"name\":\"IWFM-2024.2.1594\",\"url\":\"https://data.cnra.ca.gov/dataset/5c4b82c9-d219-4d71-a6cc-7ea6ccbaa54b/resource/393a154c-0587-4790-85a7-6936504cb430/download/iwfm-2024.2.1594.zip\",\"resource_id\":\"393a154c-0587-4790-85a7-6936504cb430\"}' ASSET_DIR=/tmp/iwfm-assets-2024 python .github/scripts/sync_upstream.py import 2>&1)"
+    ]
+  }
+}

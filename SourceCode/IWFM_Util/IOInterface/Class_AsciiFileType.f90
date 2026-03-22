@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2022
+!  Copyright (C) 2005-2024
 !  State of California, Department of Water Resources
 !
 !  This program is free software; you can redistribute it and/or
@@ -87,6 +87,7 @@ MODULE Class_AsciiFileType
       PROCEDURE,PASS :: ReadMatrixData_AsciiInFile
       PROCEDURE,PASS :: ReadCharacterArray                     => ReadCharacterUntilComment_AsciiInFile
       PROCEDURE,PASS :: Backspace                              => Backspace_AsciiInFile
+      PROCEDURE,PASS :: SkipDataBlocks
       PROCEDURE,PASS :: Rewind                                 => Rewind_AsciiInFile
       GENERIC        :: ReadData                               => ReadSingleData_AsciiInFile             , &
                                                                   ReadArrayData_AsciiInFile              , &
@@ -270,11 +271,7 @@ CONTAINS
     INTEGER,INTENT(OUT)                  :: iStat
 
     !Instantiate the file
-    IF (PRESENT(FileOpenCode)) THEN
-        CALL New_AsciiFile(ThisFile,FileName,lInputFile,'SEQUENTIAL',FileOpenCode=FileOpenCode,iStat=iStat)
-    ELSE
-        CALL New_AsciiFile(ThisFile,FileName,lInputFile,'SEQUENTIAL',iStat=iStat)
-    END IF
+    CALL New_AsciiFile(ThisFile,FileName,lInputFile,'SEQUENTIAL',FileOpenCode=FileOpenCode,iStat=iStat)
 
   END SUBROUTINE New_AsciiInFile
 
@@ -302,11 +299,7 @@ CONTAINS
     END IF
 
     !Instantiate the file
-    IF (PRESENT(FileOpenCode)) THEN
-        CALL New_AsciiFile(ThisFile,FileName,lInputFile,LocalAccessType,FileOpenCode=FileOpenCode,iStat=iStat)
-    ELSE
-        CALL New_AsciiFile(ThisFile,FileName,lInputFile,LocalAccessType,iStat=iStat)
-    END IF
+    CALL New_AsciiFile(ThisFile,FileName,lInputFile,LocalAccessType,FileOpenCode=FileOpenCode,iStat=iStat)
 
   END SUBROUTINE New_AsciiOutFile
 
@@ -364,12 +357,8 @@ CONTAINS
     !Local variables
     TYPE(AsciiInFileType) :: Dummy
 
-    IF (PRESENT(Status)) THEN
-        CALL Kill_AsciiFile(ThisFile,Status)
-    ELSE
-        CALL Kill_AsciiFile(ThisFile)
-    END IF
-
+    CALL Kill_AsciiFile(ThisFile,Status)
+    
     ThisFile%AtLine = Dummy%AtLine
 
   END SUBROUTINE Kill_AsciiInFile
@@ -382,11 +371,7 @@ CONTAINS
     CLASS(AsciiOutFileType)              :: ThisFile
     CHARACTER(LEN=*),INTENT(IN),OPTIONAL :: Status
 
-    IF (PRESENT(Status)) THEN
-        CALL Kill_AsciiFile(ThisFile,Status)
-    ELSE
-        CALL Kill_AsciiFile(ThisFile)
-    END IF
+    CALL Kill_AsciiFile(ThisFile,Status)
 
   END SUBROUTINE Kill_AsciiOutFile
 
@@ -403,11 +388,7 @@ CONTAINS
     TYPE(AsciiTSDInFileType) :: Dummy
 
     !Kill the parent class
-    IF (PRESENT(Status)) THEN
-        CALL Kill_AsciiInFile(ThisFile,Status)
-    ELSE
-        CALL Kill_AsciiInFile(ThisFile)
-    END IF
+    CALL Kill_AsciiInFile(ThisFile,Status)
 
     !Set the attributes to their default values
     ThisFile%NSP                     = Dummy%NSP
@@ -440,11 +421,7 @@ CONTAINS
     TYPE(AsciiTSDOutFileType) :: Dummy
 
     !Kill the parent class
-    IF (PRESENT(Status)) THEN
-        CALL Kill_AsciiOutFile(ThisFile,Status)
-    ELSE
-        CALL Kill_AsciiOutFile(ThisFile)
-    END IF
+    CALL Kill_AsciiOutFile(ThisFile,Status)
 
     !Set the attributes to their default values
     ThisFile%NumberOfDataBatch   = Dummy%NumberOfDataBatch
@@ -1035,28 +1012,16 @@ CONTAINS
     !Transfer read method to matrix time series data reader
     SELECT TYPE (Data)
         TYPE IS (INTEGER)
-            IF (PRESENT(TraceTime)) THEN
-                CALL ThisFile%ReadMatrixData_AsciiTSDInFile(Time,iData,FileReadCode,iStat,TraceTime)
-            ELSE
-                CALL ThisFile%ReadMatrixData_AsciiTSDInFile(Time,iData,FileReadCode,iStat)
-            END IF
+            CALL ThisFile%ReadMatrixData_AsciiTSDInFile(Time,iData,FileReadCode,iStat,TraceTime)
             IF (FileReadCode .EQ. 0) Data = iData(1,1) !If any value is read, transfer that value to tyhe return variable
 
         TYPE IS (REAL(8))
-            IF (PRESENT(TraceTime)) THEN
-                CALL ThisFile%ReadMatrixData_AsciiTSDInFile(Time,rData,FileReadCode,iStat,TraceTime)
-            ELSE
-                CALL ThisFile%ReadMatrixData_AsciiTSDInFile(Time,rData,FileReadCode,iStat)
-            END IF
+            CALL ThisFile%ReadMatrixData_AsciiTSDInFile(Time,rData,FileReadCode,iStat,TraceTime)
             IF (FileReadCode .EQ. 0) Data = rData(1,1) !If any value is read, transfer that value to tyhe return variable
 
         TYPE IS (CHARACTER(LEN=*))
             ALLOCATE(CHARACTER(LEN=LEN(Data)) :: cData(1,1))
-            IF (PRESENT(TraceTime)) THEN
-                CALL ThisFile%ReadMatrixData_AsciiTSDInFile(Time,cData,FileReadCode,iStat,TraceTime)
-            ELSE
-                CALL ThisFile%ReadMatrixData_AsciiTSDInFile(Time,cData,FileReadCode,iStat)
-            END IF
+            CALL ThisFile%ReadMatrixData_AsciiTSDInFile(Time,cData,FileReadCode,iStat,TraceTime)
             IF (FileReadCode .EQ. 0) Data = cData(1,1) !If any value is read, transfer that value to tyhe return variable
 
         CLASS DEFAULT
@@ -1089,19 +1054,11 @@ CONTAINS
     !Transfer read method to matrix integer time series data reader
     SELECT TYPE (Data)
         TYPE IS (INTEGER)
-            IF (PRESENT(TraceTime)) THEN
-                CALL ThisFile%ReadMatrixData_AsciiTSDInFile(Time,iData,FileReadCode,iStat,TraceTime)
-            ELSE
-                CALL ThisFile%ReadMatrixData_AsciiTSDInFile(Time,iData,FileReadCode,iStat)
-            END IF
+            CALL ThisFile%ReadMatrixData_AsciiTSDInFile(Time,iData,FileReadCode,iStat,TraceTime)
             IF (FileReadCode .EQ. 0) Data = iData(1,:) !If any value is read, transfer that value to tyhe return variable
 
         TYPE IS (REAL(8))
-            IF (PRESENT(TraceTime)) THEN
-                CALL ThisFile%ReadMatrixData_AsciiTSDInFile(Time,rData,FileReadCode,iStat,TraceTime)
-            ELSE
-                CALL ThisFile%ReadMatrixData_AsciiTSDInFile(Time,rData,FileReadCode,iStat)
-            END IF
+            CALL ThisFile%ReadMatrixData_AsciiTSDInFile(Time,rData,FileReadCode,iStat,TraceTime)
             IF (FileReadCode .EQ. 0) Data = rData(1,:) !If any value is read, transfer that value to tyhe return variable
 
         CLASS DEFAULT
@@ -1124,7 +1081,8 @@ CONTAINS
     LOGICAL,INTENT(IN),OPTIONAL                  :: TraceTime
 
     !Local variables
-    LOGICAL :: IsTimeTracingRequired,lDataTimeStamped
+    CHARACTER(LEN=ModNameLen+29) :: ThisProcedure = ModName // 'ReadMatrixData_AsciiTSDInFile' 
+    LOGICAL                      :: IsTimeTracingRequired,lDataTimeStamped
 
     !Initialize
     iStat = 0
@@ -1185,7 +1143,7 @@ CONTAINS
 
       !Local variables
       CHARACTER(LEN=30000)              :: InitialDataLine
-      INTEGER                           :: NDataLines,LineNumberToGo
+      INTEGER                           :: NDataLines,LineNumberToGo,iDataLineStart,iDataLineEnd
       CHARACTER(LEN=f_iTimeStampLength) :: LastDataDate
 
       !Check if the NumberOfDataLines is identified; if not identify
@@ -1205,6 +1163,9 @@ CONTAINS
           NDataLines = ThisFile%NumberOfDataLines
           CALL LocateDate(ThisFile,Time,NDataLines,LineNumberToGo,LastDataDate,iStat=iStat)
           IF (iStat .EQ. -1) RETURN
+          
+          !We want to make sure we read NDataLines, not more in case there is an error in the input data (e.g. less number of columns)
+          iDataLineStart = ThisFile%AtLine
 
           !Position the file pointer behind the time stamp as an initialization for the time series data reading
           CALL PlacePointerBehindTimeColumn(ThisFile,iStat)
@@ -1212,7 +1173,17 @@ CONTAINS
 
           !Then, read the desired data
           CALL ThisFile%ReadMatrixData_AsciiInFile(Data,Skip=.FALSE.,iStat=iStat)  ;  IF (iStat .EQ. -1) RETURN
-          CALL GoToLine(ThisFile,LineNumberToGo,iStat=iStat)  ;  IF (iStat .EQ. -1) RETURN  !Rewind the file to the beginning of data set before the one that was just read; this allows for error-free data reading when there are multiple time steps in-between two measured data
+          iDataLineEnd = ThisFile%AtLine
+          
+          !Check that we read as many as NDataLines, not more or less
+          IF (iDataLineEnd-iDataLineStart .NE. NDataLines) THEN
+              CALL SetLastMessage('It appears there is not enough number of data columns in file '//TRIM(ThisFile%Name)//'!',f_iFatal,ThisProcedure)
+              iStat = -1
+              RETURN
+          END IF
+          
+          !Rewind the file to the beginning of data set before the one that was just read; this allows for error-free data reading when there are multiple time steps in-between two measured data
+          CALL GoToLine(ThisFile,LineNumberToGo,iStat=iStat)  ;  IF (iStat .EQ. -1) RETURN  
 
           !Convert the rate-type data so that the time unit matches the time step of simulation
           SELECT TYPE (Data)
@@ -1545,9 +1516,9 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- SKIP BLOCK(S) OF DATA
   ! -------------------------------------------------------------
-  SUBROUTINE SkipDataBlock(ThisFile,NBlock,iStat)
+  SUBROUTINE SkipDataBlocks(ThisFile,iNBlocks,iStat)
     CLASS(AsciiInFileType) :: ThisFile
-    INTEGER,INTENT(IN)     :: NBlock
+    INTEGER,INTENT(IN)     :: iNBlocks
     INTEGER,INTENT(OUT)    :: iStat
 
     !Local variables
@@ -1556,13 +1527,13 @@ CONTAINS
     !Initialize
     iStat = 0
 
-    DO indx=1,NBlock
-      CALL SkipComment(ThisFile,iStat)    ;  IF (iStat .EQ. -1) RETURN
-      CALL ReadToComment(ThisFile,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    DO indx=1,iNBlocks
+        CALL SkipComment(ThisFile,iStat)    ;  IF (iStat .EQ. -1) RETURN
+        CALL ReadToComment(ThisFile,iStat)  ;  IF (iStat .EQ. -1) RETURN
     END DO
     CALL SkipComment(ThisFile,iStat)
 
-  END SUBROUTINE SkipDataBlock
+  END SUBROUTINE SkipDataBlocks
 
 
   ! -------------------------------------------------------------
@@ -2006,11 +1977,11 @@ CONTAINS
 
     IsInBetween = .FALSE.
     IF (JulianDate.LE.JulianDate1                                  .OR.  &
-        (JulianDate.GT.JulianDate1 .AND. JulianDate.LE.JulianDate2)    ) &
-      IsInBetween = .TRUE.
+       (JulianDate.GT.JulianDate1 .AND. JulianDate.LE.JulianDate2)     ) &
+        IsInBetween = .TRUE.
     IF (PRESENT(LessThanJulianDate1)) THEN
-      LessThanJulianDate1 = .FALSE.
-      IF (JulianDate.LE.JulianDate1) LessThanJulianDate1 = .TRUE.
+        LessThanJulianDate1 = .FALSE.
+        IF (JulianDate.LE.JulianDate1) LessThanJulianDate1 = .TRUE.
     END IF
 
   END FUNCTION JulianDateIsInBetween
@@ -2036,8 +2007,8 @@ CONTAINS
 
     IF (ThisFile%NFQ .EQ. ThisFile%NumberOfReads) THEN
         CALL ThisFile%Rewind()
-        CALL SkipDataBlock(ThisFile,ThisFile%NumberOfBlocksToSkip,iStat=iStat)  ;  IF (iStat .EQ. -1) RETURN
-        CALL SkipComment(ThisFile,iStat=iStat)                                  ;  IF (iStat .EQ. -1) RETURN
+        CALL ThisFile%SkipDataBlocks(ThisFile%NumberOfBlocksToSkip,iStat=iStat)  ;  IF (iStat .EQ. -1) RETURN
+        CALL SkipComment(ThisFile,iStat=iStat)                                   ;  IF (iStat .EQ. -1) RETURN
         ThisFile%NumberOfReads = 0
     END IF
 
@@ -2110,8 +2081,8 @@ CONTAINS
   ! --- PLACE FILE POINTER BEHIND TIME COLUMN
   ! -------------------------------------------------------------
   RECURSIVE SUBROUTINE PlacePointerBehindTimeColumn(ThisFile,iStat)
-    TYPE(AsciiTSDInFileType),INTENT(IN) :: ThisFile
-    INTEGER,INTENT(OUT)                 :: iStat
+    TYPE(AsciiTSDInFileType) :: ThisFile
+    INTEGER,INTENT(OUT)      :: iStat
 
     !Local variables
     CHARACTER(150)                :: ALine
@@ -2172,7 +2143,7 @@ CONTAINS
     iStat = 0
 
     CALL ThisFile%Rewind()
-    CALL SkipDataBlock(ThisFile,ThisFile%NumberOfBlocksToSkip,iStat=iStat)  ;  IF (iStat .EQ. -1) RETURN
+    CALL ThisFile%SkipDataBlocks(ThisFile%NumberOfBlocksToSkip,iStat=iStat)  ;  IF (iStat .EQ. -1) RETURN
     CALL SkipComment(ThisFile,iStat=iStat)                                  ;  IF (iStat .EQ. -1) RETURN
 
     ThisFile%JulianDate1 = Dummy%JulianDate1

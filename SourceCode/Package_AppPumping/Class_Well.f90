@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2022  
+!  Copyright (C) 2005-2024  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -28,6 +28,7 @@ MODULE Class_Well
                                           IntToText                , &
                                           ShellSort                , &
                                           GetUniqueArrayComponents , &
+                                          NormalizeArray           , &
                                           LocateInList
   USE Package_Discretization      , ONLY: AppGridType              , &
                                           StratigraphyType         
@@ -473,6 +474,9 @@ CONTAINS
         Top        = Bottom
         AquiferTop = AquiferBot
       END DO
+      
+      !Normalize layer factors
+      CALL NormalizeArray(Well%rLayerFactor)
     END ASSOCIATE
     
     !Instantiate object

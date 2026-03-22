@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2022  
+!  Copyright (C) 2005-2024  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -219,7 +219,7 @@ CONTAINS
     cZoneName   = ZoneName(TimeStep)
     rValuesTemp = PACK(rValues , MASK=.TRUE.)
 
-    Text = 'ZONE T="'//TRIM(cZoneName)//'",DATAPACKING=BLOCK,ZONETYPE=FEQUADRILATERAL,VARSHARELIST=([1,2]=1),CONNECTIVITYSHAREZONE=1,STRANDID=1,SOLUTIONTIME='//TRIM(IntToText(TimeStep%CurrentTimeStep+1))//'.0'
+    Text = 'ZONE T="'//TRIM(cZoneName)//'",DATAPACKING=BLOCK,ZONETYPE=FEQUADRILATERAL,VARSHARELIST=([1,2]=1),CONNECTIVITYSHAREZONE=1,STRANDID=1,SOLUTIONTIME='//TRIM(IntToText(TimeStep%CurrentTimeStep))//'.0'
     CALL TPOutput%OutFile%WriteData(Text) 
     DO indx=1,SIZE(rValues)/100+1 
       WRITE (Text,'(100(F12.3,2X))') (rValuesTemp(indx1)*rFactor,indx1=(indx-1)*100+1,MIN(indx*100,SIZE(rValues)))
