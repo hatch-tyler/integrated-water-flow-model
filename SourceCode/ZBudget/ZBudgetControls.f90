@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2024
+!  Copyright (C) 2005-2025
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -21,8 +21,8 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 MODULE ZBudgetControls
-  USE IWFM_Core_Version      , ONLY: IWFM_Core
-  USE IWFM_Util_VersionF     , ONLY: IWFM_Util
+  USE IWFM_Version           , ONLY: IWFMVersion
+  USE IWFM_Kernel_Version    , ONLY: IWFMKernelVersion
   USE MessageLogger          , ONLY: LogMessage                         , &
                                      LogLastMessage                     , &
                                      PrintRunTime                       , &
@@ -49,15 +49,11 @@ MODULE ZBudgetControls
   USE IOInterface            , ONLY: GenericFileType                    , &
                                      iGetFileType_FromName              , &
                                      f_iHDF                                
-  USE Package_Discretization , ONLY: Package_Discretization_GetVersion
   USE Package_Misc           , ONLY: Get_Main_File                      , &
-                                     Print_Screen                       , &
-                                     Package_Misc_GetVersion
-  USE Package_Budget         , ONLY: Package_Budget_GetVersion
+                                     Print_Screen                       
   USE Package_ZBudget        , ONLY: ZBudgetType                        , &
                                      SystemDataType                     , &
                                      ZoneListType                       , &
-                                     Package_ZBudget_GetVersion         , &
                                      f_iZoneHorizontal                  , &
                                      f_iZoneVertical                    , &
                                      f_iUndefinedZone
@@ -134,7 +130,7 @@ CONTAINS
     IF (cFileName .NE. '') THEN
         cMainFileName = cFileName
     ELSE
-        CALL Print_screen('Program: Z-Budget',IWFM_Core)
+        CALL Print_screen('Program: Z-Budget',IWFMVersion)
         CALL Get_Main_File(' Enter the Name of the Main Input File >  ',cMainFileName)
         IF (TRIM(cMainFileName) .EQ. '-about') THEN
             CALL PrintVersionNumbers()
@@ -289,14 +285,10 @@ CONTAINS
   SUBROUTINE PrintVersionNumbers()
     
     MessageArray(1) = NEW_LINE('x')//'VERSION NUMBERS FOR IWFM AND ITS COMPONENTS:'//NEW_LINE('x')
-    MessageArray(2) = '  IWFM Core                 : '//TRIM(IWFM_Core%GetVersion())
-    MessageArray(3) = '  IWFM_Util.lib             : '//TRIM(IWFM_Util%GetVersion())
-    MessageArray(4) = '  Package_Misc.lib          : '//TRIM(Package_Misc_GetVersion())
-    MessageArray(5) = '  Package_Discretization.lib: '//TRIM(Package_Discretization_GetVersion())
-    MessageArray(6) = '  Package_Budget.lib        : '//TRIM(Package_Budget_GetVersion())
-    MessageArray(7) = '  Package_ZBudget.lib       : '//TRIM(Package_ZBudget_GetVersion())
+    MessageArray(2) = '  IWFM       : '//TRIM(IWFMVersion%GetVersion())
+    MessageArray(3) = '  IWFM Kernel: '//TRIM(IWFMKernelVersion%GetVersion())
 
-    CALL LogMessage(MessageArray(1:7),f_iMessage,'',iDestination=f_iSCREEN)
+    CALL LogMessage(MessageArray(1:3),f_iMessage,'',iDestination=f_iSCREEN)
   
   END SUBROUTINE PrintVersionNumbers
   

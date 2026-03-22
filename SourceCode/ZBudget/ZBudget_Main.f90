@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2024
+!  Copyright (C) 2005-2025
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -33,7 +33,7 @@ PROGRAM ZBudget
                                 f_iYesEchoProgress    , &
                                 f_iFILE                  
   USE ProgramTimer      , ONLY: StartTimer               
-  USE IWFM_Core_Version , ONLY: IWFM_Core
+  USE IWFM_Version      , ONLY: IWFMVersion
   USE ZBudgetControls   , ONLY: ProcessZBudgets       , &
                                 EndExecution
   IMPLICIT NONE
@@ -55,7 +55,7 @@ PROGRAM ZBudget
   CALL SetLogFileName('ZBudgetMessages.out',iStat)  ;  IF (iStat .EQ. -1) CALL EndExecution(StandardOutputFile,iStat)
 
   !Print-out date and time of the execution
-  MessageArray(1) = 'PROGRAM: IWFM Z-Budget Post-Processor ' // TRIM(IWFM_Core%GetVersion())
+  MessageArray(1) = 'PROGRAM: IWFM Z-Budget Post-Processor ' // TRIM(IWFMVersion%GetVersion())
   MessageArray(2) = 'This run is made on '//TRIM(GetDate())//' at '//TRIM(GetTime())
   MessageArray(3) = ''
   CALL LogMessage(MessageArray(1:3),f_iMessage,'',iDestination=f_iFILE)

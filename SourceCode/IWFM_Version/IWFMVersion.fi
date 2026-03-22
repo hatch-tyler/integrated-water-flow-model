@@ -1,0 +1,3 @@
+CHARACTER(LEN=40),PARAMETER :: f_cTag    = '2025.0.1688'      
+CHARACTER(LEN=40),PARAMETER :: f_cBranch = 'main'  
+CHARACTER(LEN=40),PARAMETER :: f_cHash   = '3f7e84d49f2f71d5c901ef74416118a82b0be3ef'    

@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2024  
+!  Copyright (C) 2005-2025  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -97,7 +97,7 @@ MODULE IWFM_Misc_Exports
                                           f_iZBudgetType_RootZone                  , &
                                           f_iZBudgetType_LWU 
   USE Package_AppSmallWatershed   , ONLY: f_iBudgetType_SWShed 
-  USE IWFM_Util_VersionF          , ONLY: IWFM_Util
+  USE IWFM_Kernel_Version         , ONLY: IWFMKernelVersion
   USE Package_Model               , ONLY: ModelType
   IMPLICIT NONE
     
@@ -178,10 +178,10 @@ CONTAINS
   
   
   ! -------------------------------------------------------------
-  ! --- GET IWFM_Util VERSION
+  ! --- GET IWFM-kernel VERSION
   ! -------------------------------------------------------------
-  SUBROUTINE IW_IWFMUtil_GetVersion(iLen,cVer,iStat) BIND(C,NAME='IW_IWFMUtil_GetVersion')
-    !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_IWFMUtil_GetVersion
+  SUBROUTINE IW_IWFMKernel_GetVersion(iLen,cVer,iStat) BIND(C,NAME='IW_IWFMKernel_GetVersion')
+    !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_IWFMKernel_GetVersion
     INTEGER(C_INT),INTENT(IN)          :: iLen
     CHARACTER(KIND=C_CHAR),INTENT(OUT) :: cVer(iLen)
     INTEGER(C_INT),INTENT(OUT)         :: iStat
@@ -191,10 +191,10 @@ CONTAINS
     
     iStat = 0
     
-    cVer_F = IWFM_Util%GetVersion()
+    cVer_F = IWFMKernelVersion%GetVersion()
     CALL String_Copy_F_C(cVer_F,cVer)
     
-  END SUBROUTINE IW_IWFMUtil_GetVersion
+  END SUBROUTINE IW_IWFMKernel_GetVersion
   
   
   ! -------------------------------------------------------------

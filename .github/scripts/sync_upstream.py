@@ -638,15 +638,22 @@ def cmd_release() -> None:
 
     notes = "\n".join(notes_lines)
 
+    # Write notes to a temp file (avoids shell escaping issues with long notes)
+    notes_file = Path(tempfile.mktemp(suffix=".md", prefix="release-notes-"))
+    notes_file.write_text(notes, encoding="utf-8")
+
     cmd = [
         "gh", "release", "create", tag_name,
         "--title", f"IWFM {version}",
-        "--notes", notes,
+        "--notes-file", str(notes_file),
     ]
     cmd.extend(assets)
 
-    run(cmd)
-    log(f"Created GitHub Release: {tag_name}")
+    try:
+        run(cmd)
+        log(f"Created GitHub Release: {tag_name}")
+    finally:
+        notes_file.unlink(missing_ok=True)
 
 
 def cmd_create_issue() -> None:

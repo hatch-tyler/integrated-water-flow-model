@@ -71,7 +71,7 @@ PROGRAM IWFM_f2_MultiModel
                                      f_iFlowDest_StrmNode    , &
                                      f_iFlowDest_Lake        , &
                                      f_iLocationType_Bypass
-  USE IWFM_Core_Version      , ONLY: IWFM_Core                                      
+  USE IWFM_Version           , ONLY: IWFMVersion                                      
   USE Package_Model          , ONLY: ModelType               
   USE Coarray_Debugging
   IMPLICIT NONE
@@ -415,7 +415,7 @@ CONTAINS
     IF (cFileName .NE. '') THEN
         cMainFileName = cFileName
     ELSE
-        CALL Print_screen('Program: Simulation_MultiModel',IWFM_Core)
+        CALL Print_screen('Program: Simulation_MultiModel',IWFMVersion)
         CALL Get_Main_File(' Enter the Name of the Main Input File >  ',cMainFileName)
         IF (TRIM(cMainFileName) .EQ. '-about') THEN
             CALL aModel%PrintVersionNumbers()
