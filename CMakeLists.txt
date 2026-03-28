@@ -9,12 +9,19 @@
 cmake_minimum_required(VERSION 3.20)
 
 # Project definition with Fortran and C enabled
-# CXX is conditionally enabled below for the C++ solver
 project(IWFM
     VERSION 2025.0.1747
     DESCRIPTION "Integrated Water Flow Model"
     LANGUAGES Fortran C
 )
+
+# Disable Fortran preprocessing by default.
+# CMake's Ninja generator preprocesses every .f90 into a .f90-pp.f90 intermediate
+# for module dependency scanning, then compiles the preprocessed copy. This two-step
+# pipeline causes Intel ifx to generate ~34% slower code vs direct compilation.
+# Files that need preprocessing (#ifdef guards) are individually marked with
+# set_source_files_properties(... PROPERTIES Fortran_PREPROCESS ON).
+set(CMAKE_Fortran_PREPROCESS OFF)
 
 # CMake policies for modern behavior
 cmake_policy(SET CMP0074 NEW)  # Use <Package>_ROOT variables
@@ -51,7 +58,6 @@ option(IWFM_BUILD_CALCTYPHYD "Build CalcTypeHyd cluster type hydrograph tool" OF
 option(IWFM_BUILD_RESULTSEXTRACT "Build ResultsExtract generalized hydrograph extractor" OFF)
 option(IWFM_USE_SYSTEM_HDF5 "Use system-installed HDF5 instead of FetchContent" OFF)
 option(IWFM_USE_SYSTEM_HECLIB "Use system-installed heclib instead of FetchContent" OFF)
-option(IWFM_USE_CPP_SOLVER "Use C++ sparse solver instead of Fortran SPARSKIT" OFF)
 option(IWFM_MONOLITHIC_BUILD "Compile all .f90 directly into each executable (no intermediate .lib)" OFF)
 
 # =============================================================================
@@ -99,17 +105,6 @@ foreach(CONFIG_TYPE ${CMAKE_CONFIGURATION_TYPES})
     set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_${CONFIG_TYPE_UPPER} ${CMAKE_SOURCE_DIR}/Bin)
     set(CMAKE_LIBRARY_OUTPUT_DIRECTORY_${CONFIG_TYPE_UPPER} ${CMAKE_SOURCE_DIR}/Bin)
 endforeach()
-
-# =============================================================================
-# C++ Solver (optional high-performance replacement for Fortran SPARSKIT)
-# =============================================================================
-if(IWFM_USE_CPP_SOLVER)
-    enable_language(CXX)
-    message(STATUS "C++ Solver: ENABLED (C++ compiler: ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION})")
-    add_subdirectory(SourceCode/IWFM-kernel/Package_Matrix/cpp)
-else()
-    message(STATUS "C++ Solver: disabled (using Fortran SPARSKIT)")
-endif()
 
 # =============================================================================
 # Add Source Directories

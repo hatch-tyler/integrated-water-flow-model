@@ -52,12 +52,6 @@ function(iwfm_add_monolithic_executable TARGET_NAME)
     # Set module directory for .mod file output
     iwfm_set_module_directory(${TARGET_NAME})
 
-    # Link C++ solver if enabled
-    if(IWFM_USE_CPP_SOLVER)
-        target_link_libraries(${TARGET_NAME} PRIVATE iwfm_solver)
-        target_compile_definitions(${TARGET_NAME} PRIVATE IWFM_CPP_SOLVER)
-    endif()
-
     # Conditionally apply OpenMP or Coarray
     if(MONO_OPENMP)
         iwfm_add_openmp_flags(${TARGET_NAME})
@@ -116,11 +110,6 @@ function(iwfm_add_monolithic_dll TARGET_NAME)
     iwfm_set_module_directory(${TARGET_NAME})
 
     # Link C++ solver if enabled
-    if(IWFM_USE_CPP_SOLVER)
-        target_link_libraries(${TARGET_NAME} PRIVATE iwfm_solver)
-        target_compile_definitions(${TARGET_NAME} PRIVATE IWFM_CPP_SOLVER)
-    endif()
-
     # Enable OpenMP for kernel sources
     iwfm_add_openmp_flags(${TARGET_NAME})
 

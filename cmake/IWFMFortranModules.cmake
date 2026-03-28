@@ -8,13 +8,11 @@
 # =============================================================================
 # Modern CMake Fortran Module Scanning
 # =============================================================================
-# CMake 3.20+ supports Fortran module dependency scanning with Ninja generator
-# This provides automatic handling of module dependencies
-
-if(CMAKE_VERSION VERSION_GREATER_EQUAL "3.20")
-    # Enable Fortran preprocessing
-    set(CMAKE_Fortran_PREPROCESS ON)
-endif()
+# CMake 3.20+ with Ninja supports automatic Fortran module dependency scanning.
+# NOTE: CMAKE_Fortran_PREPROCESS is set to OFF in root CMakeLists.txt to prevent
+# Ninja's two-step preprocess-then-compile pipeline, which causes ifx to generate
+# ~34% slower code. The /fpp flag in compile options lets ifx handle preprocessing
+# inline (single-step), matching the VS build behavior.
 
 # CMake 3.28+ has improved Fortran module scanning
 if(CMAKE_VERSION VERSION_GREATER_EQUAL "3.28")
@@ -39,11 +37,18 @@ endfunction()
 # Function: Set Fortran Module Directory for a Target
 # =============================================================================
 function(iwfm_set_module_directory target)
+    # In monolithic builds, each target compiles all sources independently.
+    # Give each target its own module directory to avoid .mod file conflicts.
+    if(IWFM_MONOLITHIC_BUILD)
+        set(_mod_dir "${CMAKE_BINARY_DIR}/modules/${target}")
+    else()
+        set(_mod_dir "${CMAKE_Fortran_MODULE_DIRECTORY}")
+    endif()
     set_target_properties(${target} PROPERTIES
-        Fortran_MODULE_DIRECTORY ${CMAKE_Fortran_MODULE_DIRECTORY}
+        Fortran_MODULE_DIRECTORY ${_mod_dir}
     )
     target_include_directories(${target} PUBLIC
-        $<BUILD_INTERFACE:${CMAKE_Fortran_MODULE_DIRECTORY}>
+        $<BUILD_INTERFACE:${_mod_dir}>
         $<INSTALL_INTERFACE:include/iwfm>
     )
 endfunction()

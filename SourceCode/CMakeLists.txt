@@ -39,6 +39,21 @@ if(IWFM_MONOLITHIC_BUILD AND IWFM_NEED_DEPENDENCIES)
         )
         iwfm_set_output_name(Simulation_Parallel "Simulation_PLL")
         install(TARGETS Simulation_Parallel RUNTIME DESTINATION bin)
+
+        # Copy OpenMP runtime DLL next to the executable (Windows)
+        if(WIN32 AND IWFM_USING_INTEL)
+            get_filename_component(_ifx_dir "${CMAKE_Fortran_COMPILER}" DIRECTORY)
+            find_file(IOMP5_DLL_MONO libiomp5md.dll
+                PATHS "${_ifx_dir}" "${_ifx_dir}/../bin" "${_ifx_dir}/../../bin"
+                NO_DEFAULT_PATH)
+            if(IOMP5_DLL_MONO)
+                add_custom_command(TARGET Simulation_Parallel POST_BUILD
+                    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                        "${IOMP5_DLL_MONO}" "$<TARGET_FILE_DIR:Simulation_Parallel>"
+                    COMMENT "Copying libiomp5md.dll to output directory"
+                )
+            endif()
+        endif()
     endif()
 
     # -----------------------------------------------------------------
@@ -266,6 +281,23 @@ if(IWFM_BUILD_PARALLEL)
     endif()
 
     install(TARGETS Simulation_Parallel RUNTIME DESTINATION bin)
+
+    # Copy OpenMP runtime DLL next to the executable (Windows)
+    if(WIN32 AND IWFM_USING_INTEL)
+        get_filename_component(_ifx_dir "${CMAKE_Fortran_COMPILER}" DIRECTORY)
+        find_file(IOMP5_DLL libiomp5md.dll
+            PATHS "${_ifx_dir}" "${_ifx_dir}/../bin" "${_ifx_dir}/../../bin"
+            NO_DEFAULT_PATH)
+        if(IOMP5_DLL)
+            add_custom_command(TARGET Simulation_Parallel POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    "${IOMP5_DLL}" "$<TARGET_FILE_DIR:Simulation_Parallel>"
+                COMMENT "Copying libiomp5md.dll to output directory"
+            )
+        else()
+            message(WARNING "libiomp5md.dll not found near compiler — parallel exe may fail at runtime")
+        endif()
+    endif()
 endif()
 
 # =============================================================================

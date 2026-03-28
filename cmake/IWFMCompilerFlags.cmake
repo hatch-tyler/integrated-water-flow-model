@@ -52,8 +52,14 @@ set(IWFM_PGO_DIR "${CMAKE_SOURCE_DIR}/pgo_data" CACHE PATH "Directory for PGO pr
 # =============================================================================
 if(IWFM_USING_INTEL)
     # Override CMake's default Release flags for Intel compilers.
-    # We use /O3 on Windows (ifx LLVM backend benefits from aggressive optimization)
-    # and -O2 on Linux/macOS for consistency.
+    # CMake's platform module sets CMAKE_Fortran_FLAGS to "/nologo /fpp" (Windows)
+    # or "-fpp" (Linux). We keep these defaults — /fpp is needed for optimal code
+    # generation. The Ninja two-step preprocessing issue is solved by setting
+    # CMAKE_Fortran_PREPROCESS OFF in root CMakeLists.txt (not by removing /fpp).
+    #
+    # Blank CMAKE_Fortran_COMPILE_OPTIONS_PREPROCESS_OFF to prevent CMake from
+    # injecting -nofpp (which would override /fpp in the compile flags).
+    set(CMAKE_Fortran_COMPILE_OPTIONS_PREPROCESS_OFF "" CACHE STRING "" FORCE)
     if(WIN32)
         set(CMAKE_Fortran_FLAGS_RELEASE "/O2" CACHE STRING
             "Fortran Release flags" FORCE)
@@ -108,30 +114,6 @@ if(IWFM_USING_INTEL)
             $<$<CONFIG:Debug>:/warn:uncalled>
         )
 
-        # Release-specific flags
-        # /fp:fast=1: FP reordering for iterative solver (slight numerical diffs OK)
-        # /Qopt-zmm-usage:high: use 512-bit vectors on AVX-512 hardware
-        # /Qimf-precision:medium: faster math library (EXP, SQRT, etc.)
-        # /Qopt-assume-no-loop-carry: assume no loop-carried deps where unprovable
-        # /Qopt-multiple-gather-scatter-by-shuffles: better indirect-indexed gather
-        # /O3: aggressive optimization — loop transformations, vectorization, prefetch
-        #      DWR 2024 was built with ifort which generates faster code at /O2;
-        #      ifx (LLVM-based) needs /O3 + extra flags to compensate
-        # /Qipo: inter-procedural optimization across compilation units
-        # /QxHost: generate code optimized for the host CPU (AVX2/AVX-512)
-        # /Qunroll-aggressive: more aggressive loop unrolling
-        # /Qopt-prefetch: enable software prefetch instructions
-        # /Qparallel: auto-parallelization analysis (supplements OpenMP)
-        # NOTE: Aggressive flags temporarily disabled to A/B test vs /O2 baseline
-        # target_compile_options(iwfm_compiler_flags INTERFACE
-        #     $<$<CONFIG:Release>:/Qipo>
-        #     $<$<CONFIG:Release>:/QxHost>
-        #     $<$<CONFIG:Release>:/Qopt-prefetch>
-        #     $<$<CONFIG:Release>:/Qopt-zmm-usage:high>
-        #     $<$<CONFIG:Release>:/Qimf-precision:medium>
-        #     $<$<CONFIG:Release>:/Qopt-multiple-gather-scatter-by-shuffles>
-        # )
-
         # Note: /heap-arrays:900 was removed from global flags — it causes a 3x
         # performance penalty by forcing all arrays >900 bytes onto the heap.
         # The VS solution only applies it to the DLL project (see iwfm_add_dll_flags).
@@ -156,12 +138,6 @@ if(IWFM_USING_INTEL)
             )
             message(STATUS "PGO optimization enabled (LLVM use phase)")
         endif()
-
-        # IPO link: disabled for A/B testing
-        # target_link_options(iwfm_compiler_flags INTERFACE
-        #     $<$<CONFIG:Release>:/Qipo>
-        #     $<$<CONFIG:Release>:/QxHost>
-        # )
 
         # Linker: 256MB stack
         # Must use LINKER: prefix so CMake passes the flag through to link.exe
