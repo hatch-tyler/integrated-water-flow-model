@@ -58,13 +58,6 @@ if(IWFM_BUILD_PARALLEL OR IWFM_BUILD_COARRAY OR IWFM_BUILD_DLL)
     iwfm_add_openmp_flags(iwfm_kernel)
 endif()
 
-# Link C++ solver library if enabled
-if(IWFM_USE_CPP_SOLVER)
-    target_link_libraries(iwfm_kernel PUBLIC iwfm_solver)
-    target_compile_definitions(iwfm_kernel PRIVATE IWFM_CPP_SOLVER)
-    message(STATUS "iwfm_kernel: linking C++ solver (iwfm_solver)")
-endif()
-
 # Set Fortran module output directory
 iwfm_set_module_directory(iwfm_kernel)
 

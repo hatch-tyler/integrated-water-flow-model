@@ -1295,12 +1295,13 @@ CONTAINS
 
   ! -------------------------------------------------------------
   ! --- CONVERT TO CRS FORMAT REUSING PRE-ALLOCATED MATRIX ARRAYS
-  ! --- Avoids repeated ALLOCATE/DEALLOCATE of ~22MB per NR iteration
+  ! --- Single-pass: avoids repeated ALLOCATE/DEALLOCATE of ~22MB
+  ! --- per NR iteration and eliminates the first counting pass
   ! -------------------------------------------------------------
   SUBROUTINE ConvertToCRSFormat_Reuse(Matrix)
     TYPE(MatrixType) :: Matrix
 
-    INTEGER :: I, K, IM, IshftIDX, N, NJ, NJ_Max
+    INTEGER :: I, K, IM, N, NJ_Max
 
     N = SIZE(Matrix%NJD) - 1
     NJ_Max = SIZE(Matrix%COEFF)
@@ -1310,34 +1311,22 @@ CONTAINS
         ALLOCATE(Matrix%COEFF_CRS(NJ_Max), Matrix%NJD_CRS(N+1), Matrix%JND_CRS(NJ_Max))
     END IF
 
-    !Count non-zeros to skip
-    IshftIDX = 0
-    DO I = 1, N
-       DO K = Matrix%NJD(I),(Matrix%NJD(I+1)-1)
-         IF (Matrix%COEFF(K).EQ.0.D0 .OR. Matrix%JND(K).EQ.0) IshftIDX = IshftIDX + 1
-       ENDDO
-    ENDDO
-
-    NJ = NJ_Max - IshftIDX
-    Matrix%nCRS_NNZ = NJ
-
-    !Fill CRS arrays in place
+    !Single pass: fill CRS arrays and compute row pointers incrementally
     IM = 1
     Matrix%NJD_CRS(1) = 1
-    IshftIDX = 0
 
     DO I = 1, N
        DO K = Matrix%NJD(I),(Matrix%NJD(I+1)-1)
-         IF (Matrix%COEFF(K).EQ.0.D0 .OR. Matrix%JND(K).EQ.0) THEN
-           IshftIDX = IshftIDX + 1
-         ELSE
+         IF (Matrix%COEFF(K).NE.0.D0 .AND. Matrix%JND(K).NE.0) THEN
            Matrix%COEFF_CRS(IM) = Matrix%COEFF(K)
            Matrix%JND_CRS(IM) = Matrix%JND(K)
            IM = IM + 1
          ENDIF
        ENDDO
-       Matrix%NJD_CRS(I+1) = Matrix%NJD(I+1) - IshftIDX
+       Matrix%NJD_CRS(I+1) = IM
     END DO
+
+    Matrix%nCRS_NNZ = IM - 1
 
   END SUBROUTINE ConvertToCRSFormat_Reuse
   
@@ -1584,66 +1573,7 @@ CONTAINS
     IM          =       20                              ! THE NUMBER OF ITERATIONS PERFORMED BEFORE RESTART OF GMRES(IM)
     RES         =       0.0D0                           ! THE RESIDUAL ERROR USED TO ASSESS CONVERGENCE
 
-#ifdef IWFM_CPP_SOLVER
-    ! ── C++ solver: single-call ILUT + GMRES(m) ──────────────────────────────
-    BLOCK
-        USE, INTRINSIC :: ISO_C_BINDING, ONLY: C_INT, C_DOUBLE, C_PTR, C_LOC
-        INTERFACE
-            FUNCTION iwfm_pgmres_solve(n, rhs, sol, coeff_c, jnd_c, njd_c, &
-                     lfil_c, droptol_c, im_c, maxiter, rtol, atol,         &
-                     iters_out, residual_out) BIND(C, NAME='iwfm_pgmres_solve')
-                USE, INTRINSIC :: ISO_C_BINDING, ONLY: C_INT, C_DOUBLE
-                INTEGER(C_INT), VALUE :: n, lfil_c, im_c, maxiter
-                REAL(C_DOUBLE), VALUE :: droptol_c, rtol, atol
-                REAL(C_DOUBLE), INTENT(INOUT) :: rhs(*), sol(*)
-                REAL(C_DOUBLE), INTENT(IN)    :: coeff_c(*)
-                INTEGER(C_INT), INTENT(IN)    :: jnd_c(*), njd_c(*)
-                INTEGER(C_INT), INTENT(OUT)   :: iters_out
-                REAL(C_DOUBLE), INTENT(OUT)   :: residual_out
-                INTEGER(C_INT)                :: iwfm_pgmres_solve
-            END FUNCTION
-        END INTERFACE
-
-        REAL(C_DOUBLE) :: rtol_c, residual_out
-        INTEGER(C_INT) :: iters_out, ierr_c
-
-        ! Compute relative tolerance (same as Fortran path)
-        IF (RHS_L2 .EQ. 0.0D0) THEN
-            rtol_c = 0.0D0
-        ELSE
-            rtol_c = MIN(Toler/RHS_L2, 0.9999D0)
-        END IF
-
-        ierr_c = iwfm_pgmres_solve(N, Matrix%RHS, Matrix%HDelta,     &
-                                    COEFF, JND, NJD,                   &
-                                    LFIL, DROPTOL, IM, MXITER,        &
-                                    rtol_c, EPSILON(0D0),              &
-                                    iters_out, residual_out)
-
-        IF (ierr_c .LT. 0) THEN
-            SELECT CASE (ierr_c)
-                CASE (-1)
-                    MessageArray(1) = 'Convergence problem in C++ PGMRES solver.'
-                    WRITE(MessageArray(2),'(A,I8)')     'Iteration =', iters_out
-                    WRITE(MessageArray(3),'(A,E12.3)')  'Residual  =', residual_out
-                    CALL SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
-                CASE (-5)
-                    MessageArray(1) = 'Bad coefficient matrix! C++ ILUT failed.'
-                    MessageArray(2) = 'Please check input data.'
-                    CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
-                CASE (-6)
-                    MessageArray(1) = 'Insufficient storage for C++ ILUT factorization!'
-                    MessageArray(2) = 'Please contact IWFM technical support.'
-                    CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
-                CASE DEFAULT
-                    WRITE(MessageArray(1),'(A,I8)') 'C++ solver terminated. Code =', ierr_c
-                    CALL SetLastMessage(MessageArray(1:1),f_iFatal,ThisProcedure)
-            END SELECT
-            iStat = -1
-        END IF
-    END BLOCK
-#else
-    ! ── Fortran SPARSKIT path (original) ──────────────────────────────────────
+    ! ── Fortran SPARSKIT ILUT + GMRES(m) ────────────────────────────────────
 
     ! PARMETERS OF THE SOLVER
     IPAR(1)         =   0                               ! INITIALIZE THE SOLVER
@@ -1766,7 +1696,6 @@ CONTAINS
     END DO
 
     DEALLOCATE(COEFFLU, JLU, W)
-#endif
 
   END SUBROUTINE PGMRES
   
