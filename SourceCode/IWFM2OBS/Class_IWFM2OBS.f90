@@ -322,6 +322,8 @@ CONTAINS
       CALL This%MultiLayer%New(This%cNodesFile, This%cElemsFile, &
            This%cStratFile, This%cGWMainFile, This%cObsWellFile, iStat)
       IF (iStat /= 0) RETURN
+      ! Pass well_specs path to HydReader for ResultsExtract fallback
+      This%HydReader%cWellSpecFile = This%cObsWellFile
     END IF
 
     ! ---- Initialize head differences if requested ----

@@ -63,6 +63,8 @@ MODULE Class_HydrographReader
     INTEGER             :: iStartYr   = 0
     INTEGER             :: iDateSpec  = 2  ! 1=dd/mm, 2=mm/dd
     LOGICAL             :: lDiscovered = .FALSE.
+    CHARACTER(LEN=500)  :: cWellSpecFile = ' '  ! well_specs.dat path (for ResultsExtract fallback)
+    INTEGER             :: iNLayers = 4         ! Number of model layers
     ! In-memory model data (populated by ReadDotOutFileDirect)
     REAL(8), ALLOCATABLE    :: rModelData(:,:)   ! (iNTimes, iNFiltered)
     INTEGER, ALLOCATABLE    :: iModelDays(:)     ! Julian days per timestep
@@ -884,6 +886,7 @@ CONTAINS
     INTEGER,                     INTENT(OUT)   :: iStat
 
     INTEGER, PARAMETER :: iInUnit = 198
+    INTEGER, PARAMETER :: iWSUnit = 199
     REAL(4), ALLOCATABLE :: rVal(:)
     INTEGER, ALLOCATABLE :: iColMap(:)
     CHARACTER(LEN=25), ALLOCATABLE :: cObsSorted(:)
@@ -893,6 +896,10 @@ CONTAINS
     CHARACTER(LEN=1000) :: cLine
     INTEGER :: iErr, iNHyd, j, k, iTime, iNTimes
     INTEGER :: iDay, iMon, iYr, iJulian
+    ! ResultsExtract fallback variables
+    INTEGER :: iOutFileNHyd, iNWells, iL
+    CHARACTER(LEN=25), ALLOCATABLE :: cWellSpecIDs(:)
+    LOGICAL :: lRebuildColMap
 
     iStat = 0
     This%iNTimes    = 0
@@ -909,10 +916,126 @@ CONTAINS
     IF (ALLOCATED(This%iModelSecs))   DEALLOCATE(This%iModelSecs)
     IF (ALLOCATED(This%cFilteredIDs)) DEALLOCATE(This%cFilteredIDs)
 
+    ! ---- Step 3 (moved before Step 2): Count data lines and detect column count ----
+    OPEN(UNIT=iInUnit, FILE=This%HydInfo(iHydType)%cOutFilePath, &
+         STATUS='OLD', IOSTAT=iErr)
+    IF (iErr /= 0) THEN
+      CALL SetLastMessage('Cannot open .out file: '// &
+           TRIM(This%HydInfo(iHydType)%cOutFilePath), f_iFatal, cModName)
+      iStat = -1; RETURN
+    END IF
+
+    iNTimes = 0
+    DO
+      READ(iInUnit, '(A)', IOSTAT=iErr) cLine
+      IF (iErr /= 0) EXIT
+      cLine = ADJUSTL(cLine)
+      IF (LEN_TRIM(cLine) == 0) CYCLE
+      IF (cLine(1:1) == '*') CYCLE
+      iNTimes = iNTimes + 1
+    END DO
+    REWIND(iInUnit)
+
+    ! ---- Check if well_specs.dat provides a different column mapping ----
+    ! If well_specs × N_LAYERS differs from GW main file, the .out file may
+    ! be from ResultsExtract. Build alternative HydIDs from well_specs.
+    lRebuildColMap = .FALSE.
+    iOutFileNHyd = 0
+    IF (LEN_TRIM(This%cWellSpecFile) > 0) THEN
+      ! Count wells in well_specs.dat
+      iNWells = 0
+      OPEN(UNIT=iWSUnit, FILE=This%cWellSpecFile, STATUS='OLD', IOSTAT=iErr)
+      IF (iErr == 0) THEN
+        READ(iWSUnit, '(A)', IOSTAT=iErr) cLine  ! skip header
+        DO
+          READ(iWSUnit, '(A)', IOSTAT=iErr) cLine
+          IF (iErr /= 0) EXIT
+          IF (LEN_TRIM(cLine) > 0) iNWells = iNWells + 1
+        END DO
+        CLOSE(iWSUnit)
+        iOutFileNHyd = iNWells * This%iNLayers
+      END IF
+    END IF
+
+    IF (iOutFileNHyd > 0 .AND. iOutFileNHyd /= iNHyd) THEN
+      CALL LogMessage('  well_specs count ('// &
+           TRIM(IntToText(iOutFileNHyd))//') differs from GW main ('// &
+           TRIM(IntToText(iNHyd))//'). Building well_specs-based mapping.', &
+           f_iInfo, cModName)
+
+      IF (LEN_TRIM(This%cWellSpecFile) > 0) THEN
+        iNWells = 0
+        ! Count wells in well_specs.dat (header + data lines)
+        OPEN(UNIT=iWSUnit, FILE=This%cWellSpecFile, STATUS='OLD', IOSTAT=iErr)
+        IF (iErr == 0) THEN
+          READ(iWSUnit, '(A)', IOSTAT=iErr) cLine  ! skip header
+          DO
+            READ(iWSUnit, '(A)', IOSTAT=iErr) cLine
+            IF (iErr /= 0) EXIT
+            IF (LEN_TRIM(cLine) > 0) iNWells = iNWells + 1
+          END DO
+          REWIND(iWSUnit)
+
+          IF (iNWells * This%iNLayers == iOutFileNHyd) THEN
+            ! Well count × layers matches .out column count — build new HydIDs
+            iNHyd = iOutFileNHyd
+            This%HydInfo(iHydType)%iNHyd = iNHyd
+
+            IF (ALLOCATED(This%HydInfo(iHydType)%cHydIDs)) &
+                DEALLOCATE(This%HydInfo(iHydType)%cHydIDs)
+            IF (ALLOCATED(This%HydInfo(iHydType)%iLayers)) &
+                DEALLOCATE(This%HydInfo(iHydType)%iLayers)
+            ALLOCATE(This%HydInfo(iHydType)%cHydIDs(iNHyd), &
+                     This%HydInfo(iHydType)%iLayers(iNHyd), STAT=iErr)
+
+            READ(iWSUnit, '(A)', IOSTAT=iErr) cLine  ! skip header again
+            j = 0
+            DO
+              READ(iWSUnit, '(A)', IOSTAT=iErr) cLine
+              IF (iErr /= 0) EXIT
+              IF (LEN_TRIM(cLine) == 0) CYCLE
+              ! Parse first field (well name) — tab-delimited
+              cID = ADJUSTL(cLine(1:MIN(25, INDEX(cLine, CHAR(9))-1)))
+              IF (LEN_TRIM(cID) == 0) cID = ADJUSTL(cLine(1:25))
+              ! Generate NAME%1, NAME%2, ..., NAME%N_LAYERS
+              DO iL = 1, This%iNLayers
+                j = j + 1
+                IF (j > iNHyd) EXIT
+                WRITE(This%HydInfo(iHydType)%cHydIDs(j), '(A,A1,I1)') &
+                      TRIM(cID), '%', iL
+                This%HydInfo(iHydType)%iLayers(j) = iL
+              END DO
+            END DO
+
+            lRebuildColMap = .TRUE.
+            CALL LogMessage('  Built '//TRIM(IntToText(iNHyd))// &
+                 ' hydrograph IDs from well_specs ('// &
+                 TRIM(IntToText(iNWells))//' wells x '// &
+                 TRIM(IntToText(This%iNLayers))//' layers)', f_iInfo, cModName)
+          ELSE
+            CALL LogMessage('  well_specs wells ('//TRIM(IntToText(iNWells))// &
+                 ') x layers ('//TRIM(IntToText(This%iNLayers))// &
+                 ') = '//TRIM(IntToText(iNWells*This%iNLayers))// &
+                 ' does not match .out columns ('// &
+                 TRIM(IntToText(iOutFileNHyd))//')', f_iWarn, cModName)
+          END IF
+
+          CLOSE(iWSUnit)
+        ELSE
+          CALL LogMessage('  Cannot open well_specs file: '// &
+               TRIM(This%cWellSpecFile), f_iWarn, cModName)
+        END IF
+      ELSE
+        CALL LogMessage('  No well_specs file available for fallback', &
+             f_iWarn, cModName)
+      END IF
+    END IF
+
     ! ---- Step 1: Build sorted obs ID list for binary search ----
     ALLOCATE(cObsSorted(iNObsIDs), iObsOrder(iNObsIDs), STAT=iErr)
     IF (iErr /= 0) THEN
       CALL SetLastMessage('Cannot allocate obs ID sort arrays', f_iFatal, cModName)
+      CLOSE(iInUnit)
       iStat = -1; RETURN
     END IF
     DO j = 1, iNObsIDs
@@ -926,6 +1049,7 @@ CONTAINS
     IF (iErr /= 0) THEN
       CALL SetLastMessage('Cannot allocate column map', f_iFatal, cModName)
       DEALLOCATE(cObsSorted, iObsOrder)
+      CLOSE(iInUnit)
       iStat = -1; RETURN
     END IF
     iColMap = 0
@@ -946,6 +1070,7 @@ CONTAINS
       CALL LogMessage('  No matching IDs between model and obs for direct read', &
            f_iWarn, cModName)
       DEALLOCATE(iColMap)
+      CLOSE(iInUnit)
       RETURN
     END IF
 
@@ -961,27 +1086,6 @@ CONTAINS
     CALL LogMessage('  Matched '//TRIM(IntToText(This%iNFiltered))//' of '// &
          TRIM(IntToText(iNHyd))//' model hydrographs to observation IDs', &
          f_iInfo, cModName)
-
-    ! ---- Step 3: Count data lines in .out file ----
-    OPEN(UNIT=iInUnit, FILE=This%HydInfo(iHydType)%cOutFilePath, &
-         STATUS='OLD', IOSTAT=iErr)
-    IF (iErr /= 0) THEN
-      CALL SetLastMessage('Cannot open .out file: '// &
-           TRIM(This%HydInfo(iHydType)%cOutFilePath), f_iFatal, cModName)
-      DEALLOCATE(iColMap)
-      iStat = -1; RETURN
-    END IF
-
-    iNTimes = 0
-    DO
-      READ(iInUnit, '(A)', IOSTAT=iErr) cLine
-      IF (iErr /= 0) EXIT
-      cLine = ADJUSTL(cLine)
-      IF (LEN_TRIM(cLine) == 0) CYCLE
-      IF (cLine(1:1) == '*') CYCLE
-      iNTimes = iNTimes + 1
-    END DO
-    REWIND(iInUnit)
 
     This%iNTimes = iNTimes
 
