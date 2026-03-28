@@ -47,8 +47,11 @@ CMD ["/bin/bash", "-c", "\
         -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_Fortran_COMPILER=ifx \
         -DCMAKE_C_COMPILER=icx \
+        -DIWFM_BUILD_PARALLEL=ON \
         -DIWFM_BUILD_IWFM2OBS=ON \
-        -DIWFM_BUILD_CALCTYPHYD=ON && \
+        -DIWFM_BUILD_CALCTYPHYD=ON \
+        -DIWFM_BUILD_RESULTSEXTRACT=ON \
+        -DIWFM_MONOLITHIC_BUILD=ON && \
     echo '=== Building IWFM ===' && \
     cmake --build . --parallel $(nproc) && \
     echo '=== Build Complete ===' && \
