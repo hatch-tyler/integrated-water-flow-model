@@ -504,8 +504,8 @@ Write-Host "    CMake now uses /fp:consistent (matching .vfproj)."
 Write-Host "    If still slow, try: edit IWFMCompilerFlags.cmake -> /fp:fast=1" -ForegroundColor Gray
 Write-Host ""
 Write-Host "  Hypothesis C (Pre-built deps):" -ForegroundColor Cyan
-Write-Host "    cmake .. -DIWFM_HDF5_USE_BUNDLED=ON" -ForegroundColor Gray
-Write-Host "    This uses the same HDF5 libs as .vfproj." -ForegroundColor Gray
+Write-Host "    .\build-deps.ps1 && .\build-iwfm.ps1 -UsePrebuiltDeps" -ForegroundColor Gray
+Write-Host "    Pre-build dependencies to avoid recompilation variance." -ForegroundColor Gray
 Write-Host ""
 Write-Host "  Hypothesis D (Link order / code layout):" -ForegroundColor Cyan
 Write-Host "    Compare .obj order in the report above." -ForegroundColor Gray

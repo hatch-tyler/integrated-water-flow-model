@@ -81,7 +81,16 @@ param(
 
     [switch]$CalcTypeHyd,
 
-    [switch]$ResultsExtract
+    [switch]$ResultsExtract,
+
+    [switch]$Monolithic,
+
+    [ValidateSet("Ninja", "NMake")]
+    [string]$Generator = "Ninja",
+
+    [switch]$UsePrebuiltDeps,
+
+    [string]$DepsDir = "deps"
 )
 
 $ErrorActionPreference = "Stop"
@@ -219,9 +228,10 @@ function Invoke-Configure {
     Push-Location $BuildPath
     try {
         # Use full paths to compilers to avoid PATH issues
+        $genName = if ($Generator -eq "NMake") { "NMake Makefiles" } else { "Ninja" }
         $CMakeArgs = @(
             $SourceDir,
-            "-G", "Ninja",
+            "-G", $genName,
             "-DCMAKE_BUILD_TYPE=$BuildType",
             "-DCMAKE_Fortran_COMPILER=$script:IFX",
             "-DCMAKE_C_COMPILER=$script:ICX"
@@ -247,6 +257,20 @@ function Invoke-Configure {
         if ($ResultsExtract) {
             $CMakeArgs += "-DIWFM_BUILD_RESULTSEXTRACT=ON"
             Write-Host "  ResultsExtract: Enabled" -ForegroundColor Yellow
+        }
+        if ($Monolithic) {
+            $CMakeArgs += "-DIWFM_MONOLITHIC_BUILD=ON"
+            Write-Host "  Monolithic:     Enabled" -ForegroundColor Yellow
+        }
+        if ($UsePrebuiltDeps) {
+            $AbsDepsDir = if ([System.IO.Path]::IsPathRooted($DepsDir)) { $DepsDir } else { Join-Path $SourceDir $DepsDir }
+            $CMakeArgs += "-DIWFM_USE_SYSTEM_HDF5=ON"
+            $CMakeArgs += "-DHDF5_ROOT=$AbsDepsDir\hdf5-install"
+            $CMakeArgs += "-DIWFM_USE_SYSTEM_HECLIB=ON"
+            $CMakeArgs += "-DHECLIB_ROOT=$AbsDepsDir\heclib-install"
+            $CMakeArgs += "-DIWFM_USE_SYSTEM_ZLIB=ON"
+            $CMakeArgs += "-DZLIB_ROOT=$AbsDepsDir\zlib-install"
+            Write-Host "  Pre-built Deps: $AbsDepsDir" -ForegroundColor Yellow
         }
 
         Write-Host "Running: cmake $($CMakeArgs -join ' ')" -ForegroundColor Gray
@@ -279,7 +303,11 @@ function Invoke-Build {
 
     Push-Location $BuildPath
     try {
-        $BuildArgs = @("--build", ".", "--parallel", $env:NUMBER_OF_PROCESSORS)
+        $BuildArgs = @("--build", ".")
+        if ($Generator -ne "NMake") {
+            # NMake doesn't support parallel builds
+            $BuildArgs += @("--parallel", $env:NUMBER_OF_PROCESSORS)
+        }
 
         if ($Target -ne "all") {
             $BuildArgs += @("--target", $Target)
@@ -297,6 +325,26 @@ function Invoke-Build {
     }
     finally {
         Pop-Location
+    }
+
+    # Copy OpenMP runtime DLL for parallel builds
+    if ($Parallel -and (Test-Path $BinDir)) {
+        $ifxPath = Get-Command ifx -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source
+        if ($ifxPath) {
+            $compilerBinDir = Split-Path $ifxPath -Parent
+            $ompDll = Join-Path $compilerBinDir "libiomp5md.dll"
+            if (-not (Test-Path $ompDll)) {
+                # Try parent bin directory
+                $ompDll = Join-Path (Split-Path $compilerBinDir -Parent) "bin\libiomp5md.dll"
+            }
+            if (Test-Path $ompDll) {
+                Copy-Item $ompDll -Destination $BinDir -Force
+                Write-Host "  Copied libiomp5md.dll to Bin/" -ForegroundColor Green
+            } else {
+                Write-Host "  WARNING: libiomp5md.dll not found near compiler" -ForegroundColor Yellow
+                Write-Host "  Parallel executable may fail at runtime without this DLL" -ForegroundColor Yellow
+            }
+        }
     }
 
     # Show results

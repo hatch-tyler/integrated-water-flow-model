@@ -14,6 +14,7 @@ This document provides detailed instructions for building IWFM (Integrated Water
 - [Build Generators](#build-generators)
 - [Dependency Management](#dependency-management)
 - [Advanced Configuration](#advanced-configuration)
+- [Performance Benchmarks](#performance-benchmarks)
 - [Troubleshooting](#troubleshooting)
 
 ---
@@ -27,7 +28,7 @@ This document provides detailed instructions for building IWFM (Integrated Water
 | CMake | 3.20 or later |
 | Fortran Compiler | Intel ifx (recommended) or GNU gfortran 9+ |
 | C Compiler | Intel icx, MSVC, GCC, or Clang |
-| Build Tool | Ninja (recommended), Make, or Visual Studio |
+| Build Tool | Ninja (recommended) or Make |
 
 ### Supported Compilers
 
@@ -194,7 +195,6 @@ cmake --build .
 |--------|---------|-------------|
 | `IWFM_USE_SYSTEM_HDF5` | OFF | Use system-installed HDF5 instead of building from source |
 | `IWFM_USE_SYSTEM_HECLIB` | OFF | Use system-installed heclib |
-| `IWFM_HDF5_USE_BUNDLED` | OFF | Use bundled pre-built HDF5 libraries (Windows only) |
 | `IWFM_HDF5_VERSION` | 1.14.3 | HDF5 version to download and build |
 
 ### Testing Options
@@ -308,19 +308,6 @@ start IWFM.sln
 - Slower than Ninja for Fortran projects
 - Better IDE integration for debugging
 - May require manual Fortran compiler selection in project properties
-
-#### Option 3: Bundled HDF5 Libraries (Fastest Windows Setup)
-
-If pre-built HDF5 libraries are available in `SourceCode/IWFM-kernel/HDF5/`:
-
-```powershell
-cmake .. -G Ninja -DCMAKE_BUILD_TYPE=Release `
-    -DCMAKE_Fortran_COMPILER=ifx `
-    -DCMAKE_C_COMPILER=icx `
-    -DIWFM_HDF5_USE_BUNDLED=ON
-```
-
-This skips the HDF5 build step and uses pre-compiled libraries.
 
 ### Linux
 
@@ -506,7 +493,6 @@ Subsequent builds reuse the compiled dependencies.
 |--------|--------|-------------|
 | ExternalProject | (default) | Cross-platform, automatic |
 | System HDF5 | `IWFM_USE_SYSTEM_HDF5=ON` | HDF5 already installed with Fortran bindings |
-| Bundled | `IWFM_HDF5_USE_BUNDLED=ON` | Windows with pre-built libraries |
 
 **Using System HDF5:**
 ```bash
@@ -595,6 +581,12 @@ cmake --build . -- -v
 # Make
 cmake --build . -- VERBOSE=1
 ```
+
+---
+
+## Performance Benchmarks
+
+See [BENCHMARKS.md](BENCHMARKS.md) for detailed runtime benchmarks comparing build configurations (generators, dependency methods, HDF5 versions) on the C2VSimFG model.
 
 ---
 
@@ -759,9 +751,6 @@ cmake .. -G Ninja -DCMAKE_BUILD_TYPE=Release -DIWFM_BUILD_COARRAY=ON
 
 # Using system HDF5
 cmake .. -G Ninja -DCMAKE_BUILD_TYPE=Release -DIWFM_USE_SYSTEM_HDF5=ON
-
-# Using bundled HDF5 (Windows)
-cmake .. -G Ninja -DCMAKE_BUILD_TYPE=Release -DIWFM_HDF5_USE_BUNDLED=ON
 ```
 
 ---
@@ -1077,28 +1066,6 @@ cmake .. --trace-expand 2>&1 | grep -i "hdf5"
 get_target_property(_libs some_target INTERFACE_LINK_LIBRARIES)
 message(STATUS "Target libs: ${_libs}")
 ```
-
-### Bundled Library Updates (Windows)
-
-If updating pre-built Windows libraries in `SourceCode/IWFM-kernel/HDF5/`:
-
-1. Build new HDF5 version with matching compiler/flags
-2. Copy libraries to appropriate directories:
-   - `HDF5/x64/Release/` - 64-bit release libraries
-   - `HDF5/x64/Debug/` - 64-bit debug libraries (with `_D` suffix)
-3. Copy `.mod` files to same directories
-4. Test with `IWFM_HDF5_USE_BUNDLED=ON`
-
-**Required HDF5 libraries:**
-- `libhdf5.lib` / `libhdf5_D.lib`
-- `libhdf5_fortran.lib` / `libhdf5_fortran_D.lib`
-- `libhdf5_f90cstub.lib` / `libhdf5_f90cstub_D.lib`
-
-**Required HDF5 modules (.mod files):**
-- `hdf5.mod`
-- `h5fortran_types.mod`
-- `h5global.mod`
-- `h5a.mod`, `h5d.mod`, `h5e.mod`, `h5f.mod`, `h5g.mod`, `h5i.mod`, `h5l.mod`, `h5lib.mod`, `h5o.mod`, `h5p.mod`, `h5r.mod`, `h5s.mod`, `h5t.mod`, `h5vl.mod`, `h5z.mod`
 
 ### CI/CD Integration
 

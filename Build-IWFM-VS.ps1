@@ -39,7 +39,11 @@ param(
 
     [switch]$Clean,
 
-    [switch]$ShowCommands
+    [switch]$ShowCommands,
+
+    [string]$DepsDir = "deps",
+
+    [switch]$BuildDeps
 )
 
 $ErrorActionPreference = "Stop"
@@ -73,6 +77,7 @@ Write-Host ""
 Write-Host "  Build IWFM from .vfproj" -ForegroundColor Cyan
 Write-Host "  Project:       $Project" -ForegroundColor White
 Write-Host "  Configuration: $Configuration" -ForegroundColor White
+Write-Host "  Dependencies:  $DepsDir" -ForegroundColor White
 Write-Host "  VFProj:        $VFProjPath" -ForegroundColor Gray
 Write-Host ""
 
@@ -616,6 +621,39 @@ function Resolve-AndSort {
 try {
     Initialize-BuildEnvironment
 
+    # ── Resolve Dependencies ──────────────────────────────────────────────────
+    $AbsDepsDir = if ([System.IO.Path]::IsPathRooted($DepsDir)) { $DepsDir } else { Join-Path $ScriptDir $DepsDir }
+
+    if ($BuildDeps) {
+        Write-Host "Building dependencies via build-deps.ps1..." -ForegroundColor Yellow
+        & (Join-Path $ScriptDir "build-deps.ps1") -DepsDir $AbsDepsDir
+        if ($LASTEXITCODE -ne 0) { throw "build-deps.ps1 failed" }
+        Write-Host ""
+    }
+
+    # Verify pre-built dependencies exist
+    $script:HDF5Dir   = Join-Path $AbsDepsDir "hdf5-install"
+    $script:HeclibDir = Join-Path $AbsDepsDir "heclib-install"
+    $script:ZlibDir   = Join-Path $AbsDepsDir "zlib-install"
+
+    $missingDeps = @()
+    if (-not (Test-Path "$script:HDF5Dir\lib\libhdf5_fortran.lib")) { $missingDeps += "HDF5 ($script:HDF5Dir)" }
+    if (-not (Test-Path "$script:HeclibDir\lib\heclib.lib"))        { $missingDeps += "heclib ($script:HeclibDir)" }
+    if (-not (Test-Path "$script:ZlibDir\lib\zlibstatic.lib"))      { $missingDeps += "zlib ($script:ZlibDir)" }
+
+    if ($missingDeps.Count -gt 0) {
+        Write-Host "ERROR: Pre-built dependencies not found:" -ForegroundColor Red
+        foreach ($dep in $missingDeps) {
+            Write-Host "  - $dep" -ForegroundColor Red
+        }
+        Write-Host ""
+        Write-Host "Run 'build-deps.ps1' first, or use '-BuildDeps' to build automatically:" -ForegroundColor Yellow
+        Write-Host "  .\Build-IWFM-VS.ps1 -BuildDeps" -ForegroundColor White
+        exit 1
+    }
+
+    Write-Host "  Dependencies: $AbsDepsDir" -ForegroundColor Gray
+
     # Parse project
     Write-Host "Parsing $VFProjRelPath ..." -ForegroundColor Yellow
     $proj = Parse-VFProj -VFProjFile $VFProjPath -Config $Configuration
@@ -666,7 +704,12 @@ try {
         $args = @("/c")
         $args += $proj.CompilerFlags
         foreach ($inc in $proj.IncludeDirs) {
-            $args += "/I`"$inc`""
+            # Replace bundled HDF5 include path with pre-built deps path
+            if ($inc -match 'IWFM-kernel[\\/]HDF5') {
+                $args += "/I`"$script:HDF5Dir\include\static`""
+            } else {
+                $args += "/I`"$inc`""
+            }
         }
         # Module output and search in intermediate dir
         $args += "/module:`"$($proj.IntDir)`""
@@ -744,39 +787,33 @@ try {
     $linkArgs += $proj.LinkerFlags
 
     foreach ($ld in $proj.LibDirs) {
-        $linkArgs += "/LIBPATH:`"$ld`""
-    }
-
-    # Replace old heclib with DSS7 C library from CMake build
-    # The heclib_compat module requires the DSS7 C library, not the old Fortran heclib
-    $cmakeBuildDir = Join-Path $ScriptDir "build"
-    $dss7Lib = Join-Path $cmakeBuildDir "heclib.lib"
-    $zlibLib = Join-Path $cmakeBuildDir "_deps\zlib-build\zlibstatic.lib"
-
-    $hasHeclibCompat = $proj.SourceFiles | Where-Object { $_ -match 'heclib_compat\.f90$' }
-    if ($hasHeclibCompat -and (Test-Path $dss7Lib)) {
-        Write-Host "  Using DSS7 heclib from CMake build: $dss7Lib" -ForegroundColor Gray
-        # Replace old heclib_x64.lib / heclib_x64_D.lib with DSS7 library
-        $filteredLibs = $proj.Libs | Where-Object { $_ -notmatch 'heclib' }
-        foreach ($lib in $filteredLibs) {
-            $linkArgs += $lib
-        }
-        $linkArgs += "`"$dss7Lib`""
-        if (Test-Path $zlibLib) {
-            $linkArgs += "`"$zlibLib`""
-        }
-        # System libraries required by DSS7
-        $linkArgs += "ws2_32.lib"
-        $linkArgs += "shlwapi.lib"
-    } else {
-        foreach ($lib in $proj.Libs) {
-            $linkArgs += $lib
-        }
-        if ($hasHeclibCompat) {
-            Write-Host "  WARNING: DSS7 heclib.lib not found at $dss7Lib" -ForegroundColor Yellow
-            Write-Host "  Run CMake build first: .\build-iwfm.ps1" -ForegroundColor Yellow
+        # Replace bundled paths with pre-built deps
+        if ($ld -match 'IWFM-kernel[\\/]HDF5') {
+            $linkArgs += "/LIBPATH:`"$script:HDF5Dir\lib`""
+        } elseif ($ld -match 'IWFM-kernel[\\/]heclib') {
+            $linkArgs += "/LIBPATH:`"$script:HeclibDir\lib`""
+        } else {
+            $linkArgs += "/LIBPATH:`"$ld`""
         }
     }
+
+    # Use pre-built dependencies from build-deps.ps1
+    # Override .vfproj library paths with pre-built deps
+    $filteredLibs = $proj.Libs | Where-Object { $_ -notmatch 'heclib|libhdf5' }
+    foreach ($lib in $filteredLibs) {
+        $linkArgs += $lib
+    }
+    # HDF5 libraries
+    $linkArgs += "`"$script:HDF5Dir\lib\libhdf5_fortran.lib`""
+    $linkArgs += "`"$script:HDF5Dir\lib\libhdf5_f90cstub.lib`""
+    $linkArgs += "`"$script:HDF5Dir\lib\libhdf5.lib`""
+    # heclib (HEC-DSS 7)
+    $linkArgs += "`"$script:HeclibDir\lib\heclib.lib`""
+    # zlib
+    $linkArgs += "`"$script:ZlibDir\lib\zlibstatic.lib`""
+    # System libraries required by HEC-DSS 7
+    $linkArgs += "ws2_32.lib"
+    $linkArgs += "shlwapi.lib"
 
     $linkArgsStr = $linkArgs -join " "
 

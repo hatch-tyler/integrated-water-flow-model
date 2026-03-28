@@ -41,8 +41,6 @@ Coarray multi-model (`Simulation_MM`) requires Intel compilers. See `BUILD.md` f
 # Other actions: Configure, Test, Package, All
 # Additional targets: Simulation_Parallel, Simulation_MM, IWFM_C_DLL, IWFM2OBS, CalcTypeHyd
 
-# Build with C++ solver (replaces Fortran SPARSKIT for GMRES/ILUT/SpMV)
-.\build-iwfm.ps1 -CppSolver
 ```
 
 ### Windows (batch file, must use cmd.exe not Git Bash)
@@ -104,8 +102,6 @@ A standalone DSS diagnostic test exists at `SourceCode/tests/test_dss_read.f90` 
 | `IWFM_BUILD_TESTS` | ON | Integration tests (requires sample model) |
 | `IWFM_USE_SYSTEM_HDF5` | OFF | Use system HDF5 instead of building from source |
 | `IWFM_USE_SYSTEM_HECLIB` | OFF | Use system heclib |
-| `IWFM_USE_CPP_SOLVER` | OFF | Use C++ sparse solver instead of Fortran SPARSKIT |
-| `IWFM_HDF5_USE_BUNDLED` | OFF | Use pre-built HDF5 in `IWFM-kernel/HDF5/` (Windows only) |
 | `IWFM_HDF5_VERSION` | 1.14.3 | HDF5 version to download when building from source |
 
 Output binaries go to `Bin/`. Windows names: `*_x64.exe` (release), `*_x64_D.exe` (debug). Linux: no suffix (release), `*_d` (debug).
@@ -116,8 +112,6 @@ See `BUILD.md` for exhaustive build instructions, dependency management details,
 
 - Top-level directories like `Budget/`, `Simulation/`, `PreProcessor/`, `ZBudget/`, `IWFM_DLL/`, `Simulation_MM/`, `Simulation_Parallel/` contain **legacy Visual Studio project files** (`.vfproj`, `.u2d`), not source code. `BuildAll/BuildAll.sln` is the legacy VS solution.
 - All Fortran source lives in `SourceCode/`.
-- `SourceCode/IWFM-kernel/HDF5/` contains **pre-built Windows HDF5 libraries** (used with `IWFM_HDF5_USE_BUNDLED=ON`).
-- `SourceCode/IWFM-kernel/heclib/` contains **pre-built Windows heclib libraries**.
 - `Bin/` contains built executables — this is the output directory for all build methods.
 
 ## Architecture
@@ -172,7 +166,7 @@ Packages with versions:
 
 **Infrastructure:**
 - `Package_Discretization` — Finite element grid, stratigraphy, node/element management
-- `Package_Matrix` — Sparse matrix solver (GMRES via `pgmres.f90`, LU via `Ludcmp.f90`/`Lubksb.f90`). Key arrays: `COEFF()`, `RHS()`, `HDelta()` (solution), `NJD()`/`JND()` (sparse structure). Optional C++ solver replacement in `cpp/` subdir (enabled with `IWFM_USE_CPP_SOLVER=ON`): `iwfm_solver.h`, `gmres.cpp`, `ilut.cpp`, `spmv.cpp`, `lusol.cpp`, `blas.cpp`. Uses `#ifdef IWFM_CPP_SOLVER` preprocessor guards in `Package_Matrix.f90`.
+- `Package_Matrix` — Sparse matrix solver (GMRES via `pgmres.f90`, LU via `Ludcmp.f90`/`Lubksb.f90`). Key arrays: `COEFF()`, `RHS()`, `HDelta()` (solution), `NJD()`/`JND()` (sparse structure).
 - `Package_ComponentConnectors` — Stream-GW, Lake-GW, Stream-Lake inter-component connectors
 - `Package_Supply` — Water supply management and allocation
 - `Package_PrecipitationET` — Climate data handling
@@ -217,7 +211,7 @@ Packages with versions:
 - **"sortfiles.c conflicting types"** (heclib) — K&R style C code. CMake config excludes problematic source files automatically.
 - **Stack overflow with large models** (C2VSimFG 30K+ nodes) — Ensure `/heap-arrays:900` (Intel Windows), `-heap-arrays=900` (Intel Linux), or `-fmax-stack-var-size=921600` (gfortran) is set. The CMake build handles this automatically.
 - **System HDF5 module mismatch** — System HDF5 must be compiled with the same Fortran compiler as IWFM for `.mod` file compatibility.
-- **First build is slow** (~5-10 min) — HDF5 is compiled from source on first build. Subsequent builds reuse it. Use `IWFM_HDF5_USE_BUNDLED=ON` on Windows to skip this.
+- **First build is slow** (~5-10 min) — HDF5 is compiled from source on first build. Subsequent builds reuse it. Use `build-deps.ps1` then `build-iwfm.ps1 -UsePrebuiltDeps` for faster rebuilds.
 
 ## Build System Internals
 

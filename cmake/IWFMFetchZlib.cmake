@@ -13,14 +13,43 @@ option(IWFM_USE_SYSTEM_ZLIB "Use system-installed zlib instead of FetchContent" 
 
 if(IWFM_USE_SYSTEM_ZLIB)
     message(STATUS "Looking for system-installed zlib...")
-    find_package(ZLIB REQUIRED)
 
-    # Create static alias if needed for consistency
-    if(NOT TARGET ZLIB::ZLIBSTATIC)
-        add_library(ZLIB::ZLIBSTATIC ALIAS ZLIB::ZLIB)
+    # Prefer static library to avoid runtime DLL dependency.
+    # CMake's FindZLIB picks zlib.lib (DLL import lib) over zlibstatic.lib
+    # when both are present, which causes STATUS_DLL_NOT_FOUND at runtime.
+    if(ZLIB_ROOT)
+        find_library(_ZLIB_STATIC_LIB NAMES zlibstatic PATHS "${ZLIB_ROOT}/lib" NO_DEFAULT_PATH)
+    else()
+        find_library(_ZLIB_STATIC_LIB NAMES zlibstatic)
     endif()
 
-    message(STATUS "System zlib found: ${ZLIB_VERSION_STRING}")
+    if(_ZLIB_STATIC_LIB)
+        message(STATUS "Found static zlib: ${_ZLIB_STATIC_LIB}")
+        # Find headers
+        if(ZLIB_ROOT)
+            find_path(_ZLIB_INCLUDE_DIR NAMES zlib.h PATHS "${ZLIB_ROOT}/include" NO_DEFAULT_PATH)
+        else()
+            find_path(_ZLIB_INCLUDE_DIR NAMES zlib.h)
+        endif()
+        if(NOT _ZLIB_INCLUDE_DIR)
+            message(FATAL_ERROR "zlib headers not found")
+        endif()
+
+        add_library(ZLIB::ZLIB STATIC IMPORTED)
+        set_target_properties(ZLIB::ZLIB PROPERTIES
+            IMPORTED_LOCATION "${_ZLIB_STATIC_LIB}"
+            INTERFACE_INCLUDE_DIRECTORIES "${_ZLIB_INCLUDE_DIR}"
+        )
+        add_library(ZLIB::ZLIBSTATIC ALIAS ZLIB::ZLIB)
+    else()
+        # Fallback to CMake's FindZLIB
+        find_package(ZLIB REQUIRED)
+        if(NOT TARGET ZLIB::ZLIBSTATIC)
+            add_library(ZLIB::ZLIBSTATIC ALIAS ZLIB::ZLIB)
+        endif()
+    endif()
+
+    message(STATUS "System zlib configured (static)")
     return()
 endif()
 

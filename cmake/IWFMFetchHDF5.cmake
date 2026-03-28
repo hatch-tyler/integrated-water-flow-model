@@ -6,7 +6,6 @@
 #
 #  Build Methods:
 #  - System HDF5: IWFM_USE_SYSTEM_HDF5=ON
-#  - Bundled pre-built (Windows): IWFM_HDF5_USE_BUNDLED=ON
 #  - ExternalProject (default): Downloads and builds HDF5 separately
 #***********************************************************************
 
@@ -21,93 +20,48 @@ endif()
 # Configuration Options
 # =============================================================================
 option(IWFM_USE_SYSTEM_HDF5 "Use system-installed HDF5" OFF)
-option(IWFM_HDF5_USE_BUNDLED "Use bundled pre-built HDF5 (Windows fallback)" OFF)
 set(IWFM_HDF5_VERSION "1.14.3" CACHE STRING "HDF5 version to fetch")
 
 # =============================================================================
 # Option 1: System HDF5
 # =============================================================================
 if(IWFM_USE_SYSTEM_HDF5)
-    message(STATUS "Looking for system-installed HDF5...")
-    find_package(HDF5 REQUIRED COMPONENTS Fortran)
+    message(STATUS "Looking for pre-built HDF5...")
 
-    if(NOT TARGET HDF5::Fortran)
-        add_library(HDF5::Fortran INTERFACE IMPORTED GLOBAL)
-        set_target_properties(HDF5::Fortran PROPERTIES
-            INTERFACE_INCLUDE_DIRECTORIES "${HDF5_Fortran_INCLUDE_DIRS}"
-            INTERFACE_LINK_LIBRARIES "${HDF5_Fortran_LIBRARIES};ZLIB::ZLIBSTATIC"
+    # Try config mode first (uses HDF5_ROOT or CMAKE_PREFIX_PATH)
+    find_package(HDF5 CONFIG QUIET)
+
+    if(TARGET hdf5_fortran-static)
+        # Config mode found HDF5 with proper static targets
+        # hdf5_fortran-static chains hdf5_f90cstub-static -> hdf5-static
+        add_library(HDF5_Fortran_Interface INTERFACE IMPORTED GLOBAL)
+        target_link_libraries(HDF5_Fortran_Interface INTERFACE
+            hdf5_fortran-static
+            ZLIB::ZLIBSTATIC
         )
-    endif()
-
-    set(HDF5_FORTRAN_MODULE_DIR "${HDF5_Fortran_INCLUDE_DIRS}" CACHE PATH "HDF5 Fortran module directory" FORCE)
-    message(STATUS "System HDF5 found: ${HDF5_VERSION}")
-    return()
-endif()
-
-# =============================================================================
-# Option 2: Bundled Pre-built HDF5 (Windows fallback)
-# =============================================================================
-if(IWFM_HDF5_USE_BUNDLED AND WIN32)
-    message(STATUS "Using bundled pre-built HDF5 libraries...")
-
-    set(HDF5_BUNDLED_DIR "${CMAKE_SOURCE_DIR}/SourceCode/IWFM-kernel/HDF5")
-
-    # Determine platform
-    if(CMAKE_SIZEOF_VOID_P EQUAL 8)
-        set(HDF5_PLATFORM "x64")
+        # Find .mod file directory
+        get_target_property(_hdf5_inc hdf5_fortran-static INTERFACE_INCLUDE_DIRECTORIES)
+        set(HDF5_FORTRAN_MODULE_DIR "${_hdf5_inc}" CACHE PATH "HDF5 Fortran module directory" FORCE)
+        message(STATUS "HDF5 found (config mode): hdf5_fortran-static")
     else()
-        set(HDF5_PLATFORM "win32")
+        # Fall back to FindHDF5 module mode
+        find_package(HDF5 REQUIRED COMPONENTS Fortran)
+        if(NOT TARGET HDF5::Fortran)
+            add_library(HDF5::Fortran INTERFACE IMPORTED GLOBAL)
+            set_target_properties(HDF5::Fortran PROPERTIES
+                INTERFACE_INCLUDE_DIRECTORIES "${HDF5_Fortran_INCLUDE_DIRS}"
+                INTERFACE_LINK_LIBRARIES "${HDF5_Fortran_LIBRARIES};ZLIB::ZLIBSTATIC"
+            )
+        endif()
+        set(HDF5_FORTRAN_MODULE_DIR "${HDF5_Fortran_INCLUDE_DIRS}" CACHE PATH "HDF5 Fortran module directory" FORCE)
+        message(STATUS "HDF5 found (module mode): ${HDF5_VERSION}")
     endif()
 
-    set(HDF5_RELEASE_DIR "${HDF5_BUNDLED_DIR}/${HDF5_PLATFORM}/Release")
-    set(HDF5_DEBUG_DIR "${HDF5_BUNDLED_DIR}/${HDF5_PLATFORM}/Debug")
-
-    # Check if bundled libraries exist
-    if(NOT EXISTS "${HDF5_RELEASE_DIR}/libhdf5_fortran.lib")
-        message(FATAL_ERROR "Bundled HDF5 libraries not found at ${HDF5_RELEASE_DIR}. "
-                "Set IWFM_HDF5_USE_BUNDLED=OFF to build from source.")
-    endif()
-
-    # Create imported targets for HDF5 Fortran
-    add_library(hdf5_fortran-static STATIC IMPORTED GLOBAL)
-    set_target_properties(hdf5_fortran-static PROPERTIES
-        IMPORTED_LOCATION "${HDF5_RELEASE_DIR}/libhdf5_fortran.lib"
-        IMPORTED_LOCATION_DEBUG "${HDF5_DEBUG_DIR}/libhdf5_fortran_D.lib"
-        IMPORTED_LOCATION_RELEASE "${HDF5_RELEASE_DIR}/libhdf5_fortran.lib"
-    )
-
-    add_library(hdf5_f90cstub-static STATIC IMPORTED GLOBAL)
-    set_target_properties(hdf5_f90cstub-static PROPERTIES
-        IMPORTED_LOCATION "${HDF5_RELEASE_DIR}/libhdf5_f90cstub.lib"
-        IMPORTED_LOCATION_DEBUG "${HDF5_DEBUG_DIR}/libhdf5_f90cstub_D.lib"
-        IMPORTED_LOCATION_RELEASE "${HDF5_RELEASE_DIR}/libhdf5_f90cstub.lib"
-    )
-
-    add_library(hdf5-static STATIC IMPORTED GLOBAL)
-    set_target_properties(hdf5-static PROPERTIES
-        IMPORTED_LOCATION "${HDF5_RELEASE_DIR}/libhdf5.lib"
-        IMPORTED_LOCATION_DEBUG "${HDF5_DEBUG_DIR}/libhdf5_D.lib"
-        IMPORTED_LOCATION_RELEASE "${HDF5_RELEASE_DIR}/libhdf5.lib"
-    )
-
-    # Create HDF5::Fortran interface bundling all components
-    add_library(HDF5::Fortran INTERFACE IMPORTED GLOBAL)
-    set_target_properties(HDF5::Fortran PROPERTIES
-        INTERFACE_LINK_LIBRARIES "hdf5_fortran-static;hdf5_f90cstub-static;hdf5-static;ZLIB::ZLIBSTATIC"
-    )
-
-    set(HDF5_FORTRAN_MODULE_DIR "${HDF5_RELEASE_DIR}" CACHE PATH "HDF5 Fortran module directory" FORCE)
-    set(HDF5_FORTRAN_MODULE_DIR_DEBUG "${HDF5_DEBUG_DIR}" CACHE PATH "HDF5 Fortran module directory (Debug)" FORCE)
-
-    message(STATUS "Bundled HDF5 configured:")
-    message(STATUS "  Platform: ${HDF5_PLATFORM}")
-    message(STATUS "  Release libs: ${HDF5_RELEASE_DIR}")
-    message(STATUS "  Debug libs: ${HDF5_DEBUG_DIR}")
     return()
 endif()
 
 # =============================================================================
-# Option 3: Build HDF5 from Source via ExternalProject
+# Option 2: Build HDF5 from Source via ExternalProject
 # =============================================================================
 # ExternalProject builds HDF5 as a separate CMake project.
 # For static linking on Linux, we apply HDF5 libraries directly to executables
@@ -180,6 +134,18 @@ else()
     endif()
 endif()
 
+# Ensure HDF5 is built with optimization in Release mode.
+# CMake's default CMAKE_C_FLAGS_RELEASE (/O2 /DNDEBUG) and
+# CMAKE_Fortran_FLAGS_RELEASE (/O2) should apply, but we set them
+# explicitly to guarantee optimized code even if HDF5's CMake overrides them.
+if(WIN32)
+    set(HDF5_C_FLAGS_RELEASE "/O2 /DNDEBUG")
+    set(HDF5_Fortran_FLAGS_RELEASE "/O2")
+else()
+    set(HDF5_C_FLAGS_RELEASE "-O2 -DNDEBUG")
+    set(HDF5_Fortran_FLAGS_RELEASE "-O2")
+endif()
+
 set(hdf5_cmake_args
     # Install location - set BOTH CMAKE_INSTALL_PREFIX and HDF5's internal variable
     # HDF5 uses HDF5_INSTALL_PREFIX which defaults to CMAKE_INSTALL_PREFIX
@@ -198,6 +164,11 @@ set(hdf5_cmake_args
 
     # C flags - need -fPIC on Unix for shared library support
     -DCMAKE_C_FLAGS:STRING=${HDF5_C_FLAGS}
+
+    # Explicitly set Release optimization flags to guarantee /O2 is applied.
+    # Without these, HDF5's CMake may end up with no optimization.
+    -DCMAKE_C_FLAGS_RELEASE:STRING=${HDF5_C_FLAGS_RELEASE}
+    -DCMAKE_Fortran_FLAGS_RELEASE:STRING=${HDF5_Fortran_FLAGS_RELEASE}
 
     # Static libraries only
     -DBUILD_SHARED_LIBS:BOOL=OFF

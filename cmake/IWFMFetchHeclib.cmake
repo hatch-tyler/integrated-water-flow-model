@@ -22,53 +22,37 @@ endif()
 option(IWFM_USE_SYSTEM_HECLIB "Use pre-built heclib from source tree" OFF)
 
 # =============================================================================
-# Option 1: Use Pre-built heclib (Windows bundled libraries)
+# Option 1: Use Pre-built heclib
 # =============================================================================
 if(IWFM_USE_SYSTEM_HECLIB)
-    message(STATUS "Using pre-built heclib from source tree...")
+    message(STATUS "Using pre-built heclib...")
 
-    set(HECLIB_DIR "${CMAKE_SOURCE_DIR}/SourceCode/IWFM-kernel/heclib")
+    # Require HECLIB_ROOT to point to pre-built heclib (from build-deps.ps1)
+    if(DEFINED HECLIB_ROOT AND EXISTS "${HECLIB_ROOT}/lib/heclib.lib")
+        set(HECLIB_LIB "${HECLIB_ROOT}/lib/heclib.lib")
+        set(HECLIB_INC "${HECLIB_ROOT}/include")
+    else()
+        message(FATAL_ERROR "Pre-built heclib not found. Set HECLIB_ROOT or use IWFM_USE_SYSTEM_HECLIB=OFF.")
+    endif()
 
     add_library(heclib STATIC IMPORTED GLOBAL)
-
-    if(WIN32)
-        if(CMAKE_SIZEOF_VOID_P EQUAL 8)
-            # x64 platform
-            if(EXISTS "${HECLIB_DIR}/heclib_x64.lib")
-                set_target_properties(heclib PROPERTIES
-                    IMPORTED_LOCATION "${HECLIB_DIR}/heclib_x64.lib"
-                    IMPORTED_LOCATION_DEBUG "${HECLIB_DIR}/heclib_x64_D.lib"
-                    IMPORTED_LOCATION_RELEASE "${HECLIB_DIR}/heclib_x64.lib"
-                )
-            else()
-                message(FATAL_ERROR "Pre-built heclib not found at ${HECLIB_DIR}/heclib_x64.lib")
-            endif()
-        else()
-            # Win32 platform
-            if(EXISTS "${HECLIB_DIR}/heclib.lib")
-                set_target_properties(heclib PROPERTIES
-                    IMPORTED_LOCATION "${HECLIB_DIR}/heclib.lib"
-                    IMPORTED_LOCATION_DEBUG "${HECLIB_DIR}/heclib_D.lib"
-                    IMPORTED_LOCATION_RELEASE "${HECLIB_DIR}/heclib.lib"
-                )
-            else()
-                message(FATAL_ERROR "Pre-built heclib not found at ${HECLIB_DIR}/heclib.lib")
-            endif()
-        endif()
-
-        message(STATUS "Using pre-built heclib from: ${HECLIB_DIR}")
-    else()
-        message(FATAL_ERROR "Pre-built heclib not available for this platform. "
-                "Set IWFM_USE_SYSTEM_HECLIB=OFF to build from source.")
-    endif()
+    set_target_properties(heclib PROPERTIES
+        IMPORTED_LOCATION "${HECLIB_LIB}"
+    )
 
     # Link zlib to the imported heclib
     set_target_properties(heclib PROPERTIES
         INTERFACE_LINK_LIBRARIES "ZLIB::ZLIBSTATIC"
     )
+    if(HECLIB_INC AND EXISTS "${HECLIB_INC}")
+        set_target_properties(heclib PROPERTIES
+            INTERFACE_INCLUDE_DIRECTORIES "${HECLIB_INC}"
+        )
+    endif()
 
     add_library(HECLIB::HECLIB ALIAS heclib)
-    set(HECLIB_INCLUDE_DIR "" CACHE PATH "HECLIB headers" FORCE)
+    set(HECLIB_INCLUDE_DIR "${HECLIB_INC}" CACHE PATH "HECLIB headers" FORCE)
+    message(STATUS "  heclib: ${HECLIB_LIB}")
 
     return()
 endif()
