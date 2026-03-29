@@ -13,7 +13,7 @@ IWFM (Integrated Water Flow Model) is a hydrological simulation software develop
 | CMake | 3.20 or later |
 | Fortran Compiler | Intel ifx (recommended) or GNU gfortran 9+ |
 | C Compiler | Intel icx, MSVC, GCC, or Clang |
-| Build Tool | Ninja (recommended), Make, or Visual Studio |
+| Build Tool | Ninja (recommended) or Make |
 
 Coarray multi-model (`Simulation_MM`) requires Intel compilers. See `BUILD.md` for full platform/feature matrix.
 
