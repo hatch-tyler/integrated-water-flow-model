@@ -10,40 +10,36 @@
 !***********************************************************************
 PROGRAM IWFM2OBS_Main
 
-  USE ProgramTimer  , ONLY: StartTimer  , &
-                             StopTimer
-  USE MessageLogger , ONLY: PrintRunTime , &
-                             SetLogFileName, &
-                             KillLogFile   , &
-                             LogLastMessage, &
-                             LogMessage    , &
-                             f_iInfo
+  USE ProgramTimer  , ONLY: ProgramTimerType
+  USE MessageLogger , ONLY: MessageLoggerType, f_iInfo
   USE Class_IWFM2OBS, ONLY: IWFM2OBSType
 
   IMPLICIT NONE
 
-  TYPE(IWFM2OBSType) :: App
-  CHARACTER(LEN=500) :: cInputFile
-  INTEGER            :: iStat, iNArgs
+  TYPE(IWFM2OBSType)      :: App
+  TYPE(ProgramTimerType)   :: Timer
+  TYPE(MessageLoggerType)  :: Logger
+  CHARACTER(LEN=500)       :: cInputFile
+  INTEGER                  :: iStat, iNArgs
 
   ! Start timer
-  CALL StartTimer()
+  CALL Timer%Start()
 
   DO  ! Single-pass block for structured error exit
 
     ! Open log file
-    CALL SetLogFileName('IWFM2OBS_Messages.out', iStat)
+    CALL Logger%SetLogFileName('IWFM2OBS_Messages.out', iStat)
     IF (iStat == -1) THEN
-      CALL LogLastMessage()
+      CALL Logger%LogLastMessage()
       EXIT
     END IF
 
     ! Banner
-    CALL LogMessage(' ', f_iInfo, 'IWFM2OBS')
-    CALL LogMessage('Program IWFM2OBS - Hydrograph to PEST SMP converter', &
+    CALL Logger%LogMessage(' ', f_iInfo, 'IWFM2OBS')
+    CALL Logger%LogMessage('Program IWFM2OBS - Hydrograph to PEST SMP converter', &
                     f_iInfo, 'IWFM2OBS')
-    CALL LogMessage('with multi-layer target support', f_iInfo, 'IWFM2OBS')
-    CALL LogMessage(' ', f_iInfo, 'IWFM2OBS')
+    CALL Logger%LogMessage('with multi-layer target support', f_iInfo, 'IWFM2OBS')
+    CALL Logger%LogMessage(' ', f_iInfo, 'IWFM2OBS')
 
     ! Get input file from command line or prompt
     iNArgs = COMMAND_ARGUMENT_COUNT()
@@ -63,27 +59,27 @@ PROGRAM IWFM2OBS_Main
     ! Initialize
     CALL App%New(cInputFile, iStat)
     IF (iStat == -1) THEN
-      CALL LogLastMessage()
+      CALL Logger%LogLastMessage()
       EXIT
     END IF
 
     ! Run interpolation workflow
     CALL App%Run(iStat)
     IF (iStat == -1) THEN
-      CALL LogLastMessage()
+      CALL Logger%LogLastMessage()
     END IF
 
     ! Clean up
     CALL App%Kill()
 
-    CALL LogMessage(' ', f_iInfo, 'IWFM2OBS')
-    CALL LogMessage('NORMAL TERMINATION - IWFM2OBS', f_iInfo, 'IWFM2OBS')
+    CALL Logger%LogMessage(' ', f_iInfo, 'IWFM2OBS')
+    CALL Logger%LogMessage('NORMAL TERMINATION - IWFM2OBS', f_iInfo, 'IWFM2OBS')
 
     EXIT  ! Normal exit from single-pass block
   END DO
 
-  CALL StopTimer()
-  CALL PrintRunTime()
-  CALL KillLogFile()
+  CALL Timer%Stop()
+  CALL Logger%PrintRunTime()
+  CALL Logger%Kill()
 
 END PROGRAM IWFM2OBS_Main

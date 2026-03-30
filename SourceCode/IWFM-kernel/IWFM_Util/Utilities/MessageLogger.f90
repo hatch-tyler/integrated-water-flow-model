@@ -1,7 +1,7 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2025  
-!  State of California, Department of Water Resources 
+!  Copyright (C) 2005-2025
+!  State of California, Department of Water Resources
 !
 !  This program is free software; you can redistribute it and/or
 !  modify it under the terms of the GNU General Public License
@@ -18,12 +18,18 @@
 !  along with this program; if not, write to the Free Software
 !  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 !
-!  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
+!  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov
+!***********************************************************************
+!
+! Refactored to type-based design (no module-level SAVE state for the logger).
+! MessageLoggerType encapsulates all logger state as a derived type.
+! Backward-compatible wrapper procedures delegate to DefaultLogger.
+!
 !***********************************************************************
 MODULE MessageLogger
   USE ProgramTimer
+  USE ISO_FORTRAN_ENV, ONLY: OUTPUT_UNIT, ERROR_UNIT
   IMPLICIT NONE
-
 
 
 
@@ -41,6 +47,11 @@ MODULE MessageLogger
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
+
+  ! New type-based API
+  PUBLIC :: MessageLoggerType
+
+  ! Backward-compatible wrapper procedures and constants
   PUBLIC :: SetLogFileName               , &
             SetFlagToEchoProgress        , &
             SetDefaultMessageDestination , &
@@ -54,6 +65,7 @@ MODULE MessageLogger
             PrintRunTime                 , &
             MessageArray                 , &
             EchoProgress                 , &
+            GetMessageCounts             , &
             f_iYesEchoProgress           , &
             f_iNoEchoProgress            , &
             f_iSCREEN_FILE               , &
@@ -62,7 +74,7 @@ MODULE MessageLogger
             f_iMessage                   , &
             f_iInfo                      , &
             f_iWarn                      , &
-            f_iFatal    
+            f_iFatal
 
 
   ! -------------------------------------------------------------
@@ -70,8 +82,8 @@ MODULE MessageLogger
   ! -------------------------------------------------------------
   INTEGER,PARAMETER      :: f_iYesEchoProgress = 1  , &
                             f_iNoEchoProgress  = 0
-  
-  
+
+
   ! -------------------------------------------------------------
   ! --- FLAGS FOR MESSAGE DESTINATION
   ! -------------------------------------------------------------
@@ -88,53 +100,79 @@ MODULE MessageLogger
                        f_iWarn    = 2 , &
                        f_iFatal   = 3
 
-  
+
   ! -------------------------------------------------------------
   ! --- DATA DEFINITIONS
   ! -------------------------------------------------------------
   CHARACTER(LEN=1),PARAMETER  :: f_cLineFeed               = CHAR(10)
   CHARACTER(LEN=11),PARAMETER :: f_cDefaultLogFileName     = 'Message.log'
   INTEGER,PARAMETER           :: f_iLogFile_NOT_Defined    = -999
-  CHARACTER(LEN=1000)         :: MessageArray(200)         
+  CHARACTER(LEN=1000)         :: MessageArray(200)
 
-  
+
   ! -------------------------------------------------------------
-  ! --- LOG FILE DATA TYPE
+  ! --- MESSAGE LOGGER TYPE
   ! -------------------------------------------------------------
-  TYPE LogFileType
-      PRIVATE
-      INTEGER                  :: iUnitN                = f_iLogFile_NOT_Defined
-      CHARACTER(:),ALLOCATABLE :: cName                 
-      INTEGER                  :: iFlagEchoProgress     = f_iNoEchoProgress
-      INTEGER                  :: iMessageDestination   = f_iSCREEN_FILE
-      LOGICAL                  :: lWarningsGenerated    = .FALSE. 
-      LOGICAL                  :: lConsoleExists        = .TRUE.
-      INTEGER                  :: iLastMessageType      = f_iInfo
-      CHARACTER(LEN=5000)      :: cLastMessage          = ''
-      CHARACTER(LEN=200)       :: cLastMessageProcedure = ''
+  TYPE :: MessageLoggerType
+      INTEGER                  :: iUnitN                  = f_iLogFile_NOT_Defined
+      CHARACTER(:),ALLOCATABLE :: cName
+      INTEGER                  :: iFlagEchoProgress       = f_iNoEchoProgress
+      INTEGER                  :: iMessageDestination     = f_iSCREEN_FILE
+      LOGICAL                  :: lWarningsGenerated      = .FALSE.
+      LOGICAL                  :: lConsoleExists          = .TRUE.
+      INTEGER                  :: iLastMessageType        = f_iInfo
+      CHARACTER(LEN=5000)      :: cLastMessage            = ''
+      CHARACTER(LEN=200)       :: cLastMessageProcedure   = ''
+      INTEGER                  :: iInfoCount              = 0
+      INTEGER                  :: iWarnCount              = 0
+      INTEGER                  :: iFatalCount             = 0
+      LOGICAL                  :: lForceInfoWarnToScreen  = .TRUE.
+      LOGICAL                  :: lTimestamp              = .FALSE.
   CONTAINS
-      PROCEDURE,PASS :: New
-  END TYPE LogFileType
-  TYPE(LogFileType),SAVE :: MyLogFile
-  
-  
+      PROCEDURE,PASS :: Init                  => Logger_Init
+      PROCEDURE,PASS :: Kill                  => Logger_Kill
+      PROCEDURE,PASS :: SetLogFileName        => Logger_SetLogFileName
+      PROCEDURE,PASS :: SetEchoProgress       => Logger_SetEchoProgress
+      PROCEDURE,PASS :: SetMessageDest        => Logger_SetMessageDest
+      PROCEDURE,PASS :: SetLastMessage_Arr    => Logger_SetLastMessage_Array
+      PROCEDURE,PASS :: SetLastMessage_Str    => Logger_SetLastMessage_Single
+      GENERIC        :: SetLastMessage        => SetLastMessage_Arr, SetLastMessage_Str
+      PROCEDURE,PASS :: GetLastMessage        => Logger_GetLastMessage
+      PROCEDURE,PASS :: GetLogFileUnit        => Logger_GetLogFileUnit
+      PROCEDURE,PASS :: GetMessageCounts      => Logger_GetMessageCounts
+      PROCEDURE,PASS :: LogMsg_Single         => Logger_LogSingleMessage
+      PROCEDURE,PASS :: LogMsg_Array          => Logger_LogMessageArray
+      GENERIC        :: LogMessage            => LogMsg_Single, LogMsg_Array
+      PROCEDURE,PASS :: LogLastMessage        => Logger_LogLastMessage
+      PROCEDURE,PASS :: IsLogFileDefined      => Logger_IsLogFileDefined
+      PROCEDURE,PASS :: PrintRunTime          => Logger_PrintRunTime
+      PROCEDURE,PASS :: EchoProgress          => Logger_EchoProgress
+      PROCEDURE,PASS :: SetForceInfoWarnToScreen => Logger_SetForceInfoWarnToScreen
+      PROCEDURE,PASS :: SetTimestampLogging   => Logger_SetTimestampLogging
+  END TYPE MessageLoggerType
+
+
+  ! -------------------------------------------------------------
+  ! --- DEFAULT INSTANCE (backward compatibility)
+  ! -------------------------------------------------------------
+  TYPE(MessageLoggerType),SAVE,TARGET :: DefaultLogger
+
+
   ! -------------------------------------------------------------
   ! --- MISC. DEFINITIONS
   ! -------------------------------------------------------------
   INTEGER,PARAMETER                   :: ModNameLen = 15
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName = 'MessageLogger::'
-  
-  
+
+
   ! -------------------------------------------------------------
-  ! --- OVERLOADED METHODS
+  ! --- OVERLOADED METHODS (backward-compatible wrappers)
   ! -------------------------------------------------------------
-  !Overload the message logging methods
   INTERFACE LogMessage
       MODULE PROCEDURE LogSingleMessage
       MODULE PROCEDURE LogMessageArray
   END INTERFACE LogMessage
-  
-  !Overload saving the last message
+
   INTERFACE SetLastMessage
       MODULE PROCEDURE SetLastMessage_Array
       MODULE PROCEDURE SetLastMessage_Single
@@ -145,12 +183,71 @@ MODULE MessageLogger
 CONTAINS
 
 
-    
-    
+
 ! *************************************************************
 ! *************************************************************
 ! *************************************************************
-! ***** CONSTRUCTOR
+! ***** PRIVATE HELPERS
+! *************************************************************
+! *************************************************************
+! *************************************************************
+
+  ! -------------------------------------------------------------
+  ! --- WRITE FORMATTED MESSAGE TO A SINGLE OUTPUT UNIT
+  ! -------------------------------------------------------------
+  SUBROUTINE WriteFormattedMessage(iUnit,cFmt,cAdvance,cSeverityTag,cMessageArray,iNMessage,cProgName,lUseBanner)
+    INTEGER,INTENT(IN)          :: iUnit,iNMessage
+    CHARACTER(LEN=*),INTENT(IN) :: cFmt,cAdvance,cSeverityTag,cMessageArray(:),cProgName
+    LOGICAL,INTENT(IN)          :: lUseBanner
+
+    !Local variables
+    INTEGER :: indx
+
+    IF (lUseBanner) THEN
+        WRITE (iUnit,FMT=cFmt,ADVANCE=cAdvance) ' '
+        WRITE (iUnit,FMT=cFmt,ADVANCE=cAdvance) '*******************************************************************************'
+    END IF
+    IF (LEN_TRIM(cSeverityTag) .GT. 0) THEN
+        WRITE (iUnit,FMT=cFmt,ADVANCE=cAdvance) '* '//TRIM(cSeverityTag)//': '
+    END IF
+    DO indx=1,iNMessage
+        WRITE (iUnit,FMT=cFmt,ADVANCE=cAdvance) TRIM(cMessageArray(indx))
+    END DO
+    IF (LEN_TRIM(cProgName) .GT. 0) THEN
+        WRITE (iUnit,FMT=cFmt,ADVANCE=cAdvance) '*   ('//TRIM(ADJUSTL(cProgName))//')'
+    END IF
+    IF (lUseBanner) THEN
+        WRITE (iUnit,FMT=cFmt,ADVANCE=cAdvance) '*******************************************************************************'
+    END IF
+
+  END SUBROUTINE WriteFormattedMessage
+
+
+  ! -------------------------------------------------------------
+  ! --- PRIMITIVE ERROR HANDLER IF ERRORS OCCUR BEFORE LOG FILE IS OFFICIALLY OPEN
+  ! -------------------------------------------------------------
+  SUBROUTINE Logger_PrimitiveErrorHandler(this,cMessage,iStat)
+    CLASS(MessageLoggerType),INTENT(INOUT) :: this
+    CHARACTER(LEN=*),INTENT(IN)            :: cMessage
+    INTEGER,INTENT(OUT)                    :: iStat
+
+    !Local variables
+    CHARACTER(LEN=ModNameLen+21) :: ThisProcedure = ModName // 'PrimitiveErrorHandler'
+
+    CALL this%SetMessageDest(f_iSCREEN,iStat)
+    CALL this%LogMessage(cMessage,f_iFatal,ThisProcedure)
+
+    CALL this%SetLastMessage(cMessage,f_iFatal,ThisProcedure)
+    iStat = -1
+
+  END SUBROUTINE Logger_PrimitiveErrorHandler
+
+
+
+! *************************************************************
+! *************************************************************
+! *************************************************************
+! ***** TYPE-BOUND PROCEDURES
 ! *************************************************************
 ! *************************************************************
 ! *************************************************************
@@ -158,8 +255,8 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- OPEN A NEW LOG FILE
   ! -------------------------------------------------------------
-  SUBROUTINE New(LogFile,cLogFileName,iStat)
-    CLASS(LogFileType)          :: LogFile
+  SUBROUTINE Logger_Init(this,cLogFileName,iStat)
+    CLASS(MessageLoggerType)    :: this
     CHARACTER(LEN=*),INTENT(IN) :: cLogFileName
     INTEGER,INTENT(OUT)         :: iStat
 
@@ -168,330 +265,328 @@ CONTAINS
     INTEGER                     :: iErrorCode,iUnitNumber
     CHARACTER                   :: cErrorMsg*500
     LOGICAL                     :: lOpen
-    
+
     !Initialize
     iStat = 0
 
     !If log file is already open, return
-    IF (LogFile%iUnitN .NE. f_iLogFile_NOT_Defined) THEN
-        CALL SetLastMessage('A log file has already been defined!',f_iFatal,ThisProcedure)
+    IF (this%iUnitN .NE. f_iLogFile_NOT_Defined) THEN
+        CALL this%SetLastMessage('A log file has already been defined!',f_iFatal,ThisProcedure)
         iStat = -1
     END IF
-    
+
     !Get an unconnected file unit number
     DO iUnitNumber=8,508
         INQUIRE (UNIT=iUnitNumber,OPENED=lOpen)
         IF (.NOT.lOpen) EXIT
     END DO
-    MyLogFile%iUnitN = iUnitNumber
-    
+    this%iUnitN = iUnitNumber
+
     !Open log file
     IF (LEN_TRIM(cLogFileName) .EQ. 0) THEN
-        ALLOCATE (CHARACTER(LEN(f_cDefaultLogFileName)) :: MyLogFile%cName)
-        MyLogFile%cName  = f_cDefaultLogFileName
+        ALLOCATE (CHARACTER(LEN(f_cDefaultLogFileName)) :: this%cName)
+        this%cName  = f_cDefaultLogFileName
     ELSE
-        ALLOCATE (CHARACTER(LEN_TRIM(cLogFileName)) :: MyLogFile%cName)
-        MyLogFile%cName  = cLogFileName
+        ALLOCATE (CHARACTER(LEN_TRIM(cLogFileName)) :: this%cName)
+        this%cName  = cLogFileName
     END IF
-    OPEN (UNIT=MyLogFile%iUnitN,FILE=MyLogFile%cName,IOMSG=cErrorMsg,IOSTAT=iErrorCode)
+    OPEN (UNIT=this%iUnitN,FILE=this%cName,IOMSG=cErrorMsg,IOSTAT=iErrorCode)
     IF (iErrorCode .NE. 0) THEN
         MessageArray(1) = 'Error in opening the log file!'
         MessageArray(2) = TRIM(cErrorMsg)
-        CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+        CALL this%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
         iStat = -1
     END IF
-    
-  END SUBROUTINE New
 
-  
-  
+  END SUBROUTINE Logger_Init
 
-! *************************************************************
-! *************************************************************
-! *************************************************************
-! ***** DESTRUCTOR
-! *************************************************************
-! *************************************************************
-! *************************************************************
-  
+
   ! -------------------------------------------------------------
   ! --- CLOSE LOG FILE
-  ! -------------------------------------------------------------  
-  SUBROUTINE KillLogFile()
+  ! -------------------------------------------------------------
+  SUBROUTINE Logger_Kill(this)
+    CLASS(MessageLoggerType),INTENT(INOUT) :: this
 
     !Local variables
-    INTEGER           :: iErrorCode
-    TYPE(LogFileType) :: DummyFile
-    
-    CLOSE (MyLogFile%iUnitN , IOSTAT=iErrorCode)
-    DEALLOCATE(MyLogFile%cName , STAT=iErrorCode)
-    MyLogFile = DummyFile
-    
-  END SUBROUTINE KillLogFile
+    INTEGER                  :: iErrorCode
+    TYPE(MessageLoggerType)  :: DummyLogger
 
-  
-  
+    CLOSE (this%iUnitN , IOSTAT=iErrorCode)
+    IF (ALLOCATED(this%cName)) DEALLOCATE(this%cName , STAT=iErrorCode)
+    this%iUnitN                = DummyLogger%iUnitN
+    this%iFlagEchoProgress     = DummyLogger%iFlagEchoProgress
+    this%iMessageDestination   = DummyLogger%iMessageDestination
+    this%lWarningsGenerated    = DummyLogger%lWarningsGenerated
+    this%lConsoleExists        = DummyLogger%lConsoleExists
+    this%iLastMessageType      = DummyLogger%iLastMessageType
+    this%cLastMessage          = DummyLogger%cLastMessage
+    this%cLastMessageProcedure = DummyLogger%cLastMessageProcedure
+    this%iInfoCount            = DummyLogger%iInfoCount
+    this%iWarnCount            = DummyLogger%iWarnCount
+    this%iFatalCount           = DummyLogger%iFatalCount
+    this%lForceInfoWarnToScreen = DummyLogger%lForceInfoWarnToScreen
+    this%lTimestamp            = DummyLogger%lTimestamp
 
-! *************************************************************
-! *************************************************************
-! *************************************************************
-! ***** SETTERS
-! *************************************************************
-! *************************************************************
-! *************************************************************
+  END SUBROUTINE Logger_Kill
+
+
+  ! -------------------------------------------------------------
+  ! --- SET LOG FILE NAME
+  ! -------------------------------------------------------------
+  SUBROUTINE Logger_SetLogFileName(this,cFileName,iStat)
+    CLASS(MessageLoggerType),INTENT(INOUT) :: this
+    CHARACTER(LEN=*),INTENT(IN)            :: cFileName
+    INTEGER,INTENT(OUT)                    :: iStat
+
+    !Local variables
+    CHARACTER(LEN=ModNameLen+14) :: ThisProcedure = ModName // 'SetLogFileName'
+
+    !Initialize
+    iStat = 0
+
+    !Check if log file is already instantiated
+    IF (this%iUnitN .NE. f_iLogFile_NOT_Defined) THEN
+        CALL this%SetLastMessage('Error in opening new log file! A log file is already created.',f_iFatal,ThisProcedure)
+        iStat = -1
+    ELSE
+        CALL this%Init(cFileName,iStat)
+    END IF
+
+  END SUBROUTINE Logger_SetLogFileName
+
 
   ! -------------------------------------------------------------
   ! --- SET FLAG TO ECHO PROGRAM PROGRESS TO SCREEN OR NOT
   ! -------------------------------------------------------------
-  SUBROUTINE SetFlagToEchoProgress(iFlag,iStat)
-    INTEGER,INTENT(IN)  :: iFlag
-    INTEGER,INTENT(OUT) :: iStat
-    
+  SUBROUTINE Logger_SetEchoProgress(this,iFlag,iStat)
+    CLASS(MessageLoggerType),INTENT(INOUT) :: this
+    INTEGER,INTENT(IN)                     :: iFlag
+    INTEGER,INTENT(OUT)                    :: iStat
+
     !Local variables
     CHARACTER(LEN=ModNameLen+21) :: ThisProcedure = ModName // 'SetFlagToEchoProgress'
-    
+
     !Initialize
     iStat = 0
-    
+
     !Check if iFlag is recognized
     IF (iFlag.NE.f_iYesEchoProgress .AND. iFlag.NE.f_iNoEchoProgress) THEN
-        CALL SetLastMessage('Flag to echo program progress is not recognized!',f_iFatal,ThisProcedure)
+        CALL this%SetLastMessage('Flag to echo program progress is not recognized!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
 
     !Set flag
-    MyLogFile%iFlagEchoProgress = iFlag
-    
-  END SUBROUTINE SetFlagToEchoProgress
-  
+    this%iFlagEchoProgress = iFlag
+
+  END SUBROUTINE Logger_SetEchoProgress
+
 
   ! -------------------------------------------------------------
   ! --- SET DEFAULT MESSAGE DESTINATION
   ! -------------------------------------------------------------
-  SUBROUTINE SetDefaultMessageDestination(iDestination,iStat)
-    INTEGER,INTENT(IN)  :: iDestination
-    INTEGER,INTENT(OUT) :: iStat
+  SUBROUTINE Logger_SetMessageDest(this,iDestination,iStat)
+    CLASS(MessageLoggerType),INTENT(INOUT) :: this
+    INTEGER,INTENT(IN)                     :: iDestination
+    INTEGER,INTENT(OUT)                    :: iStat
 
     !Local variables
     CHARACTER(LEN=ModNameLen+28) :: ThisProcedure = ModName // 'SetDefaultMessageDestination'
     LOGICAL                      :: lDestRecognized
-    
-    !Initilaize
+
+    !Initialize
     iStat = 0
 
     !Check if Destination is recognized
     lDestRecognized = iDestination .EQ. f_iSCREEN      .OR.  &
                       iDestination .EQ. f_iFILE        .OR.  &
-                      iDestination .EQ. f_iSCREEN_FILE     
+                      iDestination .EQ. f_iSCREEN_FILE
     IF (.NOT. lDestRecognized) THEN
-        IF (MyLogFile%iUnitN .EQ. f_iLogFile_NOT_Defined) THEN 
-            CALL PrimitiveErrorHandler('Message destination is not recognized!',iStat)
+        IF (this%iUnitN .EQ. f_iLogFile_NOT_Defined) THEN
+            CALL Logger_PrimitiveErrorHandler(this,'Message destination is not recognized!',iStat)
         ELSE
-            CALL SetLastMessage('Message destination is not recognized!',f_iFatal,ThisProcedure)
+            CALL this%SetLastMessage('Message destination is not recognized!',f_iFatal,ThisProcedure)
             iStat = -1
         END IF
         RETURN
     END IF
 
     !Set DefaultMessageDestination
-    MyLogFile%iMessageDestination = iDestination
-    
-  END SUBROUTINE SetDefaultMessageDestination
-   
+    this%iMessageDestination = iDestination
+
+  END SUBROUTINE Logger_SetMessageDest
+
 
   ! -------------------------------------------------------------
-  ! --- SET THE LOG FILE NAME
+  ! --- SET THE LAST MESSAGE USING AN ARRAY OF MESSAGES
   ! -------------------------------------------------------------
-  SUBROUTINE SetLogFileName(cFileName,iStat)
-    CHARACTER(LEN=*),INTENT(IN) :: cFileName
-    INTEGER,INTENT(OUT)         :: iStat
-    
-    !Local variables
-    CHARACTER(LEN=ModNameLen+14) :: ThisProcedure = ModName // 'SetLogFileName'
-    
-    !Initilaize
-    iStat = 0
+  SUBROUTINE Logger_SetLastMessage_Array(this,cMessageArray,iErrorLevel,cProgName)
+    CLASS(MessageLoggerType),INTENT(INOUT) :: this
+    CHARACTER(LEN=*),INTENT(IN)            :: cMessageArray(:),cProgName
+    INTEGER,INTENT(IN)                     :: iErrorLevel
 
-    !Check if log file is already instantiated
-    IF (MyLogFile%iUnitN .NE. f_iLogFile_NOT_Defined) THEN
-        CALL SetLastMessage('Error in opening new log file! A log file is already created.',f_iFatal,ThisProcedure) 
-        iStat = -1
-    ELSE
-        CALL MyLogFile%New(cFileName,iStat)     
-    END IF
-    
-  END SUBROUTINE SetLogFileName
-
-  
-  ! -------------------------------------------------------------
-  ! --- SET THE LAST MESSAGE AND MESSAGE LEVEL USING AN ARRAY OF MESSAGES
-  ! -------------------------------------------------------------
-  SUBROUTINE SetLastMessage_Array(cMessageArray,iErrorLevel,cProgName)
-    CHARACTER(LEN=*),INTENT(IN) :: cMessageArray(:),cProgName
-    INTEGER,INTENT(IN)          :: iErrorLevel
-    
     !Local variables
     INTEGER :: indx
-    
+
     !Initialize
-    MyLogFile%cLastMessage = '*   ' // cMessageArray(1)
-    
-    !Stich the message arrays into a single string
+    this%cLastMessage = '*   ' // cMessageArray(1)
+
+    !Stitch the message arrays into a single string
     DO indx=2,SIZE(cMessageArray)
-        MyLogFile%cLastMessage = TRIM(MyLogFile%cLastMessage) // f_cLineFeed // '*   ' // TRIM(cMessageArray(indx))
+        this%cLastMessage = TRIM(this%cLastMessage) // f_cLineFeed // '*   ' // TRIM(cMessageArray(indx))
     END DO
 
-    !Program name 
-    MyLogFile%cLastMessageProcedure = TRIM(cProgName) 
-    
+    !Program name
+    this%cLastMessageProcedure = TRIM(cProgName)
+
     !Error level
-    MyLogFile%iLastMessageType = iErrorLevel
-    
-  END SUBROUTINE SetLastMessage_Array
-  
-  
+    this%iLastMessageType = iErrorLevel
+
+  END SUBROUTINE Logger_SetLastMessage_Array
+
+
   ! -------------------------------------------------------------
-  ! --- SET THE LAST MESSAGE AND MESSAGE LEVEL USING A SINGLE MESSAGE
+  ! --- SET THE LAST MESSAGE USING A SINGLE MESSAGE
   ! -------------------------------------------------------------
-  SUBROUTINE SetLastMessage_Single(cMessage,iErrorLevel,cProgName)
-    CHARACTER(LEN=*),INTENT(IN) :: cMessage,cProgName
-    INTEGER,INTENT(IN)          :: iErrorLevel
-    
+  SUBROUTINE Logger_SetLastMessage_Single(this,cMessage,iErrorLevel,cProgName)
+    CLASS(MessageLoggerType),INTENT(INOUT) :: this
+    CHARACTER(LEN=*),INTENT(IN)            :: cMessage,cProgName
+    INTEGER,INTENT(IN)                     :: iErrorLevel
+
     !Local variables
     CHARACTER(LEN=LEN_TRIM(cMessage)) :: cMessageArray(1)
-    
+
     !Initialize
     cMessageArray(1) = TRIM(cMessage)
-    
-    CALL SetLastMessage_Array(cMessageArray,iErrorLevel,cProgName)
 
-  END SUBROUTINE SetLastMessage_Single
-  
-  
-  
-  
-! *************************************************************
-! *************************************************************
-! *************************************************************
-! ***** GETTERS
-! *************************************************************
-! *************************************************************
-! *************************************************************
-  
+    CALL this%SetLastMessage(cMessageArray,iErrorLevel,cProgName)
+
+  END SUBROUTINE Logger_SetLastMessage_Single
+
+
   ! -------------------------------------------------------------
   ! --- GET THE LAST MESSAGE
   ! -------------------------------------------------------------
-  SUBROUTINE GetLastMessage(cMessage)
-    CHARACTER(LEN=*),INTENT(OUT) :: cMessage
-    
+  SUBROUTINE Logger_GetLastMessage(this,cMessage)
+    CLASS(MessageLoggerType),INTENT(IN) :: this
+    CHARACTER(LEN=*),INTENT(OUT)        :: cMessage
+
     !Local variables
-    INTEGER                                             :: iLenMessage,iLenLastMessage
-    CHARACTER(LEN=LEN_TRIM(MyLogFile%cLastMessage)+110) :: cMessageLocal
-    
-    SELECT CASE (MyLogFile%iLastMessageType)
+    INTEGER                                          :: iLenMessage,iLenLastMessage
+    CHARACTER(LEN=LEN_TRIM(this%cLastMessage)+110)   :: cMessageLocal
+
+    SELECT CASE (this%iLastMessageType)
         CASE (f_iInfo)
-            cMessageLocal = '* INFO:'  
+            cMessageLocal = '* INFO:'
         CASE (f_iWarn)
-            cMessageLocal = '* WARN:' 
+            cMessageLocal = '* WARN:'
         CASE (f_iFatal)
-            cMessageLocal = '* FATAL:' 
+            cMessageLocal = '* FATAL:'
     END SELECT
-    cMessageLocal = TRIM(cMessageLocal) // f_cLineFeed // TRIM(MyLogFile%cLastMessage)
-    cMessageLocal = TRIM(cMessageLocal) // f_cLineFeed // '*   (' // TRIM(MyLogFile%cLastMessageProcedure) // ')'     
-    
+    cMessageLocal = TRIM(cMessageLocal) // f_cLineFeed // TRIM(this%cLastMessage)
+    cMessageLocal = TRIM(cMessageLocal) // f_cLineFeed // '*   (' // TRIM(this%cLastMessageProcedure) // ')'
+
     iLenMessage     = LEN(cMessage)
     iLenLastMessage = LEN_TRIM(cMessageLocal)
-    
+
     cMessage = ''
-    IF (iLenMessage .LT. iLenLastMessage) THEN    
+    IF (iLenMessage .LT. iLenLastMessage) THEN
         cMessage = cMessageLocal(1:iLenMessage)
     ELSE
         cMessage(1:iLenLastMessage) = cMessageLocal
     END IF
-    
-  END SUBROUTINE GetLastMessage
-  
-  
+
+  END SUBROUTINE Logger_GetLastMessage
+
+
   ! -------------------------------------------------------------
   ! --- GET THE LOG FILE UNIT
   ! -------------------------------------------------------------
-  SUBROUTINE GetLogFileUnit(iLogFileUnit,iStat,cFileName)
-    INTEGER,INTENT(OUT)                  :: iLogFileUnit,iStat
-    CHARACTER(LEN=*),OPTIONAL,INTENT(IN) :: cFileName
-    
+  SUBROUTINE Logger_GetLogFileUnit(this,iLogFileUnit,iStat,cFileName)
+    CLASS(MessageLoggerType),INTENT(INOUT) :: this
+    INTEGER,INTENT(OUT)                    :: iLogFileUnit,iStat
+    CHARACTER(LEN=*),OPTIONAL,INTENT(IN)   :: cFileName
+
     !Initialize
     iStat = 0
 
-    IF (MyLogFile%iUnitN .EQ. f_iLogFile_NOT_Defined) THEN
+    IF (this%iUnitN .EQ. f_iLogFile_NOT_Defined) THEN
         IF (PRESENT(cFileName)) THEN
-            CALL MyLogFile%New(cFileName,iStat)
+            CALL this%Init(cFileName,iStat)
         ELSE
-            CALL MyLogFile%New('',iStat=iStat)
+            CALL this%Init('',iStat=iStat)
         ENDIF
     END IF
     IF (iStat .EQ. -1) RETURN
-      
-    iLogFileUnit = MyLogFile%iUnitN
-      
-  END SUBROUTINE GetLogFileUnit
+
+    iLogFileUnit = this%iUnitN
+
+  END SUBROUTINE Logger_GetLogFileUnit
 
 
-  
-  
-! *************************************************************
-! *************************************************************
-! *************************************************************
-! ***** UTILITIES
-! *************************************************************
-! *************************************************************
-! *************************************************************
+  ! -------------------------------------------------------------
+  ! --- GET MESSAGE COUNTS
+  ! -------------------------------------------------------------
+  SUBROUTINE Logger_GetMessageCounts(this,iInfoCount,iWarnCount,iFatalCount)
+    CLASS(MessageLoggerType),INTENT(IN) :: this
+    INTEGER,INTENT(OUT)                 :: iInfoCount,iWarnCount,iFatalCount
+
+    iInfoCount  = this%iInfoCount
+    iWarnCount  = this%iWarnCount
+    iFatalCount = this%iFatalCount
+
+  END SUBROUTINE Logger_GetMessageCounts
+
 
   ! -------------------------------------------------------------
   ! --- CHECK IF LOG FILE IS ALREADY DEFINED
   ! -------------------------------------------------------------
-  FUNCTION IsLogFileDefined() RESULT(lIsDefined)
-    LOGICAL :: lIsDefined
+  FUNCTION Logger_IsLogFileDefined(this) RESULT(lIsDefined)
+    CLASS(MessageLoggerType),INTENT(IN) :: this
+    LOGICAL                             :: lIsDefined
 
-    IF (MyLogFile%iUnitN .EQ. f_iLogFile_NOT_Defined) THEN
-        lIsDefined = .FALSE.
-    ELSE
-        lIsDefined = .TRUE.
-    END IF
+    lIsDefined = (this%iUnitN .NE. f_iLogFile_NOT_Defined)
 
-  END FUNCTION IsLogFileDefined
+  END FUNCTION Logger_IsLogFileDefined
 
 
   ! -------------------------------------------------------------
-  ! --- PRIMITIVE ERROR HANDLER IF ERRORS OCCUR BEFORE LOG FILE IS OFFICIALLY OPEN
+  ! --- SET FORCE INFO/WARN TO SCREEN FLAG
   ! -------------------------------------------------------------
-  SUBROUTINE PrimitiveErrorHandler(cMessage,iStat)
-    CHARACTER(LEN=*),INTENT(IN) :: cMessage
-    INTEGER,INTENT(OUT)         :: iStat
+  SUBROUTINE Logger_SetForceInfoWarnToScreen(this,lFlag)
+    CLASS(MessageLoggerType),INTENT(INOUT) :: this
+    LOGICAL,INTENT(IN)                     :: lFlag
 
-    !Local variables
-    CHARACTER(LEN=ModNameLen+21) :: ThisProcedure = ModName // 'PrimitiveErrorHandler'
+    this%lForceInfoWarnToScreen = lFlag
 
-    CALL SetDefaultMessageDestination(f_iSCREEN,iStat)
-    CALL LogMessage(cMessage,f_iFatal,ThisProcedure)
-    
-    CALL SetLastMessage(cMessage,f_iFatal,ThisProcedure)
-    iStat = -1
-
-  END SUBROUTINE PrimitiveErrorHandler
+  END SUBROUTINE Logger_SetForceInfoWarnToScreen
 
 
   ! -------------------------------------------------------------
-  ! --- PRINT OUT ALL TYPES OF MESSAGES (SINGLE VS. ARRAY)
+  ! --- SET TIMESTAMP LOGGING FLAG
   ! -------------------------------------------------------------
-  SUBROUTINE LogAllMessageTypes(cMessageArray,iErrorLevel,cProgName,iDestination,cFmt,cAdvance)
-    CHARACTER(LEN=*),INTENT(IN) :: cMessageArray(:),cProgName,cFmt,cAdvance
-    INTEGER,INTENT(IN)          :: iErrorLevel,iDestination
+  SUBROUTINE Logger_SetTimestampLogging(this,lEnable)
+    CLASS(MessageLoggerType),INTENT(INOUT) :: this
+    LOGICAL,INTENT(IN)                     :: lEnable
+
+    this%lTimestamp = lEnable
+
+  END SUBROUTINE Logger_SetTimestampLogging
+
+
+  ! -------------------------------------------------------------
+  ! --- CORE LOGGING PROCEDURE
+  ! -------------------------------------------------------------
+  SUBROUTINE Logger_LogAllMessageTypes(this,cMessageArray,iErrorLevel,cProgName,iDestination,cFmt,cAdvance)
+    CLASS(MessageLoggerType),INTENT(INOUT) :: this
+    CHARACTER(LEN=*),INTENT(IN)            :: cMessageArray(:),cProgName,cFmt,cAdvance
+    INTEGER,INTENT(IN)                     :: iErrorLevel,iDestination
 
     !Local variables
     INTEGER                               :: iUnitN,indx,iNMessage,iStat
     LOGICAL                               :: lWillPrintToFile,lWillPrintToScreen
-    CHARACTER(LEN=5+LEN(MessageArray(1))) :: cSeveralMessages(SIZE(cMessageArray))
+    CHARACTER(LEN=1005)                   :: cSeveralMessages(SIZE(cMessageArray))
+    CHARACTER(LEN=30)                     :: cTimestamp
 
     !Defaults
     lWillPrintToFile   = .FALSE.
@@ -507,132 +602,92 @@ CONTAINS
             lWillPrintToFile   = .FALSE.
             lWillPrintToScreen = .TRUE.
     END SELECT
-    iNMessage                     = SIZE(cMessageArray)
-    cSeveralMessages(1:iNMessage) = cMessageArray
+    iNMessage = SIZE(cMessageArray)
 
-    !Check if a log file is instantiated
-    IF (iDestination .NE. f_iSCREEN) THEN
-        IF (MyLogFile%iUnitN .EQ. f_iLogFile_NOT_Defined) CALL MyLogFile%New('',iStat)
+    !Optional timestamp prefix
+    cTimestamp = ''
+    IF (this%lTimestamp) THEN
+        BLOCK
+            CHARACTER(LEN=30) :: cDate,cTime
+            CALL DATE_AND_TIME(DATE=cDate,TIME=cTime)
+            cTimestamp = '['//cTime(1:2)//':'//cTime(3:4)//':'//cTime(5:6)//'] '
+        END BLOCK
     END IF
 
-    !Modify messages based on the error level
+    !Copy messages, applying prefix for non-message severity
     IF (iErrorLevel .NE. f_iMessage) THEN
         DO indx=1,iNMessage
-            cSeveralMessages(indx) = '*   '//TRIM(cSeveralMessages(indx))
+            cSeveralMessages(indx) = TRIM(cTimestamp)//'*   '//TRIM(cMessageArray(indx))
+        END DO
+    ELSE
+        DO indx=1,iNMessage
+            cSeveralMessages(indx) = TRIM(cTimestamp)//TRIM(cMessageArray(indx))
         END DO
     END IF
 
-    IF (MyLogFile%iUNitN .NE. f_iLogFile_NOT_Defined) iUnitN = MyLogFile%iUnitN
+    !Check if a log file is instantiated
+    IF (iDestination .NE. f_iSCREEN) THEN
+        IF (this%iUnitN .EQ. f_iLogFile_NOT_Defined) CALL this%Init('',iStat)
+    END IF
+
+    IF (this%iUnitN .NE. f_iLogFile_NOT_Defined) iUnitN = this%iUnitN
+
     !Evaluate error severity and print out message
     SELECT CASE (iErrorLevel)
         CASE DEFAULT
-            IF (lWillPrintToFile) THEN
-                WRITE (iUnitN,FMT=cFmt,ADVANCE=cAdvance) ' '
-                WRITE (iUnitN,FMT=cFmt,ADVANCE=cAdvance) '*******************************************************************************'
-                WRITE (iUnitN,FMT=cFmt,ADVANCE=cAdvance) '*'
-                WRITE (iUnitN,FMT=cFmt,ADVANCE=cAdvance) '* FATAL:' 
-                WRITE (iUnitN,FMT=cFmt,ADVANCE=cAdvance) '*   Incorrect error level returned from procedure '//TRIM(ADJUSTL(cProgName))
-                WRITE (iUnitN,FMT=cFmt,ADVANCE=cAdvance) '*   ('//TRIM(ADJUSTL(cProgName))//')'
-                WRITE (iUnitN,FMT=cFmt,ADVANCE=cAdvance) '*'
-                WRITE (iUnitN,FMT=cFmt,ADVANCE=cAdvance) '*******************************************************************************'
-            END IF
-            !Always print to error unit
-            WRITE (*,FMT=cFmt,ADVANCE=cAdvance) ' '
-            WRITE (*,FMT=cFmt,ADVANCE=cAdvance) '*******************************************************************************'
-            WRITE (*,FMT=cFmt,ADVANCE=cAdvance) '*'
-            WRITE (*,FMT=cFmt,ADVANCE=cAdvance) '* FATAL:' 
-            WRITE (*,FMT=cFmt,ADVANCE=cAdvance) '*   Incorrect error level returned from procedure '//TRIM(ADJUSTL(cProgName))
-            WRITE (*,FMT=cFmt,ADVANCE=cAdvance) '*   ('//TRIM(ADJUSTL(cProgName))//')'
-            WRITE (*,FMT=cFmt,ADVANCE=cAdvance) '*'
-            WRITE (*,FMT=cFmt,ADVANCE=cAdvance) '*******************************************************************************'
+            this%iFatalCount = this%iFatalCount + 1
+            IF (lWillPrintToFile) &
+                CALL WriteFormattedMessage(iUnitN,cFmt,cAdvance,'FATAL',cSeveralMessages,iNMessage, &
+                    'Incorrect error level returned from procedure '//TRIM(ADJUSTL(cProgName)),.TRUE.)
+            CALL WriteFormattedMessage(ERROR_UNIT,cFmt,cAdvance,'FATAL',cSeveralMessages,iNMessage, &
+                'Incorrect error level returned from procedure '//TRIM(ADJUSTL(cProgName)),.TRUE.)
             CALL PrintRunTime()
             CALL KillLogFile()
-            STOP 
-        
+            STOP
+
         CASE (f_iMessage)
-            IF (lWillPrintToFile) CALL PrintMessageArray(f_iFILE)
-            IF (lWillPrintToScreen) CALL PrintMessageArray(f_iSCREEN)
-          
+            IF (lWillPrintToFile) CALL WriteFormattedMessage(iUnitN,cFmt,cAdvance,'',cSeveralMessages,iNMessage,'',.FALSE.)
+            IF (lWillPrintToScreen) CALL WriteFormattedMessage(OUTPUT_UNIT,cFmt,cAdvance,'',cSeveralMessages,iNMessage,'',.FALSE.)
+
         CASE (f_iInfo)
-            MyLogFile%lWarningsGenerated = .TRUE.
-            IF (lWillPrintToFile) THEN
-                WRITE (iUnitN,FMT=cFmt,ADVANCE=cAdvance) '* INFO : '
-                CALL PrintMessageArray(f_iFILE)
-                WRITE (iUnitN,FMT=cFmt,ADVANCE=cAdvance) '*   ('//TRIM(ADJUSTL(cProgName))//')'
-            END IF
-            !Always print to screen
-            WRITE (*,FMT=cFmt,ADVANCE=cAdvance) '* INFO : '
-            CALL PrintMessageArray(f_iSCREEN)
-            WRITE (*,FMT=cFmt,ADVANCE=cAdvance) '*   ('//TRIM(ADJUSTL(cProgName))//')'
-            
+            this%iInfoCount = this%iInfoCount + 1
+            this%lWarningsGenerated = .TRUE.
+            IF (lWillPrintToFile) &
+                CALL WriteFormattedMessage(iUnitN,cFmt,cAdvance,'INFO ',cSeveralMessages,iNMessage,cProgName,.FALSE.)
+            IF (lWillPrintToScreen .OR. this%lForceInfoWarnToScreen) &
+                CALL WriteFormattedMessage(OUTPUT_UNIT,cFmt,cAdvance,'INFO ',cSeveralMessages,iNMessage,cProgName,.FALSE.)
+
         CASE (f_iWarn)
-            MyLogFile%lWarningsGenerated = .TRUE.
-            IF (lWillPrintToFile) THEN
-                WRITE (iUnitN,FMT=cFmt,ADVANCE=cAdvance) '* WARN : '
-                CALL PrintMessageArray(f_iFILE)
-                WRITE (iUnitN,FMT=cFmt,ADVANCE=cAdvance) '*   ('//TRIM(ADJUSTL(cProgName))//')'
-            END IF
-            !Always write to screen  
-            WRITE (*,FMT=cFmt,ADVANCE=cAdvance) '* WARN : '
-            CALL PrintMessageArray(f_iSCREEN)
-            WRITE (*,FMT=cFmt,ADVANCE=cAdvance) '*   ('//TRIM(ADJUSTL(cProgName))//')'
-        
+            this%iWarnCount = this%iWarnCount + 1
+            this%lWarningsGenerated = .TRUE.
+            IF (lWillPrintToFile) &
+                CALL WriteFormattedMessage(iUnitN,cFmt,cAdvance,'WARN ',cSeveralMessages,iNMessage,cProgName,.FALSE.)
+            IF (lWillPrintToScreen .OR. this%lForceInfoWarnToScreen) &
+                CALL WriteFormattedMessage(OUTPUT_UNIT,cFmt,cAdvance,'WARN ',cSeveralMessages,iNMessage,cProgName,.FALSE.)
+
         CASE (f_iFatal)
-          IF (lWillPrintToFile) THEN
-              WRITE (iUnitN,FMT=cFmt,ADVANCE=cAdvance) ' '
-              WRITE (iUnitN,FMT=cFmt,ADVANCE=cAdvance) '*******************************************************************************'
-              WRITE (iUnitN,FMT=cFmt,ADVANCE=cAdvance) '* FATAL: '
-              CALL PrintMessageArray(f_iFILE)
-              WRITE (iUnitN,FMT=cFmt,ADVANCE=cAdvance) '*   ('//TRIM(ADJUSTL(cProgName))//')'
-              WRITE (iUnitN,FMT=cFmt,ADVANCE=cAdvance) '*******************************************************************************'
-          END IF
-          !Always print to error unit
-          WRITE (*,FMT=cFmt,ADVANCE=cAdvance) ' '
-          WRITE (*,FMT=cFmt,ADVANCE=cAdvance) '*******************************************************************************'
-          WRITE (*,FMT=cFmt,ADVANCE=cAdvance) '* FATAL: '
-          CALL PrintMessageArray(f_iSCREEN)
-          WRITE (*,FMT=cFmt,ADVANCE=cAdvance) '*   ('//TRIM(ADJUSTL(cProgName))//')'
-          WRITE (*,FMT=cFmt,ADVANCE=cAdvance) '*******************************************************************************'
-          CALL PrintRunTime()
-          CALL KillLogFile()
-          STOP
+            this%iFatalCount = this%iFatalCount + 1
+            IF (lWillPrintToFile) &
+                CALL WriteFormattedMessage(iUnitN,cFmt,cAdvance,'FATAL',cSeveralMessages,iNMessage,cProgName,.TRUE.)
+            CALL WriteFormattedMessage(ERROR_UNIT,cFmt,cAdvance,'FATAL',cSeveralMessages,iNMessage,cProgName,.TRUE.)
+            CALL PrintRunTime()
+            CALL KillLogFile()
+            STOP
     END SELECT
 
-  
-  CONTAINS
-
-    !PRINT MESSAGE ARRAY
-    SUBROUTINE PrintMessageArray(iDest)
-      INTEGER,INTENT(IN) :: iDest
-      
-      !Local variables
-      INTEGER :: indxMessage
-      
-      !Print
-      IF (iDest .EQ. f_iFILE) THEN
-          DO indxMessage=1,iNMessage
-              WRITE (iUnitN,FMT=cFmt,ADVANCE=cAdvance) TRIM(cSeveralMessages(indxMessage))
-          END DO
-      ELSE IF (iDest .EQ. f_iSCREEN) THEN
-          DO indxMessage=1,iNMessage
-              WRITE (*,FMT=cFmt,ADVANCE=cAdvance) TRIM(cSeveralMessages(indxMessage))
-          END DO
-      END IF
-            
-    END SUBROUTINE PrintMessageArray
-
-  END SUBROUTINE LogAllMessageTypes
+  END SUBROUTINE Logger_LogAllMessageTypes
 
 
   ! -------------------------------------------------------------
-  ! --- GATEWAY SUBROUTINE FOR SINGLE MESSAGE LOGGING (integer destination)
+  ! --- LOG A SINGLE MESSAGE
   ! -------------------------------------------------------------
-  SUBROUTINE LogSingleMessage(Message,ErrorLevel,ProgName,Destination,Fmt,Advance)
-    CHARACTER(LEN=*),INTENT(IN) :: Message
-    CHARACTER(LEN=*),INTENT(IN) :: ProgName
-    INTEGER,INTENT(IN)          :: ErrorLevel
-    INTEGER,OPTIONAL,INTENT(IN) :: Destination
-    CHARACTER(LEN=*),OPTIONAL   :: Fmt,Advance
+  SUBROUTINE Logger_LogSingleMessage(this,Message,ErrorLevel,ProgName,Destination,Fmt,Advance)
+    CLASS(MessageLoggerType),INTENT(INOUT) :: this
+    CHARACTER(LEN=*),INTENT(IN)            :: Message
+    CHARACTER(LEN=*),INTENT(IN)            :: ProgName
+    INTEGER,INTENT(IN)                     :: ErrorLevel
+    INTEGER,OPTIONAL,INTENT(IN)            :: Destination
+    CHARACTER(LEN=*),OPTIONAL,INTENT(IN)   :: Fmt,Advance
 
     !Local variables
     INTEGER                          :: iLocalDestination
@@ -645,35 +700,36 @@ CONTAINS
     IF (PRESENT(Destination)) THEN
         iLocalDestination = Destination
     ELSE
-        iLocalDestination = MyLogFile%iMessageDestination
-    END IF 
-    
+        iLocalDestination = this%iMessageDestination
+    END IF
+
     IF (PRESENT(Fmt)) THEN
         LocalFmt = Fmt
     ELSE
-        LocalFmt = '(A)' 
-    END IF 
-    
+        LocalFmt = '(A)'
+    END IF
+
     IF (PRESENT(Advance)) THEN
         LocalAdvance = Advance
     ELSE
         LocalAdvance = 'YES'
-    END IF 
+    END IF
 
-    !Transfer control to LogAllMessageTypes
-    CALL LogAllMessageTypes(LocalMessage,iErrorLevel=ErrorLevel,cProgName=ProgName,iDestination=iLocalDestination,cFmt=LocalFmt,cAdvance=LocalAdvance)
-      
-  END SUBROUTINE LogSingleMessage
- 
+    CALL Logger_LogAllMessageTypes(this,LocalMessage,iErrorLevel=ErrorLevel,cProgName=ProgName, &
+                                   iDestination=iLocalDestination,cFmt=LocalFmt,cAdvance=LocalAdvance)
+
+  END SUBROUTINE Logger_LogSingleMessage
+
 
   ! -------------------------------------------------------------
-  ! --- GATEWAY SUBROUTINE FOR ARRAY OF MESSAGE LOGGING
+  ! --- LOG AN ARRAY OF MESSAGES
   ! -------------------------------------------------------------
-  SUBROUTINE LogMessageArray(cMessageArray,iErrorLevel,cProgName,iDestination,cFmt,cAdvance)
-    CHARACTER(LEN=*),INTENT(IN)          :: cMessageArray(:),cProgName
-    INTEGER,INTENT(IN)                   :: iErrorLevel
-    INTEGER,OPTIONAL,INTENT(IN)          :: iDestination
-    CHARACTER(LEN=*),OPTIONAL,INTENT(IN) :: cFmt,cAdvance
+  SUBROUTINE Logger_LogMessageArray(this,cMessageArray,iErrorLevel,cProgName,iDestination,cFmt,cAdvance)
+    CLASS(MessageLoggerType),INTENT(INOUT) :: this
+    CHARACTER(LEN=*),INTENT(IN)            :: cMessageArray(:),cProgName
+    INTEGER,INTENT(IN)                     :: iErrorLevel
+    INTEGER,OPTIONAL,INTENT(IN)            :: iDestination
+    CHARACTER(LEN=*),OPTIONAL,INTENT(IN)   :: cFmt,cAdvance
 
     !Local variables
     INTEGER           :: iLocalDestination
@@ -684,130 +740,147 @@ CONTAINS
     IF (PRESENT(iDestination)) THEN
         iLocalDestination = iDestination
     ELSE
-        iLocalDestination = MyLogFile%iMessageDestination
-    END IF 
+        iLocalDestination = this%iMessageDestination
+    END IF
     IF (PRESENT(cFmt)) THEN
         cLocalFmt = cFmt
     ELSE
-        cLocalFmt = '(A)' 
-    END IF 
+        cLocalFmt = '(A)'
+    END IF
     IF (PRESENT(cAdvance)) THEN
         cLocalAdvance = cAdvance
     ELSE
         cLocalAdvance = 'YES'
-    END IF 
+    END IF
 
-    !Transfer control to LogAllMessageTypes
-    CALL LogAllMessageTypes(cMessageArray=cMessageArray,iErrorLevel=iErrorLevel,cProgName=cProgName,iDestination=iLocalDestination,cFmt=cLocalFmt,cAdvance=cLocalAdvance)
-      
-  END SUBROUTINE LogMessageArray
+    CALL Logger_LogAllMessageTypes(this,cMessageArray=cMessageArray,iErrorLevel=iErrorLevel, &
+                                   cProgName=cProgName,iDestination=iLocalDestination, &
+                                   cFmt=cLocalFmt,cAdvance=cLocalAdvance)
+
+  END SUBROUTINE Logger_LogMessageArray
 
 
   ! -------------------------------------------------------------
-  ! --- PRINT OUT ALL THE LAST SAVED MESSAGE
+  ! --- LOG THE LAST SAVED MESSAGE
   ! -------------------------------------------------------------
-  SUBROUTINE LogLastMessage(iDestination,cAdvance)
-    INTEGER,OPTIONAL,INTENT(IN)          :: iDestination
-    CHARACTER(LEN=*),OPTIONAL,INTENT(IN) :: cAdvance
-    
+  SUBROUTINE Logger_LogLastMessage(this,iDestination,cAdvance)
+    CLASS(MessageLoggerType),INTENT(INOUT) :: this
+    INTEGER,OPTIONAL,INTENT(IN)            :: iDestination
+    CHARACTER(LEN=*),OPTIONAL,INTENT(IN)   :: cAdvance
+
     !Local variables
     INTEGER   :: iDestination_Local
     CHARACTER :: cAdvance_Local*3,cMessageLocal*5000
-    
-    
+
     !Set destination
     IF (PRESENT(iDestination)) THEN
         iDestination_Local = iDestination
     ELSE
-        iDestination_Local = MyLogFile%iMessageDestination
+        iDestination_Local = this%iMessageDestination
     END IF
-  
+
     !Set advancement of line
     IF (PRESENT(cAdvance)) THEN
         cAdvance_Local = TRIM(cAdvance)
     ELSE
         cAdvance_Local = 'YES'
     END IF
-    
+
     !Prepare message for logging
     cMessageLocal = '*******************************************************************************'
-    SELECT CASE (MyLogFile%iLastMessageType)
+    SELECT CASE (this%iLastMessageType)
         CASE (f_iInfo)
-            cMessageLocal = TRIM(cMessageLocal) //  f_cLineFeed // '* INFO: '  
+            cMessageLocal = TRIM(cMessageLocal) //  f_cLineFeed // '* INFO: '
         CASE (f_iWarn)
-            cMessageLocal = TRIM(cMessageLocal) // f_cLineFeed // '* WARN: ' 
+            cMessageLocal = TRIM(cMessageLocal) // f_cLineFeed // '* WARN: '
         CASE (f_iFatal)
-            cMessageLocal = TRIM(cMessageLocal) // f_cLineFeed // '* FATAL: ' 
+            cMessageLocal = TRIM(cMessageLocal) // f_cLineFeed // '* FATAL: '
     END SELECT
-    cMessageLocal = TRIM(cMessageLocal) // f_cLineFeed // TRIM(MyLogFile%cLastMessage)
-    cMessageLocal = TRIM(cMessageLocal) // f_cLineFeed // '*   (' // TRIM(MyLogFile%cLastMessageProcedure) // ')' // f_cLineFeed // '*******************************************************************************'
-    
+    cMessageLocal = TRIM(cMessageLocal) // f_cLineFeed // TRIM(this%cLastMessage)
+    cMessageLocal = TRIM(cMessageLocal) // f_cLineFeed // '*   (' // TRIM(this%cLastMessageProcedure) // ')' &
+                    // f_cLineFeed // '*******************************************************************************'
+
     !Log the message
-    CALL LogMessage(TRIM(cMessageLocal),f_iMessage,'',Destination=iDestination_Local,Advance=cAdvance_Local)
-    
-  END SUBROUTINE LogLastMessage
-  
-  
+    CALL this%LogMessage(TRIM(cMessageLocal),f_iMessage,'',Destination=iDestination_Local,Advance=cAdvance_Local)
+
+  END SUBROUTINE Logger_LogLastMessage
+
+
   ! -------------------------------------------------------------
   ! --- PRINT RUN TIME BEFORE STOPPING PROGRAM
   ! -------------------------------------------------------------
-  SUBROUTINE PrintRunTime(iDestination)
-    INTEGER,OPTIONAL,INTENT(IN) :: iDestination
+  SUBROUTINE Logger_PrintRunTime(this,iDestination)
+    CLASS(MessageLoggerType),INTENT(INOUT) :: this
+    INTEGER,OPTIONAL,INTENT(IN)            :: iDestination
 
     !Local variables
-    INTEGER          :: Hour, Minute
+    CHARACTER(LEN=200) :: cRunTimeString
+    CHARACTER(LEN=20)  :: cInfoCount,cWarnCount
+
+    !Local timer variables
+    INTEGER          :: Hour,Minute
     REAL(8)          :: Second
     CHARACTER(LEN=5) :: CHour,CMinute
 
-    !Get the program run-time
-    IF (.NOT. TimerStopped) CALL StopTimer()
+    !Get the program run-time via backward-compatible wrappers
+    IF (.NOT. TimerStopped()) CALL StopTimer()
     CALL GetRunTime(Hour,Minute,Second)
     WRITE (CHour,'(I5)') Hour
     WRITE (CMinute,'(I5)') Minute
     CHour   = ADJUSTL(CHour)
     CMinute = ADJUSTL(CMinute)
 
+    cRunTimeString = 'TOTAL RUN TIME: '
+    IF (Hour .GT. 0) THEN
+        cRunTimeString = TRIM(cRunTimeString)//' '// &
+                         TRIM(CHour)//' HOURS '    // &
+                         TRIM(CMinute)//' MINUTES '
+    ELSE IF (Minute .GT. 0) THEN
+        cRunTimeString = TRIM(cRunTimeString)//' '//TRIM(CMinute)//' MINUTES '
+    END IF
+    WRITE (cRunTimeString,'(A,1X,F6.3,A)') TRIM(cRunTimeString),Second,' SECONDS'
+
     !Prepare the final message
     MessageArray(1) = NEW_LINE('a') // REPEAT('*',50)
-    MessageArray(2) = 'TOTAL RUN TIME: '
-    IF (Hour.GT.0) THEN
-        MessageArray(2) = TRIM(MessageArray(2))//' '// &
-                          TRIM(CHour)//' HOURS '    // &
-                          TRIM(CMinute)//' MINUTES '
-    ELSE IF (Minute.GT.0) THEN
-        MessageArray(2) = TRIM(MessageArray(2))//' '//TRIM(CMinute)//' MINUTES '
-    END IF
-    WRITE (MessageArray(2),'(A,1X,F6.3,A)') TRIM(MessageArray(2)),Second,' SECONDS'
-    IF (MyLogFile%lWarningsGenerated) THEN
-        MessageArray(3) = 'WARNINGS/INFORMATIONAL MESSAGES ARE GENERATED!'//f_cLineFeed
-        IF (MyLogFile%iUnitN .NE. f_iLogFile_NOT_Defined)  &
-            MessageArray(3) = TRIM(MessageArray(3)) // 'FOR DETAILS CHECK FILE ''' // TRIM(MyLogFile%cName) // '''.' // f_cLineFeed
-        MessageArray(3) = TRIM(MessageArray(3)) // REPEAT('*',50)
-    ELSE                               
-        MessageArray(3) = REPEAT('*',50)
-    END IF
-
-    !Print the final message
-    IF (PRESENT(iDestination)) THEN
-        CALL LogMessage(MessageArray(1:3),f_iMessage,'',iDestination=iDestination)
+    MessageArray(2) = TRIM(cRunTimeString)
+    IF (this%iInfoCount .GT. 0 .OR. this%iWarnCount .GT. 0) THEN
+        WRITE (cInfoCount,'(I20)') this%iInfoCount
+        WRITE (cWarnCount,'(I20)') this%iWarnCount
+        MessageArray(3) = 'WARNINGS: '//TRIM(ADJUSTL(cWarnCount))//'  INFORMATIONAL: '//TRIM(ADJUSTL(cInfoCount))
+        IF (ALLOCATED(this%cName)) THEN
+            MessageArray(4) = 'FOR DETAILS CHECK FILE '''//TRIM(this%cName)//'''.'//f_cLineFeed//REPEAT('*',50)
+        ELSE
+            MessageArray(4) = REPEAT('*',50)
+        END IF
+        IF (PRESENT(iDestination)) THEN
+            CALL this%LogMessage(MessageArray(1:4),f_iMessage,'',iDestination=iDestination)
+        ELSE
+            CALL this%LogMessage(MessageArray(1:4),f_iMessage,'')
+        END IF
     ELSE
-        CALL LogMessage(MessageArray(1:3),f_iMessage,'')
+        MessageArray(3) = REPEAT('*',50)
+        IF (PRESENT(iDestination)) THEN
+            CALL this%LogMessage(MessageArray(1:3),f_iMessage,'',iDestination=iDestination)
+        ELSE
+            CALL this%LogMessage(MessageArray(1:3),f_iMessage,'')
+        END IF
     END IF
 
-  END SUBROUTINE PrintRunTime
+  END SUBROUTINE Logger_PrintRunTime
 
 
   ! -------------------------------------------------------------
   ! --- ECHO PROGRESS OF THE PROGRAM ONTO SCREEN
   ! -------------------------------------------------------------
-  SUBROUTINE EchoProgress(cText,lAdvance)
-    CHARACTER(LEN=*),INTENT(IN) :: cText
-    LOGICAL,OPTIONAL,INTENT(IN) :: lAdvance
-    
+  SUBROUTINE Logger_EchoProgress(this,cText,lAdvance)
+    CLASS(MessageLoggerType),INTENT(INOUT) :: this
+    CHARACTER(LEN=*),INTENT(IN)            :: cText
+    LOGICAL,OPTIONAL,INTENT(IN)            :: lAdvance
+
     !Local variables
     CHARACTER :: cAdvance*3
-    
-    !Initailize
+
+    !Initialize
     IF (PRESENT(lAdvance)) THEN
         IF (lAdvance) THEN
             cAdvance = 'YES'
@@ -818,9 +891,250 @@ CONTAINS
         cAdvance = 'YES'
     END IF
 
-    IF (MyLogFile%iFlagEchoProgress .EQ. f_iYesEchoProgress) CALL LogMessage(cText,f_iMessage,'',Advance=cAdvance)
-        
+    IF (this%iFlagEchoProgress .EQ. f_iYesEchoProgress) &
+        CALL this%LogMessage(cText,f_iMessage,'',Advance=cAdvance)
+
+  END SUBROUTINE Logger_EchoProgress
+
+
+
+! *************************************************************
+! *************************************************************
+! *************************************************************
+! ***** BACKWARD-COMPATIBLE WRAPPER PROCEDURES
+! *************************************************************
+! *************************************************************
+! *************************************************************
+
+  ! -------------------------------------------------------------
+  ! --- SET LOG FILE NAME (wrapper)
+  ! -------------------------------------------------------------
+  SUBROUTINE SetLogFileName(cFileName,iStat)
+    CHARACTER(LEN=*),INTENT(IN) :: cFileName
+    INTEGER,INTENT(OUT)         :: iStat
+
+    CALL DefaultLogger%SetLogFileName(cFileName,iStat)
+
+  END SUBROUTINE SetLogFileName
+
+
+  ! -------------------------------------------------------------
+  ! --- SET FLAG TO ECHO PROGRAM PROGRESS (wrapper)
+  ! -------------------------------------------------------------
+  SUBROUTINE SetFlagToEchoProgress(iFlag,iStat)
+    INTEGER,INTENT(IN)  :: iFlag
+    INTEGER,INTENT(OUT) :: iStat
+
+    CALL DefaultLogger%SetEchoProgress(iFlag,iStat)
+
+  END SUBROUTINE SetFlagToEchoProgress
+
+
+  ! -------------------------------------------------------------
+  ! --- SET DEFAULT MESSAGE DESTINATION (wrapper)
+  ! -------------------------------------------------------------
+  SUBROUTINE SetDefaultMessageDestination(iDestination,iStat)
+    INTEGER,INTENT(IN)  :: iDestination
+    INTEGER,INTENT(OUT) :: iStat
+
+    CALL DefaultLogger%SetMessageDest(iDestination,iStat)
+
+  END SUBROUTINE SetDefaultMessageDestination
+
+
+  ! -------------------------------------------------------------
+  ! --- SET LAST MESSAGE - ARRAY (wrapper)
+  ! -------------------------------------------------------------
+  SUBROUTINE SetLastMessage_Array(cMessageArray,iErrorLevel,cProgName)
+    CHARACTER(LEN=*),INTENT(IN) :: cMessageArray(:),cProgName
+    INTEGER,INTENT(IN)          :: iErrorLevel
+
+    CALL DefaultLogger%SetLastMessage(cMessageArray,iErrorLevel,cProgName)
+
+  END SUBROUTINE SetLastMessage_Array
+
+
+  ! -------------------------------------------------------------
+  ! --- SET LAST MESSAGE - SINGLE (wrapper)
+  ! -------------------------------------------------------------
+  SUBROUTINE SetLastMessage_Single(cMessage,iErrorLevel,cProgName)
+    CHARACTER(LEN=*),INTENT(IN) :: cMessage,cProgName
+    INTEGER,INTENT(IN)          :: iErrorLevel
+
+    CALL DefaultLogger%SetLastMessage(cMessage,iErrorLevel,cProgName)
+
+  END SUBROUTINE SetLastMessage_Single
+
+
+  ! -------------------------------------------------------------
+  ! --- GET LAST MESSAGE (wrapper)
+  ! -------------------------------------------------------------
+  SUBROUTINE GetLastMessage(cMessage)
+    CHARACTER(LEN=*),INTENT(OUT) :: cMessage
+
+    CALL DefaultLogger%GetLastMessage(cMessage)
+
+  END SUBROUTINE GetLastMessage
+
+
+  ! -------------------------------------------------------------
+  ! --- GET LOG FILE UNIT (wrapper)
+  ! -------------------------------------------------------------
+  SUBROUTINE GetLogFileUnit(iLogFileUnit,iStat,cFileName)
+    INTEGER,INTENT(OUT)                  :: iLogFileUnit,iStat
+    CHARACTER(LEN=*),OPTIONAL,INTENT(IN) :: cFileName
+
+    IF (PRESENT(cFileName)) THEN
+        CALL DefaultLogger%GetLogFileUnit(iLogFileUnit,iStat,cFileName)
+    ELSE
+        CALL DefaultLogger%GetLogFileUnit(iLogFileUnit,iStat)
+    END IF
+
+  END SUBROUTINE GetLogFileUnit
+
+
+  ! -------------------------------------------------------------
+  ! --- KILL LOG FILE (wrapper)
+  ! -------------------------------------------------------------
+  SUBROUTINE KillLogFile()
+
+    CALL DefaultLogger%Kill()
+
+  END SUBROUTINE KillLogFile
+
+
+  ! -------------------------------------------------------------
+  ! --- LOG SINGLE MESSAGE (wrapper)
+  ! -------------------------------------------------------------
+  SUBROUTINE LogSingleMessage(Message,ErrorLevel,ProgName,Destination,Fmt,Advance)
+    CHARACTER(LEN=*),INTENT(IN)          :: Message
+    CHARACTER(LEN=*),INTENT(IN)          :: ProgName
+    INTEGER,INTENT(IN)                   :: ErrorLevel
+    INTEGER,OPTIONAL,INTENT(IN)          :: Destination
+    CHARACTER(LEN=*),OPTIONAL,INTENT(IN) :: Fmt,Advance
+
+    IF (PRESENT(Destination) .AND. PRESENT(Fmt) .AND. PRESENT(Advance)) THEN
+        CALL DefaultLogger%LogMessage(Message,ErrorLevel,ProgName,Destination,Fmt,Advance)
+    ELSE IF (PRESENT(Destination) .AND. PRESENT(Fmt)) THEN
+        CALL DefaultLogger%LogMessage(Message,ErrorLevel,ProgName,Destination,Fmt)
+    ELSE IF (PRESENT(Destination) .AND. PRESENT(Advance)) THEN
+        CALL DefaultLogger%LogMessage(Message,ErrorLevel,ProgName,Destination,Advance=Advance)
+    ELSE IF (PRESENT(Fmt) .AND. PRESENT(Advance)) THEN
+        CALL DefaultLogger%LogMessage(Message,ErrorLevel,ProgName,Fmt=Fmt,Advance=Advance)
+    ELSE IF (PRESENT(Destination)) THEN
+        CALL DefaultLogger%LogMessage(Message,ErrorLevel,ProgName,Destination)
+    ELSE IF (PRESENT(Fmt)) THEN
+        CALL DefaultLogger%LogMessage(Message,ErrorLevel,ProgName,Fmt=Fmt)
+    ELSE IF (PRESENT(Advance)) THEN
+        CALL DefaultLogger%LogMessage(Message,ErrorLevel,ProgName,Advance=Advance)
+    ELSE
+        CALL DefaultLogger%LogMessage(Message,ErrorLevel,ProgName)
+    END IF
+
+  END SUBROUTINE LogSingleMessage
+
+
+  ! -------------------------------------------------------------
+  ! --- LOG MESSAGE ARRAY (wrapper)
+  ! -------------------------------------------------------------
+  SUBROUTINE LogMessageArray(cMessageArray,iErrorLevel,cProgName,iDestination,cFmt,cAdvance)
+    CHARACTER(LEN=*),INTENT(IN)          :: cMessageArray(:),cProgName
+    INTEGER,INTENT(IN)                   :: iErrorLevel
+    INTEGER,OPTIONAL,INTENT(IN)          :: iDestination
+    CHARACTER(LEN=*),OPTIONAL,INTENT(IN) :: cFmt,cAdvance
+
+    IF (PRESENT(iDestination) .AND. PRESENT(cFmt) .AND. PRESENT(cAdvance)) THEN
+        CALL DefaultLogger%LogMessage(cMessageArray,iErrorLevel,cProgName,iDestination,cFmt,cAdvance)
+    ELSE IF (PRESENT(iDestination) .AND. PRESENT(cFmt)) THEN
+        CALL DefaultLogger%LogMessage(cMessageArray,iErrorLevel,cProgName,iDestination,cFmt)
+    ELSE IF (PRESENT(iDestination) .AND. PRESENT(cAdvance)) THEN
+        CALL DefaultLogger%LogMessage(cMessageArray,iErrorLevel,cProgName,iDestination,cAdvance=cAdvance)
+    ELSE IF (PRESENT(cFmt) .AND. PRESENT(cAdvance)) THEN
+        CALL DefaultLogger%LogMessage(cMessageArray,iErrorLevel,cProgName,cFmt=cFmt,cAdvance=cAdvance)
+    ELSE IF (PRESENT(iDestination)) THEN
+        CALL DefaultLogger%LogMessage(cMessageArray,iErrorLevel,cProgName,iDestination)
+    ELSE IF (PRESENT(cFmt)) THEN
+        CALL DefaultLogger%LogMessage(cMessageArray,iErrorLevel,cProgName,cFmt=cFmt)
+    ELSE IF (PRESENT(cAdvance)) THEN
+        CALL DefaultLogger%LogMessage(cMessageArray,iErrorLevel,cProgName,cAdvance=cAdvance)
+    ELSE
+        CALL DefaultLogger%LogMessage(cMessageArray,iErrorLevel,cProgName)
+    END IF
+
+  END SUBROUTINE LogMessageArray
+
+
+  ! -------------------------------------------------------------
+  ! --- LOG LAST MESSAGE (wrapper)
+  ! -------------------------------------------------------------
+  SUBROUTINE LogLastMessage(iDestination,cAdvance)
+    INTEGER,OPTIONAL,INTENT(IN)          :: iDestination
+    CHARACTER(LEN=*),OPTIONAL,INTENT(IN) :: cAdvance
+
+    IF (PRESENT(iDestination) .AND. PRESENT(cAdvance)) THEN
+        CALL DefaultLogger%LogLastMessage(iDestination,cAdvance)
+    ELSE IF (PRESENT(iDestination)) THEN
+        CALL DefaultLogger%LogLastMessage(iDestination)
+    ELSE IF (PRESENT(cAdvance)) THEN
+        CALL DefaultLogger%LogLastMessage(cAdvance=cAdvance)
+    ELSE
+        CALL DefaultLogger%LogLastMessage()
+    END IF
+
+  END SUBROUTINE LogLastMessage
+
+
+  ! -------------------------------------------------------------
+  ! --- CHECK IF LOG FILE IS DEFINED (wrapper)
+  ! -------------------------------------------------------------
+  FUNCTION IsLogFileDefined() RESULT(lIsDefined)
+    LOGICAL :: lIsDefined
+
+    lIsDefined = DefaultLogger%IsLogFileDefined()
+
+  END FUNCTION IsLogFileDefined
+
+
+  ! -------------------------------------------------------------
+  ! --- PRINT RUN TIME (wrapper)
+  ! -------------------------------------------------------------
+  SUBROUTINE PrintRunTime(iDestination)
+    INTEGER,OPTIONAL,INTENT(IN) :: iDestination
+
+    IF (PRESENT(iDestination)) THEN
+        CALL DefaultLogger%PrintRunTime(iDestination)
+    ELSE
+        CALL DefaultLogger%PrintRunTime()
+    END IF
+
+  END SUBROUTINE PrintRunTime
+
+
+  ! -------------------------------------------------------------
+  ! --- ECHO PROGRESS (wrapper)
+  ! -------------------------------------------------------------
+  SUBROUTINE EchoProgress(cText,lAdvance)
+    CHARACTER(LEN=*),INTENT(IN) :: cText
+    LOGICAL,OPTIONAL,INTENT(IN) :: lAdvance
+
+    IF (PRESENT(lAdvance)) THEN
+        CALL DefaultLogger%EchoProgress(cText,lAdvance)
+    ELSE
+        CALL DefaultLogger%EchoProgress(cText)
+    END IF
+
   END SUBROUTINE EchoProgress
-  
-  
-END MODULE
+
+
+  ! -------------------------------------------------------------
+  ! --- GET MESSAGE COUNTS (wrapper)
+  ! -------------------------------------------------------------
+  SUBROUTINE GetMessageCounts(iInfoCount,iWarnCount,iFatalCount)
+    INTEGER,INTENT(OUT) :: iInfoCount,iWarnCount,iFatalCount
+
+    CALL DefaultLogger%GetMessageCounts(iInfoCount,iWarnCount,iFatalCount)
+
+  END SUBROUTINE GetMessageCounts
+
+
+END MODULE MessageLogger

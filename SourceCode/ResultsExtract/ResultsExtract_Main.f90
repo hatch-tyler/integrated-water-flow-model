@@ -19,41 +19,37 @@
 !***********************************************************************
 PROGRAM ResultsExtract_Main
 
-  USE ProgramTimer  , ONLY: StartTimer  , &
-                             StopTimer
-  USE MessageLogger , ONLY: PrintRunTime , &
-                             SetLogFileName, &
-                             KillLogFile   , &
-                             LogLastMessage, &
-                             LogMessage    , &
-                             f_iInfo
+  USE ProgramTimer  , ONLY: ProgramTimerType
+  USE MessageLogger , ONLY: MessageLoggerType, f_iInfo
   USE Class_ResultsExtract, ONLY: ResultsExtractType
 
   IMPLICIT NONE
 
   TYPE(ResultsExtractType) :: App
-  CHARACTER(LEN=500) :: cInputFile
-  INTEGER            :: iStat, iNArgs
+  TYPE(ProgramTimerType)   :: Timer
+  TYPE(MessageLoggerType)  :: Logger
+  CHARACTER(LEN=500)       :: cInputFile
+  INTEGER                  :: iStat, iNArgs
 
   ! Start timer
-  CALL StartTimer()
+  CALL Timer%Start()
 
   DO  ! Single-pass block for structured error exit
 
     ! Open log file
-    CALL SetLogFileName('ResultsExtract_Messages.out', iStat)
+    CALL Logger%SetLogFileName('ResultsExtract_Messages.out', iStat)
     IF (iStat == -1) THEN
-      CALL LogLastMessage()
+      CALL Logger%LogLastMessage()
       EXIT
     END IF
 
     ! Banner
-    CALL LogMessage(' ', f_iInfo, 'ResultsExtract')
-    CALL LogMessage('Program ResultsExtract - Generalized Hydrograph Extractor', &
+    CALL Logger%LogMessage(' ', f_iInfo, 'ResultsExtract')
+    CALL Logger%LogMessage('Program ResultsExtract - Generalized Hydrograph Extractor', &
                     f_iInfo, 'ResultsExtract')
-    CALL LogMessage('Extracts hydrographs from all-node output files (HEAD/SUBSIDENCE)', &
+    CALL Logger%LogMessage('Extracts hydrographs from all-node output files (HEAD/SUBSIDENCE)', &
                     f_iInfo, 'ResultsExtract')
-    CALL LogMessage(' ', f_iInfo, 'ResultsExtract')
+    CALL Logger%LogMessage(' ', f_iInfo, 'ResultsExtract')
 
     ! Get input file from command line or prompt
     iNArgs = COMMAND_ARGUMENT_COUNT()
@@ -73,27 +69,27 @@ PROGRAM ResultsExtract_Main
     ! Initialize
     CALL App%New(cInputFile, iStat)
     IF (iStat == -1) THEN
-      CALL LogLastMessage()
+      CALL Logger%LogLastMessage()
       EXIT
     END IF
 
     ! Run extraction
     CALL App%Run(iStat)
     IF (iStat == -1) THEN
-      CALL LogLastMessage()
+      CALL Logger%LogLastMessage()
     END IF
 
     ! Clean up
     CALL App%Kill()
 
-    CALL LogMessage(' ', f_iInfo, 'ResultsExtract')
-    CALL LogMessage('NORMAL TERMINATION - ResultsExtract', f_iInfo, 'ResultsExtract')
+    CALL Logger%LogMessage(' ', f_iInfo, 'ResultsExtract')
+    CALL Logger%LogMessage('NORMAL TERMINATION - ResultsExtract', f_iInfo, 'ResultsExtract')
 
     EXIT  ! Normal exit from single-pass block
   END DO
 
-  CALL StopTimer()
-  CALL PrintRunTime()
-  CALL KillLogFile()
+  CALL Timer%Stop()
+  CALL Logger%PrintRunTime()
+  CALL Logger%Kill()
 
 END PROGRAM ResultsExtract_Main

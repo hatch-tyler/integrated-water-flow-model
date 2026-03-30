@@ -21,7 +21,9 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov                         
 !***********************************************************************              
 MODULE Package_Model                                                                  
-  USE MessageLogger               , ONLY: LogMessage                                  , &
+  USE ProgramTimer                , ONLY: ProgramTimerType
+  USE MessageLogger               , ONLY: MessageLoggerType                              , &
+                                          LogMessage                                  , &
                                           EchoProgress                                , &
                                           SetFlagToEchoProgress                       , &
                                           SetDefaultMessageDestination                , &
@@ -249,6 +251,8 @@ MODULE Package_Model
   ! --- MODEL DATA TYPE
   ! -------------------------------------------------------------
   TYPE ModelType
+      TYPE(ProgramTimerType)               :: Timer
+      TYPE(MessageLoggerType)              :: Logger
       INTEGER                              :: iRestartOption                 = iNoRestart
       LOGICAL                              :: lIsForInquiry                  = .FALSE.
       LOGICAL                              :: lAppUnsatZone_Defined          = .FALSE.

@@ -57,23 +57,33 @@ MODULE IWFM_Model_Exports
                                           f_iLocationType_SmallWatershed  
   USE Package_AppSmallWatershed   , ONLY: f_iSWShedBudComp_RZ                      , &
                                           f_iSWShedBudComp_GW 
-  USE Package_Model               , ONLY: ModelType 
+  USE Package_Model               , ONLY: ModelType
   IMPLICIT NONE
-  
+
 
   ! -------------------------------------------------------------
   ! --- PUBLIC VARIABLES
   ! -------------------------------------------------------------
   PUBLIC
-  
-  
+
+
   ! -------------------------------------------------------------
   ! --- VARIABLES
+  ! --- Models are heap-allocated via POINTER slots instead of
+  ! --- stored as values in a fixed SAVE array. This eliminates
+  ! --- pre-allocated memory for unused slots and ensures clean
+  ! --- deallocation on Kill.
   ! -------------------------------------------------------------
-  TYPE(ModelType),TARGET,PRIVATE,SAVE  :: Models(10)
-  INTEGER,PRIVATE,SAVE                 :: iNActiveModels     = 0
-  INTEGER,ALLOCATABLE,SAVE             :: iActiveModelIndices(:)
-  INTEGER,PRIVATE,SAVE                 :: iCurrentModelIndex = 0
+  INTEGER,PRIVATE,PARAMETER :: MAX_MODEL_SLOTS = 64
+
+  TYPE,PRIVATE :: ModelSlotType
+      TYPE(ModelType),POINTER :: ptr => NULL()
+  END TYPE ModelSlotType
+
+  TYPE(ModelSlotType),PRIVATE,SAVE   :: ModelSlots(MAX_MODEL_SLOTS)
+  INTEGER,PRIVATE,SAVE               :: iNActiveModels     = 0
+  INTEGER,ALLOCATABLE,SAVE           :: iActiveModelIndices(:)
+  INTEGER,PRIVATE,SAVE               :: iCurrentModelIndex = 0
   TYPE(ModelType),POINTER,PRIVATE,SAVE :: pModel => NULL()            
   
   
@@ -108,23 +118,22 @@ CONTAINS
     INTEGER(C_INT),INTENT(IN)         :: LenPPFileName,LenSimFileName,LenWSAFileName,IsRoutedStreams,IsForInquiry
     CHARACTER(KIND=C_CHAR),INTENT(IN) :: cPPFileName(LenPPFileName),cSimFileName(LenSimFileName),cWSAFileName(LenWSAFileName)
     INTEGER(C_INT),INTENT(OUT)        :: iModelIndex,iStat
-    
+
     !Local variables
     INTEGER             :: indx
     CHARACTER           :: cPPFileName_F*LenPPFileName,cSimFileName_F*LenSimFileName,cWSAFileName_F*LenWSAFileName
     LOGICAL             :: lRoutedStreams,lForInquiry
-    TYPE(ModelType)     :: Model
     INTEGER,ALLOCATABLE :: iTempList(:)
-    
+
     !Set environment for parallel processing
-    !$ CALL KMP_SET_BLOCKTIME(0)                                  !Let threads sleep right away 
-    !$ CALL OMP_SET_NUM_THREADS(MIN(OMP_GET_NUM_PROCS()-1 , 16))  !Set number of threads to minimum of 16 or number of available processors 
+    !$ CALL KMP_SET_BLOCKTIME(0)                                  !Let threads sleep right away
+    !$ CALL OMP_SET_NUM_THREADS(MIN(OMP_GET_NUM_PROCS()-1 , 16))  !Set number of threads to minimum of 16 or number of available processors
     !$ CALL OMP_SET_MAX_ACTIVE_LEVELS(2)                          !Maximum 2 levels of nested paralellization
     !$ CALL KMP_SET_STACKSIZE_S(16777216)                         !Set thread stack size to 16MB
-    
+
     !Initialize
     iStat = 0
-    
+
     !Logical variables
     IF (IsRoutedStreams .EQ. 0) THEN
         lRoutedStreams = .FALSE.
@@ -136,45 +145,57 @@ CONTAINS
     ELSE
         lForInquiry = .TRUE.
     END IF
-    
+
     !C strings to Fortran strings
     CALL String_Copy_C_F(cPPFileName,cPPFileName_F)
     CALL String_Copy_C_F(cSimFileName,cSimFileName_F)
     CALL String_Copy_C_F(cWSAFileName,cWSAFileName_F)
-    
-    !Read main control data for pre-processor and simulation (if filename is specified) and 
-    !  instantiate model components
-    !  Return if any errors
-    IF (LEN(cSimFileName_F).EQ.0  .AND. LEN(cWSAFileName_F).EQ.0) THEN
-        CALL Model%New(cPPFileName_F,lRoutedStreams=lRoutedStreams,lPrintBinFile=.FALSE.,iStat=iStat)
-    ELSE
-        CALL Model%New('IWFM',cPPFileName_F,cSimFileName_F,cWSAFileName_F,lRoutedStreams,lForInquiry,iStat=iStat)
-    END IF
-    IF (iStat .NE. 0) RETURN
-    
-    !Find an index for the model with the Models array
-    DO indx=1,SIZE(Models)
+
+    !Find an available slot
+    iCurrentModelIndex = 0
+    DO indx=1,MAX_MODEL_SLOTS
         IF (LocateInList(indx,iActiveModelIndices) .EQ. 0) THEN
             iCurrentModelIndex = indx
             EXIT
         END IF
     END DO
-        
-    !Store new model
-    Models(iCurrentModelIndex) =  Model
-    pModel                     => Models(iCurrentModelIndex)
+    IF (iCurrentModelIndex .EQ. 0) THEN
+        CALL SetLastMessage('Maximum number of concurrent models reached!',f_iWarn,cModName)
+        iStat = -1
+        RETURN
+    END IF
+
+    !Heap-allocate a new model instance
+    ALLOCATE(ModelSlots(iCurrentModelIndex)%ptr)
+
+    !Read main control data for pre-processor and simulation (if filename is specified) and
+    !  instantiate model components
+    !  Return if any errors
+    IF (LEN(cSimFileName_F).EQ.0  .AND. LEN(cWSAFileName_F).EQ.0) THEN
+        CALL ModelSlots(iCurrentModelIndex)%ptr%New(cPPFileName_F,lRoutedStreams=lRoutedStreams,lPrintBinFile=.FALSE.,iStat=iStat)
+    ELSE
+        CALL ModelSlots(iCurrentModelIndex)%ptr%New('IWFM',cPPFileName_F,cSimFileName_F,cWSAFileName_F,lRoutedStreams,lForInquiry,iStat=iStat)
+    END IF
+    IF (iStat .NE. 0) THEN
+        DEALLOCATE(ModelSlots(iCurrentModelIndex)%ptr)
+        iCurrentModelIndex = 0
+        RETURN
+    END IF
+
+    !Set active model pointer
+    pModel => ModelSlots(iCurrentModelIndex)%ptr
 
     !New model index
     iModelIndex = iCurrentModelIndex
-    
-    !Update list of active model indicies
+
+    !Update list of active model indices
     ALLOCATE (iTempList(iNActiveModels+1))
     iTempList(1:iNActiveModels) = iActiveModelIndices
     iTempList(iNActiveModels+1) = iCurrentModelIndex
     CALL MOVE_ALLOC(iTempList , iActiveModelIndices)
     CALL ShellSort(iActiveModelIndices)
     iNActiveModels = iNActiveModels + 1
-    
+
   END SUBROUTINE IW_Model_WSA_New
 
   
@@ -186,23 +207,22 @@ CONTAINS
     INTEGER(C_INT),INTENT(IN)         :: LenPPFileName,LenSimFileName,IsRoutedStreams,IsForInquiry
     CHARACTER(KIND=C_CHAR),INTENT(IN) :: cPPFileName(LenPPFileName),cSimFileName(LenSimFileName)
     INTEGER(C_INT),INTENT(OUT)        :: iModelID,iStat
-    
+
     !Local variables
     INTEGER             :: indx
     CHARACTER           :: cPPFileName_F*LenPPFileName,cSimFileName_F*LenSimFileName
     LOGICAL             :: lRoutedStreams,lForInquiry
-    TYPE(ModelType)     :: Model
     INTEGER,ALLOCATABLE :: iTempList(:)
-    
+
     !Set environment for parallel processing
-    !$ CALL KMP_SET_BLOCKTIME(0)                                  !Let threads sleep right away 
-    !$ CALL OMP_SET_NUM_THREADS(MIN(OMP_GET_NUM_PROCS()-1 , 16))  !Set number of threads to minimum of 16 or number of available processors 
+    !$ CALL KMP_SET_BLOCKTIME(0)                                  !Let threads sleep right away
+    !$ CALL OMP_SET_NUM_THREADS(MIN(OMP_GET_NUM_PROCS()-1 , 16))  !Set number of threads to minimum of 16 or number of available processors
     !$ CALL OMP_SET_MAX_ACTIVE_LEVELS(2)                          !Maximum 2 levels of nested paralellization
     !$ CALL KMP_SET_STACKSIZE_S(16777216)                         !Set thread stack size to 16MB
-    
+
     !Initialize
     iStat = 0
-    
+
     !Logical variables
     IF (IsRoutedStreams .EQ. 0) THEN
         lRoutedStreams = .FALSE.
@@ -214,44 +234,56 @@ CONTAINS
     ELSE
         lForInquiry = .TRUE.
     END IF
-    
+
     !C strings to Fortran strings
     CALL String_Copy_C_F(cPPFileName,cPPFileName_F)
     CALL String_Copy_C_F(cSimFileName,cSimFileName_F)
-        
-    !Read main control data for pre-processor and simulation (if filename is specified) and 
-    !  instantiate model components
-    !  Return if any errors
-    IF (LEN(cSimFileName_F) .EQ. 0) THEN
-        CALL Model%New(cPPFileName_F,lRoutedStreams=lRoutedStreams,lPrintBinFile=.FALSE.,iStat=iStat)
-    ELSE
-        CALL Model%New('IWFM',cPPFileName_F,cSimFileName_F,'',lRoutedStreams,lForInquiry,iStat=iStat)
-    END IF
-    IF (iStat .NE. 0) RETURN
-    
-    !Find an index for the model with the Models array
-    DO indx=1,SIZE(Models)
+
+    !Find an available slot
+    iCurrentModelIndex = 0
+    DO indx=1,MAX_MODEL_SLOTS
         IF (LocateInList(indx,iActiveModelIndices) .EQ. 0) THEN
             iCurrentModelIndex = indx
             EXIT
         END IF
     END DO
-        
-    !Store new model
-    Models(iCurrentModelIndex) =  Model
-    pModel                     => Models(iCurrentModelIndex)
+    IF (iCurrentModelIndex .EQ. 0) THEN
+        CALL SetLastMessage('Maximum number of concurrent models reached!',f_iWarn,cModName)
+        iStat = -1
+        RETURN
+    END IF
+
+    !Heap-allocate a new model instance
+    ALLOCATE(ModelSlots(iCurrentModelIndex)%ptr)
+
+    !Read main control data for pre-processor and simulation (if filename is specified) and
+    !  instantiate model components
+    !  Return if any errors
+    IF (LEN(cSimFileName_F) .EQ. 0) THEN
+        CALL ModelSlots(iCurrentModelIndex)%ptr%New(cPPFileName_F,lRoutedStreams=lRoutedStreams,lPrintBinFile=.FALSE.,iStat=iStat)
+    ELSE
+        CALL ModelSlots(iCurrentModelIndex)%ptr%New('IWFM',cPPFileName_F,cSimFileName_F,'',lRoutedStreams,lForInquiry,iStat=iStat)
+    END IF
+    IF (iStat .NE. 0) THEN
+        DEALLOCATE(ModelSlots(iCurrentModelIndex)%ptr)
+        iCurrentModelIndex = 0
+        RETURN
+    END IF
+
+    !Set active model pointer
+    pModel => ModelSlots(iCurrentModelIndex)%ptr
 
     !New model index
     iModelID = iCurrentModelIndex
-    
-    !Update list of active model indicies
+
+    !Update list of active model indices
     ALLOCATE (iTempList(iNActiveModels+1))
     iTempList(1:iNActiveModels) = iActiveModelIndices
     iTempList(iNActiveModels+1) = iCurrentModelIndex
     CALL MOVE_ALLOC(iTempList , iActiveModelIndices)
     CALL ShellSort(iActiveModelIndices)
     iNActiveModels = iNActiveModels + 1
-       
+
   END SUBROUTINE IW_Model_New
   
   
@@ -273,22 +305,23 @@ CONTAINS
   SUBROUTINE IW_Model_Kill(iStat) BIND(C,NAME='IW_Model_Kill')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_Kill
     INTEGER(C_INT),INTENT(OUT) :: iStat
-    
+
     !Local variables
     INTEGER             :: indx,iCount
     INTEGER,ALLOCATABLE :: iTempList(:)
-    
+
     !Initialize
     iStat = 0
-    
-    !Return if there are no models instantaited
+
+    !Return if there are no models instantiated
     IF (iNActiveModels .EQ. 0) RETURN
-    
-    !Kill model
-    CALL Models(iCurrentModelIndex)%Kill()
-    
+
+    !Kill model and deallocate heap memory
+    CALL ModelSlots(iCurrentModelIndex)%ptr%Kill()
+    DEALLOCATE(ModelSlots(iCurrentModelIndex)%ptr)
+
     !Update the number and list of active models
-    ALLOCATE(iTempList(iNActiveModels-1)) 
+    ALLOCATE(iTempList(iNActiveModels-1))
     iCount = 0
     DO indx=1,iNActiveModels
         IF (iActiveModelIndices(indx) .EQ. iCurrentModelIndex) CYCLE
@@ -296,12 +329,12 @@ CONTAINS
         iTempList(iCount) = iActiveModelIndices(indx)
     END DO
     CALL MOVE_ALLOC(iTempList , iActiveModelIndices)
-    
+
     !Update the current model index and pointer
     iCurrentModelIndex =  0
     pModel             => NULL()
     iNActiveModels     = iNActiveModels - 1
-    
+
   END SUBROUTINE IW_Model_Kill
   
 
@@ -4851,8 +4884,8 @@ CONTAINS
     
     iStat              = 0
     iCurrentModelIndex = indx
-    pModel             => Models(iCurrentModelIndex)
-    
+    pModel             => ModelSlots(iCurrentModelIndex)%ptr
+
   END SUBROUTINE IW_Model_Switch
   
   

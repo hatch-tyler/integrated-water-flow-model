@@ -1,7 +1,7 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2025  
-!  State of California, Department of Water Resources 
+!  Copyright (C) 2005-2025
+!  State of California, Department of Water Resources
 !
 !  This program is free software; you can redistribute it and/or
 !  modify it under the terms of the GNU General Public License
@@ -18,43 +18,37 @@
 !  along with this program; if not, write to the Free Software
 !  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 !
-!  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
+!  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov
 !***********************************************************************
 PROGRAM IWFM_F1
   !$ USE OMP_LIB
-  USE ProgramTimer      , ONLY: StartTimer       , &
-                                StopTimer
-  USE MessageLogger     , ONLY: PrintRunTime     , &
-                                SetLogFileName   , &
-                                KillLogFile      , &
-                                LogLastMessage
   USE Package_Misc      , ONLY: Print_Screen     , &
-                                Get_Main_File 
+                                Get_Main_File
   USE Package_Model     , ONLY: ModelType
-  USE IWFM_Version      , ONLY: IWFMVersion                                   
+  USE IWFM_Version      , ONLY: IWFMVersion
   IMPLICIT NONE
 
   !Local variables
   TYPE(ModelType) :: Model
   INTEGER         :: iStat
   CHARACTER       :: cPPFileName*500
-  
-  
+
+
   !Set environment for parallel processing
-  !$ CALL KMP_SET_BLOCKTIME(0)                                !Let threads sleep right away 
-  !$ CALL OMP_SET_NUM_THREADS(MIN(OMP_GET_NUM_PROCS() , 16))  !Set number of threads to minimum of 16 or number of available processors 
+  !$ CALL KMP_SET_BLOCKTIME(0)                                !Let threads sleep right away
+  !$ CALL OMP_SET_NUM_THREADS(MIN(OMP_GET_NUM_PROCS() , 16))  !Set number of threads to minimum of 16 or number of available processors
   !$ CALL OMP_SET_MAX_ACTIVE_LEVELS(2)                        !Maximum 2 levels of nested paralellization
   !$ CALL KMP_SET_STACKSIZE_S(16777216)                       !Set thread stack size to 16MB
-  
-  
+
+
   !Start timer
-  CALL StartTimer()
-  
+  CALL Model%Timer%Start()
+
   !Set message log file
-  CALL SetLogFileName('PreprocessorMessages.out',iStat)
+  CALL Model%Logger%SetLogFileName('PreprocessorMessages.out',iStat)
   IF (iStat .EQ. -1) THEN
-      CALL LogLastMessage()
-      
+      CALL Model%Logger%LogLastMessage()
+
   ELSE
       !Display opening screen and obtain inpout file name(s)
       CALL Print_screen('Program: Pre-Processor',IWFMVersion)
@@ -66,14 +60,14 @@ PROGRAM IWFM_F1
 
       !Instantiate the static component of the model
       CALL Model%New(cPPFileName,lRoutedStreams=.TRUE.,lPrintBinFile=.TRUE.,iStat=iStat)
-      IF (iStat .EQ. -1) CALL LogLastMessage()
+      IF (iStat .EQ. -1) CALL Model%Logger%LogLastMessage()
   END IF
-  
-  !Print run-time 
-  CALL StopTimer()
-  CALL PrintRunTime()
-  
+
+  !Print run-time
+  CALL Model%Timer%Stop()
+  CALL Model%Logger%PrintRunTime()
+
   !Close message log file
-  CALL KillLogFile()
+  CALL Model%Logger%Kill()
 
 END

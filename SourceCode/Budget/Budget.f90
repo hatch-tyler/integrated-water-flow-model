@@ -1,7 +1,7 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2025 
-!  State of California, Department of Water Resources 
+!  Copyright (C) 2005-2025
+!  State of California, Department of Water Resources
 !
 !  This program is free software; you can redistribute it and/or
 !  modify it under the terms of the GNU General Public License
@@ -18,7 +18,7 @@
 !  along with this program; if not, write to the Free Software
 !  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 !
-!  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
+!  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov
 !***********************************************************************
 PROGRAM BUDGET
   USE MessageLogger    , ONLY: SetLogFileName , &
@@ -27,7 +27,7 @@ PROGRAM BUDGET
                                PrintRunTime   , &
                                MessageArray   , &
                                f_iMessage     , &
-                               f_iFILE        
+                               f_iFILE
   USE IWFM_Version     , ONLY: IWFMVersion
   USE BudgetControls
   USE GeneralUtilities
@@ -38,7 +38,7 @@ PROGRAM BUDGET
   !Local variables
   TYPE(GenericFileType) :: DummyFile !Dummy file to re-set the standard output file
   INTEGER               :: iStat
-  
+
   !Start CPU timer
   CALL StartTimer()
 
@@ -50,7 +50,7 @@ PROGRAM BUDGET
   !Set the file for messages
   CALL SetLogFileName('BudgetMessages.out',iStat)
   IF (iStat .EQ. -1) CALL EndExecution(iStat)
-  
+
   !Print-out date and time of the execution
   MessageArray(1) = 'PROGRAM: IWFM Budget Post-Processor ' // TRIM(IWFMVersion%GetVersion())
   MessageArray(2) = 'This run is made on '//TRIM(GetDate())//' at '//TRIM(GetTime())
@@ -60,7 +60,7 @@ PROGRAM BUDGET
 
   !Print budget tables
   CALL PrintBudgetTables(iStat=iStat)
-  
+
   !End execution
   CALL EndExecution(iStat)
 
