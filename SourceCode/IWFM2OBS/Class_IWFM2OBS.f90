@@ -23,6 +23,7 @@ MODULE Class_IWFM2OBS
                                  f_iInfo
   USE GeneralUtilities   , ONLY: IntToText         , &
                                  UpperCase
+  USE TimeSeriesUtilities, ONLY: JulianDateToDayMonthYear
   USE Class_SMP2SMP      , ONLY: SMP2SMPType           , &
                                  SMPRecordType         , &
                                  SMPIDGroupType        , &
@@ -389,16 +390,42 @@ CONTAINS
       END IF
     END DO
 
-    ! Multi-layer target: post-process GW head output
+    ! Multi-layer target for GW: averaging now happens pre-interpolation
+    ! in ProcessDirect/PreAverageMultiLayer. The output file (GW_Sim.smp)
+    ! already contains T-weighted composite heads.  Copy it to GW_Sim_ml.smp
+    ! for backward compatibility with CalcTypeHyd and PEST setup.
     IF (This%lMultiLayer .AND. This%HydConfig(iGWHEAD)%lActive) THEN
-      CALL LogMessage('Applying multi-layer target averaging...', &
-           f_iInfo, cModName)
-      CALL ApplyMultiLayerTarget(This, iStat)
-      IF (iStat /= 0) THEN
-        CALL LogLastMessage()
-        CALL LogMessage('  Error in multi-layer processing', f_iWarn, cModName)
-        iStat = 0
-      END IF
+      BLOCK
+        CHARACTER(LEN=500) :: cSrcFile, cMlFile
+        INTEGER :: iPos2, iCopyUnit, iErr2
+        CHARACTER(LEN=500) :: cCopyLine
+
+        cSrcFile = TRIM(This%HydConfig(iGWHEAD)%cOutFile)
+        iPos2 = SCAN(cSrcFile, '.', BACK=.TRUE.)
+        IF (iPos2 > 0) THEN
+          cMlFile = cSrcFile(1:iPos2-1)//'_ml'//cSrcFile(iPos2:)
+        ELSE
+          cMlFile = TRIM(cSrcFile)//'_ml'
+        END IF
+
+        ! Copy GW_Sim.smp -> GW_Sim_ml.smp (contents are identical since
+        ! InterpolateDirect already wrote the averaged data)
+        OPEN(UNIT=198, FILE=TRIM(cSrcFile), STATUS='OLD', IOSTAT=iErr2)
+        IF (iErr2 == 0) THEN
+          OPEN(UNIT=199, FILE=TRIM(cMlFile), STATUS='REPLACE', IOSTAT=iErr2)
+          IF (iErr2 == 0) THEN
+            DO
+              READ(198, '(A)', IOSTAT=iErr2) cCopyLine
+              IF (iErr2 /= 0) EXIT
+              WRITE(199, '(A)') TRIM(cCopyLine)
+            END DO
+            CLOSE(199)
+          END IF
+          CLOSE(198)
+          CALL LogMessage('Copied '//TRIM(cSrcFile)//' -> '// &
+               TRIM(cMlFile)//' (pre-averaged composite)', f_iInfo, cModName)
+        END IF
+      END BLOCK
     END IF
 
     ! Multi-layer target: post-process subsidence output (sum across layers)
@@ -953,10 +980,23 @@ CONTAINS
       RETURN
     END IF
 
+    ! Step 2b: For GW heads with multi-layer, T-average BEFORE interpolation
+    ! This produces a continuous composite SMP and replaces per-layer data
+    ! with averaged data in memory, so InterpolateDirect operates on
+    ! already-averaged wells (no iExpandLayers needed).
+    IF (iHyd == iGWHEAD .AND. This%lMultiLayer) THEN
+      CALL PreAverageMultiLayer(This, iStat)
+      IF (iStat /= 0) THEN
+        IF (ALLOCATED(cObsIDs)) DEALLOCATE(cObsIDs)
+        RETURN
+      END IF
+    END IF
+
     ! Step 3: Interpolate directly from in-memory data
-    ! Pass iExpandLayers for GW/subsidence so InterpolateDirect can map base obs IDs
-    ! (no %N suffix in the deduplicated file) to per-layer model columns
-    IF ((iHyd == iGWHEAD .OR. iHyd == iSUBSID) .AND. This%lMultiLayer) THEN
+    ! For GW with multi-layer: data is already averaged (no iExpandLayers)
+    ! For subsidence with multi-layer: still needs per-layer expansion
+    ! For other types: no layer expansion
+    IF (iHyd == iSUBSID .AND. This%lMultiLayer) THEN
       CALL This%Interp%InterpolateDirect( &
            This%HydConfig(iHyd)%cObsFile, &
            This%HydConfig(iHyd)%cOutFile, &
@@ -986,6 +1026,181 @@ CONTAINS
     IF (ALLOCATED(cObsIDs)) DEALLOCATE(cObsIDs)
 
   END SUBROUTINE ProcessDirect
+
+  ! =====================================================================
+  ! PreAverageMultiLayer - T-weight per-layer data in-memory BEFORE
+  !   time interpolation, and write a continuous composite SMP.
+  !
+  !   Operates on HydReader%rModelData(iNTimes, iNFiltered) where columns
+  !   have %N layer suffixes.  Groups columns by base well name, applies
+  !   MultiLayerTarget T-weights, and replaces the data with averaged
+  !   columns (one per unique well).
+  !
+  !   Also writes GW_Sim_ml_continuous.smp with all timesteps.
+  ! =====================================================================
+  SUBROUTINE PreAverageMultiLayer(This, iStat)
+    CLASS(IWFM2OBSType), INTENT(INOUT) :: This
+    INTEGER,             INTENT(OUT)   :: iStat
+
+    INTEGER, PARAMETER :: iOutUnit = 197
+    INTEGER :: iNTimes, iNFiltered, iNLayers, iNWells
+    INTEGER :: i, j, k, iW, iL, iCol, iErr
+    CHARACTER(LEN=25) :: cBaseID, cLayerID
+    CHARACTER(LEN=10) :: cDateStr
+    CHARACTER(LEN=25), ALLOCATABLE :: cBaseIDs(:)     ! unique base well names
+    INTEGER, ALLOCATABLE :: iWellCol(:,:)              ! (iNWells, iNLayers) column index
+    REAL(8), ALLOCATABLE :: rAvgData(:,:)              ! (iNTimes, iNWells) averaged data
+    REAL(8) :: rLayerVals(4), rWeighted
+    INTEGER :: iDay, iMon, iYear
+
+    iStat = 0
+    iNTimes    = This%HydReader%iNTimes
+    iNFiltered = This%HydReader%iNFiltered
+    iNLayers   = This%MultiLayer%GetNLayers()
+
+    IF (iNFiltered == 0 .OR. iNTimes == 0) RETURN
+
+    ! ---- Step 1: Build unique base well names and column mapping ----
+    ! cFilteredIDs has entries like "WELL_A%1", "WELL_A%2", "WELL_B%1", ...
+    ! We need to group these by base name (strip %N)
+    ALLOCATE(cBaseIDs(iNFiltered), iWellCol(iNFiltered, iNLayers), STAT=iErr)
+    IF (iErr /= 0) THEN
+      CALL SetLastMessage('Cannot allocate PreAverage arrays', f_iFatal, cModName)
+      iStat = -1; RETURN
+    END IF
+
+    iWellCol = 0
+    iNWells = 0
+
+    DO iCol = 1, iNFiltered
+      cLayerID = This%HydReader%cFilteredIDs(iCol)
+      ! Strip %N suffix to get base name
+      k = SCAN(cLayerID, '%', BACK=.TRUE.)
+      IF (k > 0) THEN
+        cBaseID = cLayerID(1:k-1)
+        READ(cLayerID(k+1:), *, IOSTAT=iErr) iL
+        IF (iErr /= 0) iL = 1
+      ELSE
+        cBaseID = cLayerID
+        iL = 1
+      END IF
+
+      ! Find or add this base ID
+      iW = 0
+      DO j = 1, iNWells
+        IF (TRIM(cBaseIDs(j)) == TRIM(cBaseID)) THEN
+          iW = j
+          EXIT
+        END IF
+      END DO
+      IF (iW == 0) THEN
+        iNWells = iNWells + 1
+        iW = iNWells
+        cBaseIDs(iW) = cBaseID
+      END IF
+
+      ! Map this column to (well_index, layer)
+      IF (iL >= 1 .AND. iL <= iNLayers) THEN
+        iWellCol(iW, iL) = iCol
+      END IF
+    END DO
+
+    CALL LogMessage('  PreAverage: '//TRIM(IntToText(iNFiltered))// &
+         ' per-layer columns -> '//TRIM(IntToText(iNWells))//' wells', &
+         f_iInfo, cModName)
+
+    ! ---- Step 2: Compute T-weighted averages at all timesteps ----
+    ALLOCATE(rAvgData(iNTimes, iNWells), STAT=iErr)
+    IF (iErr /= 0) THEN
+      CALL SetLastMessage('Cannot allocate averaged data array', f_iFatal, cModName)
+      iStat = -1; RETURN
+    END IF
+    rAvgData = 0.0D0
+
+    DO iW = 1, iNWells
+      ! Find this well's T-weight index in MultiLayerTarget
+      ! Match by name (case-insensitive)
+      i = 0
+      DO j = 1, This%MultiLayer%GetNObs()
+        IF (TRIM(UpperCase(This%MultiLayer%GetObsName(j))) == &
+            TRIM(UpperCase(cBaseIDs(iW)))) THEN
+          i = j
+          EXIT
+        END IF
+      END DO
+
+      IF (i == 0) THEN
+        ! Well not in MultiLayerTarget — use first available layer
+        DO iL = 1, iNLayers
+          IF (iWellCol(iW, iL) > 0) THEN
+            rAvgData(:, iW) = This%HydReader%rModelData(:, iWellCol(iW, iL))
+            EXIT
+          END IF
+        END DO
+        CYCLE
+      END IF
+
+      ! Apply T-weighted average at each timestep
+      DO j = 1, iNTimes
+        rLayerVals = 0.0D0
+        DO iL = 1, iNLayers
+          iCol = iWellCol(iW, iL)
+          IF (iCol > 0) THEN
+            rLayerVals(iL) = This%HydReader%rModelData(j, iCol)
+          END IF
+        END DO
+        rAvgData(j, iW) = This%MultiLayer%WeightedAverage(i, rLayerVals(1:iNLayers))
+      END DO
+    END DO
+
+    ! ---- Step 3: Write continuous composite SMP ----
+    OPEN(UNIT=iOutUnit, FILE='GW_Sim_ml_continuous.smp', STATUS='REPLACE', IOSTAT=iErr)
+    IF (iErr /= 0) THEN
+      CALL LogMessage('  WARNING: Cannot open GW_Sim_ml_continuous.smp for writing', &
+           f_iWarn, cModName)
+    ELSE
+      ! Header (A25,A12,A12,A11 = CalcTypeHyd-compatible fixed format)
+      WRITE(iOutUnit, '(A25,A12,A12,A11)') &
+        'Name                     ', 'Date        ', 'Time        ', ' Simulated'
+
+      DO iW = 1, iNWells
+        DO j = 1, iNTimes
+          ! Convert Julian day to date
+          CALL JulianDateToDayMonthYear(This%HydReader%iModelDays(j), iDay, iMon, iYear, iErr)
+          WRITE(cDateStr, '(I2.2,A1,I2.2,A1,I4.4)') iMon, '/', iDay, '/', iYear
+          ! Match IWFM2OBS SMP format: A25 + A12(left-padded date) + A12 + F11
+          WRITE(iOutUnit, '(A25,A10,2X,A8,4X,F11.5)') &
+            cBaseIDs(iW), cDateStr, '00:00:00', rAvgData(j, iW)
+        END DO
+      END DO
+      CLOSE(iOutUnit)
+      CALL LogMessage('  Wrote GW_Sim_ml_continuous.smp ('// &
+           TRIM(IntToText(iNWells))//' wells x '// &
+           TRIM(IntToText(iNTimes))//' timesteps)', f_iInfo, cModName)
+    END IF
+
+    ! ---- Step 4: Replace HydReader data with averaged data ----
+    ! Resize arrays to hold only the averaged columns
+    DEALLOCATE(This%HydReader%rModelData)
+    DEALLOCATE(This%HydReader%cFilteredIDs)
+    ALLOCATE(This%HydReader%rModelData(iNTimes, iNWells), &
+             This%HydReader%cFilteredIDs(iNWells), STAT=iErr)
+    IF (iErr /= 0) THEN
+      CALL SetLastMessage('Cannot reallocate HydReader arrays', f_iFatal, cModName)
+      iStat = -1; RETURN
+    END IF
+
+    This%HydReader%rModelData = rAvgData
+    This%HydReader%cFilteredIDs(1:iNWells) = cBaseIDs(1:iNWells)
+    This%HydReader%iNFiltered = iNWells
+
+    ! Clean up
+    DEALLOCATE(cBaseIDs, iWellCol, rAvgData)
+
+    CALL LogMessage('  Replaced per-layer data with '// &
+         TRIM(IntToText(iNWells))//' composite wells', f_iInfo, cModName)
+
+  END SUBROUTINE PreAverageMultiLayer
 
   ! =====================================================================
   ! Kill - Clean up
