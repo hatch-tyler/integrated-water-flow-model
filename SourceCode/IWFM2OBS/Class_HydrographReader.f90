@@ -917,8 +917,9 @@ CONTAINS
     IF (ALLOCATED(This%cFilteredIDs)) DEALLOCATE(This%cFilteredIDs)
 
     ! ---- Step 3 (moved before Step 2): Count data lines and detect column count ----
+    ! RECL must accommodate wide ResultsExtract output (~764KB+ per line)
     OPEN(UNIT=iInUnit, FILE=This%HydInfo(iHydType)%cOutFilePath, &
-         STATUS='OLD', IOSTAT=iErr)
+         STATUS='OLD', RECL=2000000, IOSTAT=iErr)
     IF (iErr /= 0) THEN
       CALL SetLastMessage('Cannot open .out file: '// &
            TRIM(This%HydInfo(iHydType)%cOutFilePath), f_iFatal, cModName)
@@ -1126,11 +1127,11 @@ CONTAINS
       rVal = 0.0
       SELECT CASE (iHydType)
       CASE (iHR_GWHEAD)
-        READ(iInUnit, '(A22,60000F12.4)', IOSTAT=iErr) cJunk, (rVal(j), j=1,iNHyd)
+        READ(iInUnit, '(A22,100000F12.4)', IOSTAT=iErr) cJunk, (rVal(j), j=1,iNHyd)
       CASE (iHR_STREAM)
-        READ(iInUnit, '(A22,60000F14.2)', IOSTAT=iErr) cJunk, (rVal(j), j=1,iNHyd)
+        READ(iInUnit, '(A22,100000F14.2)', IOSTAT=iErr) cJunk, (rVal(j), j=1,iNHyd)
       CASE DEFAULT
-        READ(iInUnit, '(A22,60000F12.2)', IOSTAT=iErr) cJunk, (rVal(j), j=1,iNHyd)
+        READ(iInUnit, '(A22,100000F12.2)', IOSTAT=iErr) cJunk, (rVal(j), j=1,iNHyd)
       END SELECT
 
       IF (iErr /= 0) EXIT

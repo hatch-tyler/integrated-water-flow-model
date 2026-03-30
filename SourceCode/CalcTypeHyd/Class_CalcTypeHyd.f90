@@ -333,13 +333,27 @@ CONTAINS
     CLOSE(iUnit)
 
     ! Compute averages
-    DO k = 1, This%iNClusWells
-      DO i = 1, This%iNVal
-        IF (iCnt(i, k) > 0) THEN
-          This%rMonAvg(i, k) = This%rMonAvg(i, k) / DBLE(iCnt(i, k))
-        END IF
+    BLOCK
+      INTEGER :: iRecordsRead, iRecordsMatched, iWellsMatched
+      iRecordsRead = 0; iRecordsMatched = 0; iWellsMatched = 0
+      DO k = 1, This%iNClusWells
+        BLOCK
+          LOGICAL :: lHasData
+          lHasData = .FALSE.
+          DO i = 1, This%iNVal
+            IF (iCnt(i, k) > 0) THEN
+              This%rMonAvg(i, k) = This%rMonAvg(i, k) / DBLE(iCnt(i, k))
+              iRecordsMatched = iRecordsMatched + iCnt(i, k)
+              lHasData = .TRUE.
+            END IF
+          END DO
+          IF (lHasData) iWellsMatched = iWellsMatched + 1
+        END BLOCK
       END DO
-    END DO
+      CALL LogMessage('  DEBUG ReadWL: '//TRIM(IntToText(iWellsMatched))// &
+           ' wells matched, '//TRIM(IntToText(iRecordsMatched))//' records', &
+           f_iInfo, cModName)
+    END BLOCK
 
     DEALLOCATE(iDateID, iCnt)
 
@@ -425,6 +439,24 @@ CONTAINS
       iStat = -1; RETURN
     END IF
 
+    ! Debug: count valid data points
+    BLOCK
+      INTEGER :: iValid, iMissing, iJ, iI
+      iValid = 0; iMissing = 0
+      DO iI = 1, This%iNVal
+        DO iJ = 1, This%iNClusWells
+          IF (This%rMonAvg(iI, iJ) > -9000.0D0) THEN
+            iValid = iValid + 1
+          ELSE
+            iMissing = iMissing + 1
+          END IF
+        END DO
+      END DO
+      CALL LogMessage('  DEBUG: iNVal='//TRIM(IntToText(This%iNVal))// &
+           ', iNClusWells='//TRIM(IntToText(This%iNClusWells))// &
+           ', valid='//TRIM(IntToText(iValid))// &
+           ', missing='//TRIM(IntToText(iMissing)), f_iInfo, cModName)
+    END BLOCK
     CALL LogMessage('Generating type hydrographs...', f_iInfo, cModName)
 
     DO n = 1, This%iNHydro
