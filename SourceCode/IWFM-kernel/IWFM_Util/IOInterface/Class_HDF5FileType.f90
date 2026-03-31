@@ -59,9 +59,11 @@ MODULE Class_HDF5FileType
 
 
   ! -------------------------------------------------------------
-  ! --- LIST OF OPEN HDF5 FILES
+  ! --- LIST OF OPEN HDF5 FILES (preallocated with growth)
   ! -------------------------------------------------------------
+  INTEGER,PARAMETER                    :: INIT_HDF_CAPACITY = 32
   INTEGER,SAVE                         :: nOpenHDFFiles   = 0
+  INTEGER,SAVE                         :: nHDFCapacity    = 0
   INTEGER(HID_T),ALLOCATABLE,SAVE      :: OpenFileIDs(:)
   CHARACTER(LEN=1000),ALLOCATABLE,SAVE :: OpenFileNames(:)
   
@@ -342,17 +344,10 @@ CONTAINS
 
     END IF
     
-    !Add file to the open files list
-    ALLOCATE (TempFileNames(nOpenHDFFiles+1) , TempFileIDs(nOpenHDFFiles+1))
-    TempFileNames(1:nOpenHDFFiles) = OpenFileNames
-    TempFileIDs(1:nOpenHDFFiles)   = OpenFileIDs
-    nOpenHDFFiles                  = nOpenHDFFiles + 1
-    TempFileNames(nOpenHDFFiles)   = UpperCase(ADJUSTL(FileName))
-    TempFileIDs(nOpenHDFFiles)     = ThisFile%FileID
-    CALL MOVE_ALLOC(TempFileNames , OpenFileNames)
-    CALL MOVE_ALLOC(TempFileIDs , OpenFileIDs)
-    
-    !Clear memeory
+    !Add file to the open files list (grow if needed)
+    CALL AddOpenHDFFile(UpperCase(ADJUSTL(FileName)), ThisFile%FileID)
+
+    !Clear memory
     DEALLOCATE (DummyArray , cDataSetNames , STAT=ErrorCode)
     
   END SUBROUTINE New_HDF5File
@@ -402,11 +397,7 @@ CONTAINS
     CALL H5FCLOSE_F(ThisFile%FileID,ErrorCode)
 
     !Remove the file info from the list of open files
-    iIndex = GetOpenFileIndex(ThisFile%FileID)
-    ALLOCATE (TempFileNames(nOpenHDFFiles-1) , TempFileIDs(nOpenHDFFiles-1))
-    TempFileNames(1:iIndex-1)    = OpenFileNames(1:iIndex-1)  ; TempFileNames(iIndex:)    = OpenFileNames(iIndex+1:)  ;  CALL MOVE_ALLOC(TempFileNames, OpenFileNames)
-    TempFileIDs(1:iIndex-1)      = OpenFileIDs(1:iIndex-1)    ; TempFileIDs(iIndex:)      = OpenFileIDs(iIndex+1:)    ;  CALL MOVE_ALLOC(TempFileIDs, OpenFileIDs)
-    nOpenHDFFiles = nOpenHDFFiles - 1
+    CALL RemoveOpenHDFFile(ThisFile%FileID)
     
     !Kill BaseFileType
     CALL ThisFile%KillBaseFile()
@@ -1984,15 +1975,8 @@ CONTAINS
         END ASSOCIATE
     END DO
 
-    !Add file to the open files list
-    ALLOCATE (cTempFileNames(nOpenHDFFiles+1) , iTempFileIDs(nOpenHDFFiles+1))
-    cTempFileNames(1:nOpenHDFFiles) = OpenFileNames
-    iTempFileIDs(1:nOpenHDFFiles)   = OpenFileIDs
-    nOpenHDFFiles                   = nOpenHDFFiles + 1
-    cTempFileNames(nOpenHDFFiles)   = UpperCase(ADJUSTL(cFileName))
-    iTempFileIDs(nOpenHDFFiles)     = ThisFile%FileID
-    CALL MOVE_ALLOC(cTempFileNames , OpenFileNames)
-    CALL MOVE_ALLOC(iTempFileIDs , OpenFileIDs)
+    !Add file to the open files list (grow if needed)
+    CALL AddOpenHDFFile(UpperCase(ADJUSTL(cFileName)), ThisFile%FileID)
     
     !Close property lists
     CALL H5PCLOSE_F(iDataAccessPropListID,iErrorCode)
@@ -2016,4 +2000,60 @@ CONTAINS
   END FUNCTION IsIDValid
   
   
+
+  ! -------------------------------------------------------------
+  ! --- ADD AN OPEN HDF FILE TO THE TRACKING LIST (preallocated)
+  ! -------------------------------------------------------------
+  SUBROUTINE AddOpenHDFFile(cFileName, iFileID)
+    CHARACTER(LEN=*),INTENT(IN) :: cFileName
+    INTEGER(HID_T),INTENT(IN)   :: iFileID
+
+    !Local variables
+    INTEGER                          :: iNewCapacity
+    INTEGER(HID_T),ALLOCATABLE       :: iTempIDs(:)
+    CHARACTER(LEN=1000),ALLOCATABLE  :: cTempNames(:)
+
+    !Grow arrays if needed
+    IF (nOpenHDFFiles .GE. nHDFCapacity) THEN
+        iNewCapacity = MAX(INIT_HDF_CAPACITY, nHDFCapacity * 2)
+        ALLOCATE(cTempNames(iNewCapacity), iTempIDs(iNewCapacity))
+        IF (nOpenHDFFiles .GT. 0) THEN
+            cTempNames(1:nOpenHDFFiles) = OpenFileNames(1:nOpenHDFFiles)
+            iTempIDs(1:nOpenHDFFiles)   = OpenFileIDs(1:nOpenHDFFiles)
+        END IF
+        CALL MOVE_ALLOC(cTempNames, OpenFileNames)
+        CALL MOVE_ALLOC(iTempIDs, OpenFileIDs)
+        nHDFCapacity = iNewCapacity
+    END IF
+
+    !Add entry
+    nOpenHDFFiles                = nOpenHDFFiles + 1
+    OpenFileNames(nOpenHDFFiles) = cFileName
+    OpenFileIDs(nOpenHDFFiles)   = iFileID
+
+  END SUBROUTINE AddOpenHDFFile
+
+
+  ! -------------------------------------------------------------
+  ! --- REMOVE AN OPEN HDF FILE FROM THE TRACKING LIST
+  ! -------------------------------------------------------------
+  SUBROUTINE RemoveOpenHDFFile(iFileID)
+    INTEGER(HID_T),INTENT(IN) :: iFileID
+
+    !Local variables
+    INTEGER :: iIndex, indx
+
+    iIndex = GetOpenFileIndex(iFileID)
+    IF (iIndex .LE. 0) RETURN
+
+    !Shift entries down (no reallocation needed)
+    DO indx = iIndex, nOpenHDFFiles - 1
+        OpenFileNames(indx) = OpenFileNames(indx+1)
+        OpenFileIDs(indx)   = OpenFileIDs(indx+1)
+    END DO
+    nOpenHDFFiles = nOpenHDFFiles - 1
+
+  END SUBROUTINE RemoveOpenHDFFile
+
+
 END MODULE
