@@ -22,6 +22,12 @@
 !***********************************************************************
 PROGRAM IWFM_F2
   !$ USE OMP_LIB
+  USE ProgramTimer      , ONLY: StartTimer       , &
+                                StopTimer
+  USE MessageLogger     , ONLY: PrintRunTime     , &
+                                SetLogFileName   , &
+                                KillLogFile      , &
+                                LogLastMessage
   USE Package_Misc      , ONLY: Print_Screen     , &
                                 Get_Main_File
   USE Package_Model     , ONLY: ModelType
@@ -44,13 +50,13 @@ PROGRAM IWFM_F2
 
 
   !Start program timer
-  CALL Model%Timer%Start()
+  CALL StartTimer()
 
 
   !Standard output file
-  CALL Model%Logger%SetLogFileName('SimulationMessages.out',iStat)
+  CALL SetLogFileName('SimulationMessages.out',iStat)
   IF (iStat .EQ. -1) THEN
-      CALL Model%Logger%LogLastMessage()
+      CALL LogLastMessage()
 
   ELSE
       !Display opening screen and obtain inpout file name(s)
@@ -66,14 +72,12 @@ PROGRAM IWFM_F2
 
       !If an error, print it and stop
       IF (iStat .EQ. -1) THEN
-          CALL Model%Logger%LogLastMessage()
+          CALL LogLastMessage()
 
       !Otherwise, simulate
       ELSE
-          CALL Model%Timer%StartSection('Simulation')
           CALL Model%Simulate(0,iStat)
-          CALL Model%Timer%StopSection('Simulation')
-          IF (iStat .EQ. -1) CALL Model%Logger%LogLastMessage()
+          IF (iStat .EQ. -1) CALL LogLastMessage()
 
       END IF
   END IF
@@ -82,10 +86,9 @@ PROGRAM IWFM_F2
   CALL Model%Kill()
 
   !Complete the simulation and print model run time
-  CALL Model%Timer%Stop()
-  CALL Model%Timer%PrintReport()
-  CALL Model%Logger%PrintRunTime()
-  CALL Model%Logger%Kill()
+  CALL StopTimer()
+  CALL PrintRunTime()
+  CALL KillLogFile()
 
   !$ CALL KMP_SET_BLOCKTIME(iBlockTime)
 

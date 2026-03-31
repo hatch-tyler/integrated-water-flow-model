@@ -134,7 +134,7 @@ CONTAINS
     iLen = LEN_TRIM(ADJUSTL(FileName))
     ALLOCATE (CHARACTER(LEN=iLen) :: ThisFile%Name)
     ThisFile%Name  = TRIM(ADJUSTL(FileName))
-    !Unit number assigned by NEWUNIT= in OPEN call (concrete file types)
+    ThisFile%UnitN = GetAUnitNumber()
 
   END SUBROUTINE NewBaseFile
   

@@ -22,6 +22,12 @@
 !***********************************************************************
 PROGRAM IWFM_F1
   !$ USE OMP_LIB
+  USE ProgramTimer      , ONLY: StartTimer       , &
+                                StopTimer
+  USE MessageLogger     , ONLY: PrintRunTime     , &
+                                SetLogFileName   , &
+                                KillLogFile      , &
+                                LogLastMessage
   USE Package_Misc      , ONLY: Print_Screen     , &
                                 Get_Main_File
   USE Package_Model     , ONLY: ModelType
@@ -42,12 +48,12 @@ PROGRAM IWFM_F1
 
 
   !Start timer
-  CALL Model%Timer%Start()
+  CALL StartTimer()
 
   !Set message log file
-  CALL Model%Logger%SetLogFileName('PreprocessorMessages.out',iStat)
+  CALL SetLogFileName('PreprocessorMessages.out',iStat)
   IF (iStat .EQ. -1) THEN
-      CALL Model%Logger%LogLastMessage()
+      CALL LogLastMessage()
 
   ELSE
       !Display opening screen and obtain inpout file name(s)
@@ -60,14 +66,14 @@ PROGRAM IWFM_F1
 
       !Instantiate the static component of the model
       CALL Model%New(cPPFileName,lRoutedStreams=.TRUE.,lPrintBinFile=.TRUE.,iStat=iStat)
-      IF (iStat .EQ. -1) CALL Model%Logger%LogLastMessage()
+      IF (iStat .EQ. -1) CALL LogLastMessage()
   END IF
 
   !Print run-time
-  CALL Model%Timer%Stop()
-  CALL Model%Logger%PrintRunTime()
+  CALL StopTimer()
+  CALL PrintRunTime()
 
   !Close message log file
-  CALL Model%Logger%Kill()
+  CALL KillLogFile()
 
 END

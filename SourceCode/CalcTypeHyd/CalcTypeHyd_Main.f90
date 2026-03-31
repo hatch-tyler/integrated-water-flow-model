@@ -10,35 +10,39 @@
 !***********************************************************************
 PROGRAM CalcTypeHyd_Main
 
-  USE ProgramTimer    , ONLY: ProgramTimerType
-  USE MessageLogger   , ONLY: MessageLoggerType, f_iInfo
+  USE ProgramTimer    , ONLY: StartTimer  , &
+                               StopTimer
+  USE MessageLogger   , ONLY: PrintRunTime , &
+                               SetLogFileName, &
+                               KillLogFile   , &
+                               LogLastMessage, &
+                               LogMessage    , &
+                               f_iInfo
   USE Class_CalcTypeHyd, ONLY: CalcTypeHydType
 
   IMPLICIT NONE
 
-  TYPE(CalcTypeHydType)    :: App
-  TYPE(ProgramTimerType)   :: Timer
-  TYPE(MessageLoggerType)  :: Logger
-  CHARACTER(LEN=500)       :: cInputFile
-  INTEGER                  :: iStat, iNArgs
+  TYPE(CalcTypeHydType) :: App
+  CHARACTER(LEN=500) :: cInputFile
+  INTEGER            :: iStat, iNArgs
 
   ! Start timer
-  CALL Timer%Start()
+  CALL StartTimer()
 
   DO  ! Single-pass block for structured error exit
 
     ! Open log file
-    CALL Logger%SetLogFileName('CalcTypeHyd_Messages.out', iStat)
+    CALL SetLogFileName('CalcTypeHyd_Messages.out', iStat)
     IF (iStat == -1) THEN
-      CALL Logger%LogLastMessage()
+      CALL LogLastMessage()
       EXIT
     END IF
 
     ! Banner
-    CALL Logger%LogMessage(' ', f_iInfo, 'CalcTypeHyd')
-    CALL Logger%LogMessage('Program CalcTypeHyd - Cluster type hydrograph computation', &
+    CALL LogMessage(' ', f_iInfo, 'CalcTypeHyd')
+    CALL LogMessage('Program CalcTypeHyd - Cluster type hydrograph computation', &
                     f_iInfo, 'CalcTypeHyd')
-    CALL Logger%LogMessage(' ', f_iInfo, 'CalcTypeHyd')
+    CALL LogMessage(' ', f_iInfo, 'CalcTypeHyd')
 
     ! Get input file from command line or use default
     iNArgs = COMMAND_ARGUMENT_COUNT()
@@ -52,27 +56,27 @@ PROGRAM CalcTypeHyd_Main
     ! Initialize
     CALL App%New(cInputFile, iStat)
     IF (iStat == -1) THEN
-      CALL Logger%LogLastMessage()
+      CALL LogLastMessage()
       EXIT
     END IF
 
     ! Run type hydrograph generation
     CALL App%Run(iStat)
     IF (iStat == -1) THEN
-      CALL Logger%LogLastMessage()
+      CALL LogLastMessage()
     END IF
 
     ! Clean up
     CALL App%Kill()
 
-    CALL Logger%LogMessage(' ', f_iInfo, 'CalcTypeHyd')
-    CALL Logger%LogMessage('NORMAL TERMINATION - CalcTypeHyd', f_iInfo, 'CalcTypeHyd')
+    CALL LogMessage(' ', f_iInfo, 'CalcTypeHyd')
+    CALL LogMessage('NORMAL TERMINATION - CalcTypeHyd', f_iInfo, 'CalcTypeHyd')
 
     EXIT  ! Normal exit from single-pass block
   END DO
 
-  CALL Timer%Stop()
-  CALL Logger%PrintRunTime()
-  CALL Logger%Kill()
+  CALL StopTimer()
+  CALL PrintRunTime()
+  CALL KillLogFile()
 
 END PROGRAM CalcTypeHyd_Main
