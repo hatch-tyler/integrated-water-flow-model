@@ -21,7 +21,8 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 MODULE Package_Supply
-  USE MessageLogger               , ONLY: EchoProgress
+  USE MessageLogger               , ONLY: MessageLoggerType              , &
+                                          EchoProgress
   USE Package_Misc                , ONLY: f_iFlowDest_Element               , &
                                           f_iSupply_Diversion               , &
                                           f_iSupply_Pumping                 , &

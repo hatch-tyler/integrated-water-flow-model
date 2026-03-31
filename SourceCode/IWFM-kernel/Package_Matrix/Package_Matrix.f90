@@ -22,9 +22,10 @@
 !***********************************************************************
 MODULE Package_Matrix
   !$ USE OMP_LIB
-  USE MessageLogger    , ONLY: SetLastMessage           , &
+  USE MessageLogger    , ONLY: MessageLoggerType        , &
+                               SetLastMessage           , &
                                MessageArray             , &
-                               f_iFatal                   
+                               f_iFatal
   USE GeneralUtilities , ONLY: LocateInList             , &
                                IntToText                , &
                                GetUniqueArrayComponents , &
@@ -99,6 +100,7 @@ MODULE Package_Matrix
       REAL(8),ALLOCATABLE,PUBLIC             :: HDelta(:)                          !Solution vector (represents the chnages in the state variable estimates)
       REAL(8),ALLOCATABLE,PUBLIC             :: RHSL2(:)                           !L2-norm of the RHS vector at each Newton-Raphson iteration
       TYPE(SolverType)                       :: Solver                             !Solver data to be used to invert matrix equation
+      TYPE(MessageLoggerType),POINTER                   :: Logger => NULL()                     !Logger instance
       TYPE(ConnectivityListType),ALLOCATABLE :: ConnectivityList(:)                !Linked-list of connectivity at each global node
       INTEGER,ALLOCATABLE                    :: NJD_CRS(:)                             !Pre-allocated CRS row pointers (reused across NR iterations)
       INTEGER,ALLOCATABLE                    :: JND_CRS(:)                             !Pre-allocated CRS column indices (reused across NR iterations)
@@ -110,6 +112,7 @@ MODULE Package_Matrix
       PROCEDURE,PASS,PRIVATE :: AddConnectivity_ToMany_Sequential
       PROCEDURE,PASS,PRIVATE :: AddConnectivity_ToMany_Random
       PROCEDURE,PASS         :: Kill
+      PROCEDURE,PASS         :: SetLogger
       PROCEDURE,PASS         :: FlattenConnectivity
       PROCEDURE,PASS         :: GetSolver
       PROCEDURE,PASS         :: GetNUnknowns
@@ -225,9 +228,21 @@ CONTAINS
     
     
   END SUBROUTINE Kill
-  
-  
-  
+
+
+  ! -------------------------------------------------------------
+  ! --- SET LOGGER INSTANCE
+  ! -------------------------------------------------------------
+  SUBROUTINE SetLogger(Matrix,Logger)
+    CLASS(MatrixType),INTENT(INOUT)               :: Matrix
+    TYPE(MessageLoggerType),TARGET,INTENT(IN) :: Logger
+
+    Matrix%Logger => Logger
+
+  END SUBROUTINE SetLogger
+
+
+
 
 ! ******************************************************************
 ! ******************************************************************
@@ -469,7 +484,7 @@ CONTAINS
     
     !Make sure solver is recognized
     IF (LocateInList(iSolver,iSolverList) .EQ. 0)  THEN
-        CALL SetLastMessage('Solver ID '//TRIM(IntToText(iSolver))//' is not recognized!',f_iFatal,ThisProcedure)
+        CALL Matrix%Logger%SetLastMessage('Solver ID '//TRIM(IntToText(iSolver))//' is not recognized!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -477,7 +492,7 @@ CONTAINS
     !Make sure relaxation parameter is between 1 and 2.
     IF (iSolver .EQ. iSolver_SOR) THEN
         IF (Relax .LT. 1.0   .OR.   Relax .GT. 2.0)  THEN
-            CALL SetLastMessage('Relaxation parameter for SOR matrix solver must be between 1.0 and 2.0!',f_iFatal,ThisProcedure)
+            CALL Matrix%Logger%SetLastMessage('Relaxation parameter for SOR matrix solver must be between 1.0 and 2.0!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -693,7 +708,7 @@ CONTAINS
     SUBROUTINE EmitError(cErrMessage)
       CHARACTER(LEN=*),INTENT(IN) :: cErrMessage
       
-      CALL SetLastMessage('Error in allocating memory for the matrix equation!'//NEW_LINE('x')//TRIM(cErrMessage),f_iFatal,ThisProcedure)
+      CALL Matrix%Logger%SetLastMessage('Error in allocating memory for the matrix equation!'//NEW_LINE('x')//TRIM(cErrMessage),f_iFatal,ThisProcedure)
       iStat = -1
     
     END SUBROUTINE EmitError
@@ -769,7 +784,7 @@ CONTAINS
     
     !Make sure component has not been added before
     IF (LocateInList(iCompID,Matrix%iComps) .GT. 0) THEN
-        CALL SetLastMessage('Component ID '//TRIM(IntToText(iCompID))//' has already been added to matrix!',f_iFatal,ThisProcedure)
+        CALL Matrix%Logger%SetLastMessage('Component ID '//TRIM(IntToText(iCompID))//' has already been added to matrix!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -810,12 +825,12 @@ CONTAINS
     
     !Make sure both component IDs are added
     IF (LocateInList(iCompID_To,Matrix%iComps) .EQ. 0) THEN
-        CALL SetLastMessage('Component ID '//TRIM(IntToText(iCompID_To))//' to add connectivity to has not been added to the matrix!',f_iFatal,ThisProcedure)
+        CALL Matrix%Logger%SetLastMessage('Component ID '//TRIM(IntToText(iCompID_To))//' to add connectivity to has not been added to the matrix!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
     IF (LocateInList(iCompID_Connect,Matrix%iComps) .EQ. 0) THEN
-        CALL SetLastMessage('Component ID '//TRIM(IntToText(iCompID_Connect))//' to add connectivity from has not been added to the matrix!',f_iFatal,ThisProcedure)
+        CALL Matrix%Logger%SetLastMessage('Component ID '//TRIM(IntToText(iCompID_Connect))//' to add connectivity from has not been added to the matrix!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -840,7 +855,7 @@ CONTAINS
     IF (iDimConnectivityList .LT. iGlobalNodeID_To_End) THEN
         ALLOCATE (Temp_ConnectivityList(iGlobalNodeID_To_End) , STAT=ErrorCode , ERRMSG=cErrMessage)
         IF (ErrorCode .NE. 0) THEN
-            CALL SetLastMessage('Error in allocating memory for matrix connectivity list!'//NEW_LINE('x')//TRIM(cErrMessage),f_iFatal,ThisProcedure)
+            CALL Matrix%Logger%SetLastMessage('Error in allocating memory for matrix connectivity list!'//NEW_LINE('x')//TRIM(cErrMessage),f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -896,12 +911,12 @@ CONTAINS
     
     !Make sure both component IDs are added
     IF (LocateInList(iCompID_To,Matrix%iComps) .EQ. 0) THEN
-        CALL SetLastMessage('Component ID '//TRIM(IntToText(iCompID_To))//' to add connectivity to has not been added to the matrix!',f_iFatal,ThisProcedure)
+        CALL Matrix%Logger%SetLastMessage('Component ID '//TRIM(IntToText(iCompID_To))//' to add connectivity to has not been added to the matrix!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
     IF (LocateInList(iCompID_Connect,Matrix%iComps) .EQ. 0) THEN
-        CALL SetLastMessage('Component ID '//TRIM(IntToText(iCompID_Connect))//' to add connectivity from has not been added to the matrix!',f_iFatal,ThisProcedure)
+        CALL Matrix%Logger%SetLastMessage('Component ID '//TRIM(IntToText(iCompID_Connect))//' to add connectivity from has not been added to the matrix!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -926,7 +941,7 @@ CONTAINS
     IF (iDimConnectivityList .LT. iDimMax) THEN
         ALLOCATE (Temp_ConnectivityList(iDimMax) , STAT=ErrorCode , ERRMSG=cErrMessage)
         IF (ErrorCode .NE. 0) THEN
-            CALL SetLastMessage('Error in allocating memory for matrix connectivity list!'//NEW_LINE('x')//TRIM(cErrMessage),f_iFatal,ThisProcedure)
+            CALL Matrix%Logger%SetLastMessage('Error in allocating memory for matrix connectivity list!'//NEW_LINE('x')//TRIM(cErrMessage),f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -979,12 +994,12 @@ CONTAINS
     
     !Make sure both component IDs are added
     IF (LocateInList(iCompID_To,Matrix%iComps) .EQ. 0) THEN
-        CALL SetLastMessage('Component ID '//TRIM(IntToText(iCompID_To))//' to add connectivity to has not been added to the matrix!',f_iFatal,ThisProcedure)
+        CALL Matrix%Logger%SetLastMessage('Component ID '//TRIM(IntToText(iCompID_To))//' to add connectivity to has not been added to the matrix!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
     IF (LocateInList(iCompID_Connect,Matrix%iComps) .EQ. 0) THEN
-        CALL SetLastMessage('Component ID '//TRIM(IntToText(iCompID_Connect))//' to add connectivity from has not been added to the matrix!',f_iFatal,ThisProcedure)
+        CALL Matrix%Logger%SetLastMessage('Component ID '//TRIM(IntToText(iCompID_Connect))//' to add connectivity from has not been added to the matrix!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -999,7 +1014,7 @@ CONTAINS
     IF (iDimConnectivityList .LT. iGlobalNodeID_To) THEN
         ALLOCATE (Temp_ConnectivityList(iGlobalNodeID_To) , STAT=ErrorCode , ERRMSG=cErrMessage)
         IF (ErrorCode .NE. 0) THEN
-            CALL SetLastMessage('Error in allocating memory for matrix connectivity list!'//NEW_LINE('x')//TRIM(cErrMessage),f_iFatal,ThisProcedure)
+            CALL Matrix%Logger%SetLastMessage('Error in allocating memory for matrix connectivity list!'//NEW_LINE('x')//TRIM(cErrMessage),f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -1146,7 +1161,7 @@ CONTAINS
               STAT = ErrorCode             , &
               ERRMSG = cErrMessage         )
     IF (ErrorCode .NE. 0) THEN
-        CALL SetLastMessage('Error in allocating memory for the NJD and JND arrays of the matrix!'//NEW_LINE('x')//TRIM(cErrMessage),f_iFatal,ThisProcedure)
+        CALL Matrix%Logger%SetLastMessage('Error in allocating memory for the NJD and JND arrays of the matrix!'//NEW_LINE('x')//TRIM(cErrMessage),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -1174,7 +1189,7 @@ CONTAINS
     !Allocate memory for the other array attributes
     ALLOCATE (Matrix%COEFF(iDimJND) , Matrix%RHS(iDimNJD-1)  , Matrix%HDelta(iDimNJD-1) , STAT=ErrorCode , ERRMSG=cErrMessage)
     IF (ErrorCode .NE. 0) THEN
-        CALL SetLastMessage('Error in allocating memory for COEFF, RHS or HDelta arrays of the matrix!'//NEW_LINE('x')//TRIM(cErrMessage),f_iFatal,ThisProcedure)    
+        CALL Matrix%Logger%SetLastMessage('Error in allocating memory for COEFF, RHS or HDelta arrays of the matrix!'//NEW_LINE('x')//TRIM(cErrMessage),f_iFatal,ThisProcedure)    
         iStat = -1
         RETURN
     END IF
@@ -1598,14 +1613,14 @@ CONTAINS
         CASE (-1)
             MessageArray(1) = 'Bad coefficent matrix! Execution cannot proceed.'
             MessageArray(2) = 'Please check input data.'
-            CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+            CALL Matrix%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
 
         CASE (-3:-2)
             MessageArray(1) = 'Insufficent storage for LU factorization!'
             MessageArray(2) = 'Please contact IWFM techical support.'
-            CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+            CALL Matrix%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
 
@@ -1641,7 +1656,7 @@ CONTAINS
                     END DO
             END SELECT
             MessageArray(2) = 'Check all data specified for this variable.'
-            CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+            CALL Matrix%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
     END SELECT
@@ -1667,25 +1682,25 @@ CONTAINS
                 MessageArray(1) = 'Convergence problem in the solution of equation system using PGMRES(M).'
                 WRITE(MessageArray(2),'(A,I8)')     'Iteration =', Iter
                 WRITE (MessageArray(3),'(A,E12.3)') 'Residual  =', RES
-                CALL SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+                CALL Matrix%Logger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
                 iStat = -1
                 EXIT
 
             ELSE IF (IPAR(1).EQ.-2) THEN
                 MessageArray(1)='ITERATIVE SOLVER WAS NOT GIVEN ENOUGH WORK SPACE.'
                 WRITE (MessageArray(2),'(A,I12,A)') 'THE WORK SPACE SHOULD AT LEAST HAVE ', IPAR(4),' ELEMENTS.'
-                CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                CALL Matrix%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                 iStat = -1
                 EXIT
 
             ELSE IF (IPAR(1).EQ.-3) THEN
-                CALL SetLastMessage('ITERATIVE SOLVER IS FACING A BREAK-DOWN.',f_iFatal,ThisProcedure)
+                CALL Matrix%Logger%SetLastMessage('ITERATIVE SOLVER IS FACING A BREAK-DOWN.',f_iFatal,ThisProcedure)
                 iStat = -1
                 EXIT
 
             ELSE
                 WRITE(MessageArray(1),'(A,I8)') 'ITERATIVE SOLVER TERMINATED. CODE =', IPAR(1)
-                CALL SetLastMessage(MessageArray(1),f_iFatal,ThisProcedure)
+                CALL Matrix%Logger%SetLastMessage(MessageArray(1),f_iFatal,ThisProcedure)
                 iStat = -1
                 EXIT
             ENDIF
@@ -1885,7 +1900,7 @@ CONTAINS
         !Is the component included in the matrix?
         iLoc = LocateInList(iCompID,Matrix%iComps)
         IF (iLoc .EQ. 0) THEN
-            CALL SetLastMessage('Component ID '//TRIM(IntTotext(Local_iCompID))//' is not included in the matrix!',f_iFatal,ThisProcedure)
+            CALL Matrix%Logger%SetLastMessage('Component ID '//TRIM(IntTotext(Local_iCompID))//' is not included in the matrix!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF

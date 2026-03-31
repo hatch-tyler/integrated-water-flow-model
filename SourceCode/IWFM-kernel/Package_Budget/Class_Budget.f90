@@ -23,7 +23,8 @@
 MODULE Class_Budget
   USE MessageLogger           , ONLY: SetLastMessage           , &
                                       MessageArray             , &
-                                      f_iFatal                   
+                                      MessageLoggerType        , &
+                                      f_iFatal
   USE GeneralUtilities        , ONLY: LocateInList             , &
                                       UpperCase                , &
                                       FirstLocation            , &
@@ -112,9 +113,11 @@ MODULE Class_Budget
   ! -------------------------------------------------------------
   TYPE BudgetType
     PRIVATE
-    TYPE(BudgetInputFileType) :: InputFile
-    TYPE(BudgetHeaderType)    :: Header
+    TYPE(BudgetInputFileType)          :: InputFile
+    TYPE(BudgetHeaderType)             :: Header
+    TYPE(MessageLoggerType),POINTER    :: Logger => NULL()
   CONTAINS
+    PROCEDURE,PASS   :: SetLogger => Budget_SetLogger
     PROCEDURE,PASS   :: Create
     PROCEDURE,PASS   :: Open
     PROCEDURE,PASS   :: Kill
@@ -160,6 +163,18 @@ MODULE Class_Budget
 CONTAINS
 
 
+  ! -------------------------------------------------------------
+  ! --- SET LOGGER
+  ! -------------------------------------------------------------
+  SUBROUTINE Budget_SetLogger(Budget,Logger)
+    CLASS(BudgetType)                         :: Budget
+    TYPE(MessageLoggerType),TARGET,INTENT(IN) :: Logger
+
+    Budget%Logger => Logger
+
+  END SUBROUTINE Budget_SetLogger
+
+
 
 
 ! ******************************************************************
@@ -175,7 +190,7 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- CREATE A NEW BUDGET FILE
   ! -------------------------------------------------------------
-  SUBROUTINE Create(Budget,cInputFileName,HeaderData,iStat) 
+  SUBROUTINE Create(Budget,cInputFileName,HeaderData,iStat)
     CLASS(BudgetType)                 :: Budget
     CHARACTER(LEN=*),INTENT(IN)       :: cInputFileName
     TYPE(BudgetHeaderType),INTENT(IN) :: HeaderData
@@ -1232,10 +1247,10 @@ CONTAINS
     ELSE
         WRITE (cTime,'(A)') rOutputBeginTime
     END IF
-    CALL Budget%InputFile%ReadData(cTime,iLocation,iCol,rReadValues,ErrorCode,iStat)  
+    CALL Budget%InputFile%ReadData(cTime,iLocation,iCol,rReadValues,ErrorCode,iStat)
     IF (ErrorCode .NE. 0) THEN
         CALL Budget%InputFile%GetName(cFileName)
-        CALL SetLastMessage('Error in reading data from file '//cFileName//'!',f_iFatal,ThisProcedure)
+        CALL Budget%Logger%SetLastMessage('Error in reading data from file '//cFileName//'!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF

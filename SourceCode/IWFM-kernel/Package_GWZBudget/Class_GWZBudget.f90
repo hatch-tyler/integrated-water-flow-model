@@ -24,8 +24,9 @@ MODULE Class_GWZBudget
   USE IWFM_Kernel_Version         , ONLY: IWFMKernelVersion
   USE MessageLogger               , ONLY: SetLastMessage            , &
                                           EchoProgress              , &
+                                          MessageLoggerType         , &
                                           MessageArray              , &
-                                          f_iFatal                    
+                                          f_iFatal
   USE GeneralUtilities            , ONLY: IntToText                 , &
                                           AllocArray                , &
                                           LocateInList              , &
@@ -637,7 +638,7 @@ CONTAINS
         !Retrieve data
         CALL GetCumGWStorChange_GivenFile(GWZBudget%ZBudgetType,ZoneList,iZoneID,cBeginDate,cEndDate,cOutputInterval,rFactVL,rOutDates,rCumStorChange,iStat)
     ELSE
-        CALL SetLastMessage('Groundwater ZBudget is not part of model output to retrieve zonal cumulative storage change!',f_iFatal,ThisProcedure)
+        CALL GWZBudget%Logger%SetLastMessage('Groundwater ZBudget is not part of model output to retrieve zonal cumulative storage change!',f_iFatal,ThisProcedure)
         iStat = -1
     END IF
     
@@ -711,7 +712,7 @@ CONTAINS
     TYPE(ZoneListType)          :: ZoneList
 
     IF (.NOT. GWZBudget%IsOutfileDefined()) THEN
-        CALL SetLastMessage('Groundwater zone budget is not part of the model output to retrieve data!',f_iFatal,ThisProcedure)
+        CALL GWZBudget%Logger%SetLastMessage('Groundwater zone budget is not part of the model output to retrieve data!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -1417,7 +1418,7 @@ CONTAINS
     TYPE(RHSVectorType) :: NodeRHS(AppGrid%NNodes,Stratigraphy%NLayers)
     
     !Report progress
-    CALL EchoProgress('Computing element face flows')
+    CALL GWZBudget%Logger%EchoProgress('Computing element face flows')
     
     !Initialize
     FlowCollect_IN          = 0.0

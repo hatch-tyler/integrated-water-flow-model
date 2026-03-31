@@ -22,6 +22,7 @@
 !***********************************************************************
 MODULE Class_BudgetInputFile
   USE MessageLogger           , ONLY: SetLastMessage        , &
+                                      MessageLoggerType     , &
                                       f_iFatal
   USE TimeSeriesUtilities     , ONLY: TimeStepType 
   USE GeneralUtilities        , ONLY: IntToText             , &
@@ -60,7 +61,9 @@ MODULE Class_BudgetInputFile
   ! --- BUDGET INPUT FILE TYPE
   ! -------------------------------------------------------------
   TYPE,EXTENDS(GenericFileType) :: BudgetInputFileType
+      TYPE(MessageLoggerType),POINTER :: Logger => NULL()
   CONTAINS
+      PROCEDURE,PASS :: SetLogger => BudgetInputFile_SetLogger
       PROCEDURE,PASS :: Create
       PROCEDURE,PASS :: Open
       PROCEDURE,PASS :: Close
@@ -139,6 +142,17 @@ MODULE Class_BudgetInputFile
 CONTAINS
 
 
+  ! -------------------------------------------------------------
+  ! --- SET LOGGER
+  ! -------------------------------------------------------------
+  SUBROUTINE BudgetInputFile_SetLogger(BudgetFile,Logger)
+    CLASS(BudgetInputFileType)              :: BudgetFile
+    TYPE(MessageLoggerType),TARGET,INTENT(IN) :: Logger
+
+    BudgetFile%Logger => Logger
+
+  END SUBROUTINE BudgetInputFile_SetLogger
+
 
 ! ******************************************************************
 ! ******************************************************************
@@ -168,7 +182,7 @@ CONTAINS
     
     !Make sure that file is an HDF5 file
     IF (iGetFileType_FromName(cFileName) .NE. f_iHDF) THEN
-        CALL SetLastMessage('File '//TRIM(ADJUSTL(cFileName))//' must be an HDF5 file for budget output!',f_iFatal,ThisProcedure)
+        CALL BudgetFile%Logger%SetLastMessage('File '//TRIM(ADJUSTL(cFileName))//' must be an HDF5 file for budget output!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF

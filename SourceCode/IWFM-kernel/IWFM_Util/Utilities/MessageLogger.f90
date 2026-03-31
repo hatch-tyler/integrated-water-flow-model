@@ -50,6 +50,7 @@ MODULE MessageLogger
 
   ! New type-based API
   PUBLIC :: MessageLoggerType
+  PUBLIC :: DefaultLogger
 
   ! Backward-compatible wrapper procedures and constants
   PUBLIC :: SetLogFileName               , &

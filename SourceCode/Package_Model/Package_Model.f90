@@ -23,6 +23,7 @@
 MODULE Package_Model                                                                  
   USE ProgramTimer                , ONLY: ProgramTimerType
   USE MessageLogger               , ONLY: MessageLoggerType                              , &
+                                          DefaultLogger                                , &
                                           LogMessage                                  , &
                                           EchoProgress                                , &
                                           SetFlagToEchoProgress                       , &
@@ -834,9 +835,10 @@ CONTAINS
     CALL Model%AppStream%New(BinaryFile,lWSA,iStat)
     IF (iStat .EQ. -1) RETURN
     
-    !Matrix data 
+    !Matrix data
+    CALL Model%Matrix%SetLogger(DefaultLogger)
     CALL Model%Matrix%New(BinaryFile,iStat)
- 
+
   END SUBROUTINE SetStaticComponent_FromBinFile
   
   
@@ -941,6 +943,11 @@ CONTAINS
         CALL LogMessage(f_cLineFeed//Text,f_iMessage,'',f_iFILE)
     END IF
 
+    !Set logger for components
+    CALL Model%SupplyAdjust%SetLogger(DefaultLogger)
+    CALL Model%IrigFracFile%SetLogger(DefaultLogger)
+    CALL Model%GWZBudget%SetLogger(DefaultLogger)
+
     !Solution scheme control data
     CALL Model%Matrix%SetSolver(MSOLVE,0.01d0*Model%Convergence%Tolerance,Model%Convergence%IterMax,RELAX,iStat)  ;  iF (iStat .EQ. -1) RETURN
     CALL Model%SupplyAdjust%SetMaxPumpAdjustIter(MXITERSP,iStat)  ;  IF (iStat .EQ. -1) RETURN
@@ -1035,6 +1042,7 @@ CONTAINS
     Model%QRVETFRAC                 = 0.0
     
     !Matrix
+    CALL Model%Matrix%SetLogger(DefaultLogger)
     CALL Model%Matrix%New(PPBinaryFile,iStat)
     IF (iStat .EQ. -1) RETURN
 
@@ -1285,15 +1293,20 @@ CONTAINS
         CALL LogMessage(f_cLineFeed//Text,f_iMessage,'',f_iFILE)
     END IF
     
+    !Set logger for components
+    CALL Model%SupplyAdjust%SetLogger(DefaultLogger)
+    CALL Model%IrigFracFile%SetLogger(DefaultLogger)
+    CALL Model%GWZBudget%SetLogger(DefaultLogger)
+
     !Solution scheme control data
     CALL Model%Matrix%SetSolver(MSOLVE,0.01d0*Model%Convergence%Tolerance,Model%Convergence%IterMax,RELAX,iStat)  ;  IF (iStat .EQ. -1) RETURN
     CALL Model%SupplyAdjust%SetMaxPumpAdjustIter(MXITERSP,iStat)  ;  IF (iStat .EQ. -1) RETURN
     CALL Model%SupplyAdjust%SetTolerance(STOPCSP,iStat)  ;  IF (iStat .EQ. -1) RETURN
-    
+
     !Set the supply adjustment flag
     CALL Model%SupplyAdjust%SetAdjustFlag(iAdjustFlag,iStat)
     IF (iStat .EQ. -1) RETURN
-    
+
     !Precipitation data
     CALL Model%PrecipData%New(ProjectFileNames(SIM_PrecipDataFileID),Model%cSIMWorkingDirectory,'precipitation data',Model%TimeStep,iStat)
     IF (iStat .EQ. -1) RETURN
@@ -1635,6 +1648,11 @@ CONTAINS
         CALL LogMessage(f_cLineFeed//Text,f_iMessage,'',f_iFILE)
     END IF
     
+    !Set logger for components
+    CALL Model%SupplyAdjust%SetLogger(DefaultLogger)
+    CALL Model%IrigFracFile%SetLogger(DefaultLogger)
+    CALL Model%GWZBudget%SetLogger(DefaultLogger)
+
     !Solution scheme control data
     Model%Convergence%Tolerance = Toler
     Model%Convergence%IterMax   = iMaxIter

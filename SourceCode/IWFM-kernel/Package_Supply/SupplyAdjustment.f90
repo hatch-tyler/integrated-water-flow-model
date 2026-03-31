@@ -21,7 +21,8 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 MODULE SupplyAdjustment
-  USE MessageLogger               , ONLY: SetLastMessage                 , &
+  USE MessageLogger               , ONLY: MessageLoggerType              , &
+                                          SetLastMessage                 , &
                                           EchoProgress                   , &
                                           MessageArray                   , &
                                           f_iFatal
@@ -93,6 +94,7 @@ MODULE SupplyAdjustment
   ! -------------------------------------------------------------
   TYPE SupplyAdjustmentType
     PRIVATE
+    TYPE(MessageLoggerType),POINTER :: Logger => NULL()                         !Logger instance
     INTEGER                   :: iAdjust               = f_iAdjustNone  !Will pumping, diversions or both will be adjusted
     INTEGER                   :: NAdjustLocations      = 0              !Number of demand locations (e.g. elements or subregions) for which supply will be adjusted
     INTEGER                   :: NMaxPumpAdjustIter    = 0              !Number of maximum supply adjustment iterations (only used for pumping; for diversions diversion rank is used to limit the iterations)
@@ -104,7 +106,8 @@ MODULE SupplyAdjustment
     LOGICAL                   :: lAdjust               = .FALSE.        !Flag to check further adjustment runs will be performed
     TYPE(IntTSDataInFileType) :: SpecFile                               !Supply adjustment specifications file
   CONTAINS
-    PROCEDURE,PASS :: New  
+    PROCEDURE,PASS :: SetLogger
+    PROCEDURE,PASS :: New
     PROCEDURE,PASS :: Kill
     PROCEDURE,PASS :: IsAdjust                  
     PROCEDURE,PASS :: IsDiversionAdjusted       
@@ -133,6 +136,16 @@ MODULE SupplyAdjustment
 CONTAINS
 
 
+  ! -------------------------------------------------------------
+  ! --- SET LOGGER INSTANCE
+  ! -------------------------------------------------------------
+  SUBROUTINE SetLogger(SupplyAdjustment,Logger)
+    CLASS(SupplyAdjustmentType),INTENT(INOUT) :: SupplyAdjustment
+    TYPE(MessageLoggerType),TARGET,INTENT(IN) :: Logger
+
+    SupplyAdjustment%Logger => Logger
+
+  END SUBROUTINE SetLogger
 
 
 ! ******************************************************************
@@ -169,7 +182,7 @@ CONTAINS
     IF (cFileName .EQ. '') THEN
         MessageArray(1) = 'Supply adjustment specifications file must be specified when'
         MessageArray(2) = ' root zone is simulated and pumping or diversions are defined!'
-        CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+        CALL SupplyAdjustment%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -342,7 +355,7 @@ CONTAINS
     
     !Make sure tolerance is set to a value between 0 and 1
     IF (Toler.GT.1.0  .OR. Toler.LT.0.0) THEN
-        CALL SetLastMessage('Supply adjustment tolerance must be a value between 0 and 1',f_iFatal,ThisProcedure)
+        CALL SupplyAdjustment%Logger%SetLastMessage('Supply adjustment tolerance must be a value between 0 and 1',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -369,7 +382,7 @@ CONTAINS
     
     !Make sure that iMaxIter is not less than 1
     IF (iMaxIter .LE. 0) THEN
-        CALL SetLastMessage('Maximum supply adjustment iteration number must be greater than zero!',f_iFatal,ThisProcedure)
+        CALL SupplyAdjustment%Logger%SetLastMessage('Maximum supply adjustment iteration number must be greater than zero!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -398,7 +411,7 @@ CONTAINS
         IF (iAdjust .NE. f_iAdjustPump) THEN      
             IF (iAdjust .NE. f_iAdjustDiver) THEN
                 IF (iAdjust .NE. f_iAdjustPumpDiver) THEN
-                    CALL SetLastMessage('Supply adjustment flag to adjust pumping, diversions or both is not recognized!',f_iFatal,ThisProcedure)
+                    CALL SupplyAdjustment%Logger%SetLastMessage('Supply adjustment flag to adjust pumping, diversions or both is not recognized!',f_iFatal,ThisProcedure)
                     iStat = -1
                     RETURN
                 END IF
@@ -456,7 +469,7 @@ CONTAINS
             MessageArray(1) = 'Column '//TRIM(IntToText(indxCol))//' of Supply Adjustment Specifications Data File'
             MessageArray(2) = 'indicates that a water supply will be adjusted to meet both agricultural and urban '
             MessageArray(3) = 'water demands. This is no longer supported due to computational difficulties!'
-            CALL SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+            CALL SupplyAdjustment%Logger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -499,7 +512,7 @@ CONTAINS
     SupplyAdjustment%lAdjust = .TRUE.
     
     !Inform user
-    CALL EchoProgress('Adjusting supplies to meet water demand')
+    CALL SupplyAdjustment%Logger%EchoProgress('Adjusting supplies to meet water demand')
     
     !Get water demands
     CALL RootZone%GetWaterDemand(f_iLandUse_Ag,AgDemand)
