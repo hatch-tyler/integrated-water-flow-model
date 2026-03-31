@@ -187,7 +187,8 @@ MODULE GeneralUtilities
   ! that disambiguates dates (09/30/1990), file paths, and DSS pathnames
   CHARACTER(LEN=1),PARAMETER  :: f_cInlineCommentChar = '/'
 
-  INTEGER                     :: ErrorCode
+  ! ErrorCode removed from module scope (was thread-unsafe SAVE variable).
+  ! Now declared as local variable in each allocation subroutine.
           
           
           
@@ -1050,6 +1051,7 @@ CONTAINS
     INTEGER,INTENT(IN)::ncolumn
     CHARACTER(LEN=*),INTENT(IN)::SendingProcedure
     INTEGER,INTENT(OUT) :: iStat
+    INTEGER :: ErrorCode
 
     !Initialize
     iStat = 0
@@ -1074,6 +1076,7 @@ CONTAINS
     INTEGER,INTENT(IN)::ncolumn
     CHARACTER(LEN=*),INTENT(IN)::SendingProcedure
     INTEGER,INTENT(OUT) :: iStat
+    INTEGER :: ErrorCode
 
     !Initialize
     iStat = 0
@@ -1098,6 +1101,7 @@ CONTAINS
     INTEGER,INTENT(IN)::ncolumn
     CHARACTER(LEN=*),INTENT(IN)::SendingProcedure
     INTEGER,INTENT(OUT) :: iStat
+    INTEGER :: ErrorCode
 
     !Initialize
     iStat = 0
@@ -1122,6 +1126,7 @@ CONTAINS
     INTEGER,INTENT(IN)::ncolumn
     CHARACTER(LEN=*),INTENT(IN)::SendingProcedure
     INTEGER,INTENT(OUT) :: iStat
+    INTEGER :: ErrorCode
 
     !Initialize
     iStat = 0
@@ -1146,6 +1151,7 @@ CONTAINS
     INTEGER,INTENT(IN)::nrow,ncolumn
     CHARACTER(LEN=*),INTENT(IN)::SendingProcedure
     INTEGER,INTENT(OUT) :: iStat
+    INTEGER :: ErrorCode
 
     !Initialize
     iStat = 0
@@ -1170,6 +1176,7 @@ CONTAINS
     INTEGER,INTENT(IN)::nrow,ncolumn
     CHARACTER(LEN=*),INTENT(IN)::SendingProcedure
     INTEGER,INTENT(OUT) :: iStat
+    INTEGER :: ErrorCode
 
     !Initialize
     iStat = 0
@@ -1194,6 +1201,7 @@ CONTAINS
     INTEGER,INTENT(IN)::n1,n2,n3
     CHARACTER(LEN=*),INTENT(IN)::SendingProcedure
     INTEGER,INTENT(OUT) :: iStat
+    INTEGER :: ErrorCode
 
     !Initialize
     iStat = 0
@@ -1218,6 +1226,7 @@ CONTAINS
     INTEGER,INTENT(IN)::nrow,ncolumn
     CHARACTER(LEN=*),INTENT(IN)::SendingProcedure
     INTEGER,INTENT(OUT) :: iStat
+    INTEGER :: ErrorCode
 
     !Initialize
     iStat = 0
@@ -1242,6 +1251,7 @@ CONTAINS
     INTEGER,INTENT(IN)::ncolumn
     CHARACTER(LEN=*),INTENT(IN)::SendingProcedure
     INTEGER,INTENT(OUT) :: iStat
+    INTEGER :: ErrorCode
 
     !Initialize
     iStat = 0
@@ -1266,6 +1276,7 @@ CONTAINS
     INTEGER,INTENT(IN)::ncolumn
     CHARACTER(LEN=*),INTENT(IN)::SendingProcedure
     INTEGER,INTENT(OUT) :: iStat
+    INTEGER :: ErrorCode
 
     !Initialize
     iStat = 0
@@ -1290,6 +1301,7 @@ CONTAINS
     INTEGER,INTENT(IN)::ncolumn
     CHARACTER(LEN=*),INTENT(IN)::SendingProcedure
     INTEGER,INTENT(OUT) :: iStat
+    INTEGER :: ErrorCode
 
     !Initialize
     iStat = 0

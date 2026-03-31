@@ -55,7 +55,7 @@ MODULE Class_BaseFileType
   INTEGER,PARAMETER :: f_iDefaultUnitNumber = -200   ,&
                        f_iMinUnitNumber     = 8      ,&
                        f_iMaxUnitNumber     = 50008     
-  INTEGER,SAVE      :: LastUnitConnected    = f_iMinUnitNumber - 1
+  INTEGER,SAVE      :: LastUnitConnected    = f_iMinUnitNumber - 1  !Used only by GetAUnitNumber (DSS files)
   
   
   ! -------------------------------------------------------------
@@ -134,7 +134,7 @@ CONTAINS
     iLen = LEN_TRIM(ADJUSTL(FileName))
     ALLOCATE (CHARACTER(LEN=iLen) :: ThisFile%Name)
     ThisFile%Name  = TRIM(ADJUSTL(FileName))
-    ThisFile%UnitN = GetAUnitNumber()
+    !Unit number assigned by NEWUNIT= in OPEN call (concrete file types)
 
   END SUBROUTINE NewBaseFile
   

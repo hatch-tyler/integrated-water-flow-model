@@ -130,7 +130,7 @@ CONTAINS
     END SELECT
       
     !Open file
-    OPEN (UNIT=ThisFile%UnitN,FILE=TRIM(ThisFile%Name),ACCESS='STREAM',FORM='UNFORMATTED',STATUS=StatusJargon,ACTION=ActionJargon,IOSTAT=ErrorCode,IOMSG=cErrMessage)
+    OPEN (NEWUNIT=ThisFile%UnitN,FILE=TRIM(ThisFile%Name),ACCESS='STREAM',FORM='UNFORMATTED',STATUS=StatusJargon,ACTION=ActionJargon,IOSTAT=ErrorCode,IOMSG=cErrMessage)
 
     !Implement actions based on error code
     IF (ErrorCode .NE. 0) THEN

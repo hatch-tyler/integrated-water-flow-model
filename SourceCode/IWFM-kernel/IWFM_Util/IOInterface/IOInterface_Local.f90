@@ -60,7 +60,6 @@ MODULE IOInterface_Local
   ! -------------------------------------------------------------
   PRIVATE
   PUBLIC :: GenericFileType        , &
-            GetFileDate            , &
             iGetFileType_FromName  , &
             DoesFileExist          , &
             f_iUNKNOWN             , &
@@ -2094,57 +2093,6 @@ CONTAINS
   END SUBROUTINE GoToLine
 
 
-! ! -------------------------------------------------------------
-! ! --- SUBROUTINE TO FIND OUT THE DATE OF A FILE
-! ! -------------------------------------------------------------
-  FUNCTION GetFileDate(FileName) RESULT(FileDateAndTime)
-!   USE IFPORT
-   CHARACTER(LEN=*),INTENT(IN) :: FileName
-   CHARACTER(LEN=22)           :: FileDateAndTime
-
-!   !Local variables
-!   !^^^^^^^^^^^^^^^
-!   CHARACTER(LEN=22)::FileDateAndTime_temp
-!   INTEGER(4)::Length,Handle
-!   TYPE(FILE$INFO)::MyFile
-!   INTEGER(2)::Year,Month,Day,Hour,Minute,Second
-!   CHARACTER(LEN=2)::CharMonth,CharDay,CharHour,CharMinute,CharSecond
-!   LOGICAL::FileFound
-
-    !Note: This subroutine is made redundent for portability reasons (Can Dogrul 09/23/2010)
-    FileDateAndTime = ''
-
-!   Handle    = FILE$FIRST
-!   FileFound = .FALSE.
-!   Length    = GETFILEINFOQQ(FileName,MyFile,Handle)
-!   IF (Handle .NE. FILE$ERROR) THEN
-!     CALL UNPACKTIMEQQ(MyFile%LastWrite,Year,Month,Day,Hour,Minute,Second)
-!     FileFound = .TRUE.
-!   END IF
-
-!   IF (.NOT. FileFound) THEN
-!     FileDateAndTime = ''
-!     RETURN
-!   END IF
-
-!   !Convert date and time that is in numbers to characters
-!   CharMonth =TRIM(IntToText(INT(Month,4)))
-!   CharDay   =TRIM(IntToText(INT(Day,4)))
-!   CharHour  =TRIM(IntToText(INT(Hour,4)))
-!   CharMinute=TRIM(IntToText(INT(Minute,4)))
-!   CharSecond=TRIM(IntToText(INT(Second,4)))
-
-!   !Pad the date and time components with zero if necessary
-!   IF (LEN(CharMonth)-LEN_TRIM(CharMonth)  .GT.0) CharMonth =REPEAT('0',LEN(CharMonth)-LEN_TRIM(CharMonth))//TRIM(CharMonth)
-!   IF (LEN(CharDay)-LEN_TRIM(CharDay)      .GT.0) CharDay   =REPEAT('0',LEN(CharDay)-LEN_TRIM(CharDay))//TRIM(CharDay)
-!   IF (LEN(CharHour)-LEN_TRIM(CharHour)    .GT.0) CharHour  =REPEAT('0',LEN(CharHour)-LEN_TRIM(CharHour))//TRIM(CharHour)
-!   IF (LEN(CharMinute)-LEN_TRIM(CharMinute).GT.0) CharMinute=REPEAT('0',LEN(CharMinute)-LEN_TRIM(CharMinute))//TRIM(CharMinute)
-!   IF (LEN(CharSecond)-LEN_TRIM(CharSecond).GT.0) CharSecond=REPEAT('0',LEN(CharSecond)-LEN_TRIM(CharSecond))//TRIM(CharSecond)
-
-!   WRITE (FileDateAndTime_Temp,'(4A,I4,2X,5A)') CharMonth,'/',CharDay,'/',Year,CharHour,':',CharMinute,':',CharSecond
-!   FileDateAndTime=ADJUSTL(FileDateAndTime_temp)
-
-  END FUNCTION GetFileDate
   
   
   ! -------------------------------------------------------------

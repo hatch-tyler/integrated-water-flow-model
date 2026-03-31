@@ -243,7 +243,7 @@ CONTAINS
         ActionJargon = 'READWRITE'
         AccessJargon = AccessType
     END SELECT
-    OPEN (UNIT=ThisFile%UnitN,FILE=TRIM(ThisFile%Name),FORM='FORMATTED',STATUS=StatusJargon,ACTION=ActionJargon,ACCESS=TRIM(AccessJargon),IOSTAT=ErrorCode,IOMSG=cErrMessage)
+    OPEN (NEWUNIT=ThisFile%UnitN,FILE=TRIM(ThisFile%Name),FORM='FORMATTED',STATUS=StatusJargon,ACTION=ActionJargon,ACCESS=TRIM(AccessJargon),IOSTAT=ErrorCode,IOMSG=cErrMessage)
 
     !Implement actions based on error code
     IF (ErrorCode .NE. 0) THEN
