@@ -118,6 +118,7 @@ if(IWFM_MONOLITHIC_BUILD AND IWFM_NEED_DEPENDENCIES)
         iwfm_add_monolithic_executable(IWFM2OBS
             SCOPE KERNEL
             SOURCES
+                ${CMAKE_CURRENT_SOURCE_DIR}/IWFM2OBS/IWFM2OBS_Utilities.f90
                 ${CMAKE_CURRENT_SOURCE_DIR}/IWFM2OBS/Class_SMP2SMP.f90
                 ${CMAKE_CURRENT_SOURCE_DIR}/IWFM2OBS/Class_PESTOutput.f90
                 ${CMAKE_CURRENT_SOURCE_DIR}/IWFM2OBS/Class_HeadDifference.f90
@@ -373,6 +374,7 @@ endif()
 # =============================================================================
 if(IWFM_BUILD_IWFM2OBS)
     add_executable(IWFM2OBS
+        IWFM2OBS/IWFM2OBS_Utilities.f90
         IWFM2OBS/Class_SMP2SMP.f90
         IWFM2OBS/Class_PESTOutput.f90
         IWFM2OBS/Class_HeadDifference.f90

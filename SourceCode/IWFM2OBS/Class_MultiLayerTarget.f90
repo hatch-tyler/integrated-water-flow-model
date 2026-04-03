@@ -17,6 +17,8 @@ MODULE Class_MultiLayerTarget
                                f_iFatal       , &
                                f_iInfo
   USE GeneralUtilities , ONLY: IntToText
+  USE IWFM2OBS_Utilities, ONLY: StripAndClean
+  USE IOInterface      , ONLY: GenericFileType
   USE Class_Grid       , ONLY: GridType
 
   IMPLICIT NONE
@@ -69,27 +71,6 @@ MODULE Class_MultiLayerTarget
 CONTAINS
 
   ! =====================================================================
-  ! ReadNonComment - Read one non-comment line from a Fortran unit
-  !   Skips lines starting with C, c, *, #, or blank lines
-  ! =====================================================================
-  SUBROUTINE ReadNonComment(iUnit, cLine, iStat)
-    INTEGER,          INTENT(IN)  :: iUnit
-    CHARACTER(LEN=*), INTENT(OUT) :: cLine
-    INTEGER,          INTENT(OUT) :: iStat
-
-    iStat = 0
-    DO
-      READ(iUnit, '(A)', IOSTAT=iStat) cLine
-      IF (iStat /= 0) RETURN
-      cLine = ADJUSTL(cLine)
-      IF (LEN_TRIM(cLine) == 0) CYCLE
-      IF (cLine(1:1) == 'C' .OR. cLine(1:1) == 'c' .OR. &
-          cLine(1:1) == '*' .OR. cLine(1:1) == '#') CYCLE
-      EXIT
-    END DO
-  END SUBROUTINE ReadNonComment
-
-  ! =====================================================================
   ! ExtractFirstInt - Extract the first integer from a line
   !   Strips any text before the number (e.g., "NE 1234" or "/ 1234")
   ! =====================================================================
@@ -125,143 +106,143 @@ CONTAINS
     CHARACTER(LEN=*),           INTENT(IN)     :: cObsWellFile
     INTEGER,                    INTENT(OUT)    :: iStat
 
-    INTEGER, PARAMETER :: iUnit = 191
+    TYPE(GenericFileType) :: ConfigFile
     CHARACTER(LEN=1000) :: cLine
     INTEGER :: i, k, iErr, iDum, iNReg
     INTEGER :: iNOUTH, iNOUTF, iNGROUP
-    REAL(8) :: rDum
     REAL(8), ALLOCATABLE :: rDumArr(:), rThick(:)
     REAL(8), ALLOCATABLE :: rInterpHK(:,:), rInterpElev(:,:)
     REAL(8), ALLOCATABLE :: rInterpT(:,:), rObsTrans(:)
     REAL(8) :: rTope, rBote, rTempThick
     REAL(8), ALLOCATABLE :: rCoeff(:)
     INTEGER :: iNVerts
+    INTEGER :: iNObsMax, iNObsCount
 
     iStat = 0
 
     ! ==================================================================
     ! 1. Read nodes file
     ! ==================================================================
-    OPEN(UNIT=iUnit, FILE=cNodesFile, STATUS='OLD', IOSTAT=iErr)
-    IF (iErr /= 0) THEN
-      CALL SetLastMessage('Cannot open nodes file: '//TRIM(cNodesFile), &
-           f_iFatal, cModName)
-      iStat = -1; RETURN
-    END IF
+    CALL ConfigFile%New(FileName=cNodesFile, InputFile=.TRUE., &
+         IsTSFile=.FALSE., Descriptor='Nodes file', iStat=iStat)
+    IF (iStat == -1) RETURN
 
-    CALL ReadNonComment(iUnit, cLine, iErr)
+    CALL ConfigFile%ReadData(cLine, iStat)
+    IF (iStat == -1) THEN; CALL ConfigFile%Kill(); RETURN; END IF
+    CALL StripAndClean(cLine, cLine)
     CALL ExtractFirstInt(cLine, This%iNNodes, iErr)
     IF (iErr /= 0 .OR. This%iNNodes <= 0) THEN
       CALL SetLastMessage('Cannot read node count from: '//TRIM(cNodesFile), &
            f_iFatal, cModName)
-      CLOSE(iUnit); iStat = -1; RETURN
+      CALL ConfigFile%Kill(); iStat = -1; RETURN
     END IF
 
     ALLOCATE(This%Grid%X(This%iNNodes), This%Grid%Y(This%iNNodes), STAT=iErr)
     IF (iErr /= 0) THEN
       CALL SetLastMessage('Cannot allocate node arrays', f_iFatal, cModName)
-      CLOSE(iUnit); iStat = -1; RETURN
+      CALL ConfigFile%Kill(); iStat = -1; RETURN
     END IF
 
-    ! Skip factor/header lines (2 non-comment lines), backspace to data
-    CALL ReadNonComment(iUnit, cLine, iErr)
-    CALL ReadNonComment(iUnit, cLine, iErr)
-    BACKSPACE(iUnit)
+    ! Skip 1 factor/header line (old code read 2, backspaced 1)
+    CALL ConfigFile%ReadData(cLine, iStat)
+    IF (iStat == -1) THEN; CALL ConfigFile%Kill(); RETURN; END IF
 
     DO i = 1, This%iNNodes
-      READ(iUnit, *, IOSTAT=iErr) iDum, This%Grid%X(i), This%Grid%Y(i)
+      CALL ConfigFile%ReadData(cLine, iStat)
+      IF (iStat == -1) THEN; CALL ConfigFile%Kill(); RETURN; END IF
+      READ(cLine, *, IOSTAT=iErr) iDum, This%Grid%X(i), This%Grid%Y(i)
       IF (iErr /= 0) THEN
         CALL SetLastMessage('Error reading node '//TRIM(IntToText(i))// &
              ' from: '//TRIM(cNodesFile), f_iFatal, cModName)
-        CLOSE(iUnit); iStat = -1; RETURN
+        CALL ConfigFile%Kill(); iStat = -1; RETURN
       END IF
     END DO
-    CLOSE(iUnit)
+    CALL ConfigFile%Kill()
 
     ! ==================================================================
     ! 2. Read elements file
     ! ==================================================================
-    OPEN(UNIT=iUnit, FILE=cElemsFile, STATUS='OLD', IOSTAT=iErr)
-    IF (iErr /= 0) THEN
-      CALL SetLastMessage('Cannot open elements file: '//TRIM(cElemsFile), &
-           f_iFatal, cModName)
-      iStat = -1; RETURN
-    END IF
+    CALL ConfigFile%New(FileName=cElemsFile, InputFile=.TRUE., &
+         IsTSFile=.FALSE., Descriptor='Elements file', iStat=iStat)
+    IF (iStat == -1) RETURN
 
     ! Scan for the line containing the number of elements
     ! IWFM elements file: scan until we find a line with 'N' or 'E'
-    ! (matching original MultiLayerTarget behavior)
+    ! (scan raw line including inline comment, then strip for parsing)
     DO
-      CALL ReadNonComment(iUnit, cLine, iErr)
-      IF (iErr /= 0) THEN
+      CALL ConfigFile%ReadData(cLine, iStat)
+      IF (iStat == -1) THEN
         CALL SetLastMessage('Unexpected end of elements file: '// &
              TRIM(cElemsFile), f_iFatal, cModName)
-        CLOSE(iUnit); iStat = -1; RETURN
+        CALL ConfigFile%Kill(); iStat = -1; RETURN
       END IF
       IF (SCAN(cLine, 'NEne') > 0) EXIT
     END DO
+    CALL StripAndClean(cLine, cLine)
 
     CALL ExtractFirstInt(cLine, This%iNElems, iErr)
     IF (iErr /= 0 .OR. This%iNElems <= 0) THEN
       CALL SetLastMessage('Cannot read element count from: '// &
            TRIM(cElemsFile), f_iFatal, cModName)
-      CLOSE(iUnit); iStat = -1; RETURN
+      CALL ConfigFile%Kill(); iStat = -1; RETURN
     END IF
 
     ALLOCATE(This%Grid%Vertex(4, This%iNElems), &
              This%Grid%NVertex(This%iNElems), STAT=iErr)
     IF (iErr /= 0) THEN
       CALL SetLastMessage('Cannot allocate element arrays', f_iFatal, cModName)
-      CLOSE(iUnit); iStat = -1; RETURN
+      CALL ConfigFile%Kill(); iStat = -1; RETURN
     END IF
     This%Grid%Vertex  = 0
     This%Grid%NVertex = 4
 
     ! Read number of subregions
-    CALL ReadNonComment(iUnit, cLine, iErr)
+    CALL ConfigFile%ReadData(cLine, iStat)
+    IF (iStat == -1) THEN; CALL ConfigFile%Kill(); RETURN; END IF
+    CALL StripAndClean(cLine, cLine)
     CALL ExtractFirstInt(cLine, iNReg, iErr)
 
-    ! Skip subregion definitions: 1 header + (nreg-1) entries + 1 more
-    CALL ReadNonComment(iUnit, cLine, iErr)
-    DO i = 1, iNReg - 1
-      CALL ReadNonComment(iUnit, cLine, iErr)
+    ! Skip subregion definitions: 1 header + (nreg-1) entries
+    ! (old code read nreg+1 lines then backspaced; net = skip nreg lines)
+    DO i = 1, iNReg
+      CALL ConfigFile%ReadData(cLine, iStat)
+      IF (iStat == -1) THEN; CALL ConfigFile%Kill(); RETURN; END IF
     END DO
-    CALL ReadNonComment(iUnit, cLine, iErr)
-    BACKSPACE(iUnit)
 
     ! Read element connectivity
     DO i = 1, This%iNElems
-      READ(iUnit, *, IOSTAT=iErr) iDum, &
+      CALL ConfigFile%ReadData(cLine, iStat)
+      IF (iStat == -1) THEN; CALL ConfigFile%Kill(); RETURN; END IF
+      READ(cLine, *, IOSTAT=iErr) iDum, &
            This%Grid%Vertex(1,iDum), This%Grid%Vertex(2,iDum), &
            This%Grid%Vertex(3,iDum), This%Grid%Vertex(4,iDum)
       IF (iErr /= 0) THEN
         CALL SetLastMessage('Error reading element '//TRIM(IntToText(i))// &
              ' from: '//TRIM(cElemsFile), f_iFatal, cModName)
-        CLOSE(iUnit); iStat = -1; RETURN
+        CALL ConfigFile%Kill(); iStat = -1; RETURN
       END IF
       ! Determine number of active vertices (0 = triangle)
       IF (This%Grid%Vertex(4, iDum) <= 0) THEN
         This%Grid%NVertex(iDum) = 3
       END IF
     END DO
-    CLOSE(iUnit)
+    CALL ConfigFile%Kill()
 
     ! ==================================================================
     ! 3. Read stratigraphy file
     ! ==================================================================
-    OPEN(UNIT=iUnit, FILE=cStratFile, STATUS='OLD', IOSTAT=iErr)
-    IF (iErr /= 0) THEN
-      CALL SetLastMessage('Cannot open stratigraphy file: '//TRIM(cStratFile), &
-           f_iFatal, cModName)
-      iStat = -1; RETURN
-    END IF
+    CALL ConfigFile%New(FileName=cStratFile, InputFile=.TRUE., &
+         IsTSFile=.FALSE., Descriptor='Stratigraphy file', iStat=iStat)
+    IF (iStat == -1) RETURN
 
-    CALL ReadNonComment(iUnit, cLine, iErr)
+    CALL ConfigFile%ReadData(cLine, iStat)
+    IF (iStat == -1) THEN; CALL ConfigFile%Kill(); RETURN; END IF
+    CALL StripAndClean(cLine, cLine)
     CALL ExtractFirstInt(cLine, This%iNLayers, iErr)
     IF (iErr /= 0 .OR. This%iNLayers <= 0) THEN
       CALL SetLastMessage('Cannot read layer count from: '//TRIM(cStratFile), &
            f_iFatal, cModName)
-      CLOSE(iUnit); iStat = -1; RETURN
+      CALL ConfigFile%Kill(); iStat = -1; RETURN
     END IF
 
     ALLOCATE(This%rElevation(This%iNNodes, This%iNLayers+1), &
@@ -271,105 +252,118 @@ CONTAINS
     IF (iErr /= 0) THEN
       CALL SetLastMessage('Cannot allocate stratigraphy arrays', &
            f_iFatal, cModName)
-      CLOSE(iUnit); iStat = -1; RETURN
+      CALL ConfigFile%Kill(); iStat = -1; RETURN
     END IF
 
-    ! Skip 2 header lines, backspace to data
-    CALL ReadNonComment(iUnit, cLine, iErr)
-    CALL ReadNonComment(iUnit, cLine, iErr)
-    BACKSPACE(iUnit)
+    ! Skip 1 header line (old code read 2, backspaced 1)
+    CALL ConfigFile%ReadData(cLine, iStat)
+    IF (iStat == -1) THEN; CALL ConfigFile%Kill(); RETURN; END IF
 
     ! Read stratigraphy: node_id, top_elev, (aquitard_thick, aquifer_thick) x nlayers
     DO i = 1, This%iNNodes
-      CALL ReadNonComment(iUnit, cLine, iErr)
-      IF (iErr /= 0) THEN
+      CALL ConfigFile%ReadData(cLine, iStat)
+      IF (iStat == -1) THEN
         CALL SetLastMessage('Error reading stratigraphy for node '// &
              TRIM(IntToText(i)), f_iFatal, cModName)
-        CLOSE(iUnit); iStat = -1; RETURN
+        CALL ConfigFile%Kill(); RETURN
       END IF
       READ(cLine, *, IOSTAT=iErr) iDum, This%rElevation(i,1), &
            ((rDumArr(k), rThick(k)), k=1, This%iNLayers)
       IF (iErr /= 0) THEN
         CALL SetLastMessage('Error parsing stratigraphy for node '// &
              TRIM(IntToText(i)), f_iFatal, cModName)
-        CLOSE(iUnit); iStat = -1; RETURN
+        CALL ConfigFile%Kill(); iStat = -1; RETURN
       END IF
       ! Compute layer bottom elevations
       DO k = 1, This%iNLayers
         This%rElevation(i, k+1) = This%rElevation(i, k) - rThick(k)
       END DO
     END DO
-    CLOSE(iUnit)
+    CALL ConfigFile%Kill()
     DEALLOCATE(rDumArr, rThick)
 
     ! ==================================================================
     ! 4. Read hydraulic conductivity from GW main file
     !    NOTE: Skip counts are IWFM version-specific
     ! ==================================================================
-    OPEN(UNIT=iUnit, FILE=cGWFile, STATUS='OLD', IOSTAT=iErr)
-    IF (iErr /= 0) THEN
-      CALL SetLastMessage('Cannot open GW file: '//TRIM(cGWFile), &
-           f_iFatal, cModName)
-      iStat = -1; RETURN
-    END IF
+    CALL ConfigFile%New(FileName=cGWFile, InputFile=.TRUE., &
+         IsTSFile=.FALSE., Descriptor='GW main file', iStat=iStat)
+    IF (iStat == -1) RETURN
 
-    ! Skip 21 non-comment lines; line 21 contains NOUTH
+    ! GW file starts with a #4.0 version line that GenericFileType
+    ! does NOT auto-skip (it only skips C/c/* comments). Read and discard.
+    CALL ConfigFile%ReadData(cLine, iStat)
+    IF (iStat == -1) THEN; CALL ConfigFile%Kill(); RETURN; END IF
+
+    ! Skip to NOUTH: 21 data lines after the version line
+    ! (the old ReadNonComment auto-skipped #4.0 as a # comment, then
+    !  read 21 data lines; we've already read #4.0 explicitly, so
+    !  read 21 more data lines to reach NOUTH)
     DO i = 1, 21
-      CALL ReadNonComment(iUnit, cLine, iErr)
-      IF (iErr /= 0) THEN
+      CALL ConfigFile%ReadData(cLine, iStat)
+      IF (iStat == -1) THEN
         CALL SetLastMessage('Unexpected end of GW file at line '// &
              TRIM(IntToText(i)), f_iFatal, cModName)
-        CLOSE(iUnit); iStat = -1; RETURN
+        CALL ConfigFile%Kill(); RETURN
       END IF
     END DO
+    CALL StripAndClean(cLine, cLine)
     CALL ExtractFirstInt(cLine, iNOUTH, iErr)
 
-    ! Skip FACTXY + GWHYDOUTFL + header
-    CALL ReadNonComment(iUnit, cLine, iErr)  ! FACTXY
-    CALL ReadNonComment(iUnit, cLine, iErr)  ! GWHYDOUTFL
-    CALL ReadNonComment(iUnit, cLine, iErr)  ! header
-    BACKSPACE(iUnit)
+    ! Skip FACTXY + GWHYDOUTFL (old code read 3, backspaced 1 = skip 2)
+    CALL ConfigFile%ReadData(cLine, iStat)  ! FACTXY
+    IF (iStat == -1) THEN; CALL ConfigFile%Kill(); RETURN; END IF
+    CALL ConfigFile%ReadData(cLine, iStat)  ! GWHYDOUTFL
+    IF (iStat == -1) THEN; CALL ConfigFile%Kill(); RETURN; END IF
 
     ! Skip NOUTH observation entries
     DO i = 1, iNOUTH
-      CALL ReadNonComment(iUnit, cLine, iErr)
+      CALL ConfigFile%ReadData(cLine, iStat)
+      IF (iStat == -1) THEN; CALL ConfigFile%Kill(); RETURN; END IF
     END DO
 
     ! Read NOUTF
-    CALL ReadNonComment(iUnit, cLine, iErr)
+    CALL ConfigFile%ReadData(cLine, iStat)
+    IF (iStat == -1) THEN; CALL ConfigFile%Kill(); RETURN; END IF
+    CALL StripAndClean(cLine, cLine)
     CALL ExtractFirstInt(cLine, iNOUTF, iErr)
 
     ! Skip FCHYDOUTFL + NOUTF flow entries
-    CALL ReadNonComment(iUnit, cLine, iErr)
+    CALL ConfigFile%ReadData(cLine, iStat)
+    IF (iStat == -1) THEN; CALL ConfigFile%Kill(); RETURN; END IF
     DO i = 1, iNOUTF
-      CALL ReadNonComment(iUnit, cLine, iErr)
+      CALL ConfigFile%ReadData(cLine, iStat)
+      IF (iStat == -1) THEN; CALL ConfigFile%Kill(); RETURN; END IF
     END DO
 
     ! Read NGROUP
-    CALL ReadNonComment(iUnit, cLine, iErr)
+    CALL ConfigFile%ReadData(cLine, iStat)
+    IF (iStat == -1) THEN; CALL ConfigFile%Kill(); RETURN; END IF
+    CALL StripAndClean(cLine, cLine)
     CALL ExtractFirstInt(cLine, iNGROUP, iErr)
     IF (iNGROUP > 0) THEN
       CALL SetLastMessage('Parametric grid (NGROUP>0) not supported', &
            f_iFatal, cModName)
-      CLOSE(iUnit); iStat = -1; RETURN
+      CALL ConfigFile%Kill(); iStat = -1; RETURN
     END IF
 
     ! Skip FX + 3 more lines (time units etc.)
     DO i = 1, 4
-      CALL ReadNonComment(iUnit, cLine, iErr)
+      CALL ConfigFile%ReadData(cLine, iStat)
+      IF (iStat == -1) THEN; CALL ConfigFile%Kill(); RETURN; END IF
     END DO
 
-    ! Read HK: for each node, for each layer, one non-comment line
+    ! Read HK: for each node, for each layer, one data line
     ! Layer 1: "node_id HK_value"; Layers 2+: "HK_value"
     This%rHK = 0.0D0
     DO i = 1, This%iNNodes
       DO k = 1, This%iNLayers
-        CALL ReadNonComment(iUnit, cLine, iErr)
-        IF (iErr /= 0) THEN
+        CALL ConfigFile%ReadData(cLine, iStat)
+        IF (iStat == -1) THEN
           CALL SetLastMessage('Error reading HK for node '// &
                TRIM(IntToText(i))//' layer '//TRIM(IntToText(k)), &
                f_iFatal, cModName)
-          CLOSE(iUnit); iStat = -1; RETURN
+          CALL ConfigFile%Kill(); RETURN
         END IF
         IF (k == 1) THEN
           READ(cLine, *, IOSTAT=iErr) iDum, This%rHK(i, k)
@@ -380,54 +374,88 @@ CONTAINS
           CALL SetLastMessage('Error parsing HK for node '// &
                TRIM(IntToText(i))//' layer '//TRIM(IntToText(k)), &
                f_iFatal, cModName)
-          CLOSE(iUnit); iStat = -1; RETURN
+          CALL ConfigFile%Kill(); iStat = -1; RETURN
         END IF
       END DO
     END DO
-    CLOSE(iUnit)
+    CALL ConfigFile%Kill()
 
     ! ==================================================================
     ! 5. Read observation well file
     !    Format: name  x  y  element  BOS  TOS  overwrite_layer
     ! ==================================================================
-    OPEN(UNIT=iUnit, FILE=cObsWellFile, STATUS='OLD', IOSTAT=iErr)
+    CALL ConfigFile%New(FileName=cObsWellFile, InputFile=.TRUE., &
+         IsTSFile=.FALSE., Descriptor='Observation wells file', iStat=iStat)
+    IF (iStat == -1) RETURN
+
+    ! Skip header line
+    CALL ConfigFile%ReadData(cLine, iStat)
+    IF (iStat == -1) THEN; CALL ConfigFile%Kill(); RETURN; END IF
+
+    ! Single-pass read: pre-allocate, grow if needed
+    iNObsMax   = 100
+    iNObsCount = 0
+    ALLOCATE(This%ObsWells(iNObsMax), STAT=iErr)
     IF (iErr /= 0) THEN
-      CALL SetLastMessage('Cannot open obs well file: '//TRIM(cObsWellFile), &
+      CALL SetLastMessage('Cannot allocate obs well array', f_iFatal, cModName)
+      CALL ConfigFile%Kill(); iStat = -1; RETURN
+    END IF
+
+    DO
+      CALL ConfigFile%ReadData(cLine, iStat)
+      IF (iStat == -1) EXIT   ! EOF — normal termination
+      iStat = 0
+
+      iNObsCount = iNObsCount + 1
+
+      ! Grow array if needed
+      IF (iNObsCount > iNObsMax) THEN
+        BLOCK
+          TYPE(ObsWellType), ALLOCATABLE :: TempWells(:)
+          ALLOCATE(TempWells(iNObsMax))
+          TempWells(1:iNObsMax) = This%ObsWells(1:iNObsMax)
+          iNObsMax = iNObsMax * 2
+          DEALLOCATE(This%ObsWells)
+          ALLOCATE(This%ObsWells(iNObsMax))
+          This%ObsWells(1:iNObsCount-1) = TempWells(1:iNObsCount-1)
+          DEALLOCATE(TempWells)
+        END BLOCK
+      END IF
+
+      READ(cLine, *, IOSTAT=iErr) This%ObsWells(iNObsCount)%cName, &
+           This%ObsWells(iNObsCount)%rX, This%ObsWells(iNObsCount)%rY, &
+           This%ObsWells(iNObsCount)%iElem, This%ObsWells(iNObsCount)%rBOS, &
+           This%ObsWells(iNObsCount)%rTOS, &
+           This%ObsWells(iNObsCount)%iOverwriteLayer
+      IF (iErr /= 0) THEN
+        CALL SetLastMessage('Error reading obs well '// &
+             TRIM(IntToText(iNObsCount))// &
+             ' from: '//TRIM(cObsWellFile), f_iFatal, cModName)
+        CALL ConfigFile%Kill(); iStat = -1; RETURN
+      END IF
+    END DO
+    CALL ConfigFile%Kill()
+    iStat = 0
+
+    This%iNObs = iNObsCount
+    IF (This%iNObs == 0) THEN
+      CALL SetLastMessage('No observation wells in: '//TRIM(cObsWellFile), &
            f_iFatal, cModName)
       iStat = -1; RETURN
     END IF
 
-    ! Skip header line, count data lines
-    READ(iUnit, *, IOSTAT=iErr)
-    This%iNObs = 0
-    DO
-      READ(iUnit, *, IOSTAT=iErr)
-      IF (iErr /= 0) EXIT
-      This%iNObs = This%iNObs + 1
-    END DO
-
-    IF (This%iNObs == 0) THEN
-      CALL SetLastMessage('No observation wells in: '//TRIM(cObsWellFile), &
-           f_iFatal, cModName)
-      CLOSE(iUnit); iStat = -1; RETURN
+    ! Trim array to actual size
+    IF (iNObsMax > This%iNObs) THEN
+      BLOCK
+        TYPE(ObsWellType), ALLOCATABLE :: TempWells(:)
+        ALLOCATE(TempWells(This%iNObs))
+        TempWells(1:This%iNObs) = This%ObsWells(1:This%iNObs)
+        DEALLOCATE(This%ObsWells)
+        ALLOCATE(This%ObsWells(This%iNObs))
+        This%ObsWells = TempWells
+        DEALLOCATE(TempWells)
+      END BLOCK
     END IF
-
-    ALLOCATE(This%ObsWells(This%iNObs), STAT=iErr)
-    REWIND(iUnit)
-    READ(iUnit, *, IOSTAT=iErr)  ! Skip header again
-
-    DO i = 1, This%iNObs
-      READ(iUnit, *, IOSTAT=iErr) This%ObsWells(i)%cName, &
-           This%ObsWells(i)%rX, This%ObsWells(i)%rY, &
-           This%ObsWells(i)%iElem, This%ObsWells(i)%rBOS, &
-           This%ObsWells(i)%rTOS, This%ObsWells(i)%iOverwriteLayer
-      IF (iErr /= 0) THEN
-        CALL SetLastMessage('Error reading obs well '//TRIM(IntToText(i))// &
-             ' from: '//TRIM(cObsWellFile), f_iFatal, cModName)
-        CLOSE(iUnit); iStat = -1; RETURN
-      END IF
-    END DO
-    CLOSE(iUnit)
 
     ! ==================================================================
     ! 6. Compute FE interpolation coefficients and T-weights
