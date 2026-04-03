@@ -550,34 +550,50 @@ CONTAINS
 
 
   ! -------------------------------------------------------------
-  ! --- PRINT SUBSIDENCE AT ALL NODES TO HDF5
+  ! --- PRINT SUBSIDENCE AT ALL NODES
+  ! --- Supports text, DSS, and HDF5 (same pattern as AllHeadOutFile_PrintResults)
   ! -------------------------------------------------------------
   SUBROUTINE AllSubsOutFile_PrintResults(CumSubsidence,rFactor,TimeStep,lEndOfSimulation,OutFile)
     REAL(8),INTENT(IN)            :: CumSubsidence(:,:),rFactor
     TYPE(TimeStepType),INTENT(IN) :: TimeStep
     LOGICAL,INTENT(IN)            :: lEndOfSimulation
     TYPE(GenericFileType)         :: OutFile
-    
+
     !Local variables
-    INTEGER :: indxLayer,indxNode,NNodes,NLayers
-    
+    INTEGER   :: indxLayer,indxNode,NNodes,NLayers
+    REAL(8)   :: DummyArray(SIZE(CumSubsidence,DIM=2),SIZE(CumSubsidence,DIM=1))
+    CHARACTER :: SimulationTime*21
+
     !Initialize
     NNodes  = SIZE(CumSubsidence , DIM=1)
     NLayers = SIZE(CumSubsidence , DIM=2)
-    
-    !Only HDF5 output is supported
+
+    !Prepare data: transpose and apply conversion factor (same as AllHeadOutFile_PrintResults)
+    DO indxLayer=1,NLayers
+      DO indxNode=1,NNodes
+        DummyArray(indxLayer,indxNode) = CumSubsidence(indxNode,indxLayer) * rFactor
+      END DO
+    END DO
+
+    !Create the simulation time
+    IF (TimeStep%TrackTime) THEN
+      SimulationTime = ADJUSTL(TimeStep%CurrentDateAndTime)
+    ELSE
+      WRITE(SimulationTime,'(F10.2,1X,A10)') TimeStep%CurrentTime,ADJUSTL(TimeStep%Unit)
+    END IF
+
+    !Print out the results
     IF (OutFile%iGetFileType() .EQ. f_iHDF) THEN
+        !Pack data for HDF: flatten (NLayers,NNodes) to (NNodes*NLayers,1), grouped by layer
         BLOCK
             REAL(8) :: rHDFData(NNodes*NLayers, 1)
-            DO indxLayer=1,NLayers
-              DO indxNode=1,NNodes
-                rHDFData((indxLayer-1)*NNodes + indxNode, 1) = CumSubsidence(indxNode,indxLayer) * rFactor
-              END DO
-            END DO
+            rHDFData(:,1) = PACK(TRANSPOSE(DummyArray), MASK=.TRUE.)
             CALL OutFile%WriteData(rHDFData)
         END BLOCK
+    ELSE
+        CALL OutFile%WriteData(SimulationTime,DummyArray,FinalPrint=lEndOfSimulation)
     END IF
-    
+
   END SUBROUTINE AllSubsOutFile_PrintResults
 
 

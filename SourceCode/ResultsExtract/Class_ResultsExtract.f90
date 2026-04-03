@@ -14,33 +14,42 @@
 !    - DATATYPE input line selects HEAD or SUBSIDENCE
 !    - SUBSIDENCE uses layer summation (not averaging) for Layer=0
 !    - Optional incremental mode (cumulative -> incremental) for SUBSIDENCE
-!    - Auto-discovers AllSubsOut HDF5 from subsidence data file
+!    - Auto-discovers AllSubsOut from subsidence data file
+!    - Supports text, DSS, and HDF5 for both input and output
 !***********************************************************************
 MODULE Class_ResultsExtract
 
-  USE MessageLogger      , ONLY: SetLastMessage   , &
-                                  LogMessage        , &
-                                  f_iFatal          , &
-                                  f_iWarn           , &
-                                  f_iInfo
-  USE GeneralUtilities   , ONLY: IntToText         , &
-                                  UpperCase         , &
-                                  EstablishAbsolutePathFileName , &
-                                  ArrangeText       , &
-                                  PrepareTitle      , &
-                                  ConvertID_To_Index
-  USE TimeSeriesUtilities, ONLY: TimeStepType              , &
-                                  f_iTimeStampLength        , &
-                                  IncrementTimeStamp        , &
-                                  NPeriods                  , &
-                                  CTimeStep_To_RTimeStep
-  USE IOInterface        , ONLY: GenericFileType            , &
-                                  Real2DTSDataInFileType     , &
-                                  PrepareTSDOutputFile       , &
-                                  iGetFileType_FromName      , &
-                                  f_iDSS
-  USE Class_AppGrid      , ONLY: AppGridType
-  USE Class_Stratigraphy , ONLY: StratigraphyType
+  USE MessageLogger        , ONLY: SetLastMessage   , &
+                                    LogMessage        , &
+                                    f_iFatal          , &
+                                    f_iWarn           , &
+                                    f_iInfo
+  USE GeneralUtilities     , ONLY: IntToText                        , &
+                                    UpperCase                        , &
+                                    EstablishAbsolutePathFileName    , &
+                                    ArrangeText                      , &
+                                    PrepareTitle                     , &
+                                    ConvertID_To_Index               , &
+                                    StripTextUntilCharacter          , &
+                                    CleanSpecialCharacters           , &
+                                    f_cInlineCommentChar
+  USE TimeSeriesUtilities  , ONLY: TimeStepType              , &
+                                    f_iTimeStampLength        , &
+                                    IncrementTimeStamp        , &
+                                    NPeriods                  , &
+                                    CTimeStep_To_RTimeStep
+  USE IOInterface          , ONLY: GenericFileType            , &
+                                    Real2DTSDataInFileType     , &
+                                    PrepareTSDOutputFile       , &
+                                    iGetFileType_FromName      , &
+                                    f_iDSS                     , &
+                                    f_iHDF
+  USE Class_AppGrid        , ONLY: AppGridType
+  USE Class_Stratigraphy   , ONLY: StratigraphyType
+  USE Class_BaseHydrograph , ONLY: f_iHyd_AtXY     , &
+                                    f_iHyd_AtNode    , &
+                                    f_iHyd_GWHead    , &
+                                    f_iHyd_Subsidence
 
   IMPLICIT NONE
 
@@ -53,12 +62,10 @@ MODULE Class_ResultsExtract
   INTEGER, PARAMETER :: f_iDataType_HEAD        = 1
   INTEGER, PARAMETER :: f_iDataType_SUBSIDENCE  = 2
 
-  ! Hydrograph type flags (same convention as Class_BaseHydrograph)
-  INTEGER, PARAMETER :: f_iHyd_AtXY   = 0
-  INTEGER, PARAMETER :: f_iHyd_AtNode = 1
-
   ! =====================================================================
   ! Local hydrograph types
+  !   (Kernel's HydAtNodeType/HydAtXYType have PRIVATE fields and are
+  !   not exported, so ResultsExtract maintains compatible public types.)
   ! =====================================================================
   TYPE :: RE_HydAtNodeType
     INTEGER            :: ID       = 0
@@ -81,7 +88,7 @@ MODULE Class_ResultsExtract
   END TYPE RE_HydAtXYType
 
   TYPE :: RE_OrderedHydType
-    INTEGER :: iHydType = 0   ! 0=AtXY, 1=AtNode
+    INTEGER :: iHydType = 0   ! f_iHyd_AtXY or f_iHyd_AtNode
     INTEGER :: indx     = 0   ! Index into Hyd_AtNode or Hyd_AtXY array
   END TYPE RE_OrderedHydType
 
@@ -125,68 +132,13 @@ MODULE Class_ResultsExtract
 
 CONTAINS
 
-  ! =====================================================================
-  ! ReadSimDataLine - Read one data line from an IWFM simulation file
-  !   IWFM convention: comments have C/c/*/# in column 1.
-  !   Data lines are indented (column 1 is space).
-  ! =====================================================================
-  SUBROUTINE ReadSimDataLine(iUnit, cLine, iStat)
-    INTEGER,          INTENT(IN)  :: iUnit
-    CHARACTER(LEN=*), INTENT(OUT) :: cLine
-    INTEGER,          INTENT(OUT) :: iStat
-
-    iStat = 0
-    DO
-      READ(iUnit, '(A)', IOSTAT=iStat) cLine
-      IF (iStat /= 0) RETURN
-      IF (LEN_TRIM(cLine) == 0) CYCLE
-      IF (cLine(1:1) == 'C' .OR. cLine(1:1) == 'c' .OR. &
-          cLine(1:1) == '*' .OR. cLine(1:1) == '#') CYCLE
-      cLine = ADJUSTL(cLine)
-      EXIT
-    END DO
-  END SUBROUTINE ReadSimDataLine
-
-  ! =====================================================================
-  ! StripInlineComment - Remove text after '/' delimiter
-  ! =====================================================================
-  SUBROUTINE StripInlineComment(cLine, cResult)
-    CHARACTER(LEN=*), INTENT(IN)  :: cLine
-    CHARACTER(LEN=*), INTENT(OUT) :: cResult
-    INTEGER :: iPos
-
-    cResult = cLine
-    iPos = SCAN(cResult, '/')
-    IF (iPos > 1) THEN
-      cResult = cResult(1:iPos-1)
-    ELSE IF (iPos == 1) THEN
-      cResult = ' '
-    END IF
-    cResult = ADJUSTL(TRIM(cResult))
-  END SUBROUTINE StripInlineComment
-
-  ! =====================================================================
-  ! ResolveAbsPath - Wrapper for EstablishAbsolutePathFileName
-  ! =====================================================================
-  SUBROUTINE ResolveAbsPath(cFileName, cDefaultPath, cResult)
-    CHARACTER(LEN=*), INTENT(IN)  :: cFileName, cDefaultPath
-    CHARACTER(LEN=*), INTENT(OUT) :: cResult
-    CHARACTER(:), ALLOCATABLE :: cAbsPath
-
-    CALL EstablishAbsolutePathFileName(cFileName, cDefaultPath, cAbsPath)
-    IF (ALLOCATED(cAbsPath)) THEN
-      cResult = cAbsPath
-    ELSE
-      cResult = cFileName
-    END IF
-  END SUBROUTINE ResolveAbsPath
 
   ! =====================================================================
   ! New - Initialize: parse input, discover model files, load grid
   !
   ! Input file format:
   !   Line 1: Simulation main file path          (SIMFILE)
-  !   Line 2: Data type (HEAD or SUBSIDENCE)      (DATATYPE) -- NEW
+  !   Line 2: Data type (HEAD or SUBSIDENCE)      (DATATYPE)
   !   Line 3: Output file path                    (OUTFILE)
   !   Line 4: Number of hydrographs               (NHYD)
   !   Line 5: Coordinate conversion factor        (FACTXY)
@@ -199,9 +151,10 @@ CONTAINS
     INTEGER,                   INTENT(OUT)   :: iStat
 
     CHARACTER(LEN=35), PARAMETER :: ThisProcedure = cModName // '::New'
-    INTEGER, PARAMETER :: iUnit = 198
+    TYPE(GenericFileType) :: InFile
     CHARACTER(LEN=1000) :: cLine, cClean, cSimFile, cOutFile
     CHARACTER(LEN=1000) :: cInputDir
+    CHARACTER(:), ALLOCATABLE :: cAbsPathFileName
     INTEGER :: iErr, iPos, iNHyd, i
     REAL(8) :: rFactXY
     ! Per-hydrograph parsing
@@ -225,32 +178,25 @@ CONTAINS
     ! ================================================================
     ! Step 1: Parse ResultsExtract input file
     ! ================================================================
-    OPEN(UNIT=iUnit, FILE=cInputFile, STATUS='OLD', IOSTAT=iErr)
-    IF (iErr /= 0) THEN
-      CALL SetLastMessage('Cannot open input file: '//TRIM(cInputFile), &
-           f_iFatal, ThisProcedure)
-      iStat = -1; RETURN
-    END IF
+    CALL InFile%New(FileName=cInputFile, InputFile=.TRUE., IsTSFile=.FALSE., &
+                    Descriptor='ResultsExtract input', iStat=iStat)
+    IF (iStat == -1) RETURN
 
     ! Line 1: Simulation main file path
-    CALL ReadSimDataLine(iUnit, cLine, iErr)
-    IF (iErr /= 0) THEN
-      CALL SetLastMessage('Cannot read simulation file path from input', &
-           f_iFatal, ThisProcedure)
-      CLOSE(iUnit); iStat = -1; RETURN
-    END IF
-    CALL StripInlineComment(cLine, cClean)
-    CALL ResolveAbsPath(TRIM(cClean), TRIM(cInputDir), cSimFile)
+    CALL InFile%ReadData(cLine, iStat)
+    IF (iStat == -1) RETURN
+    cClean = StripTextUntilCharacter(cLine, f_cInlineCommentChar)
+    CALL CleanSpecialCharacters(cClean)
+    cClean = ADJUSTL(TRIM(cClean))
+    CALL EstablishAbsolutePathFileName(cClean, TRIM(cInputDir), cAbsPathFileName)
+    cSimFile = cAbsPathFileName
     This%cSimMainFile = cSimFile
 
-    ! Line 2: Data type (HEAD or SUBSIDENCE)  -- NEW vs GWHydExtract
-    CALL ReadSimDataLine(iUnit, cLine, iErr)
-    IF (iErr /= 0) THEN
-      CALL SetLastMessage('Cannot read DATATYPE from input', &
-           f_iFatal, ThisProcedure)
-      CLOSE(iUnit); iStat = -1; RETURN
-    END IF
-    CALL StripInlineComment(cLine, cClean)
+    ! Line 2: Data type (HEAD or SUBSIDENCE)
+    CALL InFile%ReadData(cLine, iStat)
+    IF (iStat == -1) RETURN
+    cClean = StripTextUntilCharacter(cLine, f_cInlineCommentChar)
+    CALL CleanSpecialCharacters(cClean)
     cClean = UpperCase(ADJUSTL(TRIM(cClean)))
     SELECT CASE (TRIM(cClean))
       CASE ('HEAD')
@@ -269,34 +215,37 @@ CONTAINS
         CALL SetLastMessage('Unknown DATATYPE: '//TRIM(cClean)// &
              '. Must be HEAD, SUBSIDENCE, or SUBSIDENCE_CUM.', &
              f_iFatal, ThisProcedure)
-        CLOSE(iUnit); iStat = -1; RETURN
+        iStat = -1; RETURN
     END SELECT
 
     ! Line 3: Output file path
-    CALL ReadSimDataLine(iUnit, cLine, iErr)
-    IF (iErr /= 0) THEN
-      CALL SetLastMessage('Cannot read output file path from input', &
-           f_iFatal, ThisProcedure)
-      CLOSE(iUnit); iStat = -1; RETURN
-    END IF
-    CALL StripInlineComment(cLine, cClean)
-    CALL ResolveAbsPath(TRIM(cClean), TRIM(cInputDir), cOutFile)
+    CALL InFile%ReadData(cLine, iStat)
+    IF (iStat == -1) RETURN
+    cClean = StripTextUntilCharacter(cLine, f_cInlineCommentChar)
+    CALL CleanSpecialCharacters(cClean)
+    cClean = ADJUSTL(TRIM(cClean))
+    CALL EstablishAbsolutePathFileName(cClean, TRIM(cInputDir), cAbsPathFileName)
+    cOutFile = cAbsPathFileName
     This%cOutputFile = cOutFile
 
     ! Line 4: NHYD
-    CALL ReadSimDataLine(iUnit, cLine, iErr)
-    CALL StripInlineComment(cLine, cClean)
+    CALL InFile%ReadData(cLine, iStat)
+    IF (iStat == -1) RETURN
+    cClean = StripTextUntilCharacter(cLine, f_cInlineCommentChar)
+    CALL CleanSpecialCharacters(cClean)
     READ(cClean, *, IOSTAT=iErr) iNHyd
     IF (iErr /= 0 .OR. iNHyd <= 0) THEN
       CALL SetLastMessage('Invalid NHYD value in input file', &
            f_iFatal, ThisProcedure)
-      CLOSE(iUnit); iStat = -1; RETURN
+      iStat = -1; RETURN
     END IF
     This%NHyd = iNHyd
 
     ! Line 5: FACTXY
-    CALL ReadSimDataLine(iUnit, cLine, iErr)
-    CALL StripInlineComment(cLine, cClean)
+    CALL InFile%ReadData(cLine, iStat)
+    IF (iStat == -1) RETURN
+    cClean = StripTextUntilCharacter(cLine, f_cInlineCommentChar)
+    CALL CleanSpecialCharacters(cClean)
     READ(cClean, *, IOSTAT=iErr) rFactXY
     IF (iErr /= 0) rFactXY = 1d0
 
@@ -307,18 +256,19 @@ CONTAINS
     iAtNodeCount = 0
     iAtXYCount   = 0
     DO i = 1, iNHyd
-      CALL ReadSimDataLine(iUnit, cLine, iErr)
-      IF (iErr /= 0) THEN
+      CALL InFile%ReadData(cLine, iStat)
+      IF (iStat == -1) THEN
         CALL SetLastMessage('Unexpected end of input at hydrograph '// &
              TRIM(IntToText(i)), f_iFatal, ThisProcedure)
-        CLOSE(iUnit); iStat = -1; RETURN
+        RETURN
       END IF
-      CALL StripInlineComment(cLine, cClean)
+      cClean = StripTextUntilCharacter(cLine, f_cInlineCommentChar)
+      CALL CleanSpecialCharacters(cClean)
       READ(cClean, *, IOSTAT=iErr) iID, iHydTyp
       IF (iErr /= 0) THEN
         CALL SetLastMessage('Cannot parse hydrograph spec line '// &
              TRIM(IntToText(i)), f_iFatal, ThisProcedure)
-        CLOSE(iUnit); iStat = -1; RETURN
+        iStat = -1; RETURN
       END IF
       IF (iHydTyp == f_iHyd_AtNode) THEN
         iAtNodeCount = iAtNodeCount + 1
@@ -326,7 +276,7 @@ CONTAINS
         iAtXYCount = iAtXYCount + 1
       END IF
     END DO
-    CLOSE(iUnit)
+    CALL InFile%Kill()
 
     This%NHyd_AtNode = iAtNodeCount
     This%NHyd_AtXY   = iAtXYCount
@@ -334,16 +284,21 @@ CONTAINS
     IF (iAtXYCount > 0)   ALLOCATE(This%Hyd_AtXY(iAtXYCount))
 
     ! Second pass: populate (re-open and skip 5 header data lines)
-    OPEN(UNIT=iUnit, FILE=cInputFile, STATUS='OLD', IOSTAT=iErr)
+    CALL InFile%New(FileName=cInputFile, InputFile=.TRUE., IsTSFile=.FALSE., &
+                    Descriptor='ResultsExtract input', iStat=iStat)
+    IF (iStat == -1) RETURN
     DO i = 1, 5
-      CALL ReadSimDataLine(iUnit, cLine, iErr)
+      CALL InFile%ReadData(cLine, iStat)
+      IF (iStat == -1) RETURN
     END DO
 
     iAtNodeCount = 0
     iAtXYCount   = 0
     DO i = 1, iNHyd
-      CALL ReadSimDataLine(iUnit, cLine, iErr)
-      CALL StripInlineComment(cLine, cClean)
+      CALL InFile%ReadData(cLine, iStat)
+      IF (iStat == -1) RETURN
+      cClean = StripTextUntilCharacter(cLine, f_cInlineCommentChar)
+      CALL CleanSpecialCharacters(cClean)
       READ(cClean, *, IOSTAT=iErr) iID, iHydTyp, iLayer
       IF (iErr /= 0) iLayer = 1
 
@@ -379,7 +334,7 @@ CONTAINS
         This%OrderedHydList(i)%indx     = iAtXYCount
       END IF
     END DO
-    CLOSE(iUnit)
+    CALL InFile%Kill()
 
     CALL LogMessage('  Input file: '//TRIM(cInputFile), f_iInfo, ThisProcedure)
     CALL LogMessage('  Data type: '//TRIM(This%cDataType), f_iInfo, ThisProcedure)
@@ -424,15 +379,17 @@ CONTAINS
 
   ! =====================================================================
   ! ParseSimMainFile - Parse simulation main file for PP binary, GW main,
-  !   and time stepping info
+  !   and time stepping info.  Uses GenericFileType which auto-skips
+  !   C/c/* comment lines in ASCII input files.
   ! =====================================================================
   SUBROUTINE ParseSimMainFile(This, iStat)
     CLASS(ResultsExtractType), INTENT(INOUT) :: This
     INTEGER,                   INTENT(OUT)   :: iStat
 
     CHARACTER(LEN=40), PARAMETER :: ThisProcedure = cModName // '::ParseSimMainFile'
-    INTEGER, PARAMETER :: iUnit = 199
+    TYPE(GenericFileType) :: SimFile
     CHARACTER(LEN=1000) :: cLine, cClean, cSimDir
+    CHARACTER(:), ALLOCATABLE :: cAbsPathFileName
     INTEGER :: iErr, iPos, i
     CHARACTER(LEN=30) :: cTimeUnit
     REAL(8) :: rDeltaT
@@ -450,50 +407,49 @@ CONTAINS
     END IF
     This%cSimDir = cSimDir
 
-    OPEN(UNIT=iUnit, FILE=This%cSimMainFile, STATUS='OLD', IOSTAT=iErr)
-    IF (iErr /= 0) THEN
-      CALL SetLastMessage('Cannot open simulation main file: '// &
-           TRIM(This%cSimMainFile), f_iFatal, ThisProcedure)
-      iStat = -1; RETURN
-    END IF
+    CALL SimFile%New(FileName=This%cSimMainFile, InputFile=.TRUE., IsTSFile=.FALSE., &
+                     Descriptor='simulation main file', iStat=iStat)
+    IF (iStat == -1) RETURN
 
-    ! 3 title lines: first via ReadSimDataLine, then 2 raw reads
-    CALL ReadSimDataLine(iUnit, cLine, iErr)
-    IF (iErr /= 0) THEN
-      CALL SetLastMessage('Unexpected end of simulation main file', &
-           f_iFatal, ThisProcedure)
-      CLOSE(iUnit); iStat = -1; RETURN
-    END IF
-    READ(iUnit, '(A)', IOSTAT=iErr) cLine   ! title 2 (raw, may start with C)
-    READ(iUnit, '(A)', IOSTAT=iErr) cLine   ! title 3 (raw, may start with C)
+    ! 3 title lines (auto-skip of C/c/* comments means we get the data lines)
+    CALL SimFile%ReadData(cLine, iStat)  ;  IF (iStat == -1) RETURN
+    CALL SimFile%ReadData(cLine, iStat)  ;  IF (iStat == -1) RETURN
+    CALL SimFile%ReadData(cLine, iStat)  ;  IF (iStat == -1) RETURN
 
     ! File 1: PP binary path
-    CALL ReadSimDataLine(iUnit, cLine, iErr)
-    CALL StripInlineComment(cLine, cClean)
-    CALL ResolveAbsPath(TRIM(cClean), TRIM(cSimDir), This%cPPBinaryFile)
+    CALL SimFile%ReadData(cLine, iStat)  ;  IF (iStat == -1) RETURN
+    cClean = StripTextUntilCharacter(cLine, f_cInlineCommentChar)
+    CALL CleanSpecialCharacters(cClean)
+    CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(cClean)), TRIM(cSimDir), cAbsPathFileName)
+    This%cPPBinaryFile = cAbsPathFileName
 
     ! File 2: GW main file
-    CALL ReadSimDataLine(iUnit, cLine, iErr)
-    CALL StripInlineComment(cLine, cClean)
-    CALL ResolveAbsPath(TRIM(cClean), TRIM(cSimDir), This%cGWMainFile)
+    CALL SimFile%ReadData(cLine, iStat)  ;  IF (iStat == -1) RETURN
+    cClean = StripTextUntilCharacter(cLine, f_cInlineCommentChar)
+    CALL CleanSpecialCharacters(cClean)
+    CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(cClean)), TRIM(cSimDir), cAbsPathFileName)
+    This%cGWMainFile = cAbsPathFileName
 
     ! Files 3-11: skip 9 more file entries
     DO i = 1, 9
-      CALL ReadSimDataLine(iUnit, cLine, iErr)
+      CALL SimFile%ReadData(cLine, iStat)  ;  IF (iStat == -1) RETURN
     END DO
 
     ! BDT (start date) -- extract first whitespace-delimited token
-    CALL ReadSimDataLine(iUnit, cLine, iErr)
-    cClean = ADJUSTL(TRIM(cLine))
+    CALL SimFile%ReadData(cLine, iStat)  ;  IF (iStat == -1) RETURN
+    cClean = StripTextUntilCharacter(cLine, f_cInlineCommentChar)
+    CALL CleanSpecialCharacters(cClean)
+    cClean = ADJUSTL(TRIM(cClean))
     iPos = INDEX(cClean, ' ')
     IF (iPos > 1) cClean = cClean(1:iPos-1)
     This%TimeStep%CurrentDateAndTime = cClean
     This%TimeStep%TrackTime = .TRUE.
 
     ! Skip 1 line (restart flag), then read time unit
-    CALL ReadSimDataLine(iUnit, cLine, iErr)
-    CALL ReadSimDataLine(iUnit, cLine, iErr)
-    CALL StripInlineComment(cLine, cClean)
+    CALL SimFile%ReadData(cLine, iStat)  ;  IF (iStat == -1) RETURN
+    CALL SimFile%ReadData(cLine, iStat)  ;  IF (iStat == -1) RETURN
+    cClean = StripTextUntilCharacter(cLine, f_cInlineCommentChar)
+    CALL CleanSpecialCharacters(cClean)
     cTimeUnit = ADJUSTL(TRIM(cClean))
     This%TimeStep%Unit = cTimeUnit(1:6)
 
@@ -502,19 +458,21 @@ CONTAINS
     IF (iErr /= 0) THEN
       CALL SetLastMessage('Cannot parse time unit: '//TRIM(cTimeUnit), &
            f_iFatal, ThisProcedure)
-      CLOSE(iUnit); iStat = -1; RETURN
+      iStat = -1; RETURN
     END IF
     This%TimeStep%DeltaT_InMinutes = iDeltaT_InMinutes
     This%TimeStep%DeltaT = rDeltaT
 
     ! EDT (end date) -- extract first whitespace-delimited token
-    CALL ReadSimDataLine(iUnit, cLine, iErr)
-    cClean = ADJUSTL(TRIM(cLine))
+    CALL SimFile%ReadData(cLine, iStat)  ;  IF (iStat == -1) RETURN
+    cClean = StripTextUntilCharacter(cLine, f_cInlineCommentChar)
+    CALL CleanSpecialCharacters(cClean)
+    cClean = ADJUSTL(TRIM(cClean))
     iPos = INDEX(cClean, ' ')
     IF (iPos > 1) cClean = cClean(1:iPos-1)
     This%TimeStep%EndDateAndTime = cClean
 
-    CLOSE(iUnit)
+    CALL SimFile%Kill()
 
     ! Compute NTIME
     This%NTIME = NPeriods(iDeltaT_InMinutes, &
@@ -551,47 +509,47 @@ CONTAINS
     INTEGER,                   INTENT(OUT)   :: iStat
 
     CHARACTER(LEN=40), PARAMETER :: ThisProcedure = cModName // '::ParseGWMainFile'
-    INTEGER, PARAMETER :: iUnit = 200
+    TYPE(GenericFileType) :: GWFile
     CHARACTER(LEN=1000) :: cLine, cClean, cSubsFile
+    CHARACTER(:), ALLOCATABLE :: cAbsPathFileName
     INTEGER :: iErr, i
 
     iStat = 0
 
-    OPEN(UNIT=iUnit, FILE=This%cGWMainFile, STATUS='OLD', IOSTAT=iErr)
-    IF (iErr /= 0) THEN
-      CALL SetLastMessage('Cannot open GW main file: '// &
-           TRIM(This%cGWMainFile), f_iFatal, ThisProcedure)
-      iStat = -1; RETURN
-    END IF
+    CALL GWFile%New(FileName=This%cGWMainFile, InputFile=.TRUE., IsTSFile=.FALSE., &
+                    Descriptor='groundwater main file', iStat=iStat)
+    IF (iStat == -1) RETURN
 
-    ! Skip 3 data lines: BC, TileDrain, Pumping
-    ! (Version line '#4.0' is auto-skipped by ReadSimDataLine as '#' comment)
+    ! Read and discard version line (#4.0 etc.) — not skipped by SkipComment
+    ! since # is not in f_cCommentIndicators (matches kernel's explicit read pattern)
+    CALL GWFile%ReadData(cLine, iStat)  ;  IF (iStat == -1) RETURN
+
+    ! Data lines 1-3: BC, TileDrain, Pumping
     DO i = 1, 3
-      CALL ReadSimDataLine(iUnit, cLine, iErr)
-      IF (iErr /= 0) THEN
-        CALL SetLastMessage('Unexpected end of GW main file at line '// &
-             TRIM(IntToText(i)), f_iFatal, ThisProcedure)
-        CLOSE(iUnit); iStat = -1; RETURN
-      END IF
+      CALL GWFile%ReadData(cLine, iStat)  ;  IF (iStat == -1) RETURN
     END DO
 
     ! Data line 4: Subsidence filename (save for SUBSIDENCE mode)
-    CALL ReadSimDataLine(iUnit, cLine, iErr)
-    CALL StripInlineComment(cLine, cClean)
-    CALL ResolveAbsPath(TRIM(cClean), TRIM(This%cSimDir), cSubsFile)
+    CALL GWFile%ReadData(cLine, iStat)  ;  IF (iStat == -1) RETURN
+    cClean = StripTextUntilCharacter(cLine, f_cInlineCommentChar)
+    CALL CleanSpecialCharacters(cClean)
+    CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(cClean)), TRIM(This%cSimDir), cAbsPathFileName)
+    cSubsFile = cAbsPathFileName
 
     ! Data line 5: Parameter over-write filename
-    CALL ReadSimDataLine(iUnit, cLine, iErr)
+    CALL GWFile%ReadData(cLine, iStat)  ;  IF (iStat == -1) RETURN
 
     ! Data line 6: FACTLTOU (output conversion factor)
-    CALL ReadSimDataLine(iUnit, cLine, iErr)
-    CALL StripInlineComment(cLine, cClean)
+    CALL GWFile%ReadData(cLine, iStat)  ;  IF (iStat == -1) RETURN
+    cClean = StripTextUntilCharacter(cLine, f_cInlineCommentChar)
+    CALL CleanSpecialCharacters(cClean)
     READ(cClean, *, IOSTAT=iErr) This%rFactOutput
     IF (iErr /= 0) This%rFactOutput = 1d0
 
     ! Data line 7: UNITLTOU (output unit string)
-    CALL ReadSimDataLine(iUnit, cLine, iErr)
-    CALL StripInlineComment(cLine, cClean)
+    CALL GWFile%ReadData(cLine, iStat)  ;  IF (iStat == -1) RETURN
+    cClean = StripTextUntilCharacter(cLine, f_cInlineCommentChar)
+    CALL CleanSpecialCharacters(cClean)
     This%cUnitOutput = ADJUSTL(TRIM(cClean))
 
     SELECT CASE (This%iDataType)
@@ -600,34 +558,31 @@ CONTAINS
         ! Data lines 8-13: FactFlow, UnitFlow, FactVelocity, UnitVelocity,
         !                  CellVelocityFile, VerticalFlowFile
         DO i = 1, 6
-          CALL ReadSimDataLine(iUnit, cLine, iErr)
-          IF (iErr /= 0) THEN
-            CALL SetLastMessage('Unexpected end of GW main file at skip line '// &
-                 TRIM(IntToText(i+7)), f_iFatal, ThisProcedure)
-            CLOSE(iUnit); iStat = -1; RETURN
-          END IF
+          CALL GWFile%ReadData(cLine, iStat)  ;  IF (iStat == -1) RETURN
         END DO
 
         ! Data line 14: All-heads output file path
-        CALL ReadSimDataLine(iUnit, cLine, iErr)
-        IF (iErr /= 0) THEN
+        CALL GWFile%ReadData(cLine, iStat)
+        IF (iStat == -1) THEN
           CALL SetLastMessage('Cannot read all-heads file path from GW main', &
                f_iFatal, ThisProcedure)
-          CLOSE(iUnit); iStat = -1; RETURN
+          RETURN
         END IF
-        CALL StripInlineComment(cLine, cClean)
-        CLOSE(iUnit)
+        cClean = StripTextUntilCharacter(cLine, f_cInlineCommentChar)
+        CALL CleanSpecialCharacters(cClean)
+        CALL GWFile%Kill()
 
-        IF (LEN_TRIM(cClean) == 0) THEN
+        IF (LEN_TRIM(ADJUSTL(cClean)) == 0) THEN
           CALL SetLastMessage('All-heads output file path is blank in GW main. '// &
                'Simulation must have all-heads output enabled.', &
                f_iFatal, ThisProcedure)
           iStat = -1; RETURN
         END IF
-        CALL ResolveAbsPath(TRIM(cClean), TRIM(This%cSimDir), This%cAllDataFile)
+        CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(cClean)), TRIM(This%cSimDir), cAbsPathFileName)
+        This%cAllDataFile = cAbsPathFileName
 
       CASE (f_iDataType_SUBSIDENCE)
-        CLOSE(iUnit)
+        CALL GWFile%Kill()
         ! Discover AllSubsOut file from subsidence data file
         CALL ParseSubsidenceFile(This, cSubsFile, iStat)
         IF (iStat == -1) RETURN
@@ -646,17 +601,12 @@ CONTAINS
   ! =====================================================================
   ! ParseSubsidenceFile - Parse subsidence data file to find AllSubsOut
   !
-  ! v4.1/v5.1 subsidence file data line order:
-  !   Version #4.1 (auto-skipped as '#' comment)
-  !   Line 1: AllSubsOut HDF5 file   <-- what we need
+  ! v4.1/v5.1 subsidence file structure (matching kernel reading pattern
+  ! in Class_AppSubsidence_v51.f90:144-150):
+  !   Version #4.1 (read and discarded)
+  !   Line 1: AllSubsOut file path  <-- what we need
   !   Line 2: IC file
-  !   Line 3: Tecplot output file
-  !   Line 4: Final Results file
   !   ... (remaining lines)
-  !
-  ! In the kernel (Class_AppSubsidence_v41/v51), AllSubsOut is read
-  ! FIRST (data line 1), then IC/Tecplot/etc follow via the v40/v50
-  ! config reader.
   ! =====================================================================
   SUBROUTINE ParseSubsidenceFile(This, cSubsFile, iStat)
     CLASS(ResultsExtractType), INTENT(INOUT) :: This
@@ -664,48 +614,41 @@ CONTAINS
     INTEGER,                   INTENT(OUT)   :: iStat
 
     CHARACTER(LEN=40), PARAMETER :: ThisProcedure = cModName // '::ParseSubsidenceFile'
-    INTEGER, PARAMETER :: iUnit = 201
-    CHARACTER(LEN=1000) :: cLine, cClean, cSubsDir
-    INTEGER :: iErr, iPos
+    TYPE(GenericFileType) :: SubsFile
+    CHARACTER(LEN=1000) :: cLine, cClean
+    CHARACTER(:), ALLOCATABLE :: cAbsPathFileName
 
     iStat = 0
 
-    ! Determine subsidence file directory for relative path resolution
-    cSubsDir = cSubsFile
-    iPos = MAX(SCAN(cSubsDir, '/\', BACK=.TRUE.), 0)
-    IF (iPos > 0) THEN
-      cSubsDir = cSubsDir(1:iPos)
-    ELSE
-      cSubsDir = './'
-    END IF
+    CALL SubsFile%New(FileName=cSubsFile, InputFile=.TRUE., IsTSFile=.FALSE., &
+                      Descriptor='subsidence data file', iStat=iStat)
+    IF (iStat == -1) RETURN
 
-    OPEN(UNIT=iUnit, FILE=cSubsFile, STATUS='OLD', IOSTAT=iErr)
-    IF (iErr /= 0) THEN
-      CALL SetLastMessage('Cannot open subsidence data file: '// &
-           TRIM(cSubsFile), f_iFatal, ThisProcedure)
-      iStat = -1; RETURN
-    END IF
+    ! Read version line (#4.1 or #5.1) - not skipped by SkipComment since # is not
+    ! in f_cCommentIndicators; matches kernel pattern in v51.f90:145
+    CALL SubsFile%ReadData(cLine, iStat)  ;  IF (iStat == -1) RETURN
 
-    ! Data line 1: AllSubsOut HDF5 file (first data line after version comment)
-    ! In v4.1/v5.1, AllSubsOut is inserted before the v4.0/v5.0 config lines.
-    CALL ReadSimDataLine(iUnit, cLine, iErr)
-    IF (iErr /= 0) THEN
+    ! AllSubsOut file path (first data line after version; matches v51.f90:148)
+    CALL SubsFile%ReadData(cLine, iStat)
+    IF (iStat == -1) THEN
       CALL SetLastMessage('Cannot read AllSubsOut file path from subsidence file. '// &
            'Subsidence version must be >= 4.1.', f_iFatal, ThisProcedure)
-      CLOSE(iUnit); iStat = -1; RETURN
+      RETURN
     END IF
-    CALL StripInlineComment(cLine, cClean)
-    CLOSE(iUnit)
+    cClean = StripTextUntilCharacter(cLine, f_cInlineCommentChar)
+    CALL CleanSpecialCharacters(cClean)
+    CALL SubsFile%Kill()
 
-    IF (LEN_TRIM(cClean) == 0) THEN
+    IF (LEN_TRIM(ADJUSTL(cClean)) == 0) THEN
       CALL SetLastMessage('AllSubsOut file path is blank in subsidence file. '// &
            'Check subsidence version (must be >= 4.1 with AllSubsOut enabled).', &
            f_iFatal, ThisProcedure)
       iStat = -1; RETURN
     END IF
 
-    ! Resolve relative to simulation directory (same convention as IWFM)
-    CALL ResolveAbsPath(TRIM(cClean), TRIM(This%cSimDir), This%cAllDataFile)
+    ! Resolve relative to simulation directory (same convention as kernel, v51.f90:152)
+    CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(cClean)), TRIM(This%cSimDir), cAbsPathFileName)
+    This%cAllDataFile = cAbsPathFileName
 
     CALL LogMessage('  Subsidence file: '//TRIM(cSubsFile), &
          f_iInfo, ThisProcedure)
@@ -717,6 +660,7 @@ CONTAINS
 
   ! =====================================================================
   ! LoadGridFromPPBinary - Load grid and stratigraphy from PP binary file
+  !   Uses kernel's AppGridType%New and StratigraphyType%New
   ! =====================================================================
   SUBROUTINE LoadGridFromPPBinary(This, iStat)
     CLASS(ResultsExtractType), INTENT(INOUT) :: This
@@ -727,21 +671,17 @@ CONTAINS
 
     iStat = 0
 
-    ! Open PP binary for reading
     CALL PPBinFile%New(FileName=This%cPPBinaryFile, InputFile=.TRUE., &
                        IsTSFile=.FALSE., Descriptor='preprocessor binary', &
                        iStat=iStat)
     IF (iStat == -1) RETURN
 
-    ! Read grid (ReadProcessedAppGridData)
     CALL This%AppGrid%New(PPBinFile, iStat)
     IF (iStat == -1) RETURN
 
-    ! Read stratigraphy (ReadProcessedStratigraphyData)
     CALL This%Stratigraphy%New(This%AppGrid%NNodes, PPBinFile, iStat)
     IF (iStat == -1) RETURN
 
-    ! Close PP binary - only need grid and stratigraphy
     CALL PPBinFile%Kill()
 
     CALL LogMessage('  Grid: '//TRIM(IntToText(This%AppGrid%NNodes))//' nodes, '// &
@@ -754,7 +694,8 @@ CONTAINS
 
   ! =====================================================================
   ! ProcessHydSpecs - Compute FE interpolation coefficients for AtXY,
-  !   convert node IDs to indices for AtNode
+  !   convert node IDs to indices for AtNode.
+  !   Uses kernel's AppGrid%FEInterpolate and ConvertID_To_Index.
   ! =====================================================================
   SUBROUTINE ProcessHydSpecs(This, iStat)
     CLASS(ResultsExtractType), INTENT(INOUT) :: This
@@ -768,7 +709,6 @@ CONTAINS
 
     iStat = 0
 
-    ! Get node IDs for ConvertID_To_Index
     CALL This%AppGrid%GetNodeIDs(iNodeIDs)
 
     ! Process AtXY hydrographs
@@ -786,7 +726,6 @@ CONTAINS
       This%Hyd_AtXY(i)%iNodes   = iNodes
       This%Hyd_AtXY(i)%rFactors = rCoeff
 
-      ! Validate layer
       IF (This%Hyd_AtXY(i)%iLayer > This%Stratigraphy%NLayers) THEN
         CALL SetLastMessage('Hydrograph '//TRIM(IntToText(This%Hyd_AtXY(i)%ID))// &
              ': layer '//TRIM(IntToText(This%Hyd_AtXY(i)%iLayer))// &
@@ -807,11 +746,9 @@ CONTAINS
         iStat = -1; RETURN
       END IF
 
-      ! Find element containing this node (use first element in connectivity)
       This%Hyd_AtNode(i)%iElement = This%AppGrid%AppNode(iNodeIndex)%ElemID_OnCCWSide(1)
       This%Hyd_AtNode(i)%iNode    = iNodeIndex   ! Replace user ID with internal index
 
-      ! Validate layer
       IF (This%Hyd_AtNode(i)%iLayer > This%Stratigraphy%NLayers) THEN
         CALL SetLastMessage('Hydrograph '//TRIM(IntToText(This%Hyd_AtNode(i)%ID))// &
              ': layer '//TRIM(IntToText(This%Hyd_AtNode(i)%iLayer))// &
@@ -829,7 +766,9 @@ CONTAINS
 
 
   ! =====================================================================
-  ! PrepareOutputFile - Set up output file with IWFM hydrograph format
+  ! PrepareOutputFile - Set up output file with IWFM hydrograph format.
+  !   Text/DSS: uses kernel's PrepareTSDOutputFile (same as PrepHydOutFile)
+  !   HDF5:     uses kernel's CreateHDFDataSet (same as Transfer_To_HDF)
   ! =====================================================================
   SUBROUTINE PrepareOutputFile(This, iStat)
     CLASS(ResultsExtractType), INTENT(INOUT) :: This
@@ -845,15 +784,17 @@ CONTAINS
     CHARACTER(LEN=10)  :: DataUnit(1), DataType(1)
     CHARACTER(LEN=32)  :: CPart(1), FPart(1)
     INTEGER :: Layers(This%NHyd), IDs(This%NHyd), GWNodes(This%NHyd), Elements(This%NHyd)
+    ! HDF5 output variables
+    INTEGER            :: NColumns_HDF(1)
+    CHARACTER(LEN=50)  :: cDataSetName_HDF(1)
 
     iStat = 0
     NHyd  = This%NHyd
 
-    ! Get node and element IDs
     CALL This%AppGrid%GetNodeIDs(iNodeIDs)
     CALL This%AppGrid%GetElementIDs(iElemIDs)
 
-    ! Open file
+    ! Open file (GenericFileType auto-detects format from extension)
     CALL This%OutFile%New(FileName=This%cOutputFile, InputFile=.FALSE., &
                           IsTSFile=.TRUE., &
                           Descriptor=TRIM(This%cDataType)//' hydrograph output', &
@@ -877,70 +818,82 @@ CONTAINS
       END SELECT
     END DO
 
-    ! Format spec matches IWFM hydrograph output
-    cFormatSpec = '(A21,*(2X,F10.3))'
+    ! Branch by output file type
+    IF (This%OutFile%iGetFileType() == f_iHDF) THEN
+      ! ----- HDF5 output (same pattern as Transfer_To_HDF, Class_BaseHydrograph.f90:1054-1057) -----
+      NColumns_HDF(1) = NHyd
+      SELECT CASE (This%iDataType)
+        CASE (f_iDataType_HEAD)
+          cDataSetName_HDF(1) = '/cGWHydrographs'     ! matches GWHydrograph.f90:1412
+        CASE (f_iDataType_SUBSIDENCE)
+          cDataSetName_HDF(1) = '/Subsidence'          ! matches Class_BaseAppSubsidence.f90:609
+      END SELECT
+      CALL This%OutFile%CreateHDFDataSet(cPathNames=cDataSetName_HDF, NColumns=NColumns_HDF, &
+           NTime=This%NTIME+1, TimeStep=This%TimeStep, DataType=0d0, iStat=iStat)
+      IF (iStat == -1) RETURN
 
-    ! Title - varies by data type
-    SELECT CASE (This%iDataType)
-      CASE (f_iDataType_HEAD)
-        WorkArray(1) = ArrangeText('GROUNDWATER HYDROGRAPH', 37)
-        WorkArray(2) = ArrangeText('(UNIT=', This%cUnitOutput, ')', 37)
-        CPart(1) = 'HEAD'
-        FPart(1) = 'GW_HEAD_HYDROGRAPHS'
-      CASE (f_iDataType_SUBSIDENCE)
-        IF (This%lIncremental) THEN
-          WorkArray(1) = ArrangeText('SUBSIDENCE HYDROGRAPH (INCR)', 37)
-        ELSE
-          WorkArray(1) = ArrangeText('SUBSIDENCE HYDROGRAPH (CUM)', 37)
-        END IF
-        WorkArray(2) = ArrangeText('(UNIT=', This%cUnitOutput, ')', 37)
-        CPart(1) = 'SUBSIDENCE'
-        FPart(1) = 'SUBS_HYDROGRAPHS'
-    END SELECT
-    CALL PrepareTitle(TitleLines(1), WorkArray(1:2), 39, 42)
+    ELSE
+      ! ----- Text/DSS output (same as PrepHydOutFile, Class_BaseHydrograph.f90:930-948) -----
+      cFormatSpec = '(A21,*(2X,F10.3))'
 
-    ! Headers (5 rows matching IWFM format)
-    Header = ''
-    WRITE(Header(1,1), '(A1,10X,A13)') '*', 'HYDROGRAPH ID'
-    WRITE(Header(2,1), '(A1,18X,A5)')  '*', 'LAYER'
-    WRITE(Header(3,1), '(A1,19X,A4)')  '*', 'NODE'
-    WRITE(Header(4,1), '(A1,16X,A7)')  '*', 'ELEMENT'
-    DO indx = 1, NHyd
-      WRITE(Header(1, indx+1), '(I7)') IDs(indx)
-      WRITE(Header(2, indx+1), '(I7)') Layers(indx)
-      WRITE(Header(3, indx+1), '(I7)') GWNodes(indx)
-      WRITE(Header(4, indx+1), '(I7)') Elements(indx)
-    END DO
-    WRITE(Header(5,1), '(A1,8X,A4)') '*', 'TIME'
+      SELECT CASE (This%iDataType)
+        CASE (f_iDataType_HEAD)
+          WorkArray(1) = ArrangeText('GROUNDWATER HYDROGRAPH', 37)
+          WorkArray(2) = ArrangeText('(UNIT=', This%cUnitOutput, ')', 37)
+          CPart(1) = 'HEAD'
+          FPart(1) = 'GW_HEAD_HYDROGRAPHS'
+        CASE (f_iDataType_SUBSIDENCE)
+          IF (This%lIncremental) THEN
+            WorkArray(1) = ArrangeText('SUBSIDENCE HYDROGRAPH (INCR)', 37)
+          ELSE
+            WorkArray(1) = ArrangeText('SUBSIDENCE HYDROGRAPH (CUM)', 37)
+          END IF
+          WorkArray(2) = ArrangeText('(UNIT=', This%cUnitOutput, ')', 37)
+          CPart(1) = 'SUBSIDENCE'
+          FPart(1) = 'SUBS_HYDROGRAPHS'
+      END SELECT
+      CALL PrepareTitle(TitleLines(1), WorkArray(1:2), 39, 42)
 
-    HeaderFormat(1:4) = '(A24,2X,*(A7,5X))'
-    HeaderFormat(5)   = '(A13,*(A))'
+      Header = ''
+      WRITE(Header(1,1), '(A1,10X,A13)') '*', 'HYDROGRAPH ID'
+      WRITE(Header(2,1), '(A1,18X,A5)')  '*', 'LAYER'
+      WRITE(Header(3,1), '(A1,19X,A4)')  '*', 'NODE'
+      WRITE(Header(4,1), '(A1,16X,A7)')  '*', 'ELEMENT'
+      DO indx = 1, NHyd
+        WRITE(Header(1, indx+1), '(I7)') IDs(indx)
+        WRITE(Header(2, indx+1), '(I7)') Layers(indx)
+        WRITE(Header(3, indx+1), '(I7)') GWNodes(indx)
+        WRITE(Header(4, indx+1), '(I7)') Elements(indx)
+      END DO
+      WRITE(Header(5,1), '(A1,8X,A4)') '*', 'TIME'
 
-    ! Data unit and type
-    DataUnit(1) = This%TimeStep%Unit
-    DataType(1) = 'PER-AVER'
+      HeaderFormat(1:4) = '(A24,2X,*(A7,5X))'
+      HeaderFormat(5)   = '(A13,*(A))'
 
-    ! Call PrepareTSDOutputFile
-    CALL PrepareTSDOutputFile(This%OutFile         , &
-                              NHyd                  , &
-                              1                     , &
-                              .TRUE.                , &
-                              cFormatSpec           , &
-                              TitleLines            , &
-                              Header                , &
-                              HeaderFormat           , &
-                              .FALSE.               , &
-                              DataUnit              , &
-                              DataType              , &
-                              CPart                 , &
-                              FPart                 , &
-                              This%TimeStep%Unit    , &
-                              IDs=IDs               , &
-                              Layers=Layers         , &
-                              Elements=Elements     , &
-                              GWNodes=GWNodes       , &
-                              iStat=iStat           )
-    IF (iStat == -1) RETURN
+      DataUnit(1) = This%TimeStep%Unit
+      DataType(1) = 'PER-AVER'
+
+      CALL PrepareTSDOutputFile(This%OutFile         , &
+                                NHyd                  , &
+                                1                     , &
+                                .TRUE.                , &
+                                cFormatSpec           , &
+                                TitleLines            , &
+                                Header                , &
+                                HeaderFormat           , &
+                                .FALSE.               , &
+                                DataUnit              , &
+                                DataType              , &
+                                CPart                 , &
+                                FPart                 , &
+                                This%TimeStep%Unit    , &
+                                IDs=IDs               , &
+                                Layers=Layers         , &
+                                Elements=Elements     , &
+                                GWNodes=GWNodes       , &
+                                iStat=iStat           )
+      IF (iStat == -1) RETURN
+    END IF
 
     CALL LogMessage('  Output file: '//TRIM(This%cOutputFile), &
          f_iInfo, ThisProcedure)
@@ -950,8 +903,17 @@ CONTAINS
 
   ! =====================================================================
   ! Run - Main processing loop: read all-node data, compute hydrographs,
-  !   write output.  For SUBSIDENCE with lIncremental=.TRUE., computes
-  !   incremental values (current - previous timestep).
+  !   write output.
+  !
+  !   Input reading:
+  !     Text: Real2DTSDataInFile with nRow=NLayers, nCol=NNodes
+  !     HDF5: Real2DTSDataInFile with nRow=NNodes*NLayers, nCol=1
+  !           (matches single-dataset layout), then unpack to (NLayers,NNodes)
+  !     DSS:  Real2DTSDataInFile with DSS pathnames
+  !
+  !   Output writing:
+  !     Text/DSS: WriteData(SimulationTime, values, FinalPrint)
+  !     HDF5:     WriteData(matrix(NHyd,1)) per timestep
   ! =====================================================================
   SUBROUTINE Run(This, iStat)
     CLASS(ResultsExtractType), INTENT(INOUT) :: This
@@ -962,28 +924,37 @@ CONTAINS
     INTEGER :: iTime, indxHyd, indx, iHydLayer, iHydNode
     INTEGER :: NLayers, NNodes, nVertex, indxVertex, iNode, indxLayer, iCount
     REAL(8), ALLOCATABLE :: rHydValues(:), rPrevHydValues(:), HXY(:)
+    REAL(8), ALLOCATABLE :: rAllNodeData(:,:)
+    REAL(8), ALLOCATABLE :: rHDFOut(:,:)
     REAL(8) :: rFactors(4)
     INTEGER :: iNodes(4)
     CHARACTER(LEN=21) :: SimulationTime
     TYPE(TimeStepType) :: TSLocal
     INTEGER :: iFileReadError
-    LOGICAL :: lFinal
+    LOGICAL :: lFinal, lHDF, lHDFOut
     CHARACTER(LEN=30) :: cDSS_CPart, cDSS_LayerPrefix
 
     iStat   = 0
     NLayers = This%Stratigraphy%NLayers
     NNodes  = This%AppGrid%NNodes
 
-    ALLOCATE(rHydValues(This%NHyd), HXY(NLayers))
+    ALLOCATE(rHydValues(This%NHyd), rAllNodeData(NLayers, NNodes), HXY(NLayers))
     IF (This%lIncremental) THEN
       ALLOCATE(rPrevHydValues(This%NHyd))
       rPrevHydValues = 0d0
     END IF
 
+    ! Detect input and output file formats
+    lHDF    = (iGetFileType_FromName(This%cAllDataFile) == f_iHDF)
+    lHDFOut = (This%OutFile%iGetFileType() == f_iHDF)
+
+    IF (lHDFOut) ALLOCATE(rHDFOut(This%NHyd, 1))
+
+    ! ================================================================
     ! Open all-node data file for reading
-    ! For HEAD: dataset is (NLayers, NNodes)
-    ! For SUBSIDENCE: dataset is also (NLayers, NNodes) from AllSubsOut
+    ! ================================================================
     IF (iGetFileType_FromName(This%cAllDataFile) == f_iDSS) THEN
+      ! DSS: uses separate Init overload with pathnames
       BLOCK
         INTEGER :: iNodeIDs_Local(NNodes), iCnt, iLyr, iNd
         CHARACTER(LEN=80) :: cPathNames(NNodes*NLayers)
@@ -1010,7 +981,17 @@ CONTAINS
              This%TimeStep%TrackTime, nRow=NLayers, nCol=NNodes, &
              cPathNames=cPathNames, iStat=iStat)
       END BLOCK
+
+    ELSE IF (lHDF) THEN
+      ! HDF5: single dataset with NNodes*NLayers columns.
+      ! Open with flat dimensions to match dataset shape, then unpack.
+      ! (Same Init overload as AllHeadOutFile_ForInquiry_New, GWHydrograph.f90:613)
+      CALL AllDataInFile%Init(This%cAllDataFile, &
+           TRIM(This%cDataType)//' at all nodes', &
+           BlocksToSkip=0, nRow=NNodes*NLayers, nCol=1, iStat=iStat)
+
     ELSE
+      ! Text: data stored as (NLayers, NNodes) matrix per timestep
       CALL AllDataInFile%Init(This%cAllDataFile, &
            TRIM(This%cDataType)//' at all nodes', &
            BlocksToSkip=0, nRow=NLayers, nCol=NNodes, iStat=iStat)
@@ -1020,20 +1001,35 @@ CONTAINS
     CALL LogMessage('  Processing '//TRIM(IntToText(This%NTIME+1))// &
          ' timesteps...', f_iInfo, ThisProcedure)
 
-    ! Initialize local timestep for advancing
     TSLocal = This%TimeStep
 
-    ! Loop over NTIME+1 timesteps (initial conditions + NTIME steps)
+    ! ================================================================
+    ! Main timestep loop (initial conditions + NTIME steps)
+    ! ================================================================
     DO iTime = 1, This%NTIME + 1
       lFinal = (iTime == This%NTIME + 1)
 
-      ! Read one timestep of data: rValues(NLayers, NNodes)
+      ! Read one timestep of data
       CALL AllDataInFile%ReadTSData(TSLocal, TRIM(This%cDataType), iFileReadError, iStat)
       IF (iStat == -1) RETURN
       IF (iFileReadError /= 0) THEN
         CALL SetLastMessage('Error reading all-data file at timestep '// &
              TRIM(IntToText(iTime)), f_iFatal, ThisProcedure)
         iStat = -1; RETURN
+      END IF
+
+      ! Unpack into working array rAllNodeData(NLayers, NNodes)
+      IF (lHDF) THEN
+        ! HDF5 data is packed as: index = (layer-1)*NNodes + node
+        ! (canonical layout from AllHeadOutFile_PrintResults / AllSubsOutFile_PrintResults)
+        DO indxLayer = 1, NLayers
+          DO iNode = 1, NNodes
+            rAllNodeData(indxLayer, iNode) = AllDataInFile%rValues((indxLayer-1)*NNodes + iNode, 1)
+          END DO
+        END DO
+      ELSE
+        ! Text/DSS: already in (NLayers, NNodes) layout
+        rAllNodeData = AllDataInFile%rValues
       END IF
 
       ! Compute hydrograph values
@@ -1048,18 +1044,16 @@ CONTAINS
             IF (iHydLayer == 0) THEN
               SELECT CASE (This%iDataType)
                 CASE (f_iDataType_HEAD)
-                  ! Average over active layers (same as GWHydExtract)
                   iCount = COUNT(This%Stratigraphy%ActiveNode(iHydNode,:))
                   IF (iCount > 0) THEN
-                    rHydValues(indxHyd) = SUM(AllDataInFile%rValues(:,iHydNode), &
+                    rHydValues(indxHyd) = SUM(rAllNodeData(:,iHydNode), &
                          MASK=This%Stratigraphy%ActiveNode(iHydNode,:)) / REAL(iCount,8)
                   END IF
                 CASE (f_iDataType_SUBSIDENCE)
-                  ! Sum over all layers (additive compaction)
-                  rHydValues(indxHyd) = SUM(AllDataInFile%rValues(:,iHydNode))
+                  rHydValues(indxHyd) = SUM(rAllNodeData(:,iHydNode))
               END SELECT
             ELSE
-              rHydValues(indxHyd) = AllDataInFile%rValues(iHydLayer, iHydNode)
+              rHydValues(indxHyd) = rAllNodeData(iHydLayer, iHydNode)
             END IF
 
           CASE (f_iHyd_AtXY)
@@ -1074,7 +1068,6 @@ CONTAINS
             IF (iHydLayer == 0) THEN
               SELECT CASE (This%iDataType)
                 CASE (f_iDataType_HEAD)
-                  ! Interpolate at each layer, average active
                   HXY    = 0d0
                   iCount = 0
                   DO indxLayer = 1, NLayers
@@ -1083,28 +1076,26 @@ CONTAINS
                     DO indxVertex = 1, nVertex
                       iNode = iNodes(indxVertex)
                       HXY(indxLayer) = HXY(indxLayer) + &
-                           AllDataInFile%rValues(indxLayer, iNode) * rFactors(indxVertex)
+                           rAllNodeData(indxLayer, iNode) * rFactors(indxVertex)
                     END DO
                   END DO
                   IF (iCount > 0) THEN
                     rHydValues(indxHyd) = SUM(HXY) / REAL(iCount, 8)
                   END IF
                 CASE (f_iDataType_SUBSIDENCE)
-                  ! Interpolate at each layer, sum all (additive compaction)
                   DO indxLayer = 1, NLayers
                     DO indxVertex = 1, nVertex
                       iNode = iNodes(indxVertex)
                       rHydValues(indxHyd) = rHydValues(indxHyd) + &
-                           AllDataInFile%rValues(indxLayer, iNode) * rFactors(indxVertex)
+                           rAllNodeData(indxLayer, iNode) * rFactors(indxVertex)
                     END DO
                   END DO
               END SELECT
             ELSE
-              ! Specific layer
               DO indxVertex = 1, nVertex
                 iNode = iNodes(indxVertex)
                 rHydValues(indxHyd) = rHydValues(indxHyd) + &
-                     AllDataInFile%rValues(iHydLayer, iNode) * rFactors(indxVertex)
+                     rAllNodeData(iHydLayer, iNode) * rFactors(indxVertex)
               END DO
             END IF
 
@@ -1118,19 +1109,34 @@ CONTAINS
         WRITE(SimulationTime, '(F10.2,1X,A10)') TSLocal%CurrentTime, ADJUSTL(TSLocal%Unit)
       END IF
 
-      ! Incremental conversion: write (current - previous), then update previous
+      ! Write output (with incremental conversion if needed)
       IF (This%lIncremental) THEN
         IF (iTime == 1) THEN
           ! Initial condition: write zeros (no prior timestep to diff against)
-          CALL This%OutFile%WriteData(SimulationTime, rHydValues * 0d0, FinalPrint=lFinal)
+          IF (lHDFOut) THEN
+            rHDFOut(:,1) = 0d0
+            CALL This%OutFile%WriteData(rHDFOut)
+          ELSE
+            CALL This%OutFile%WriteData(SimulationTime, rHydValues * 0d0, FinalPrint=lFinal)
+          END IF
         ELSE
-          CALL This%OutFile%WriteData(SimulationTime, &
-               rHydValues - rPrevHydValues, FinalPrint=lFinal)
+          IF (lHDFOut) THEN
+            rHDFOut(:,1) = rHydValues - rPrevHydValues
+            CALL This%OutFile%WriteData(rHDFOut)
+          ELSE
+            CALL This%OutFile%WriteData(SimulationTime, &
+                 rHydValues - rPrevHydValues, FinalPrint=lFinal)
+          END IF
         END IF
         rPrevHydValues = rHydValues
       ELSE
         ! Cumulative output (HEAD or SUBSIDENCE_CUM)
-        CALL This%OutFile%WriteData(SimulationTime, rHydValues, FinalPrint=lFinal)
+        IF (lHDFOut) THEN
+          rHDFOut(:,1) = rHydValues
+          CALL This%OutFile%WriteData(rHDFOut)
+        ELSE
+          CALL This%OutFile%WriteData(SimulationTime, rHydValues, FinalPrint=lFinal)
+        END IF
       END IF
 
       ! Advance timestamp
@@ -1141,7 +1147,6 @@ CONTAINS
       END IF
     END DO
 
-    ! Close all-data input file
     CALL AllDataInFile%Close()
 
     CALL LogMessage('  Extraction complete. '//TRIM(IntToText(This%NHyd))// &

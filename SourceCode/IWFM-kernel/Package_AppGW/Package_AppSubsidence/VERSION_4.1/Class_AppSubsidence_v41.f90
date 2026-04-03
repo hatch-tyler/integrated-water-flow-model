@@ -41,11 +41,15 @@ MODULE Class_AppSubsidence_v41
                                       EchoProgress                  , &
                                       f_iFatal
   USE IOInterface             , ONLY: GenericFileType               , &
-                                      f_iHDF
+                                      PrepareTSDOutputFile          , &
+                                      f_iHDF                        , &
+                                      f_iDSS
   USE GeneralUtilities        , ONLY: StripTextUntilCharacter       , &
                                       CleanSpecialCharacters        , &
                                       EstablishAbsolutePathFilename , &
                                       IntToText                     , &
+                                      ArrangeText                   , &
+                                      PrepareTitle                  , &
                                       f_cInlineCommentChar
   USE TimeSeriesUtilities     , ONLY: TimeStepType
   USE Package_Discretization  , ONLY: AppGridType                   , &
@@ -181,18 +185,20 @@ CONTAINS
         IF (.NOT. IsForInquiry) THEN
             ALLOCATE (AppSubsidence%AllSubsOutFile , STAT=ErrorCode , ERRMSG=cErrorMsg)
             IF (ErrorCode .NE. 0) THEN
-                CALL SetLastMessage('Error allocating memory for AllSubsOut HDF5 file.'//NEW_LINE('x')//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
+                CALL SetLastMessage('Error allocating memory for AllSubsOut file.'//NEW_LINE('x')//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
             CALL AppSubsidence%AllSubsOutFile%New(FileName=cAbsPathFileName,InputFile=.FALSE.,IsTSFile=.TRUE., &
                 Descriptor='subsidence at all nodes output',iStat=iStat)
             IF (iStat .EQ. -1) RETURN
-            !Verify HDF5 format
-            IF (AppSubsidence%AllSubsOutFile%iGetFileType() .NE. f_iHDF) THEN
-                CALL SetLastMessage('AllSubsOut file must be an HDF5 file (.hdf extension)!',f_iFatal,ThisProcedure)
-                iStat = -1
-                RETURN
+            !Make sure DSS file is used only if it is a time-tracking simulation
+            IF (AppSubsidence%AllSubsOutFile%iGetFileType() .EQ. f_iDSS) THEN
+                IF (.NOT. TimeStep%TrackTime) THEN
+                    CALL SetLastMessage('DSS files for subsidence at all nodes can only be used for time-tracking simulations.',f_iFatal,ThisProcedure)
+                    iStat = -1
+                    RETURN
+                END IF
             END IF
             !Use NTIME from caller
             IF (.NOT. PRESENT(NTIME)) THEN
@@ -200,23 +206,91 @@ CONTAINS
                 iStat = -1
                 RETURN
             END IF
-            !Create HDF5 dataset: /SubsidenceAtAllNodes with NNodes*NLayers columns
-            BLOCK
-                INTEGER   :: NColumns_HDF(1)
-                CHARACTER :: cDataSetName_HDF(1)*24
-                NColumns_HDF(1)     = NNodes * NLayers
-                cDataSetName_HDF(1) = '/SubsidenceAtAllNodes'
-                CALL AppSubsidence%AllSubsOutFile%CreateHDFDataSet(cPathNames=cDataSetName_HDF,NColumns=NColumns_HDF, &
-                    NTime=NTIME+1,TimeStep=TimeStep,DataType=0d0,iStat=iStat)
-                IF (iStat .EQ. -1) RETURN
-            END BLOCK
+            !Setup output file based on format (same pattern as AllHeadOutFile_New)
+            IF (AppSubsidence%AllSubsOutFile%iGetFileType() .EQ. f_iHDF) THEN
+                !HDF5: create dataset with canonical layout
+                BLOCK
+                    INTEGER   :: NColumns_HDF(1)
+                    CHARACTER :: cDataSetName_HDF(1)*24
+                    NColumns_HDF(1)     = NNodes * NLayers
+                    cDataSetName_HDF(1) = '/SubsidenceAtAllNodes'
+                    CALL AppSubsidence%AllSubsOutFile%CreateHDFDataSet(cPathNames=cDataSetName_HDF,NColumns=NColumns_HDF, &
+                        NTime=NTIME+1,TimeStep=TimeStep,DataType=0d0,iStat=iStat)
+                    IF (iStat .EQ. -1) RETURN
+                END BLOCK
+                !Print initial zero subsidence
+                BLOCK
+                    REAL(8) :: rZeroData(NNodes*NLayers, 1)
+                    rZeroData = 0d0
+                    CALL AppSubsidence%AllSubsOutFile%WriteData(rZeroData)
+                END BLOCK
+            ELSE
+                !Text/DSS: use PrepareTSDOutputFile (same pattern as AllHeadOutFile_New)
+                BLOCK
+                    INTEGER   :: I, J
+                    CHARACTER :: cText*20,cFormatSpec*500,cDataUnit(1)*10,cDataType(1)*10, &
+                                 cCPart(1)*32,cFPart(1)*32,cHeader(2,1+NNodes)*50,        &
+                                 cHeaderFormat(2)*500,cWorkArray(2)*300,cTitleLines(1)*3000
+                    INTEGER   :: iNodeIDs_Local(NNodes)
+                    CALL AppGrid%GetNodeIDs(iNodeIDs_Local)
+                    cHeader     = ''
+                    cTitleLines = ''
+                    cText = TRIM(IntToText(NNodes))//'(2X,F10.4)'
+                    SELECT CASE (NLayers)
+                      CASE (1)
+                        cFormatSpec='(A21,'//TRIM(cText)//')'
+                      CASE DEFAULT
+                        cFormatSpec=                              '(A21,'//TRIM(cText) // ","  //  &
+                                    TRIM(IntToText(NLayers-1))//'(/,21X,'//TRIM(cText)//'))'
+                    END SELECT
+                    cDataUnit(1) = 'FEET'
+                    cDataType(1) = 'INST-VAL'
+                    cCPart(1)    = 'SUBSIDENCE'
+                    cFPart(1)    = 'SUBS_AT_ALL_NODES'
+                    cText        = IntToText(NNodes)
+                    cWorkArray(1) = ArrangeText('SUBSIDENCE AT ALL NODES',37)
+                    cWorkArray(2) = ArrangeText('(UNIT=','FEET',')',37)
+                    CALL PrepareTitle(cTitleLines(1),cWorkArray,39,42)
+                    WRITE (cHeader(1,1),'(A1,28X,A4)') '*','NODE'
+                    WRITE (cHeader(2,1),'(A1,8X,A4)')  '*','TIME'
+                    DO I=1,NNodes
+                      WRITE (cHeader(2,I+1),'(I7)') iNodeIDs_Local(I)
+                    END DO
+                    cHeaderFormat(1)='(A33,'//TRIM(cText)//'(A))'
+                    cHeaderFormat(2)='(A13,8X,'//TRIM(cText)//'(5X,A7))'
+                    CALL PrepareTSDOutputFile(AppSubsidence%AllSubsOutFile              , &
+                                              NColumnsOfData          = NNodes          , &
+                                              NRowsOfData             = NLayers          , &
+                                              OverwriteNColumnsOfData = .FALSE.          , &
+                                              FormatSpec              = cFormatSpec      , &
+                                              Title                   = cTitleLines      , &
+                                              Header                  = cHeader          , &
+                                              HeaderFormat            = cHeaderFormat    , &
+                                              PrintColumnNo           = .FALSE.          , &
+                                              DataUnit                = cDataUnit        , &
+                                              DataType                = cDataType        , &
+                                              CPart                   = cCPart           , &
+                                              FPart                   = cFPart           , &
+                                              UnitT                   = TimeStep%Unit    , &
+                                              Layers=[((I,J=1,NNodes),I=1,NLayers)]             , &
+                                              GWNodes=[((iNodeIDs_Local(I),I=1,NNodes),J=1,NLayers)] , &
+                                              iStat=iStat                                )
+                    IF (iStat .EQ. -1) RETURN
+                END BLOCK
+                !Print initial zero subsidence
+                BLOCK
+                    REAL(8) :: rZeroArray(NLayers, NNodes)
+                    CHARACTER :: cSimTime*21
+                    rZeroArray = 0d0
+                    IF (TimeStep%TrackTime) THEN
+                        cSimTime = ADJUSTL(TimeStep%CurrentDateAndTime)
+                    ELSE
+                        WRITE(cSimTime,'(F10.2,1X,A10)') TimeStep%CurrentTime,ADJUSTL(TimeStep%Unit)
+                    END IF
+                    CALL AppSubsidence%AllSubsOutFile%WriteData(cSimTime,rZeroArray,FinalPrint=.FALSE.)
+                END BLOCK
+            END IF
             AppSubsidence%lAllSubsOutFile_Defined = .TRUE.
-            !Print initial zero subsidence
-            BLOCK
-                REAL(8) :: rZeroData(NNodes*NLayers, 1)
-                rZeroData = 0d0
-                CALL AppSubsidence%AllSubsOutFile%WriteData(rZeroData)
-            END BLOCK
         END IF
     END IF
 
