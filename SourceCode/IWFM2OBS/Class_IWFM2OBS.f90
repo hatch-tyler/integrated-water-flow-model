@@ -23,7 +23,9 @@ MODULE Class_IWFM2OBS
                                  f_iInfo
   USE GeneralUtilities   , ONLY: IntToText         , &
                                  UpperCase
+  USE IWFM2OBS_Utilities , ONLY: StripAndClean
   USE TimeSeriesUtilities, ONLY: JulianDateToDayMonthYear
+  USE IOInterface        , ONLY: GenericFileType
   USE Class_SMP2SMP      , ONLY: SMP2SMPType           , &
                                  SMPRecordType         , &
                                  SMPIDGroupType        , &
@@ -100,44 +102,6 @@ MODULE Class_IWFM2OBS
 CONTAINS
 
   ! =====================================================================
-  ! ReadNonComment - Read one non-comment line, strip inline comment
-  ! =====================================================================
-  SUBROUTINE ReadNonComment(iUnit, cLine, iStat)
-    INTEGER,          INTENT(IN)  :: iUnit
-    CHARACTER(LEN=*), INTENT(OUT) :: cLine
-    INTEGER,          INTENT(OUT) :: iStat
-
-    iStat = 0
-    DO
-      READ(iUnit, '(A)', IOSTAT=iStat) cLine
-      IF (iStat /= 0) RETURN
-      cLine = ADJUSTL(cLine)
-      IF (LEN_TRIM(cLine) == 0) CYCLE
-      IF (cLine(1:1) == 'C' .OR. cLine(1:1) == 'c' .OR. &
-          cLine(1:1) == '*' .OR. cLine(1:1) == '#') CYCLE
-      EXIT
-    END DO
-  END SUBROUTINE ReadNonComment
-
-  ! =====================================================================
-  ! StripComment - Remove inline comment (after '/')
-  ! =====================================================================
-  SUBROUTINE StripComment(cLine, cResult)
-    CHARACTER(LEN=*), INTENT(IN)  :: cLine
-    CHARACTER(LEN=*), INTENT(OUT) :: cResult
-    INTEGER :: iPos
-
-    cResult = cLine
-    iPos = SCAN(cResult, '/')
-    IF (iPos > 1) THEN
-      cResult = cResult(1:iPos-1)
-    ELSE IF (iPos == 1) THEN
-      cResult = ' '
-    END IF
-    cResult = ADJUSTL(TRIM(cResult))
-  END SUBROUTINE StripComment
-
-  ! =====================================================================
   ! New - Read input file and initialize
   !
   !   Input file format (new, backward compatible):
@@ -157,7 +121,7 @@ CONTAINS
     CHARACTER(LEN=*),    INTENT(IN)    :: cInputFile
     INTEGER,             INTENT(OUT)   :: iStat
 
-    INTEGER, PARAMETER :: iUnit = 190
+    TYPE(GenericFileType) :: InFile
     CHARACTER(LEN=500) :: cLine, cClean
     CHARACTER(LEN=1)   :: cYN
     CHARACTER(LEN=500) :: cWorkDir
@@ -174,70 +138,53 @@ CONTAINS
       cWorkDir = '.'
     END IF
 
-    OPEN(UNIT=iUnit, FILE=cInputFile, STATUS='OLD', IOSTAT=iErr)
-    IF (iErr /= 0) THEN
-      CALL SetLastMessage('Cannot open input file: '//TRIM(cInputFile), &
-           f_iFatal, cModName)
-      iStat = -1; RETURN
-    END IF
+    CALL InFile%New(FileName=cInputFile, InputFile=.TRUE., IsTSFile=.FALSE., &
+                    Descriptor='IWFM2OBS input', iStat=iStat)
+    IF (iStat == -1) RETURN
 
-    ! ---- NEW: Simulation main file (first data line) ----
-    CALL ReadNonComment(iUnit, cLine, iErr)
-    IF (iErr /= 0) THEN
-      CALL SetLastMessage('Error reading first line from input file', &
-           f_iFatal, cModName)
-      CLOSE(iUnit); iStat = -1; RETURN
-    END IF
-    CALL StripComment(cLine, cClean)
+    ! ---- Simulation main file (first data line) ----
+    CALL InFile%ReadData(cLine, iStat)
+    IF (iStat == -1) RETURN
+    CALL StripAndClean(cLine, cClean)
 
     ! Check if first line is a file path or a date format integer
-    ! If it's 1 or 2, it's the old format (no sim main file)
-    ! If it's anything else, it's a sim main file path
     IF (TRIM(cClean) == '1' .OR. TRIM(cClean) == '2') THEN
-      ! Old format: first line is date format
       READ(cClean, *, IOSTAT=iErr) iDateSpec
       This%lModelMode = .FALSE.
     ELSE IF (LEN_TRIM(cClean) == 0) THEN
-      ! Blank = explicit SMP mode, read date format next
       This%lModelMode = .FALSE.
-      CALL ReadNonComment(iUnit, cLine, iErr)
-      CALL StripComment(cLine, cClean)
+      CALL InFile%ReadData(cLine, iStat)  ;  IF (iStat == -1) RETURN
+      CALL StripAndClean(cLine, cClean)
       READ(cClean, *, IOSTAT=iErr) iDateSpec
     ELSE
-      ! New format: first line is simulation main file path
       This%cSimMainFile = cClean
       This%lModelMode = .TRUE.
-      ! Read date format next
-      CALL ReadNonComment(iUnit, cLine, iErr)
-      CALL StripComment(cLine, cClean)
+      CALL InFile%ReadData(cLine, iStat)  ;  IF (iStat == -1) RETURN
+      CALL StripAndClean(cLine, cClean)
       READ(cClean, *, IOSTAT=iErr) iDateSpec
     END IF
 
     IF (iErr /= 0 .OR. (iDateSpec /= 1 .AND. iDateSpec /= 2)) THEN
       CALL SetLastMessage('Invalid date format (must be 1 or 2)', &
            f_iFatal, cModName)
-      CLOSE(iUnit); iStat = -1; RETURN
+      iStat = -1; RETURN
     END IF
     CALL This%Interp%Init(iDateSpec)
 
     ! ---- Read 4 hydrograph type blocks (6 lines each) ----
-    ! Order: GW (4), Stream (3), Tile Drain (2), Subsidence (1)
     DO iHyd = iGWHEAD, iSUBSID, -1
-      ! Line 1: Hydrograph/model SMP file (or observation SMP in model mode)
-      CALL ReadNonComment(iUnit, cLine, iErr)
-      IF (iErr /= 0) THEN
+      CALL InFile%ReadData(cLine, iStat)
+      IF (iStat == -1) THEN
         CALL SetLastMessage('Error reading '//TRIM(cHydName(iHyd))// &
              ' hydrograph file path', f_iFatal, cModName)
-        CLOSE(iUnit); iStat = -1; RETURN
+        RETURN
       END IF
-      CALL StripComment(cLine, cClean)
+      CALL StripAndClean(cLine, cClean)
 
       IF (LEN_TRIM(cClean) == 0) THEN
-        ! Skip this hydrograph type (blank = inactive)
         This%HydConfig(iHyd)%lActive = .FALSE.
-        ! Still need to read 5 more lines
         DO i = 1, 5
-          CALL ReadNonComment(iUnit, cLine, iErr)
+          CALL InFile%ReadData(cLine, iStat)  ;  IF (iStat == -1) RETURN
         END DO
         CYCLE
       END IF
@@ -245,56 +192,50 @@ CONTAINS
       This%HydConfig(iHyd)%cHydFile = cClean
       This%HydConfig(iHyd)%lActive  = .TRUE.
 
-      ! Line 2: Observation SMP file
-      CALL ReadNonComment(iUnit, cLine, iErr)
-      CALL StripComment(cLine, This%HydConfig(iHyd)%cObsFile)
+      CALL InFile%ReadData(cLine, iStat)  ;  IF (iStat == -1) RETURN
+      CALL StripAndClean(cLine, This%HydConfig(iHyd)%cObsFile)
 
-      ! Line 3: Output SMP file
-      CALL ReadNonComment(iUnit, cLine, iErr)
-      CALL StripComment(cLine, This%HydConfig(iHyd)%cOutFile)
+      CALL InFile%ReadData(cLine, iStat)  ;  IF (iStat == -1) RETURN
+      CALL StripAndClean(cLine, This%HydConfig(iHyd)%cOutFile)
 
-      ! Line 4: Extrapolation threshold
-      CALL ReadNonComment(iUnit, cLine, iErr)
-      CALL StripComment(cLine, cClean)
+      CALL InFile%ReadData(cLine, iStat)  ;  IF (iStat == -1) RETURN
+      CALL StripAndClean(cLine, cClean)
       READ(cClean, *, IOSTAT=iErr) This%HydConfig(iHyd)%rThreshold
       IF (iErr /= 0) This%HydConfig(iHyd)%rThreshold = 1.0D0
 
-      ! Line 5: Instruction file (ignored — INS generation moved to pyiwfm)
-      CALL ReadNonComment(iUnit, cLine, iErr)
-
-      ! Line 6: PCF file (ignored — INS generation moved to pyiwfm)
-      CALL ReadNonComment(iUnit, cLine, iErr)
+      CALL InFile%ReadData(cLine, iStat)  ;  IF (iStat == -1) RETURN
+      CALL InFile%ReadData(cLine, iStat)  ;  IF (iStat == -1) RETURN
     END DO
 
     ! ---- Head differences (Y/N, then file path if Y) ----
-    CALL ReadNonComment(iUnit, cLine, iErr)
-    CALL StripComment(cLine, cClean)
+    CALL InFile%ReadData(cLine, iStat)  ;  IF (iStat == -1) RETURN
+    CALL StripAndClean(cLine, cClean)
     cYN = UpperCase(cClean(1:1))
     IF (cYN == 'Y') THEN
       This%lHeadDiff = .TRUE.
-      CALL ReadNonComment(iUnit, cLine, iErr)
-      CALL StripComment(cLine, This%cHDiffFile)
+      CALL InFile%ReadData(cLine, iStat)  ;  IF (iStat == -1) RETURN
+      CALL StripAndClean(cLine, This%cHDiffFile)
     END IF
 
     ! ---- Multi-layer target (Y/N, then 5 file paths if Y) ----
-    CALL ReadNonComment(iUnit, cLine, iErr)
-    CALL StripComment(cLine, cClean)
+    CALL InFile%ReadData(cLine, iStat)  ;  IF (iStat == -1) RETURN
+    CALL StripAndClean(cLine, cClean)
     cYN = UpperCase(cClean(1:1))
     IF (cYN == 'Y') THEN
       This%lMultiLayer = .TRUE.
-      CALL ReadNonComment(iUnit, cLine, iErr)
-      CALL StripComment(cLine, This%cObsWellFile)
-      CALL ReadNonComment(iUnit, cLine, iErr)
-      CALL StripComment(cLine, This%cElemsFile)
-      CALL ReadNonComment(iUnit, cLine, iErr)
-      CALL StripComment(cLine, This%cNodesFile)
-      CALL ReadNonComment(iUnit, cLine, iErr)
-      CALL StripComment(cLine, This%cStratFile)
-      CALL ReadNonComment(iUnit, cLine, iErr)
-      CALL StripComment(cLine, This%cGWMainFile)
+      CALL InFile%ReadData(cLine, iStat)  ;  IF (iStat == -1) RETURN
+      CALL StripAndClean(cLine, This%cObsWellFile)
+      CALL InFile%ReadData(cLine, iStat)  ;  IF (iStat == -1) RETURN
+      CALL StripAndClean(cLine, This%cElemsFile)
+      CALL InFile%ReadData(cLine, iStat)  ;  IF (iStat == -1) RETURN
+      CALL StripAndClean(cLine, This%cNodesFile)
+      CALL InFile%ReadData(cLine, iStat)  ;  IF (iStat == -1) RETURN
+      CALL StripAndClean(cLine, This%cStratFile)
+      CALL InFile%ReadData(cLine, iStat)  ;  IF (iStat == -1) RETURN
+      CALL StripAndClean(cLine, This%cGWMainFile)
     END IF
 
-    CLOSE(iUnit)
+    CALL InFile%Kill()
 
     ! ---- Model discovery mode: discover .out files (reading deferred to Run) ----
     IF (This%lModelMode) THEN
@@ -371,6 +312,12 @@ CONTAINS
       IF (This%lModelMode .AND. This%HydReader%HydInfo(iHyd)%lActive) THEN
         ! Direct path: .out -> memory -> interpolation (no temp SMP file)
         CALL ProcessDirect(This, iHyd, iStat)
+      ELSE IF (This%lModelMode .AND. &
+               UpperCase(ADJUSTL(TRIM(This%HydConfig(iHyd)%cHydFile))) == 'AUTO') THEN
+        ! Model discovery mode but no .out file found for this type — skip
+        CALL LogMessage('  '//TRIM(cHydName(iHyd))// &
+             ': AUTO specified but no .out file discovered — skipping', &
+             f_iInfo, cModName)
       ELSE
         ! Standard path: SMP-to-SMP file interpolation
         CALL This%Interp%Interpolate( &
@@ -966,8 +913,8 @@ CONTAINS
       END IF
     END IF
 
-    ! Step 2: Read .out file directly into memory (only matching columns)
-    CALL This%HydReader%ReadDotOutFileDirect(iHyd, cObsIDs, iNObsIDs, iStat)
+    ! Step 2: Read hydrograph data into memory (supports text, HDF5, DSS)
+    CALL This%HydReader%ReadHydrographData(iHyd, cObsIDs, iNObsIDs, iStat)
     IF (iStat /= 0) THEN
       IF (ALLOCATED(cObsIDs)) DEALLOCATE(cObsIDs)
       RETURN
@@ -1159,20 +1106,47 @@ CONTAINS
       CALL LogMessage('  WARNING: Cannot open GW_Sim_ml_continuous.smp for writing', &
            f_iWarn, cModName)
     ELSE
-      ! Header (A25,A12,A12,A11 = CalcTypeHyd-compatible fixed format)
-      WRITE(iOutUnit, '(A25,A12,A12,A11)') &
-        'Name                     ', 'Date        ', 'Time        ', ' Simulated'
+      BLOCK
+        INTEGER :: iJulStart, iJulEnd, iJulDay
 
-      DO iW = 1, iNWells
-        DO j = 1, iNTimes
-          ! Convert Julian day to date
-          CALL JulianDateToDayMonthYear(This%HydReader%iModelDays(j), iDay, iMon, iYear, iErr)
-          WRITE(cDateStr, '(I2.2,A1,I2.2,A1,I4.4)') iMon, '/', iDay, '/', iYear
-          ! Match IWFM2OBS SMP format: A25 + A12(left-padded date) + A12 + F11
-          WRITE(iOutUnit, '(A25,A10,2X,A8,4X,F11.5)') &
-            cBaseIDs(iW), cDateStr, '00:00:00', rAvgData(j, iW)
+        ! Model date bounds from parsed timestamps
+        iJulStart = This%HydReader%iModelDays(1)
+        iJulEnd   = This%HydReader%iModelDays(iNTimes)
+
+        ! Header (A25,A12,A12,A11 = CalcTypeHyd-compatible fixed format)
+        WRITE(iOutUnit, '(A25,A12,A12,A11)') &
+          'Name                     ', 'Date        ', 'Time        ', ' Simulated'
+
+        DO iW = 1, iNWells
+          DO j = 1, iNTimes
+            iJulDay = This%HydReader%iModelDays(j)
+
+            ! Validate date is within model simulation period
+            IF (iJulDay < iJulStart .OR. iJulDay > iJulEnd) THEN
+              CALL JulianDateToDayMonthYear(iJulDay, iDay, iMon, iYear, iErr)
+              CALL SetLastMessage('Date at timestep '//TRIM(IntToText(j))// &
+                   ' ('//TRIM(IntToText(iMon))//'/'//TRIM(IntToText(iDay))//'/'// &
+                   TRIM(IntToText(iYear))//') is outside model period', &
+                   f_iFatal, cModName)
+              CLOSE(iOutUnit)
+              iStat = -1; RETURN
+            END IF
+
+            CALL JulianDateToDayMonthYear(iJulDay, iDay, iMon, iYear, iErr)
+            IF (iErr /= 0) THEN
+              CALL SetLastMessage('Cannot convert Julian day '// &
+                   TRIM(IntToText(iJulDay))//' at timestep '//TRIM(IntToText(j)), &
+                   f_iFatal, cModName)
+              CLOSE(iOutUnit)
+              iStat = -1; RETURN
+            END IF
+
+            WRITE(cDateStr, '(I2.2,A1,I2.2,A1,I4.4)') iMon, '/', iDay, '/', iYear
+            WRITE(iOutUnit, '(A25,A10,2X,A8,4X,F11.5)') &
+              cBaseIDs(iW), cDateStr, '00:00:00', rAvgData(j, iW)
+          END DO
         END DO
-      END DO
+      END BLOCK
       CLOSE(iOutUnit)
       CALL LogMessage('  Wrote GW_Sim_ml_continuous.smp ('// &
            TRIM(IntToText(iNWells))//' wells x '// &

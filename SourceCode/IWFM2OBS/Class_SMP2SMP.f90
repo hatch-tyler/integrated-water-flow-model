@@ -14,6 +14,7 @@ MODULE Class_SMP2SMP
                                f_iInfo
   USE GeneralUtilities , ONLY: UpperCase      , &
                                IntToText
+  USE IWFM2OBS_Utilities, ONLY: SortStringsIndex
   USE TimeSeriesUtilities, ONLY: DayMonthYearToJulianDate , &
                                  JulianDateToDayMonthYear , &
                                  IsLeapYear
@@ -942,7 +943,7 @@ CONTAINS
       cSorted(k) = cFilteredIDs(k)
       iSortIdx(k) = k
     END DO
-    IF (iNFiltered > 1) CALL SortStringsIndexSMP(cSorted, iSortIdx, 1, iNFiltered)
+    IF (iNFiltered > 1) CALL SortStringsIndex(cSorted, iSortIdx, 1, iNFiltered)
 
     ! ---- Open files ----
     OPEN(UNIT=iObsUnit, FILE=cObsFile, STATUS='OLD', IOSTAT=iErr)
@@ -1164,43 +1165,6 @@ CONTAINS
       END IF
     END DO
   END FUNCTION BinarySearchStrSMP
-
-  ! =====================================================================
-  ! SortStringsIndexSMP - Quicksort CHARACTER(25) array with index array
-  !   Sorts cArr(iLo:iHi) in ascending order, reordering iIdx in parallel
-  ! =====================================================================
-  RECURSIVE SUBROUTINE SortStringsIndexSMP(cArr, iIdx, iLo, iHi)
-    CHARACTER(LEN=25), INTENT(INOUT) :: cArr(:)
-    INTEGER,           INTENT(INOUT) :: iIdx(:)
-    INTEGER,           INTENT(IN)    :: iLo, iHi
-
-    CHARACTER(LEN=25) :: cPivot, cTemp
-    INTEGER :: i, j, iTemp
-
-    IF (iLo >= iHi) RETURN
-
-    cPivot = cArr((iLo + iHi) / 2)
-    i = iLo
-    j = iHi
-
-    DO WHILE (i <= j)
-      DO WHILE (cArr(i) < cPivot)
-        i = i + 1
-      END DO
-      DO WHILE (cArr(j) > cPivot)
-        j = j - 1
-      END DO
-      IF (i <= j) THEN
-        cTemp = cArr(i); cArr(i) = cArr(j); cArr(j) = cTemp
-        iTemp = iIdx(i); iIdx(i) = iIdx(j); iIdx(j) = iTemp
-        i = i + 1
-        j = j - 1
-      END IF
-    END DO
-
-    IF (iLo < j) CALL SortStringsIndexSMP(cArr, iIdx, iLo, j)
-    IF (i < iHi) CALL SortStringsIndexSMP(cArr, iIdx, i, iHi)
-  END SUBROUTINE SortStringsIndexSMP
 
   ! =====================================================================
   ! ExpandObsIDsToLayers - Expand base observation IDs to per-layer IDs
