@@ -903,27 +903,29 @@ CONTAINS
         iTimeOffset = NPeriods(ThisFile%TimeStep%DeltaT,ThisFile%TimeStep%CurrentTime,rTime)
     END IF
     
-    !Defined ofseet and block, select partial array on file 
+    !Read data
     iOffset = [0 , iTimeOffset]
-    iBlock  = [ThisFile%Datasets(indx)%nColumns , 1]
-    CALL H5SSELECT_HYPERSLAB_F(ThisFile%Datasets(indx)%iDataSpaceID,H5S_SELECT_SET_F,iOffset,iCount,FileReadCode,iStride,iBlock)
-    
-    !Read data   
     SELECT TYPE(Data)
         TYPE IS (REAL(8))
             ALLOCATE (rData(SIZE(Data,DIM=1)))
             pData = C_LOC(rData(1))
             !Iterate over datasets
             DO indx=1,ThisFile%nDatasets
+                !Select hyperslab for this dataset (one timestep, all columns)
+                iBlock = [ThisFile%Datasets(indx)%nColumns , 1]
+                CALL H5SSELECT_HYPERSLAB_F(ThisFile%Datasets(indx)%iDataSpaceID,H5S_SELECT_SET_F,iOffset,iCount,FileReadCode,iStride,iBlock)
                 CALL H5DREAD_F(ThisFile%Datasets(indx)%iDataSetID,ThisFile%iReal8TypeID,pData,FileReadCode,ThisFile%Datasets(indx)%iDataSpaceID_OneTimeStep,ThisFile%Datasets(indx)%iDataSpaceID)
                 Data(:,indx) = rData
             END DO
-    
+
         TYPE IS (INTEGER)
             ALLOCATE (iData(SIZE(Data,DIM=1)))
             pData = C_LOC(iData(1))
             !Iterate over datasets
             DO indx=1,ThisFile%nDatasets
+                !Select hyperslab for this dataset (one timestep, all columns)
+                iBlock = [ThisFile%Datasets(indx)%nColumns , 1]
+                CALL H5SSELECT_HYPERSLAB_F(ThisFile%Datasets(indx)%iDataSpaceID,H5S_SELECT_SET_F,iOffset,iCount,FileReadCode,iStride,iBlock)
                 CALL H5DREAD_F(ThisFile%Datasets(indx)%iDataSetID,ThisFile%iIntegerTypeID,pData,FileReadCode,ThisFile%Datasets(indx)%iDataSpaceID_OneTimeStep,ThisFile%Datasets(indx)%iDataSpaceID)
                 Data(:,indx) = iData
             END DO
