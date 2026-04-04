@@ -2,21 +2,28 @@
 !  CalcTypeHyd - Class_CalcTypeHyd
 !  Cluster-weighted type hydrograph computation
 !
-!  Ported from CalcTypeHyd.for (Fortran 77 fixed-form).
-!  Modernized: Fortran 90, modules, allocatable arrays, IWFM kernel
-!  date utilities.
+!  Computes de-meaned weighted dot product of water level time series
+!  with fuzzy cluster weights, normalized by sum of non-zero weights.
 !
-!  Algorithm: For each cluster, compute de-meaned weighted dot product
-!  of water level time series with cluster weights, normalized by
-!  the sum of non-zero weights at each time step.
+!  Uses IWFM kernel GenericFileType for input, shared IWFM2OBS_Utilities
+!  for date parsing and sorted string search.
 !***********************************************************************
 MODULE Class_CalcTypeHyd
 
-  USE MessageLogger    , ONLY: SetLastMessage , &
-                               LogMessage     , &
-                               f_iFatal       , &
-                               f_iInfo
-  USE GeneralUtilities , ONLY: IntToText
+  USE MessageLogger        , ONLY: SetLastMessage , &
+                                    LogMessage     , &
+                                    f_iFatal       , &
+                                    f_iWarn        , &
+                                    f_iInfo
+  USE GeneralUtilities     , ONLY: IntToText      , &
+                                    UpperCase
+  USE TimeSeriesUtilities  , ONLY: DayMonthYearToJulianDate , &
+                                    JulianDateToDayMonthYear
+  USE IOInterface          , ONLY: GenericFileType
+  USE IWFM2OBS_Utilities   , ONLY: StripAndClean           , &
+                                    ParseDateFromString     , &
+                                    BinarySearchStr         , &
+                                    SortStringsIndex
 
   IMPLICIT NONE
 
@@ -29,25 +36,28 @@ MODULE Class_CalcTypeHyd
   ! CalcTypeHydType - Manager for type hydrograph computation
   ! =====================================================================
   TYPE :: CalcTypeHydType
-    INTEGER                         :: iNClus      = 0   ! Number of clusters
-    INTEGER                         :: iNClusWells = 0   ! Number of wells
-    INTEGER                         :: iNHydro     = 0   ! Number of type hydrographs to generate
-    INTEGER                         :: iNVal       = 0   ! Number of output time steps
-    INTEGER,  ALLOCATABLE           :: iClusID(:)         ! Cluster IDs to generate (nhydro)
-    REAL(8),  ALLOCATABLE           :: rClusWt(:,:)       ! Cluster weights (ncluswells, nclus)
-    CHARACTER(LEN=25), ALLOCATABLE  :: cWellNames(:)      ! Well names (ncluswells)
-    REAL(8),  ALLOCATABLE           :: rMonAvg(:,:)       ! Monthly avg WL (nval, ncluswells)
-    REAL(8),  ALLOCATABLE           :: rMean(:)           ! Mean WL per well (ncluswells)
-    CHARACTER(LEN=10), ALLOCATABLE  :: cDateStr(:)        ! Output date strings (nval)
-    CHARACTER(LEN=50)               :: cPBase     = ' '   ! PEST parameter base name
+    INTEGER                         :: iNClus      = 0
+    INTEGER                         :: iNClusWells = 0
+    INTEGER                         :: iNHydro     = 0
+    INTEGER                         :: iNVal       = 0
+    INTEGER,  ALLOCATABLE           :: iClusID(:)
+    REAL(8),  ALLOCATABLE           :: rClusWt(:,:)
+    CHARACTER(LEN=25), ALLOCATABLE  :: cWellNames(:)
+    ! Sorted well index for O(log N) lookup
+    CHARACTER(LEN=25), ALLOCATABLE  :: cWellSorted(:)
+    INTEGER, ALLOCATABLE            :: iWellOrder(:)
+    REAL(8),  ALLOCATABLE           :: rMonAvg(:,:)
+    REAL(8),  ALLOCATABLE           :: rMean(:)
+    CHARACTER(LEN=10), ALLOCATABLE  :: cDateStr(:)
+    CHARACTER(LEN=50)               :: cPBase     = ' '
     CHARACTER(LEN=10)               :: cStartDate = ' '
     CHARACTER(LEN=10)               :: cEndDate   = ' '
-    CHARACTER(LEN=50)               :: cWtsFile   = ' '
+    CHARACTER(LEN=500)              :: cWtsFile   = ' '
     ! Averaging period configuration
     INTEGER                         :: iNAvgPer = 0
-    INTEGER                         :: iActvMon(12) = 0   ! Month -> averaging period map
-    INTEGER, ALLOCATABLE            :: iAvgMo(:)          ! Representative month per period
-    INTEGER, ALLOCATABLE            :: iAvgDay(:)         ! Representative day per period
+    INTEGER                         :: iActvMon(12) = 0
+    INTEGER, ALLOCATABLE            :: iAvgMo(:)
+    INTEGER, ALLOCATABLE            :: iAvgDay(:)
     LOGICAL                         :: lActive = .FALSE.
   CONTAINS
     PROCEDURE, PASS :: New
@@ -57,38 +67,27 @@ MODULE Class_CalcTypeHyd
 
 CONTAINS
 
-  ! =====================================================================
-  ! MonthRange - Count months between two dates (MM/DD/YYYY format)
-  ! =====================================================================
-  FUNCTION MonthRange(cDateMin, cDateMax) RESULT(iRange)
-    CHARACTER(LEN=*), INTENT(IN) :: cDateMin, cDateMax
-    INTEGER :: iRange
-    INTEGER :: iStartMo, iEndMo, iInterMo
-    INTEGER :: iYearMin, iMonMin, iYearMax, iMonMax
-
-    READ(cDateMin(1:2), *) iMonMin
-    READ(cDateMin(7:10), *) iYearMin
-    READ(cDateMax(1:2), *) iMonMax
-    READ(cDateMax(7:10), *) iYearMax
-
-    iStartMo = 12 - iMonMin
-    iInterMo = ((iYearMax - iYearMin) - 1) * 12
-    iEndMo   = iMonMax
-
-    iRange = iStartMo + iInterMo + iEndMo
-
-  END FUNCTION MonthRange
 
   ! =====================================================================
-  ! Date2Str - Format month/day/year to MM/DD/YYYY string
+  ! StripHashComment - Remove text after '#' (CalcTypeHyd inline comments)
+  !   Cannot use StripAndClean (which strips at '/') because dates
+  !   like 01/01/1985 contain '/'.
   ! =====================================================================
-  FUNCTION Date2Str(iMM, iDD, iYYYY) RESULT(cDate)
-    INTEGER, INTENT(IN) :: iMM, iDD, iYYYY
-    CHARACTER(LEN=10) :: cDate
+  SUBROUTINE StripHashComment(cLine, cResult)
+    CHARACTER(LEN=*), INTENT(IN)  :: cLine
+    CHARACTER(LEN=*), INTENT(OUT) :: cResult
+    INTEGER :: iPos
 
-    WRITE(cDate, '(I2.2,A1,I2.2,A1,I4.4)') iMM, '/', iDD, '/', iYYYY
+    cResult = cLine
+    iPos = INDEX(cResult, '#')
+    IF (iPos > 1) cResult = cResult(1:iPos-1)
+    ! Also strip tab characters (common in CalcTypeHyd .in files)
+    DO iPos = 1, LEN_TRIM(cResult)
+      IF (ICHAR(cResult(iPos:iPos)) == 9) cResult(iPos:iPos) = ' '
+    END DO
+    cResult = ADJUSTL(TRIM(cResult))
+  END SUBROUTINE StripHashComment
 
-  END FUNCTION Date2Str
 
   ! =====================================================================
   ! New - Read input file and initialize
@@ -98,165 +97,253 @@ CONTAINS
     CHARACTER(LEN=*),       INTENT(IN)    :: cInputFile
     INTEGER,                INTENT(OUT)   :: iStat
 
-    INTEGER, PARAMETER :: iUnit = 180
-    CHARACTER(LEN=500) :: cLine
-    CHARACTER(LEN=50)  :: cWLFile, cWtsFile
-    INTEGER :: iErr, i, j, k, iMM, iDD, iYYYY, iNMon, iDum
+    INTEGER, PARAMETER :: iInUnit = 180
+    CHARACTER(LEN=500) :: cLine, cClean
+    CHARACTER(LEN=500) :: cWLFile, cWtsFile
+    INTEGER :: iErr, i, j, k, iMM, iDD, iYYYY, iNMon
     INTEGER :: iStartM, iEndM
-    CHARACTER(LEN=10) :: cRefDate
     INTEGER, ALLOCATABLE :: iMon(:)
+    INTEGER :: iActualRows
+    CHARACTER(LEN=25) :: cDumNm
+    REAL(8) :: rTest
 
     iStat = 0
 
-    ! Open input file
-    OPEN(UNIT=iUnit, FILE=cInputFile, STATUS='OLD', IOSTAT=iErr)
+    ! ================================================================
+    ! Read control file (uses raw I/O — CalcTypeHyd format uses #
+    ! inline comments which conflict with IWFM's / comment convention)
+    ! ================================================================
+    OPEN(UNIT=iInUnit, FILE=cInputFile, STATUS='OLD', IOSTAT=iErr)
     IF (iErr /= 0) THEN
       CALL SetLastMessage('Cannot open input file: '//TRIM(cInputFile), &
            f_iFatal, cModName)
       iStat = -1; RETURN
     END IF
 
-    READ(iUnit, *, IOSTAT=iErr) cWLFile
-    READ(iUnit, *, IOSTAT=iErr) cWtsFile
+    READ(iInUnit, '(A)', IOSTAT=iErr) cLine
+    CALL StripHashComment(cLine, cClean)
+    READ(cClean, *) cWLFile
+
+    READ(iInUnit, '(A)', IOSTAT=iErr) cLine
+    CALL StripHashComment(cLine, cClean)
+    READ(cClean, *) cWtsFile
     This%cWtsFile = cWtsFile
-    READ(iUnit, *, IOSTAT=iErr) This%iNClus
-    READ(iUnit, *, IOSTAT=iErr) This%iNClusWells
-    READ(iUnit, *, IOSTAT=iErr) This%iNHydro
 
-    ALLOCATE(This%iClusID(This%iNHydro), STAT=iErr)
-    DO i = 1, This%iNHydro
-      READ(iUnit, *, IOSTAT=iErr) This%iClusID(i)
-    END DO
+    READ(iInUnit, '(A)', IOSTAT=iErr) cLine
+    CALL StripHashComment(cLine, cClean)
+    READ(cClean, *) This%iNClus
 
-    READ(iUnit, '(A10)', IOSTAT=iErr) This%cStartDate
-    READ(iUnit, '(A10)', IOSTAT=iErr) This%cEndDate
-    READ(iUnit, *, IOSTAT=iErr) This%cPBase
+    READ(iInUnit, '(A)', IOSTAT=iErr) cLine
+    CALL StripHashComment(cLine, cClean)
+    READ(cClean, *) This%iNClusWells
 
-    ! Read averaging period configuration
-    READ(iUnit, *, IOSTAT=iErr) This%iNAvgPer
-    ALLOCATE(This%iAvgMo(This%iNAvgPer), This%iAvgDay(This%iNAvgPer))
-    This%iActvMon = 0
-    DO i = 1, This%iNAvgPer
-      READ(iUnit, *, IOSTAT=iErr) iNMon
-      ALLOCATE(iMon(iNMon))
-      READ(iUnit, *) (iMon(j), j=1, iNMon)
-      DO j = 1, iNMon
-        This%iActvMon(iMon(j)) = i
-      END DO
-      DEALLOCATE(iMon)
-      READ(iUnit, *) This%iAvgMo(i), This%iAvgDay(i)
-    END DO
-    CLOSE(iUnit)
+    READ(iInUnit, '(A)', IOSTAT=iErr) cLine
+    CALL StripHashComment(cLine, cClean)
+    READ(cClean, *) This%iNHydro
 
-    ! Read cluster weights file
-    CALL LogMessage('Reading cluster weights...', f_iInfo, cModName)
-    ALLOCATE(This%rClusWt(This%iNClusWells, This%iNClus), &
-             This%cWellNames(This%iNClusWells), STAT=iErr)
-    IF (iErr /= 0) THEN
-      CALL SetLastMessage('Cannot allocate cluster weight arrays', &
+    IF (This%iNClus <= 0 .OR. This%iNClusWells <= 0 .OR. This%iNHydro <= 0) THEN
+      CALL SetLastMessage('Invalid NCLUS, NCLUSWELLS, or NHYDRO in input file', &
            f_iFatal, cModName)
       iStat = -1; RETURN
     END IF
 
-    OPEN(UNIT=iUnit, FILE=cWtsFile, STATUS='OLD', IOSTAT=iErr)
+    ALLOCATE(This%iClusID(This%iNHydro))
+    DO i = 1, This%iNHydro
+      READ(iInUnit, '(A)', IOSTAT=iErr) cLine
+      CALL StripHashComment(cLine, cClean)
+      READ(cClean, *) This%iClusID(i)
+      IF (This%iClusID(i) < 1 .OR. This%iClusID(i) > This%iNClus) THEN
+        CALL SetLastMessage('Cluster ID '//TRIM(IntToText(This%iClusID(i)))// &
+             ' is outside range 1-'//TRIM(IntToText(This%iNClus)), &
+             f_iFatal, cModName)
+        iStat = -1; RETURN
+      END IF
+    END DO
+
+    READ(iInUnit, '(A)', IOSTAT=iErr) cLine
+    CALL StripHashComment(cLine, cClean)
+    This%cStartDate = cClean(1:10)
+
+    READ(iInUnit, '(A)', IOSTAT=iErr) cLine
+    CALL StripHashComment(cLine, cClean)
+    This%cEndDate = cClean(1:10)
+
+    READ(iInUnit, '(A)', IOSTAT=iErr) cLine
+    CALL StripHashComment(cLine, cClean)
+    READ(cClean, *) This%cPBase
+
+    ! Read averaging period configuration
+    READ(iInUnit, '(A)', IOSTAT=iErr) cLine
+    CALL StripHashComment(cLine, cClean)
+    READ(cClean, *) This%iNAvgPer
+    ALLOCATE(This%iAvgMo(This%iNAvgPer), This%iAvgDay(This%iNAvgPer))
+    This%iActvMon = 0
+    DO i = 1, This%iNAvgPer
+      READ(iInUnit, '(A)', IOSTAT=iErr) cLine
+      CALL StripHashComment(cLine, cClean)
+      READ(cClean, *) iNMon
+      ALLOCATE(iMon(iNMon))
+      READ(iInUnit, '(A)', IOSTAT=iErr) cLine
+      CALL StripHashComment(cLine, cClean)
+      READ(cClean, *) (iMon(j), j=1, iNMon)
+      DO j = 1, iNMon
+        IF (iMon(j) >= 1 .AND. iMon(j) <= 12) This%iActvMon(iMon(j)) = i
+      END DO
+      DEALLOCATE(iMon)
+      READ(iInUnit, '(A)', IOSTAT=iErr) cLine
+      CALL StripHashComment(cLine, cClean)
+      READ(cClean, *) This%iAvgMo(i), This%iAvgDay(i)
+    END DO
+    CLOSE(iInUnit)
+
+    CALL LogMessage('  Start='//TRIM(This%cStartDate)//' End='//TRIM(This%cEndDate)// &
+         '  Clusters='//TRIM(IntToText(This%iNClus))// &
+         '  Wells='//TRIM(IntToText(This%iNClusWells))// &
+         '  Hydros='//TRIM(IntToText(This%iNHydro)), f_iInfo, cModName)
+
+    ! ================================================================
+    ! Read cluster weights file
+    ! ================================================================
+    CALL LogMessage('Reading cluster weights: '//TRIM(cWtsFile), f_iInfo, cModName)
+    ALLOCATE(This%rClusWt(This%iNClusWells, This%iNClus), &
+             This%cWellNames(This%iNClusWells), STAT=iErr)
+    IF (iErr /= 0) THEN
+      CALL SetLastMessage('Cannot allocate cluster weight arrays', f_iFatal, cModName)
+      iStat = -1; RETURN
+    END IF
+
+    OPEN(UNIT=180, FILE=TRIM(cWtsFile), STATUS='OLD', IOSTAT=iErr)
     IF (iErr /= 0) THEN
       CALL SetLastMessage('Cannot open weights file: '//TRIM(cWtsFile), &
            f_iFatal, cModName)
       iStat = -1; RETURN
     END IF
 
-    ! Peek at first line: if second token is numeric, it's data (no header)
-    READ(iUnit, '(A)', IOSTAT=iErr) cLine
+    ! Auto-detect header: if second token is numeric, it's data
+    READ(180, '(A)', IOSTAT=iErr) cLine
     IF (iErr == 0) THEN
-      ! Try parsing: name weight1 weight2 ...
-      ! If second token is a number, this is data - rewind
-      BLOCK
-        CHARACTER(LEN=25) :: cDumNm
-        REAL(8)           :: rTest
-        INTEGER           :: iChk
-        READ(cLine, *, IOSTAT=iChk) cDumNm, rTest
-        IF (iChk == 0) THEN
-          BACKSPACE(iUnit)  ! No header - rewind to process as data
-          CALL LogMessage('  Weights file has no header line - reading from first line', f_iInfo, cModName)
-        ELSE
-          CALL LogMessage('  Skipped header line in weights file', f_iInfo, cModName)
-        END IF
-      END BLOCK
+      READ(cLine, *, IOSTAT=iErr) cDumNm, rTest
+      IF (iErr == 0) THEN
+        BACKSPACE(180)
+      ELSE
+        CALL LogMessage('  Skipped header line in weights file', f_iInfo, cModName)
+      END IF
     END IF
+
+    iActualRows = 0
     DO i = 1, This%iNClusWells
-      READ(iUnit, *, IOSTAT=iErr) This%cWellNames(i), &
+      READ(180, *, IOSTAT=iErr) This%cWellNames(i), &
            (This%rClusWt(i, j), j=1, This%iNClus)
       IF (iErr /= 0) THEN
-        CALL SetLastMessage('Error reading weight for well '// &
-             TRIM(IntToText(i)), f_iFatal, cModName)
-        CLOSE(iUnit); iStat = -1; RETURN
+        IF (i == 1) THEN
+          CALL SetLastMessage('Cannot read first well from weights file: '// &
+               TRIM(cWtsFile), f_iFatal, cModName)
+          CLOSE(180); iStat = -1; RETURN
+        END IF
+        CALL LogMessage('  WARNING: Weights file has only '// &
+             TRIM(IntToText(i-1))//' rows (expected '// &
+             TRIM(IntToText(This%iNClusWells))//')', f_iWarn, cModName)
+        This%iNClusWells = i - 1
+        EXIT
       END IF
+      iActualRows = i
     END DO
-    CLOSE(iUnit)
+    CLOSE(180)
 
-    ! Set up date arrays
+    CALL LogMessage('  Read '//TRIM(IntToText(iActualRows))// &
+         ' wells from weights file', f_iInfo, cModName)
+
+    ! Build sorted well index for O(log N) lookup
+    ALLOCATE(This%cWellSorted(This%iNClusWells), &
+             This%iWellOrder(This%iNClusWells))
+    DO i = 1, This%iNClusWells
+      This%cWellSorted(i) = UpperCase(ADJUSTL(This%cWellNames(i)))
+      This%iWellOrder(i) = i
+    END DO
+    IF (This%iNClusWells > 1) &
+      CALL SortStringsIndex(This%cWellSorted, This%iWellOrder, 1, This%iNClusWells)
+
+    ! ================================================================
+    ! Set up date arrays using month arithmetic
+    ! ================================================================
     CALL LogMessage('Setting up date arrays...', f_iInfo, cModName)
-    cRefDate = '01/01/1900'
-    iStartM = MonthRange(cRefDate, This%cStartDate)
-    iEndM   = MonthRange(cRefDate, This%cEndDate)
-    This%iNVal = MonthRange(This%cStartDate, This%cEndDate) + 1
+    BLOCK
+      INTEGER :: iStartMon, iStartYr, iEndMon, iEndYr, iE
+      CALL ParseDateFromString(This%cStartDate, 2, iDD, iStartMon, iStartYr, iE)
+      CALL ParseDateFromString(This%cEndDate, 2, iDD, iEndMon, iEndYr, iE)
+      iStartM = (iStartYr * 12 + iStartMon)
+      iEndM   = (iEndYr * 12 + iEndMon)
+      This%iNVal = iEndM - iStartM + 1
+    END BLOCK
+
+    IF (This%iNVal <= 0) THEN
+      CALL SetLastMessage('End date must be after start date', f_iFatal, cModName)
+      iStat = -1; RETURN
+    END IF
 
     ALLOCATE(This%cDateStr(This%iNVal), STAT=iErr)
     ALLOCATE(This%rMonAvg(This%iNVal, This%iNClusWells), STAT=iErr)
     ALLOCATE(This%rMean(This%iNClusWells), STAT=iErr)
     This%rMonAvg = -9999.0D0
 
-    ! Fill date arrays
-    READ(This%cStartDate(1:2), *) iMM
-    READ(This%cStartDate(7:10), *) iYYYY
+    ! Fill date strings
+    BLOCK
+      INTEGER :: iStartMon2, iStartYr2, iE2
+      CALL ParseDateFromString(This%cStartDate, 2, iDD, iStartMon2, iStartYr2, iE2)
+      iMM = iStartMon2
+      iYYYY = iStartYr2
+    END BLOCK
     DO i = 1, This%iNVal
-      IF (i > 1 .AND. iMM > 12) THEN
-        iMM = 1
-        iYYYY = iYYYY + 1
+      IF (i > 1) THEN
+        iMM = iMM + 1
+        IF (iMM > 12) THEN
+          iMM = 1
+          iYYYY = iYYYY + 1
+        END IF
       END IF
-      iDD = 15  ! Default day
-      IF (This%iActvMon(iMM) > 0) THEN
-        iDD = This%iAvgDay(This%iActvMon(iMM))
-      END IF
-      This%cDateStr(i) = Date2Str(iMM, iDD, iYYYY)
-      iMM = iMM + 1
+      iDD = 15  ! Default
+      IF (This%iActvMon(iMM) > 0) iDD = This%iAvgDay(This%iActvMon(iMM))
+      WRITE(This%cDateStr(i), '(I2.2,A1,I2.2,A1,I4.4)') iMM, '/', iDD, '/', iYYYY
     END DO
 
+    ! ================================================================
     ! Read water level data
-    CALL LogMessage('Reading water level data...', f_iInfo, cModName)
-    CALL ReadWaterLevels(This, cWLFile, cRefDate, iStartM, iEndM, iStat)
+    ! ================================================================
+    CALL LogMessage('Reading water levels: '//TRIM(cWLFile), f_iInfo, cModName)
+    CALL ReadWaterLevels(This, cWLFile, iStartM, iEndM, iStat)
     IF (iStat /= 0) RETURN
 
     ! Calculate means
-    CALL LogMessage('Calculating means...', f_iInfo, cModName)
     CALL ComputeMeans(This)
-
     This%lActive = .TRUE.
 
   END SUBROUTINE New
 
+
   ! =====================================================================
-  ! ReadWaterLevels - Read simulated water level data
+  ! ReadWaterLevels - Read simulated water level data from SMP file
+  !   Reads fixed-format (A25,A12,A12,A11) matching GW_Sim_ml_continuous.smp
+  !   Uses sorted binary search for O(log N) well lookup
   ! =====================================================================
-  SUBROUTINE ReadWaterLevels(This, cWLFile, cRefDate, iStartM, iEndM, iStat)
+  SUBROUTINE ReadWaterLevels(This, cWLFile, iStartM, iEndM, iStat)
     CLASS(CalcTypeHydType), INTENT(INOUT) :: This
-    CHARACTER(LEN=*),       INTENT(IN)    :: cWLFile, cRefDate
+    CHARACTER(LEN=*),       INTENT(IN)    :: cWLFile
     INTEGER,                INTENT(IN)    :: iStartM, iEndM
     INTEGER,                INTENT(OUT)   :: iStat
 
     INTEGER, PARAMETER :: iUnit = 180
     CHARACTER(LEN=500) :: cLine
-    CHARACTER(LEN=25)  :: cWellNm
-    CHARACTER(LEN=12)  :: cDateStr
-    CHARACTER(LEN=12)  :: cDumStr
+    CHARACTER(LEN=25)  :: cWellNm, cWellUC
+    CHARACTER(LEN=12)  :: cDateStr, cDumStr
     CHARACTER(LEN=11)  :: cWLStr
-    INTEGER :: iErr, i, k, iDate, iMM, iAvgPer
-    REAL(8) :: rWL
+    INTEGER :: iErr, i, k, kOrig, iDate, iMM, iYY, iAvgPer
+    REAL(8) :: rWL, rTest
     INTEGER, ALLOCATABLE :: iDateID(:), iCnt(:,:)
+    INTEGER :: iRecordsRead, iRecordsMatched, iWellsMatched, iSortPos
 
     iStat = 0
 
-    ! Build date index mapping
+    ! Build date index mapping (absolute month → local index)
     ALLOCATE(iDateID(iEndM), STAT=iErr)
     iDateID = 0
     k = iStartM
@@ -275,46 +362,53 @@ CONTAINS
       iStat = -1; RETURN
     END IF
 
-    ! Peek at first line: if fourth token is numeric, it's data (no header)
+    ! Auto-detect header: if 4th token is numeric, it's data
     READ(iUnit, '(A)', IOSTAT=iErr) cLine
     IF (iErr == 0) THEN
       BLOCK
-        CHARACTER(LEN=25) :: cDumNm
-        CHARACTER(LEN=12) :: cDumDt, cDumTm
-        REAL(8)           :: rTest
-        INTEGER           :: iChk
-        READ(cLine, *, IOSTAT=iChk) cDumNm, cDumDt, cDumTm, rTest
+        CHARACTER(LEN=25) :: cD1
+        CHARACTER(LEN=12) :: cD2, cD3
+        INTEGER :: iChk
+        READ(cLine, *, IOSTAT=iChk) cD1, cD2, cD3, rTest
         IF (iChk == 0) THEN
-          BACKSPACE(iUnit)  ! No header - rewind to process as data
-          CALL LogMessage('  SMP file has no header line - reading from first line', f_iInfo, cModName)
+          BACKSPACE(iUnit)
         ELSE
           CALL LogMessage('  Skipped header line in SMP file', f_iInfo, cModName)
         END IF
       END BLOCK
     END IF
 
-    ! Read data: well_name date time value
+    ! Read data: fixed-format (A25,A12,A12,A11)
+    iRecordsRead = 0
+    iRecordsMatched = 0
     DO
       READ(iUnit, '(A25,A12,A12,A11)', IOSTAT=iErr) cWellNm, cDateStr, cDumStr, cWLStr
       IF (iErr /= 0) EXIT
+      iRecordsRead = iRecordsRead + 1
 
       ! Check active months
       READ(cDateStr(1:2), *, IOSTAT=iErr) iMM
       IF (iErr /= 0) CYCLE
+      IF (iMM < 1 .OR. iMM > 12) CYCLE
       IF (This%iActvMon(iMM) == 0) CYCLE
 
-      ! Remap to representative month/day
+      ! Remap to representative month/day for this averaging period
       iAvgPer = This%iActvMon(iMM)
       WRITE(cDateStr(1:2), '(I2.2)') This%iAvgMo(iAvgPer)
       WRITE(cDateStr(4:5), '(I2.2)') This%iAvgDay(iAvgPer)
 
-      iDate = MonthRange(cRefDate, cDateStr)
+      ! Compute absolute month index for date
+      READ(cDateStr(1:2), *) iMM
+      READ(cDateStr(7:10), *) iYY
+      iDate = iYY * 12 + iMM
       IF (iDate < iStartM .OR. iDate > iEndM) CYCLE
       IF (iDateID(iDate) == 0) CYCLE
 
-      ! Find well index
-      k = FindWell(This%cWellNames, This%iNClusWells, cWellNm)
-      IF (k <= 0) CYCLE
+      ! Find well via sorted binary search — O(log N)
+      cWellUC = UpperCase(ADJUSTL(cWellNm))
+      iSortPos = BinarySearchStr(This%cWellSorted, This%iNClusWells, cWellUC)
+      IF (iSortPos <= 0) CYCLE
+      kOrig = This%iWellOrder(iSortPos)
 
       ! Parse water level value
       READ(cWLStr, *, IOSTAT=iErr) rWL
@@ -322,65 +416,48 @@ CONTAINS
 
       ! Accumulate for averaging
       i = iDateID(iDate)
-      IF (This%rMonAvg(i, k) < -9000.0D0) THEN
-        This%rMonAvg(i, k) = rWL
-        iCnt(i, k) = 1
+      iRecordsMatched = iRecordsMatched + 1
+      IF (This%rMonAvg(i, kOrig) < -9000.0D0) THEN
+        This%rMonAvg(i, kOrig) = rWL
+        iCnt(i, kOrig) = 1
       ELSE
-        This%rMonAvg(i, k) = This%rMonAvg(i, k) + rWL
-        iCnt(i, k) = iCnt(i, k) + 1
+        This%rMonAvg(i, kOrig) = This%rMonAvg(i, kOrig) + rWL
+        iCnt(i, kOrig) = iCnt(i, kOrig) + 1
       END IF
     END DO
     CLOSE(iUnit)
 
-    ! Compute averages
-    BLOCK
-      INTEGER :: iRecordsRead, iRecordsMatched, iWellsMatched
-      iRecordsRead = 0; iRecordsMatched = 0; iWellsMatched = 0
-      DO k = 1, This%iNClusWells
-        BLOCK
-          LOGICAL :: lHasData
-          lHasData = .FALSE.
-          DO i = 1, This%iNVal
-            IF (iCnt(i, k) > 0) THEN
-              This%rMonAvg(i, k) = This%rMonAvg(i, k) / DBLE(iCnt(i, k))
-              iRecordsMatched = iRecordsMatched + iCnt(i, k)
-              lHasData = .TRUE.
-            END IF
-          END DO
-          IF (lHasData) iWellsMatched = iWellsMatched + 1
-        END BLOCK
-      END DO
-      CALL LogMessage('  DEBUG ReadWL: '//TRIM(IntToText(iWellsMatched))// &
-           ' wells matched, '//TRIM(IntToText(iRecordsMatched))//' records', &
-           f_iInfo, cModName)
-    END BLOCK
+    ! Compute averages and count matched wells
+    iWellsMatched = 0
+    DO k = 1, This%iNClusWells
+      BLOCK
+        LOGICAL :: lHasData
+        lHasData = .FALSE.
+        DO i = 1, This%iNVal
+          IF (iCnt(i, k) > 0) THEN
+            This%rMonAvg(i, k) = This%rMonAvg(i, k) / DBLE(iCnt(i, k))
+            lHasData = .TRUE.
+          END IF
+        END DO
+        IF (lHasData) iWellsMatched = iWellsMatched + 1
+      END BLOCK
+    END DO
+
+    CALL LogMessage('  Read '//TRIM(IntToText(iRecordsRead))//' records, '// &
+         TRIM(IntToText(iRecordsMatched))//' matched, '// &
+         TRIM(IntToText(iWellsMatched))//' of '// &
+         TRIM(IntToText(This%iNClusWells))//' wells have data', f_iInfo, cModName)
+
+    IF (iWellsMatched == 0) THEN
+      CALL SetLastMessage('No wells matched between water level file and cluster '// &
+           'weights file. Check that well names are consistent.', f_iFatal, cModName)
+      iStat = -1; RETURN
+    END IF
 
     DEALLOCATE(iDateID, iCnt)
 
   END SUBROUTINE ReadWaterLevels
 
-  ! =====================================================================
-  ! FindWell - Find well name in array, return index (0 if not found)
-  ! =====================================================================
-  FUNCTION FindWell(cNames, iN, cTarget) RESULT(iIdx)
-    CHARACTER(LEN=25), INTENT(IN) :: cNames(:)
-    INTEGER,           INTENT(IN) :: iN
-    CHARACTER(LEN=*),  INTENT(IN) :: cTarget
-    INTEGER :: iIdx
-
-    INTEGER :: i
-    CHARACTER(LEN=25) :: cTgt
-
-    cTgt = ADJUSTL(cTarget)
-    iIdx = 0
-    DO i = 1, iN
-      IF (ADJUSTL(cNames(i)) == cTgt) THEN
-        iIdx = i
-        RETURN
-      END IF
-    END DO
-
-  END FUNCTION FindWell
 
   ! =====================================================================
   ! ComputeMeans - Calculate mean water level per well
@@ -409,21 +486,23 @@ CONTAINS
 
   END SUBROUTINE ComputeMeans
 
+
   ! =====================================================================
-  ! Run - Generate type hydrographs and PEST files
+  ! Run - Generate type hydrographs and output files
   ! =====================================================================
   SUBROUTINE Run(This, iStat)
     CLASS(CalcTypeHydType), INTENT(INOUT) :: This
     INTEGER,               INTENT(OUT)   :: iStat
 
     INTEGER, PARAMETER :: iOutUnit = 181
-    INTEGER :: iErr, n, i, j, k, iCls
+    INTEGER :: iErr, n, i, j, iCls
     REAL(8) :: rSumProduct, rNzWtSum, rTypeHydro
     CHARACTER(LEN=2)  :: cClusStr
     CHARACTER(LEN=50) :: cHeader, cOutFile
     CHARACTER(LEN=20) :: cPstNam
     CHARACTER(LEN=4)  :: cIdStr
     REAL(8), ALLOCATABLE :: rNonZeroWts(:,:), rDeMeaned(:,:)
+    INTEGER :: iValid, iMissing, k
 
     iStat = 0
 
@@ -439,32 +518,27 @@ CONTAINS
       iStat = -1; RETURN
     END IF
 
-    ! Debug: count valid data points
-    BLOCK
-      INTEGER :: iValid, iMissing, iJ, iI
-      iValid = 0; iMissing = 0
-      DO iI = 1, This%iNVal
-        DO iJ = 1, This%iNClusWells
-          IF (This%rMonAvg(iI, iJ) > -9000.0D0) THEN
-            iValid = iValid + 1
-          ELSE
-            iMissing = iMissing + 1
-          END IF
-        END DO
+    ! Report data coverage
+    iValid = 0; iMissing = 0
+    DO i = 1, This%iNVal
+      DO j = 1, This%iNClusWells
+        IF (This%rMonAvg(i, j) > -9000.0D0) THEN
+          iValid = iValid + 1
+        ELSE
+          iMissing = iMissing + 1
+        END IF
       END DO
-      CALL LogMessage('  DEBUG: iNVal='//TRIM(IntToText(This%iNVal))// &
-           ', iNClusWells='//TRIM(IntToText(This%iNClusWells))// &
-           ', valid='//TRIM(IntToText(iValid))// &
-           ', missing='//TRIM(IntToText(iMissing)), f_iInfo, cModName)
-    END BLOCK
+    END DO
+    CALL LogMessage('  Data coverage: '//TRIM(IntToText(iValid))//' valid, '// &
+         TRIM(IntToText(iMissing))//' missing ('// &
+         TRIM(IntToText(This%iNVal))//' timesteps x '// &
+         TRIM(IntToText(This%iNClusWells))//' wells)', f_iInfo, cModName)
+
     CALL LogMessage('Generating type hydrographs...', f_iInfo, cModName)
 
     DO n = 1, This%iNHydro
       iCls = This%iClusID(n)
       WRITE(cClusStr, '(I2)') iCls
-
-      CALL LogMessage('  Hydrograph '//TRIM(IntToText(n))//'/'// &
-           TRIM(IntToText(This%iNHydro)), f_iInfo, cModName)
 
       ! Build non-zero weight matrix
       rNonZeroWts = 0.0D0
@@ -486,7 +560,7 @@ CONTAINS
         END DO
       END DO
 
-      ! Set up file names
+      ! Set up output file name
       k = SCAN(This%cWtsFile, '.')
       IF (k > 0) THEN
         cHeader = 'sim_'//TRIM(ADJUSTL(This%cWtsFile(1:k-1)))// &
@@ -496,7 +570,6 @@ CONTAINS
       END IF
       cOutFile = TRIM(ADJUSTL(cHeader))//'.out'
 
-      ! Open output file
       OPEN(UNIT=iOutUnit, FILE=cOutFile, STATUS='REPLACE', IOSTAT=iErr)
       IF (iErr /= 0) THEN
         CALL SetLastMessage('Cannot open output file: '//TRIM(cOutFile), &
@@ -507,41 +580,35 @@ CONTAINS
 
       ! Calculate and write type hydrograph
       DO i = 1, This%iNVal
-        ! Sum product: dot_product(cluster_weights, demeaned_values)
         rSumProduct = 0.0D0
         DO j = 1, This%iNClusWells
           rSumProduct = rSumProduct + This%rClusWt(j, iCls) * rDeMeaned(i, j)
         END DO
 
-        ! Sum of non-zero weights
         rNzWtSum = 0.0D0
         DO j = 1, This%iNClusWells
           rNzWtSum = rNzWtSum + rNonZeroWts(i, j)
         END DO
 
-        ! Compute type hydrograph value
         IF (rNzWtSum /= 0.0D0) THEN
           rTypeHydro = rSumProduct / rNzWtSum
-
-          ! Build PEST parameter name
           WRITE(cIdStr, '(I0)') i
           cPstNam = TRIM(ADJUSTL(This%cPBase))// &
                     TRIM(ADJUSTL(cClusStr))//'_'// &
                     TRIM(ADJUSTL(cIdStr))
-
-          ! Write to output file
           WRITE(iOutUnit, '(A14,A12,F20.6)') cPstNam, This%cDateStr(i), rTypeHydro
         END IF
       END DO
 
       CLOSE(iOutUnit)
+      CALL LogMessage('  Wrote '//TRIM(cOutFile), f_iInfo, cModName)
     END DO
 
     DEALLOCATE(rNonZeroWts, rDeMeaned)
-
     CALL LogMessage('Type hydrograph generation complete.', f_iInfo, cModName)
 
   END SUBROUTINE Run
+
 
   ! =====================================================================
   ! Kill - Deallocate all arrays
@@ -549,14 +616,16 @@ CONTAINS
   SUBROUTINE Kill(This)
     CLASS(CalcTypeHydType), INTENT(INOUT) :: This
 
-    IF (ALLOCATED(This%iClusID))    DEALLOCATE(This%iClusID)
-    IF (ALLOCATED(This%rClusWt))    DEALLOCATE(This%rClusWt)
-    IF (ALLOCATED(This%cWellNames)) DEALLOCATE(This%cWellNames)
-    IF (ALLOCATED(This%rMonAvg))    DEALLOCATE(This%rMonAvg)
-    IF (ALLOCATED(This%rMean))      DEALLOCATE(This%rMean)
-    IF (ALLOCATED(This%cDateStr))   DEALLOCATE(This%cDateStr)
-    IF (ALLOCATED(This%iAvgMo))     DEALLOCATE(This%iAvgMo)
-    IF (ALLOCATED(This%iAvgDay))    DEALLOCATE(This%iAvgDay)
+    IF (ALLOCATED(This%iClusID))     DEALLOCATE(This%iClusID)
+    IF (ALLOCATED(This%rClusWt))     DEALLOCATE(This%rClusWt)
+    IF (ALLOCATED(This%cWellNames))  DEALLOCATE(This%cWellNames)
+    IF (ALLOCATED(This%cWellSorted)) DEALLOCATE(This%cWellSorted)
+    IF (ALLOCATED(This%iWellOrder))  DEALLOCATE(This%iWellOrder)
+    IF (ALLOCATED(This%rMonAvg))     DEALLOCATE(This%rMonAvg)
+    IF (ALLOCATED(This%rMean))       DEALLOCATE(This%rMean)
+    IF (ALLOCATED(This%cDateStr))    DEALLOCATE(This%cDateStr)
+    IF (ALLOCATED(This%iAvgMo))      DEALLOCATE(This%iAvgMo)
+    IF (ALLOCATED(This%iAvgDay))     DEALLOCATE(This%iAvgDay)
     This%lActive = .FALSE.
 
   END SUBROUTINE Kill
