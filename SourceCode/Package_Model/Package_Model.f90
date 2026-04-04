@@ -140,7 +140,12 @@ MODULE Package_Model
                                           f_iBudgetType_StrmReach                     , &
                                           f_iBudgetType_DiverDetail        
   USE Package_AppLake             , ONLY: AppLakeType                                 , &
-                                          f_iBudgetType_Lake             
+                                          AppLake_SetModuleLogger                     , &
+                                          BaseAppLake_SetModuleLogger                 , &
+                                          Lake_SetModuleLogger                        , &
+                                          AppLake_v40_SetModuleLogger                 , &
+                                          AppLake_v50_SetModuleLogger                 , &
+                                          f_iBudgetType_Lake
   USE Package_RootZone            , ONLY: RootZoneType                                , &
                                           f_iBudgetType_RootZone                      , &
                                           f_iBudgetType_LWU                           , &
@@ -153,12 +158,26 @@ MODULE Package_Model
   USE Package_AppUnsatZone        , ONLY: AppUnsatZoneType                            , &
                                           f_iBudgetType_UnsatZone                     , &
                                           f_iZBudgetType_UnsatZone             
-  USE Package_AppSmallWatershed   , ONLY: AppSmallWatershedType                       , &               
-                                          f_iBudgetType_SWShed             
-  USE Package_ComponentConnectors , ONLY: StrmLakeConnectorType                       , & 
-                                          StrmGWConnectorType                         , & 
-                                          LakeGWConnectorType                         , & 
-                                          SupplyDestinationConnectorType              , & 
+  USE Package_AppSmallWatershed   , ONLY: AppSmallWatershedType                       , &
+                                          AppSWShed_SetModuleLogger                   , &
+                                          BaseAppSWShed_SetModuleLogger               , &
+                                          AppSWShed_v40_SetModuleLogger               , &
+                                          AppSWShed_v41_SetModuleLogger               , &
+                                          f_iBudgetType_SWShed
+  USE Package_ComponentConnectors , ONLY: StrmLakeConnectorType                       , &
+                                          StrmGWConnectorType                         , &
+                                          LakeGWConnectorType                         , &
+                                          SupplyDestinationConnectorType              , &
+                                          StrmGWConnector_SetModuleLogger             , &
+                                          StrmLakeConnector_SetModuleLogger           , &
+                                          LakeGWConnector_SetModuleLogger             , &
+                                          SupplyDest_SetModuleLogger                  , &
+                                          BaseStrmGWConnector_SetModuleLogger         , &
+                                          StrmGWConnector_v40_SetModuleLogger         , &
+                                          StrmGWConnector_v41_SetModuleLogger         , &
+                                          StrmGWConnector_v42_SetModuleLogger         , &
+                                          StrmGWConnector_v421_SetModuleLogger        , &
+                                          StrmGWConnector_v50_SetModuleLogger         , &
                                           f_iLakeToStrmFlow
   USE Package_PrecipitationET     , ONLY: PrecipitationType                           , &
                                           ETType                                      , &
@@ -852,6 +871,26 @@ CONTAINS
     CALL TecplotOutput_SetModuleLogger(DefaultLogger)
     CALL PairedData_SetModuleLogger(DefaultLogger)
     CALL PrecipET_SetModuleLogger(DefaultLogger)
+    !Set module-level loggers for Batch 3 packages
+    CALL BaseStrmGWConnector_SetModuleLogger(DefaultLogger)
+    CALL StrmGWConnector_SetModuleLogger(DefaultLogger)
+    CALL StrmGWConnector_v40_SetModuleLogger(DefaultLogger)
+    CALL StrmGWConnector_v41_SetModuleLogger(DefaultLogger)
+    CALL StrmGWConnector_v42_SetModuleLogger(DefaultLogger)
+    CALL StrmGWConnector_v421_SetModuleLogger(DefaultLogger)
+    CALL StrmGWConnector_v50_SetModuleLogger(DefaultLogger)
+    CALL StrmLakeConnector_SetModuleLogger(DefaultLogger)
+    CALL LakeGWConnector_SetModuleLogger(DefaultLogger)
+    CALL SupplyDest_SetModuleLogger(DefaultLogger)
+    CALL AppLake_SetModuleLogger(DefaultLogger)
+    CALL BaseAppLake_SetModuleLogger(DefaultLogger)
+    CALL Lake_SetModuleLogger(DefaultLogger)
+    CALL AppLake_v40_SetModuleLogger(DefaultLogger)
+    CALL AppLake_v50_SetModuleLogger(DefaultLogger)
+    CALL AppSWShed_SetModuleLogger(DefaultLogger)
+    CALL BaseAppSWShed_SetModuleLogger(DefaultLogger)
+    CALL AppSWShed_v40_SetModuleLogger(DefaultLogger)
+    CALL AppSWShed_v41_SetModuleLogger(DefaultLogger)
 
     !Matrix data
     CALL Model%Matrix%SetLogger(DefaultLogger)

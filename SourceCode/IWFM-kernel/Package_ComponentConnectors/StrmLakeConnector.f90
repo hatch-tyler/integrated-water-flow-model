@@ -23,6 +23,7 @@
 MODULE StrmLakeConnector
   USE MessageLogger      , ONLY: SetLastMessage   , &
                                  MessageArray     , &
+                                 MessageLoggerType, &
                                  f_iFatal
   USE GeneralUtilities   , ONLY: LocateInList     , &
                                  IntToText
@@ -46,10 +47,11 @@ MODULE StrmLakeConnector
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: StrmLakeConnectorType  , &
-            f_iStrmToLakeFlow      , &
-            f_iBypassToLakeFlow    , &
-            f_iLakeToStrmFlow   
+  PUBLIC :: StrmLakeConnectorType            , &
+            StrmLakeConnector_SetModuleLogger , &
+            f_iStrmToLakeFlow               , &
+            f_iBypassToLakeFlow             , &
+            f_iLakeToStrmFlow
 
 
   ! -------------------------------------------------------------
@@ -101,15 +103,26 @@ MODULE StrmLakeConnector
   ! -------------------------------------------------------------
   ! --- MISC. DATA
   ! -------------------------------------------------------------
+  ! -------------------------------------------------------------
+  ! --- MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
+
+
   INTEGER,PARAMETER                   :: ModNameLen = 19
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'StrmLakeConnector::'
-
-
 
 
 CONTAINS
 
 
+  ! -------------------------------------------------------------
+  ! --- SET MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  SUBROUTINE StrmLakeConnector_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    ModuleLogger => Logger
+  END SUBROUTINE StrmLakeConnector_SetModuleLogger
 
 
 ! ******************************************************************
@@ -523,13 +536,17 @@ CONTAINS
             iDest   = LocateInList(iDestID,iLakeIDs)
             IF (iDest .EQ. 0) THEN
                 iSourceID = iStrmNodeIDs(iSource)
-                CALL SetLastMessage('Lake '//TRIM(IntToText(iDestID))//' that receives flow from stream node '//TRIM(IntToText(iSourceID))//' is not in the model!',f_iFatal,ThisProcedure)
+                IF (ASSOCIATED(ModuleLogger)) THEN
+                    CALL ModuleLogger%SetLastMessage('Lake '//TRIM(IntToText(iDestID))//' that receives flow from stream node '//TRIM(IntToText(iSourceID))//' is not in the model!',f_iFatal,ThisProcedure)
+                ELSE
+                    CALL SetLastMessage('Lake '//TRIM(IntToText(iDestID))//' that receives flow from stream node '//TRIM(IntToText(iSourceID))//' is not in the model!',f_iFatal,ThisProcedure)
+                END IF
                 iStat = -1
                 RETURN
-            END IF  
+            END IF
             pStrmToLake(indx)%iDestination = iDest
         END DO
-        
+
         !Bypass-lake connection
         DO indx=1,Connector%NBypassToLake
             iSource = pBypassToLake(indx)%iSource
@@ -537,10 +554,14 @@ CONTAINS
             iDest   = LocateInList(iDestID,iLakeIDs)
             IF (iDest .EQ. 0) THEN
                 iSourceID = iStrmNodeIDs(iSource)
-                CALL SetLastMessage('Lake '//TRIM(IntToText(iDestID))//' that receives flow from stream node '//TRIM(IntToText(iSourceID))//' by means of a bypass is not in the model!',f_iFatal,ThisProcedure)
+                IF (ASSOCIATED(ModuleLogger)) THEN
+                    CALL ModuleLogger%SetLastMessage('Lake '//TRIM(IntToText(iDestID))//' that receives flow from stream node '//TRIM(IntToText(iSourceID))//' by means of a bypass is not in the model!',f_iFatal,ThisProcedure)
+                ELSE
+                    CALL SetLastMessage('Lake '//TRIM(IntToText(iDestID))//' that receives flow from stream node '//TRIM(IntToText(iSourceID))//' by means of a bypass is not in the model!',f_iFatal,ThisProcedure)
+                END IF
                 iStat = -1
                 RETURN
-            END IF    
+            END IF
             pBypassToLake(indx)%iDestination = iDest
         END DO
 
@@ -551,7 +572,11 @@ CONTAINS
             iDest   = LocateInList(iDestID,iStrmNodeIDs)
             IF (iDest .EQ. 0) THEN
                 iSourceID = iLakeIDs(iSource)
-                CALL SetLastMessage('Stream node '//TRIM(IntToText(iDestID))//' that receives flow from lake '//TRIM(IntToText(iSourceID))//' is not in the model!',f_iFatal,ThisProcedure)
+                IF (ASSOCIATED(ModuleLogger)) THEN
+                    CALL ModuleLogger%SetLastMessage('Stream node '//TRIM(IntToText(iDestID))//' that receives flow from lake '//TRIM(IntToText(iSourceID))//' is not in the model!',f_iFatal,ThisProcedure)
+                ELSE
+                    CALL SetLastMessage('Stream node '//TRIM(IntToText(iDestID))//' that receives flow from lake '//TRIM(IntToText(iSourceID))//' is not in the model!',f_iFatal,ThisProcedure)
+                END IF
                 iStat = -1
                 RETURN
             END IF    

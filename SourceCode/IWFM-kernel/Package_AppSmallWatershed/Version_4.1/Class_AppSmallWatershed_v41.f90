@@ -24,7 +24,8 @@ MODULE Class_AppSmallWatershed_v41
   USE MessageLogger               , ONLY: SetLastMessage                , &
                                           EchoProgress                  , &
                                           MessageArray                  , &
-                                          f_iFatal                      
+                                          MessageLoggerType             , &
+                                          f_iFatal
   USE IOInterface                 , ONLY: GenericFileType                   
   USE GeneralUtilities            , ONLY: StripTextUntilCharacter       , &
                                           CleanSpecialCharacters        , &
@@ -59,7 +60,8 @@ MODULE Class_AppSmallWatershed_v41
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: AppSmallWatershed_v41_Type 
+  PUBLIC :: AppSmallWatershed_v41_Type                  , &
+            AppSWShed_v41_SetModuleLogger
   
   
   ! -------------------------------------------------------------
@@ -78,18 +80,31 @@ MODULE Class_AppSmallWatershed_v41
   ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
+  ! -------------------------------------------------------------
+  ! --- MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
+
+
   INTEGER,PARAMETER                      :: f_iModNameLen = 29
   CHARACTER(LEN=f_iModNameLen),PARAMETER :: f_cModName    = 'Class_AppSmallWatershed_v41::'
   CHARACTER(LEN=3),PARAMETER             :: f_cVersion    = '4.1'
-  
-  
-  
+
+
 
 CONTAINS
-    
-    
-  
-    
+
+
+  ! -------------------------------------------------------------
+  ! --- SET MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  SUBROUTINE AppSWShed_v41_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    ModuleLogger => Logger
+  END SUBROUTINE AppSWShed_v41_SetModuleLogger
+
+
+
 ! ******************************************************************
 ! ******************************************************************
 ! ******************************************************************

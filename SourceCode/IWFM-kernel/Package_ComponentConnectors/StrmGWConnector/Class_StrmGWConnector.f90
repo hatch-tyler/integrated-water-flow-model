@@ -25,18 +25,26 @@ MODULE Class_StrmGWConnector
   USe MessageLogger             , ONLY: SetLastMessage        , &
                                         EchoProgress          , &
                                         MessageArray          , &
+                                        MessageLoggerType     , &
                                         f_iFatal
   USE IOInterface
   USE Package_Discretization
   USE Package_Matrix            , ONLY: MatrixType               , &
                                         ConnectivityListType
   USE Package_Misc              , ONLY: AbstractFunctionType
-  USE Class_BaseStrmGWConnector , ONLY: BaseStrmGWConnectorType 
-  USE Class_StrmGWConnector_v40
-  USE Class_StrmGWConnector_v41
-  USE Class_StrmGWConnector_v42
-  USE Class_StrmGWConnector_v421
-  USE Class_StrmGWConnector_v50
+  USE Class_BaseStrmGWConnector , ONLY: BaseStrmGWConnectorType              , &
+                                        BaseStrmGWConnector_SetModuleLogger
+  USE Class_StrmGWConnector_v40 , ONLY: StrmGWConnector_v40_Type             , &
+                                        StrmGWConnector_v40_SetModuleLogger
+  USE Class_StrmGWConnector_v41 , ONLY: StrmGWConnector_v41_Type             , &
+                                        StrmGWConnector_v41_SetModuleLogger
+  USE Class_StrmGWConnector_v42 , ONLY: StrmGWConnector_v42_Type             , &
+                                        StrmGWConnector_v42_SetModuleLogger  , &
+                                        MaxnGWNodes
+  USE Class_StrmGWConnector_v421, ONLY: StrmGWConnector_v421_Type            , &
+                                        StrmGWConnector_v421_SetModuleLogger
+  USE Class_StrmGWConnector_v50 , ONLY: StrmGWConnector_v50_Type             , &
+                                        StrmGWConnector_v50_SetModuleLogger
   IMPLICIT NONE
   
   
@@ -55,7 +63,14 @@ MODULE Class_StrmGWConnector
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: StrmGWConnectorType       
+  PUBLIC :: StrmGWConnectorType                       , &
+            StrmGWConnector_SetModuleLogger            , &
+            BaseStrmGWConnector_SetModuleLogger        , &
+            StrmGWConnector_v40_SetModuleLogger        , &
+            StrmGWConnector_v41_SetModuleLogger        , &
+            StrmGWConnector_v42_SetModuleLogger        , &
+            StrmGWConnector_v421_SetModuleLogger       , &
+            StrmGWConnector_v50_SetModuleLogger
   
   
   ! -------------------------------------------------------------
@@ -105,13 +120,28 @@ MODULE Class_StrmGWConnector
   ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
+  ! -------------------------------------------------------------
+  ! --- MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
+
+
   INTEGER,PARAMETER                   :: ModNameLen = 23
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'Class_StrmGWConnector::'
 
-  
-  
-  
+
+
+
 CONTAINS
+
+
+  ! -------------------------------------------------------------
+  ! --- SET MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  SUBROUTINE StrmGWConnector_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    ModuleLogger => Logger
+  END SUBROUTINE StrmGWConnector_SetModuleLogger
 
     
 
@@ -880,7 +910,11 @@ CONTAINS
     IF (.NOT. Connector%lDefined) RETURN
     
     !Inform user
-    CALL EchoProgress('Registering stream-groundwater connector with matrix...')
+    IF (ASSOCIATED(ModuleLogger)) THEN
+        CALL ModuleLogger%EchoProgress('Registering stream-groundwater connector with matrix...')
+    ELSE
+        CALL EchoProgress('Registering stream-groundwater connector with matrix...')
+    END IF
     
     !Register connectivity with matrix
     CALL Connector%Me%RegisterWithMatrix(StrmConnectivity,AppGrid,Matrix,iStat)

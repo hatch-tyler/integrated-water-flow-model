@@ -23,7 +23,8 @@
 MODULE LakeGWConnector
   USE MessageLogger          , ONLY: SetLastMessage           , &
                                      EchoProgress             , &
-                                     f_iFatal                 
+                                     MessageLoggerType        , &
+                                     f_iFatal
   USE GeneralUtilities       , ONLY: ShellSort                , &
                                      GetUniqueArrayComponents , &
                                      AllocArray               , &
@@ -53,7 +54,8 @@ MODULE LakeGWConnector
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: LakeGWConnectorType               
+  PUBLIC :: LakeGWConnectorType                     , &
+            LakeGWConnector_SetModuleLogger
   
   
   ! -------------------------------------------------------------
@@ -113,13 +115,28 @@ MODULE LakeGWConnector
   ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
+  ! -------------------------------------------------------------
+  ! --- MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
+
+
   INTEGER,PARAMETER                   :: ModNameLen = 17
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'LakeGWConnector::'
-  
-  
-  
-  
+
+
+
+
 CONTAINS
+
+
+  ! -------------------------------------------------------------
+  ! --- SET MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  SUBROUTINE LakeGWConnector_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    ModuleLogger => Logger
+  END SUBROUTINE LakeGWConnector_SetModuleLogger
 
 
 
@@ -515,7 +532,11 @@ CONTAINS
           !Make sure that time unit for conductance is consistent within all lakes
           IF (Connector%TimeUnitConductance .NE. '') THEN
               IF (TRIM(Connector%TimeUnitConductance) .NE. TRIM(ADJUSTL(UpperCase(TimeUnitConductance)))) THEN
-                  CALL SetLastMessage('Time unit for conductance between lakes is not consistent!',f_iFatal,ThisProcedure)
+                  IF (ASSOCIATED(ModuleLogger)) THEN
+                      CALL ModuleLogger%SetLastMessage('Time unit for conductance between lakes is not consistent!',f_iFatal,ThisProcedure)
+                  ELSE
+                      CALL SetLastMessage('Time unit for conductance between lakes is not consistent!',f_iFatal,ThisProcedure)
+                  END IF
                   iStat = -1
                   RETURN
               END IF
@@ -814,8 +835,13 @@ CONTAINS
     iStat = 0
     
     !Inform user
-    IF (SIZE(Connector%Lakes) .GT. 0) &
-        CALL EchoProgress('Registering lake-groundwater connector with matrix...')
+    IF (SIZE(Connector%Lakes) .GT. 0) THEN
+        IF (ASSOCIATED(ModuleLogger)) THEN
+            CALL ModuleLogger%EchoProgress('Registering lake-groundwater connector with matrix...')
+        ELSE
+            CALL EchoProgress('Registering lake-groundwater connector with matrix...')
+        END IF
+    END IF
     
     !Initialize
     NNodes = AppGrid%NNodes

@@ -23,6 +23,7 @@
 MODULE Class_BaseStrmGWConnector
   USE MessageLogger          , ONLY: SetLastMessage       , &
                                      MessageArray         , &
+                                     MessageLoggerType    , &
                                      f_iFatal
   USE IOInterface
   USE TimeSeriesUtilities
@@ -52,9 +53,10 @@ MODULE Class_BaseStrmGWConnector
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: BaseStrmGWConnectorType  , &
-            BaseStrmGWConnector_Kill , &
-            iDisconnectAtTopOfBed    , &
+  PUBLIC :: BaseStrmGWConnectorType           , &
+            BaseStrmGWConnector_Kill          , &
+            BaseStrmGWConnector_SetModuleLogger , &
+            iDisconnectAtTopOfBed             , &
             iDisconnectAtBottomOfBed
   
   
@@ -169,6 +171,12 @@ MODULE Class_BaseStrmGWConnector
   ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
+  ! -------------------------------------------------------------
+  ! --- MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
+
+
   INTEGER,PARAMETER                   :: ModNameLen = 27
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'Class_BaseStrmGWConnector::'
   
@@ -178,6 +186,13 @@ MODULE Class_BaseStrmGWConnector
 CONTAINS
 
 
+  ! -------------------------------------------------------------
+  ! --- SET MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  SUBROUTINE BaseStrmGWConnector_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    ModuleLogger => Logger
+  END SUBROUTINE BaseStrmGWConnector_SetModuleLogger
 
 
 ! ******************************************************************
@@ -511,7 +526,11 @@ CONTAINS
     IF (LocateInList(iInteractionType,iDisconnectTypeArray) .EQ. 0) THEN
         MessageArray(1) = 'While reading Main Stream Parameters Data File, the flag (INTRCTYPE) used to'
         MessageArray(2) = 'describe hydraulic disconnection between stream and groundwater is not recognized!'
-        CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+        IF (ASSOCIATED(ModuleLogger)) THEN
+            CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+        ELSE
+            CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+        END IF
         iStat = -1
         RETURN
     END IF
@@ -577,7 +596,11 @@ CONTAINS
             IF (iStrmNodes(indx) .EQ. iStrmNodes(indx1)) THEN
                 MessageArray(1) = 'Stream node '// TRIM(IntToText(iStrmNodes(indx))) // ' is listed more than once for defining '
                 MessageArray(2) = 'fraction of the stream-aquifer interaction to be applied to the corresponding groundwater node.'
-                CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                IF (ASSOCIATED(ModuleLogger)) THEN
+                    CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                ELSE
+                    CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                END IF
                 iStat = -1
                 RETURN
             END IF
@@ -585,9 +608,13 @@ CONTAINS
         
         !Check that the fractions are less than or equal to 1.0
         IF (rFractions(indx).GT.1.0  .OR.  rFractions(indx).LT.0.0) THEN
-            MessageArray(1) = 'Fraction of stream-aquifer interaction at stream node ' // TRIM(IntToText(iStrmNodes(indx))) 
-            MessageArray(2) = ' to be applied to corresponding groundwater node must be between 0.0 and 1.0.' 
-            CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+            MessageArray(1) = 'Fraction of stream-aquifer interaction at stream node ' // TRIM(IntToText(iStrmNodes(indx)))
+            MessageArray(2) = ' to be applied to corresponding groundwater node must be between 0.0 and 1.0.'
+            IF (ASSOCIATED(ModuleLogger)) THEN
+                CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+            ELSE
+                CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+            END IF
             iStat = -1
             RETURN
         END IF

@@ -23,6 +23,7 @@
 MODULE Class_Lake
   USE MessageLogger          , ONLY: SetLastMessage           , &
                                      MessageArray             , &
+                                     MessageLoggerType        , &
                                      f_iFatal
   USE GeneralUtilities       , ONLY: AllocArray               , &
                                      GetUniqueArrayComponents , &
@@ -51,7 +52,8 @@ MODULE Class_Lake
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: LakeType              , &
+  PUBLIC :: LakeType                     , &
+            Lake_SetModuleLogger        , &
             ReadInitialLakeElevs
 
 
@@ -91,6 +93,12 @@ MODULE Class_Lake
   ! -------------------------------------------------------------
   ! --- MISC. DATA 
   ! -------------------------------------------------------------
+  ! -------------------------------------------------------------
+  ! --- MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
+
+
   INTEGER,PARAMETER                   :: ModNameLen = 12
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'Class_Lake::'
 
@@ -100,6 +108,13 @@ MODULE Class_Lake
 CONTAINS
 
 
+  ! -------------------------------------------------------------
+  ! --- SET MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  SUBROUTINE Lake_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    ModuleLogger => Logger
+  END SUBROUTINE Lake_SetModuleLogger
 
 
 ! ******************************************************************

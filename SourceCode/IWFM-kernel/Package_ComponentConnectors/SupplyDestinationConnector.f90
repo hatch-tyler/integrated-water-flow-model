@@ -24,7 +24,8 @@ MODULE SupplyDestinationConnector
   USE MessageLogger          , ONLY: SetLastMessage         , &
                                      EchoProgress           , &
                                      MessageArray           , &
-                                     f_iFatal                 
+                                     MessageLoggerType      , &
+                                     f_iFatal
   USE GeneralUtilities       , ONLY: IntToText              , &
                                      LowerCase              , &
                                      NormalizeArray         , &
@@ -64,7 +65,8 @@ MODULE SupplyDestinationConnector
             Supply_SetIrigFracsRead                 , &
             Supply_CheckSupplyDestinationConnection , &
             Supply_ResetIrigFracs                   , &
-            Supply_SetSupplySpecs                   
+            Supply_SetSupplySpecs                   , &
+            SupplyDest_SetModuleLogger
   
   ! -------------------------------------------------------------
   ! --- SUPPLY TO DESTINATION CONNECTOR TYPE
@@ -129,12 +131,27 @@ MODULE SupplyDestinationConnector
   ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
+  ! -------------------------------------------------------------
+  ! --- MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
+
+
   INTEGER,PARAMETER                   :: ModNameLen = 28
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'SupplyDestinationConnector::'
-  
-  
+
+
 
 CONTAINS
+
+
+  ! -------------------------------------------------------------
+  ! --- SET MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  SUBROUTINE SupplyDest_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    ModuleLogger => Logger
+  END SUBROUTINE SupplyDest_SetModuleLogger
 
 
 

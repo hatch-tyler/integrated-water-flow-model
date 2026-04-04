@@ -26,21 +26,25 @@ MODULE Package_AppSmallWatershed
   USE IOInterface                 , ONLY: GenericFileType                  
   USE MessageLogger               , ONLY: SetLastMessage              , &
                                           EchoProgress                , &
-                                          f_iFatal                      
+                                          MessageLoggerType           , &
+                                          f_iFatal
   USE Package_Discretization      , ONLY: AppGridType                 , &
                                           StratigraphyType            
   USE Package_PrecipitationET     , ONLY: PrecipitationType           , &
                                           ETType                      
   USE Package_Budget              , ONLY: BudgetType                  
   USE Package_Matrix              , ONLY: MatrixType                  
-  USE Class_BaseAppSmallWatershed , ONLY: BaseAppSmallWatershedType   , &
-                                          f_iSWShedBaseFlowBCID       , &
-                                          f_iSWShedPercFlowBCID       , &
-                                          f_iBudgetType_SWShed        , & 
-                                          f_iSWShedBudComp_RZ         , &
-                                          f_iSWShedBudComp_GW 
-  USE Class_AppSmallWatershed_v40 , ONLY: AppSmallWaterShed_v40_Type
-  USE Class_AppSmallWatershed_v41 , ONLY: AppSmallWaterShed_v41_Type
+  USE Class_BaseAppSmallWatershed , ONLY: BaseAppSmallWatershedType        , &
+                                          BaseAppSWShed_SetModuleLogger    , &
+                                          f_iSWShedBaseFlowBCID            , &
+                                          f_iSWShedPercFlowBCID            , &
+                                          f_iBudgetType_SWShed             , &
+                                          f_iSWShedBudComp_RZ              , &
+                                          f_iSWShedBudComp_GW
+  USE Class_AppSmallWatershed_v40 , ONLY: AppSmallWaterShed_v40_Type       , &
+                                          AppSWShed_v40_SetModuleLogger
+  USE Class_AppSmallWatershed_v41 , ONLY: AppSmallWaterShed_v41_Type       , &
+                                          AppSWShed_v41_SetModuleLogger
   IMPLICIT NONE
 
   
@@ -60,12 +64,16 @@ MODULE Package_AppSmallWatershed
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: AppSmallWatershedType  , &
-            f_iSWShedBaseFlowBCID  , &
-            f_iSWShedPercFlowBCID  , &
-            f_iBudgetType_SWShed   , & 
-            f_iSWShedBudComp_RZ    , &
-            f_iSWShedBudComp_GW 
+  PUBLIC :: AppSmallWatershedType                    , &
+            AppSWShed_SetModuleLogger               , &
+            BaseAppSWShed_SetModuleLogger           , &
+            AppSWShed_v40_SetModuleLogger           , &
+            AppSWShed_v41_SetModuleLogger           , &
+            f_iSWShedBaseFlowBCID                   , &
+            f_iSWShedPercFlowBCID                   , &
+            f_iBudgetType_SWShed                    , &
+            f_iSWShedBudComp_RZ                     , &
+            f_iSWShedBudComp_GW
   
   
   ! -------------------------------------------------------------
@@ -125,6 +133,12 @@ MODULE Package_AppSmallWatershed
   ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
+  ! -------------------------------------------------------------
+  ! --- MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
+
+
   INTEGER,PARAMETER                      :: f_iModNameLen  = 27
   CHARACTER(LEN=f_iModNameLen),PARAMETER :: f_cModName     = 'Package_AppSmallWatershed::'
   
@@ -135,6 +149,13 @@ MODULE Package_AppSmallWatershed
 CONTAINS
 
 
+  ! -------------------------------------------------------------
+  ! --- SET MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  SUBROUTINE AppSWShed_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    ModuleLogger => Logger
+  END SUBROUTINE AppSWShed_SetModuleLogger
 
 
 ! ******************************************************************

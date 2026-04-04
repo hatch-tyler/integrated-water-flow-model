@@ -26,7 +26,8 @@ MODULE Package_AppLake
   USE MessageLogger               , ONLY: SetLastMessage          , &
                                           EchoProgress            , &
                                           MessageArray            , &
-                                          f_iFatal                  
+                                          MessageLoggerType       , &
+                                          f_iFatal
   USE IOInterface                 , ONLY: GenericFileType         , &
                                           f_iUNKNOWN
   USE GeneralUtilities            , ONLY: IntToText               , &
@@ -39,10 +40,14 @@ MODULE Package_AppLake
   USE Package_Matrix              , ONLY: MatrixType
   USE Package_PrecipitationET     , ONLY: ETType                  , &
                                           PrecipitationType
-  USE Class_BaseAppLake           , ONLY: BaseAppLakeType         , &
+  USE Class_BaseAppLake           , ONLY: BaseAppLakeType                  , &
+                                          BaseAppLake_SetModuleLogger      , &
                                           f_iBudgetType_Lake
-  USE Class_AppLake_v40           , ONLY: AppLake_v40_Type
-  USE Class_AppLake_v50           , ONLY: AppLake_v50_Type
+  USE Class_Lake                  , ONLY: Lake_SetModuleLogger
+  USE Class_AppLake_v40           , ONLY: AppLake_v40_Type                 , &
+                                          AppLake_v40_SetModuleLogger
+  USE Class_AppLake_v50           , ONLY: AppLake_v50_Type                 , &
+                                          AppLake_v50_SetModuleLogger
   USE Package_Budget              , ONLY: BudgetType
   IMPLICIT NONE
 
@@ -63,7 +68,12 @@ MODULE Package_AppLake
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: AppLakeType        , &
+  PUBLIC :: AppLakeType                         , &
+            AppLake_SetModuleLogger            , &
+            BaseAppLake_SetModuleLogger        , &
+            Lake_SetModuleLogger               , &
+            AppLake_v40_SetModuleLogger        , &
+            AppLake_v50_SetModuleLogger        , &
             f_iBudgetType_Lake
   
   
@@ -127,6 +137,12 @@ MODULE Package_AppLake
   ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
+  ! -------------------------------------------------------------
+  ! --- MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
+
+
   INTEGER,PARAMETER                   :: ModNameLen = 17
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'Package_AppLake::'
   
@@ -134,10 +150,19 @@ MODULE Package_AppLake
   
   
 CONTAINS
-    
-    
-    
-    
+
+
+  ! -------------------------------------------------------------
+  ! --- SET MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  SUBROUTINE AppLake_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    ModuleLogger => Logger
+  END SUBROUTINE AppLake_SetModuleLogger
+
+
+
+
 ! ******************************************************************
 ! ******************************************************************
 ! ******************************************************************
@@ -1072,7 +1097,11 @@ CONTAINS
     
     IF (AppLake%lDefined) THEN
         !Echo progress
-        CALL EchoProgress('Simulating lakes')
+        IF (ASSOCIATED(ModuleLogger)) THEN
+            CALL ModuleLogger%EchoProgress('Simulating lakes')
+        ELSE
+            CALL EchoProgress('Simulating lakes')
+        END IF
     
         !Simulate
         CALL AppLake%Me%Simulate(GSElevs,GWHeads,rGWReturnFlows,Runoff,ReturnFlow,PondDrain,LakeGWConnector,StrmLakeConnector,Matrix)
@@ -1093,7 +1122,11 @@ CONTAINS
     iStat = 0
     
     IF (AppLake%lDefined) THEN
-        CALL EchoProgress('Registering lake component with matrix...')
+        IF (ASSOCIATED(ModuleLogger)) THEN
+            CALL ModuleLogger%EchoProgress('Registering lake component with matrix...')
+        ELSE
+            CALL EchoProgress('Registering lake component with matrix...')
+        END IF
         CALL AppLake%Me%RegisterWithMatrix(Matrix,iStat)
     END IF
     

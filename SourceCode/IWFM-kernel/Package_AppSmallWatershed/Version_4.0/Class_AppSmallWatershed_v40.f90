@@ -23,7 +23,8 @@
 MODULE Class_AppSmallWatershed_v40
   USE MessageLogger               , ONLY: SetLastMessage                , &
                                           EchoProgress                  , &
-                                          f_iFatal                      
+                                          MessageLoggerType             , &
+                                          f_iFatal
   USE IOInterface                 , ONLY: GenericFileType                   
   USE GeneralUtilities            , ONLY: StripTextUntilCharacter       , &
                                           CleanSpecialCharacters        , &
@@ -58,7 +59,8 @@ MODULE Class_AppSmallWatershed_v40
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: AppSmallWatershed_v40_Type 
+  PUBLIC :: AppSmallWatershed_v40_Type                  , &
+            AppSWShed_v40_SetModuleLogger
   
   
   ! -------------------------------------------------------------
@@ -76,6 +78,12 @@ MODULE Class_AppSmallWatershed_v40
   ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
+  ! -------------------------------------------------------------
+  ! --- MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
+
+
   INTEGER,PARAMETER                      :: f_iModNameLen = 29
   CHARACTER(LEN=f_iModNameLen),PARAMETER :: f_cModName    = 'Class_AppSmallWatershed_v40::'
   CHARACTER(LEN=3),PARAMETER             :: f_cVersion    = '4.0'
@@ -84,10 +92,18 @@ MODULE Class_AppSmallWatershed_v40
   
 
 CONTAINS
-    
-    
-  
-    
+
+
+  ! -------------------------------------------------------------
+  ! --- SET MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  SUBROUTINE AppSWShed_v40_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    ModuleLogger => Logger
+  END SUBROUTINE AppSWShed_v40_SetModuleLogger
+
+
+
 ! ******************************************************************
 ! ******************************************************************
 ! ******************************************************************

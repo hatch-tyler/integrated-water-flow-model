@@ -40,7 +40,8 @@ MODULE Class_BaseAppSmallWatershed
   USE MessageLogger            , ONLY: SetLastMessage                 , &
                                        EchoProgress                   , &
                                        MessageArray                   , &
-                                       f_iFatal                               
+                                       MessageLoggerType              , &
+                                       f_iFatal
   USE Package_Misc             , ONLY: SolverDataType                 , &
                                        f_iGWComp                      , &
                                        f_iSWShedComp                  , &
@@ -83,12 +84,13 @@ MODULE Class_BaseAppSmallWatershed
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: BaseAppSmallWatershedType  , &
-            f_iSWShedBaseFlowBCID      , &
-            f_iSWShedPercFlowBCID      , &
-            f_iBudgetType_SWShed       , & 
-            f_iSWShedBudComp_RZ        , &
-            f_iSWShedBudComp_GW 
+  PUBLIC :: BaseAppSmallWatershedType            , &
+            BaseAppSWShed_SetModuleLogger       , &
+            f_iSWShedBaseFlowBCID               , &
+            f_iSWShedPercFlowBCID               , &
+            f_iBudgetType_SWShed                , &
+            f_iSWShedBudComp_RZ                 , &
+            f_iSWShedBudComp_GW
 
   
   ! -------------------------------------------------------------
@@ -261,6 +263,12 @@ MODULE Class_BaseAppSmallWatershed
   ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
+  ! -------------------------------------------------------------
+  ! --- MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
+
+
   INTEGER,PARAMETER                      :: f_iModNameLen  = 29
   CHARACTER(LEN=f_iModNameLen),PARAMETER :: f_cModName     = 'Class_BaseAppSmallWatershed::'
   
@@ -316,9 +324,17 @@ MODULE Class_BaseAppSmallWatershed
   
 CONTAINS
 
-    
-    
-    
+
+  ! -------------------------------------------------------------
+  ! --- SET MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  SUBROUTINE BaseAppSWShed_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    ModuleLogger => Logger
+  END SUBROUTINE BaseAppSWShed_SetModuleLogger
+
+
+
 ! ******************************************************************
 ! ******************************************************************
 ! ******************************************************************
@@ -1939,7 +1955,11 @@ CONTAINS
     iStat = 0
    
     !Inform user
-    CALL EchoProgress('Simulating small watershed b.c.')
+    IF (ASSOCIATED(ModuleLogger)) THEN
+        CALL ModuleLogger%EchoProgress('Simulating small watershed b.c.')
+    ELSE
+        CALL EchoProgress('Simulating small watershed b.c.')
+    END IF
     
     !Initialize
     rDeltaT = TimeStep%DeltaT
@@ -1993,7 +2013,11 @@ CONTAINS
                 MessageArray(2) =                   'Small watershed ID   = '//TRIM(IntToText(AppSWShed%SmallWatersheds(indxSWShed)%ID))
                 WRITE (MessageArray(3),'(A,F11.8)') 'Desired convergence  = ',rToler
                 WRITE (MessageArray(4),'(A,F11.8)') 'Achieved convergence = ',ABS(rAchievedConv)
-                CALL SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
+                IF (ASSOCIATED(ModuleLogger)) THEN
+                    CALL ModuleLogger%SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
+                ELSE
+                    CALL SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
+                END IF
                 iStat = -1
                 RETURN
             END IF

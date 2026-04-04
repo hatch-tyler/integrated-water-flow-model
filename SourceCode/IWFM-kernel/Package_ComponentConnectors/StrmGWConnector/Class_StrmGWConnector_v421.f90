@@ -22,10 +22,11 @@
 !***********************************************************************
 MODULE Class_StrmGWConnector_v421
   USE MessageLogger              , ONLY: SetLastMessage            , &
-                                         LogMessage                , & 
+                                         LogMessage                , &
                                          MessageArray              , &
+                                         MessageLoggerType         , &
                                          f_iWarn                   , &
-                                         f_iFatal 
+                                         f_iFatal
   USE GeneralUtilities           , ONLY: StripTextUntilCharacter   , &
                                          IntToText                 , &
                                          CleanSpecialCharacters    , &
@@ -63,7 +64,8 @@ MODULE Class_StrmGWConnector_v421
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: StrmGWConnector_v421_Type                    
+  PUBLIC :: StrmGWConnector_v421_Type                       , &
+            StrmGWConnector_v421_SetModuleLogger
   
   
   ! -------------------------------------------------------------
@@ -87,12 +89,27 @@ MODULE Class_StrmGWConnector_v421
   ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
+  ! -------------------------------------------------------------
+  ! --- MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
+
+
   INTEGER,PARAMETER                   :: ModNameLen  = 28
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName     = 'Class_StrmGWConnector_v421::'
-  
-  
-  
+
+
+
 CONTAINS
+
+
+  ! -------------------------------------------------------------
+  ! --- SET MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  SUBROUTINE StrmGWConnector_v421_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    ModuleLogger => Logger
+  END SUBROUTINE StrmGWConnector_v421_SetModuleLogger
     
     
     
@@ -312,31 +329,43 @@ CONTAINS
         iStrmNodeID = INT(rDummyArray4(1))
         CALL ConvertID_To_Index(iStrmNodeID,iStrmNodeIDs,iNode)
         IF (iNode .EQ. 0) THEN
-            CALL SetLastMessage('Stream node '//TRIM(IntToText(iStrmNodeID))//' listed for stream bed parameters is not in the model!',f_iFatal,ThisProcedure)
+            IF (ASSOCIATED(ModuleLogger)) THEN
+                CALL ModuleLogger%SetLastMessage('Stream node '//TRIM(IntToText(iStrmNodeID))//' listed for stream bed parameters is not in the model!',f_iFatal,ThisProcedure)
+            ELSE
+                CALL SetLastMessage('Stream node '//TRIM(IntToText(iStrmNodeID))//' listed for stream bed parameters is not in the model!',f_iFatal,ThisProcedure)
+            END IF
             iStat = -1
             RETURN
         END IF
-        
+
         !Check if this node was processed before
         IF (lProcessed(iNode)) THEN
-            CALL SetLastMessage('Stream bed parameters for stream node '//TRIM(IntToText(iStrmNodeID))//' are defined more than once!',f_iFatal,ThisProcedure)
+            IF (ASSOCIATED(ModuleLogger)) THEN
+                CALL ModuleLogger%SetLastMessage('Stream bed parameters for stream node '//TRIM(IntToText(iStrmNodeID))//' are defined more than once!',f_iFatal,ThisProcedure)
+            ELSE
+                CALL SetLastMessage('Stream bed parameters for stream node '//TRIM(IntToText(iStrmNodeID))//' are defined more than once!',f_iFatal,ThisProcedure)
+            END IF
             iStat = -1
             RETURN
         END IF
         lProcessed(iNode) = .TRUE.
-        
+
         !Number of gw nodes associated with the stream node
         nGWNodes = Connector%GWNodeList(iNode)%nGWNodes
-        
+
         !Allocate memory for connector data at stream node
         ALLOCATE (Connector%GWNodeList(iNode)%Conductance(nGWNodes) , Connector%GWNodeList(iNode)%StrmGWFlow(nGWNodes)  ,  Connector%GWNodeList(iNode)%rBedThickness(nGWNodes) ,  Connector%GWNodeList(iNode)%rDisconnectElev(nGWNodes) ,  Connector%GWNodeList(iNode)%rDistFrac(nGWNodes))
         Connector%GWNodeList(iNode)%StrmGWFlow(nGWNodes) = 0.0
-        
+
         !Parameters
         iGWNodeID = INT(rDummyArray4(2))
         CALL ConvertID_To_Index(iGWNodeID,iGWNodeIDs,iGWNode)
         IF (iGWNode .EQ. 0) THEN
-            CALL SetLastMessage('Groundwater node '//TRIM(IntToText(iGWNodeID))//' listed for stream node '//TRIM(IntToText(iStrmNodeID))//' for stream bed parameters is not in the model!',f_iFatal,ThisProcedure)
+            IF (ASSOCIATED(ModuleLogger)) THEN
+                CALL ModuleLogger%SetLastMessage('Groundwater node '//TRIM(IntToText(iGWNodeID))//' listed for stream node '//TRIM(IntToText(iStrmNodeID))//' for stream bed parameters is not in the model!',f_iFatal,ThisProcedure)
+            ELSE
+                CALL SetLastMessage('Groundwater node '//TRIM(IntToText(iGWNodeID))//' listed for stream node '//TRIM(IntToText(iStrmNodeID))//' for stream bed parameters is not in the model!',f_iFatal,ThisProcedure)
+            END IF
             iStat = -1
             RETURN
         END IF
@@ -344,7 +373,11 @@ CONTAINS
         IF (iLoc .EQ. 0) THEN
             MessageArray(1) = 'Stream bed parameters at stream node '//TRIM(IntToText(iStrmNodeID))//' are listed for groundwater node '
             MessageArray(2) = TRIM(IntToText(iGWNodeID))//', but this groundwater node is not associated with the stream node!'
-            CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+            IF (ASSOCIATED(ModuleLogger)) THEN
+                CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+            ELSE
+                CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+            END IF
             iStat = -1
             RETURN
         END IF
@@ -352,13 +385,17 @@ CONTAINS
         BedThick(iLoc,iNode)     = rDummyArray4(4) * FACTL
         DO indx=2,Connector%GWNodeList(iNode)%nGWNodes
             CALL InFile%ReadData(rDummyArray3,iStat)  ;  IF (iStat .EQ. -1) RETURN
-            iGWNodeID = INT(rDummyArray3(1))  
+            iGWNodeID = INT(rDummyArray3(1))
             CALL ConvertID_To_Index(iGWNodeID,iGWNodeIDs,iGWNode)
             iLoc = LocateInList(iGWNode , Connector%GWNodeList(iNode)%iGWNodes)
             IF (iLoc .EQ. 0) THEN
                 MessageArray(1) = 'Stream bed parameters at stream node '//TRIM(IntToText(iStrmNodeID))//' are listed for groundwater node '//TRIM(IntToText(iGWNodeID))//','
                 MessageArray(2) = 'but this groundwater node is not associated with the stream node!'
-                CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                IF (ASSOCIATED(ModuleLogger)) THEN
+                    CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                ELSE
+                    CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                END IF
                 iStat = -1
                 RETURN
             END IF
@@ -413,12 +450,20 @@ CONTAINS
                     !Warn the user about the modification
                     MessageArray(1)         = 'Stream bed thickness at stream node ' // TRIM(IntToText(iStrmNodeID)) // ' and GW node '// TRIM(IntToText(iGWNodeID)) // ' penetrates into second active aquifer layer!'
                     MessageArray(2)         = 'It is adjusted to penetrate only into the top active layer.'
-                    CALL LogMessage(MessageArray(1:2),f_iWarn,ThisProcedure) 
+                    IF (ASSOCIATED(ModuleLogger)) THEN
+                        CALL ModuleLogger%LogMessage(MessageArray(1:2),f_iWarn,ThisProcedure)
+                    ELSE
+                        CALL LogMessage(MessageArray(1:2),f_iWarn,ThisProcedure)
+                    END IF
                     !Check that bed thickness is not zero or less
                     IF (BedThick(indx,indxNode) .LE. 0.0) THEN
                         MessageArray(1) = 'Stream bed thickness at stream node ' // TRIM(IntToText(iStrmNodeID)) // ' and GW node '// TRIM(IntToText(iGWNodeID)) // ' is less than or equal to zero!'
                         MessageArray(2) = 'Check the stratigraphy and bed thickness at this location.'
-                        CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure) 
+                        IF (ASSOCIATED(ModuleLogger)) THEN
+                            CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                        ELSE
+                            CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                        END IF
                         iStat = -1
                         RETURN
                     END IF

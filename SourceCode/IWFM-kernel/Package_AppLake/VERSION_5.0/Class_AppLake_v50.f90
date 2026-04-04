@@ -25,7 +25,8 @@ MODULE Class_AppLake_v50
   USE MessageLogger                , ONLY: SetLastMessage                , &
                                            EchoProgress                  , &
                                            MessageArray                  , &
-                                           f_iFatal                        
+                                           MessageLoggerType             , &
+                                           f_iFatal
   USE GeneralUtilities             , ONLY: StripTextUntilCharacter       , &
                                            IntToText                     , &
                                            FirstLocation                 , &
@@ -80,7 +81,8 @@ MODULE Class_AppLake_v50
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: AppLake_v50_Type                         
+  PUBLIC :: AppLake_v50_Type                              , &
+            AppLake_v50_SetModuleLogger
 
 
   ! -------------------------------------------------------------
@@ -107,6 +109,12 @@ MODULE Class_AppLake_v50
   ! -------------------------------------------------------------
   ! --- MISC. DATA 
   ! -------------------------------------------------------------
+  ! -------------------------------------------------------------
+  ! --- MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
+
+
   INTEGER,PARAMETER                   :: ModNameLen = 19
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'Class_AppLake_v50::'
 
@@ -114,6 +122,15 @@ MODULE Class_AppLake_v50
 
 
 CONTAINS
+
+
+  ! -------------------------------------------------------------
+  ! --- SET MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  SUBROUTINE AppLake_v50_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    ModuleLogger => Logger
+  END SUBROUTINE AppLake_v50_SetModuleLogger
 
 
 

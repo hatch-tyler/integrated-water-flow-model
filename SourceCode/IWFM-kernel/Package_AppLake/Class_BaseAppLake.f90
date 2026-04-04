@@ -25,6 +25,7 @@ MODULE Class_BaseAppLake
    USE MessageLogger               , ONLY: EchoProgress            , &
                                            SetLastMessage          , &
                                            MessageArray            , &
+                                           MessageLoggerType       , &
                                            f_iFatal
    USE GeneralUtilities            , ONLY: ArrangeText             , &
                                            UpperCase               , &
@@ -84,10 +85,11 @@ MODULE Class_BaseAppLake
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: BaseAppLakeType         , &
-            PrepareLakeBudgetHeader , &
-            GenerateRatingTable     , &
-            f_iBudgetType_Lake 
+  PUBLIC :: BaseAppLakeType                  , &
+            BaseAppLake_SetModuleLogger     , &
+            PrepareLakeBudgetHeader         , &
+            GenerateRatingTable             , &
+            f_iBudgetType_Lake
 
 
   ! -------------------------------------------------------------
@@ -181,6 +183,12 @@ MODULE Class_BaseAppLake
   ! -------------------------------------------------------------
   ! --- MISC. DATA 
   ! -------------------------------------------------------------
+  ! -------------------------------------------------------------
+  ! --- MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
+
+
   INTEGER,PARAMETER                   :: ModNameLen = 19
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'Class_BaseAppLake::'
 
@@ -303,11 +311,19 @@ MODULE Class_BaseAppLake
 
 
 CONTAINS
-    
-    
-    
-    
-    
+
+
+  ! -------------------------------------------------------------
+  ! --- SET MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  SUBROUTINE BaseAppLake_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    ModuleLogger => Logger
+  END SUBROUTINE BaseAppLake_SetModuleLogger
+
+
+
+
 ! ******************************************************************
 ! ******************************************************************
 ! ******************************************************************
@@ -993,7 +1009,11 @@ CONTAINS
     IF (.NOT. AppLake%LakeBudRawFile_Defined) RETURN
     
     !Echo progress
-    CALL EchoProgress('Printing results of lake simulation')
+    IF (ASSOCIATED(ModuleLogger)) THEN
+        CALL ModuleLogger%EchoProgress('Printing results of lake simulation')
+    ELSE
+        CALL EchoProgress('Printing results of lake simulation')
+    END IF
 
     !Initialize
     LakeGWFlows = LakeGWConnector%GetFlowAtLakes()
