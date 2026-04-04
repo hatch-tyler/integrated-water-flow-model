@@ -21,11 +21,12 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 MODULE Class_BaseHydrograph
-  USE MessageLogger          , ONLY: SetLastMessage                 , &
+  USE MessageLogger          , ONLY: MessageLoggerType              , &
+                                     SetLastMessage                 , &
                                      LogMessage                     , &
                                      MessageArray                   , &
                                      f_iFatal                       , &
-                                     f_iInfo                          
+                                     f_iInfo
   USE GeneralUtilities       , ONLY: ConvertID_To_Index             , &
                                      StripTextUntilCharacter        , &
                                      FirstLocation                  , &
@@ -70,7 +71,8 @@ MODULE Class_BaseHydrograph
             f_iHyd_AtXY            , &
             f_iHyd_AtNode          , &
             f_iHyd_GWHead          , &
-            f_iHyd_Subsidence
+            f_iHyd_Subsidence      , &
+            BaseHydrograph_SetModuleLogger
   
   
   ! -------------------------------------------------------------
@@ -143,6 +145,12 @@ MODULE Class_BaseHydrograph
 
   
   ! -------------------------------------------------------------
+  ! --- MODULE-LEVEL LOGGER (preserves type binary layout)
+  ! -------------------------------------------------------------
+  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
+
+
+  ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
   INTEGER,PARAMETER                   :: f_iHyd_AtXY       = 0  , &
@@ -155,10 +163,19 @@ MODULE Class_BaseHydrograph
 
 
 CONTAINS
-    
-    
-    
-    
+
+
+  ! -------------------------------------------------------------
+  ! --- SET MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  SUBROUTINE BaseHydrograph_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    ModuleLogger => Logger
+  END SUBROUTINE BaseHydrograph_SetModuleLogger
+
+
+
+
 ! ******************************************************************
 ! ******************************************************************
 ! ******************************************************************
@@ -168,7 +185,7 @@ CONTAINS
 ! ******************************************************************
 ! ******************************************************************
 ! ******************************************************************
-    
+
   ! -------------------------------------------------------------
   ! --- NEW OUTPUT FOR USER-SPECIFIED HYDROGRAPH PRINTING
   ! -------------------------------------------------------------
@@ -700,7 +717,11 @@ CONTAINS
         END SELECT
     END DO
     IF (iHydIndex .EQ. 0) THEN
-        CALL SetLastMessage('Groundwater hydrograph ID '//TRIM(IntToText(iHydID))//' is not in the model!',f_iFatal,ThisProcedure)
+        IF (ASSOCIATED(ModuleLogger)) THEN
+            CALL ModuleLogger%SetLastMessage('Groundwater hydrograph ID '//TRIM(IntToText(iHydID))//' is not in the model!',f_iFatal,ThisProcedure)
+        ELSE
+            CALL SetLastMessage('Groundwater hydrograph ID '//TRIM(IntToText(iHydID))//' is not in the model!',f_iFatal,ThisProcedure)
+        END IF
         iStat = -1
         RETURN
     END IF

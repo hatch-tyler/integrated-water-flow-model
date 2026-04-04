@@ -23,10 +23,11 @@
 MODULE Class_AppFace
   !$ USE OMP_LIB
   USE GenericLinkedList  , ONLY: GenericLinkedListType
-  USE MessageLogger      , ONLY: SetLastMessage            , &
+  USE MessageLogger      , ONLY: MessageLoggerType         , &
+                                 SetLastMessage            , &
                                  f_iFatal
   USE GeneralUtilities   , ONLY: LocateInList
-  USE IOInterface        , ONLY: GenericFileType       
+  USE IOInterface        , ONLY: GenericFileType
   IMPLICIT NONE
   
 
@@ -46,7 +47,8 @@ MODULE Class_AppFace
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: AppFaceType              
+  PUBLIC :: AppFaceType
+  PUBLIC :: AppFace_SetModuleLogger
     
     
   ! -------------------------------------------------------------
@@ -70,16 +72,31 @@ MODULE Class_AppFace
   
   
   ! -------------------------------------------------------------
+  ! --- MODULE-LEVEL LOGGER (preserves type binary layout)
+  ! -------------------------------------------------------------
+  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
+
+
+  ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
   INTEGER,PARAMETER                   :: ModNameLen = 15
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'Class_AppFace::'
 
 
-  
-  
-  
+
+
+
 CONTAINS
+
+
+  ! -------------------------------------------------------------
+  ! --- SET MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  SUBROUTINE AppFace_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    ModuleLogger => Logger
+  END SUBROUTINE AppFace_SetModuleLogger
 
 
 

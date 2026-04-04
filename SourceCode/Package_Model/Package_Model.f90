@@ -75,8 +75,11 @@ MODULE Package_Model
   USE IOInterface                 , ONLY: GenericFileType                             , &
                                           DoesFileExist                               , &
                                           f_iUNKNOWN                                     
-  USE IWFM_Kernel_Version         , ONLY: IWFMKernelVersion                                   
-  USE IWFM_Version                , ONLY: IWFMVersion                                   
+  USE IWFM_Kernel_Version         , ONLY: IWFMKernelVersion
+  USE IWFM_Version                , ONLY: IWFMVersion
+  USE Class_BaseHydrograph        , ONLY: BaseHydrograph_SetModuleLogger
+  USE Class_TecplotOutput         , ONLY: TecplotOutput_SetModuleLogger
+  USE Class_PairedData            , ONLY: PairedData_SetModuleLogger
   USE Package_Misc                , ONLY: FlowDestinationType                         , &
                                           SolverDataType                              , &
                                           Print_Screen                                , &
@@ -116,7 +119,11 @@ MODULE Package_Model
                                           f_iLandUse_Urb 
   USE Package_Discretization      , ONLY: AppGridType                                 , &
                                           StratigraphyType                            , &
-                                          Discretization_GetNodeLayer                 
+                                          Discretization_GetNodeLayer                 , &
+                                          Grid_SetModuleLogger                        , &
+                                          AppGrid_SetModuleLogger                     , &
+                                          AppFace_SetModuleLogger                     , &
+                                          Stratigraphy_SetModuleLogger
   USE Package_AppGW               , ONLY: AppGWType                                   , &
                                           f_iSpFlowBCID                               , &
                                           f_iSpHeadBCID                               , &
@@ -154,7 +161,8 @@ MODULE Package_Model
                                           SupplyDestinationConnectorType              , & 
                                           f_iLakeToStrmFlow
   USE Package_PrecipitationET     , ONLY: PrecipitationType                           , &
-                                          ETType                                      
+                                          ETType                                      , &
+                                          PrecipET_SetModuleLogger
   USE Package_Matrix              , ONLY: MatrixType                                  , &
                                           ConnectivityListType
   USE Package_GWZBudget           , ONLY: GWZBudgetType                               , &
@@ -835,6 +843,16 @@ CONTAINS
     CALL Model%AppStream%New(BinaryFile,lWSA,iStat)
     IF (iStat .EQ. -1) RETURN
     
+    !Set module-level loggers for Batch 2 packages
+    CALL Grid_SetModuleLogger(DefaultLogger)
+    CALL AppGrid_SetModuleLogger(DefaultLogger)
+    CALL AppFace_SetModuleLogger(DefaultLogger)
+    CALL Stratigraphy_SetModuleLogger(DefaultLogger)
+    CALL BaseHydrograph_SetModuleLogger(DefaultLogger)
+    CALL TecplotOutput_SetModuleLogger(DefaultLogger)
+    CALL PairedData_SetModuleLogger(DefaultLogger)
+    CALL PrecipET_SetModuleLogger(DefaultLogger)
+
     !Matrix data
     CALL Model%Matrix%SetLogger(DefaultLogger)
     CALL Model%Matrix%New(BinaryFile,iStat)
@@ -947,6 +965,14 @@ CONTAINS
     CALL Model%SupplyAdjust%SetLogger(DefaultLogger)
     CALL Model%IrigFracFile%SetLogger(DefaultLogger)
     CALL Model%GWZBudget%SetLogger(DefaultLogger)
+    CALL Grid_SetModuleLogger(DefaultLogger)
+    CALL AppGrid_SetModuleLogger(DefaultLogger)
+    CALL AppFace_SetModuleLogger(DefaultLogger)
+    CALL Stratigraphy_SetModuleLogger(DefaultLogger)
+    CALL BaseHydrograph_SetModuleLogger(DefaultLogger)
+    CALL TecplotOutput_SetModuleLogger(DefaultLogger)
+    CALL PairedData_SetModuleLogger(DefaultLogger)
+    CALL PrecipET_SetModuleLogger(DefaultLogger)
 
     !Solution scheme control data
     CALL Model%Matrix%SetSolver(MSOLVE,0.01d0*Model%Convergence%Tolerance,Model%Convergence%IterMax,RELAX,iStat)  ;  iF (iStat .EQ. -1) RETURN
@@ -1297,6 +1323,14 @@ CONTAINS
     CALL Model%SupplyAdjust%SetLogger(DefaultLogger)
     CALL Model%IrigFracFile%SetLogger(DefaultLogger)
     CALL Model%GWZBudget%SetLogger(DefaultLogger)
+    CALL Grid_SetModuleLogger(DefaultLogger)
+    CALL AppGrid_SetModuleLogger(DefaultLogger)
+    CALL AppFace_SetModuleLogger(DefaultLogger)
+    CALL Stratigraphy_SetModuleLogger(DefaultLogger)
+    CALL BaseHydrograph_SetModuleLogger(DefaultLogger)
+    CALL TecplotOutput_SetModuleLogger(DefaultLogger)
+    CALL PairedData_SetModuleLogger(DefaultLogger)
+    CALL PrecipET_SetModuleLogger(DefaultLogger)
 
     !Solution scheme control data
     CALL Model%Matrix%SetSolver(MSOLVE,0.01d0*Model%Convergence%Tolerance,Model%Convergence%IterMax,RELAX,iStat)  ;  IF (iStat .EQ. -1) RETURN
@@ -1652,6 +1686,14 @@ CONTAINS
     CALL Model%SupplyAdjust%SetLogger(DefaultLogger)
     CALL Model%IrigFracFile%SetLogger(DefaultLogger)
     CALL Model%GWZBudget%SetLogger(DefaultLogger)
+    CALL Grid_SetModuleLogger(DefaultLogger)
+    CALL AppGrid_SetModuleLogger(DefaultLogger)
+    CALL AppFace_SetModuleLogger(DefaultLogger)
+    CALL Stratigraphy_SetModuleLogger(DefaultLogger)
+    CALL BaseHydrograph_SetModuleLogger(DefaultLogger)
+    CALL TecplotOutput_SetModuleLogger(DefaultLogger)
+    CALL PairedData_SetModuleLogger(DefaultLogger)
+    CALL PrecipET_SetModuleLogger(DefaultLogger)
 
     !Solution scheme control data
     Model%Convergence%Tolerance = Toler

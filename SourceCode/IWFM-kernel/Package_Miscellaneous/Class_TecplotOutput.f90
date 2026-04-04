@@ -21,7 +21,8 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 MODULE Class_TecplotOutput
-  USE MessageLogger           , ONLY: EchoProgress
+  USE MessageLogger           , ONLY: MessageLoggerType  , &
+                                      EchoProgress
   USE TimeSeriesUtilities     , ONLY: TimeStepType       , &
                                       f_iTimeStampLength
   USE GeneralUtilities        , ONLY: IntToText
@@ -45,7 +46,8 @@ MODULE Class_TecplotOutput
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: TecplotOutputType                 
+  PUBLIC :: TecplotOutputType
+  PUBLIC :: TecplotOutput_SetModuleLogger
   
   
   ! -------------------------------------------------------------
@@ -64,11 +66,24 @@ MODULE Class_TecplotOutput
   
   
   
-CONTAINS
-    
-    
+  ! -------------------------------------------------------------
+  ! --- MODULE-LEVEL LOGGER (preserves type binary layout)
+  ! -------------------------------------------------------------
+  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
 
-    
+
+CONTAINS
+
+
+  ! -------------------------------------------------------------
+  ! --- SET MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  SUBROUTINE TecplotOutput_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    ModuleLogger => Logger
+  END SUBROUTINE TecplotOutput_SetModuleLogger
+
+
 ! ******************************************************************
 ! ******************************************************************
 ! ******************************************************************

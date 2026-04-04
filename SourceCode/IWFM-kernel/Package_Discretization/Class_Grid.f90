@@ -22,7 +22,8 @@
 !***********************************************************************
 MODULE Class_Grid
   !$ USE OMP_LIB
-  USE MessageLogger      , ONLY: SetLastMessage           , &
+  USE MessageLogger      , ONLY: MessageLoggerType        , &
+                                 SetLastMessage           , &
                                  MessageArray             , &
                                  f_iFatal
   USE GeneralUtilities   , ONLY: GetUniqueArrayComponents , &
@@ -60,7 +61,8 @@ MODULE Class_Grid
             ListConnectedNodes          , &
             ListSurroundingElems        , &
             Compute_DELShpI_DELShpJ     , &
-            Compute_Rot_DELShpI_DELShpJ
+            Compute_Rot_DELShpI_DELShpJ , &
+            Grid_SetModuleLogger
 
 
   ! -------------------------------------------------------------
@@ -105,6 +107,12 @@ MODULE Class_Grid
 
 
   ! -------------------------------------------------------------
+  ! --- MODULE-LEVEL LOGGER (preserves type binary layout)
+  ! -------------------------------------------------------------
+  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
+
+
+  ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
   INTEGER,PARAMETER           :: f_iModNameLen = 12
@@ -115,6 +123,15 @@ MODULE Class_Grid
 
 
 CONTAINS
+
+
+  ! -------------------------------------------------------------
+  ! --- SET MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  SUBROUTINE Grid_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    ModuleLogger => Logger
+  END SUBROUTINE Grid_SetModuleLogger
 
 
 

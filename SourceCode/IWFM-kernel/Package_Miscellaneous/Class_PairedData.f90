@@ -21,7 +21,8 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 MODULE Class_PairedData
-  USE MessageLogger     , ONLY: SetLastMessage        , &
+  USE MessageLogger     , ONLY: MessageLoggerType     , &
+                                SetLastMessage        , &
                                 f_iFatal
   USE IOInterface
   USE AbstractFunction  , ONLY: AbstractFunctionType
@@ -44,7 +45,8 @@ MODULE Class_PairedData
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: PairedDataType             
+  PUBLIC :: PairedDataType
+  PUBLIC :: PairedData_SetModuleLogger
 
 
   ! -------------------------------------------------------------
@@ -72,6 +74,12 @@ MODULE Class_PairedData
 
 
   ! -------------------------------------------------------------
+  ! --- MODULE-LEVEL LOGGER (preserves type binary layout)
+  ! -------------------------------------------------------------
+  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
+
+
+  ! -------------------------------------------------------------
   ! --- MISCELLENEOUS DATA
   ! -------------------------------------------------------------
   INTEGER,PARAMETER                   :: ModNameLen = 18
@@ -81,6 +89,15 @@ MODULE Class_PairedData
 
 
 CONTAINS
+
+
+  ! -------------------------------------------------------------
+  ! --- SET MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  SUBROUTINE PairedData_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    ModuleLogger => Logger
+  END SUBROUTINE PairedData_SetModuleLogger
 
 
 

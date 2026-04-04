@@ -22,16 +22,17 @@
 !***********************************************************************
 MODULE Class_AppGrid
   !$ USE OMP_LIB
-  USE IOInterface       , ONLY: GenericFileType           
+  USE IOInterface       , ONLY: GenericFileType
   USE GeneralUtilities
-  USE MessageLogger     , ONLY: LogMessage                , &
+  USE MessageLogger     , ONLY: MessageLoggerType         , &
+                                LogMessage                , &
                                 SetLastMessage            , &
                                 MessageArray              , &
                                 f_iWarn                   , &
                                 f_iFatal                  , &
                                 EchoProgress
   USE GenericLinkedList , ONLY: GenericLinkedListType
-  USE Class_Grid        
+  USE Class_Grid
   USE Class_AppFace     , ONLY: AppFaceType
   IMPLICIT NONE
 
@@ -53,7 +54,8 @@ MODULE Class_AppGrid
   PUBLIC :: AppGridType                                , &
             AppNodeType                                , &
             AppElementType                             , &
-            AppFaceType                               
+            AppFaceType                                , &
+            AppGrid_SetModuleLogger
           
 
   ! -------------------------------------------------------------
@@ -166,6 +168,12 @@ MODULE Class_AppGrid
 
 
   ! -------------------------------------------------------------
+  ! --- MODULE-LEVEL LOGGER (preserves type binary layout)
+  ! -------------------------------------------------------------
+  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
+
+
+  ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
   INTEGER,PARAMETER                   :: ModNameLen = 15
@@ -174,6 +182,15 @@ MODULE Class_AppGrid
 
 
 CONTAINS
+
+
+  ! -------------------------------------------------------------
+  ! --- SET MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  SUBROUTINE AppGrid_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    ModuleLogger => Logger
+  END SUBROUTINE AppGrid_SetModuleLogger
 
 
 

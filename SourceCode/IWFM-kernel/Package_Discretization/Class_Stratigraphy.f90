@@ -21,15 +21,16 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 MODULE Class_Stratigraphy
-  USE MessageLogger    , ONLY: SetLastMessage      , &
+  USE MessageLogger    , ONLY: MessageLoggerType   , &
+                               SetLastMessage      , &
                                EchoProgress        , &
                                MessageArray        , &
-                               f_iFatal              
-  USE IOInterface                                  
+                               f_iFatal
+  USE IOInterface
   USE GeneralUtilities , ONLY: IntToText           , &
                                ConvertID_To_Index
-  USE Class_AppGrid    , ONLY: AppGridType         
-                               
+  USE Class_AppGrid    , ONLY: AppGridType
+
   IMPLICIT NONE
 
 
@@ -47,7 +48,8 @@ MODULE Class_Stratigraphy
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: StratigraphyType                       
+  PUBLIC :: StratigraphyType
+  PUBLIC :: Stratigraphy_SetModuleLogger
 
 
   ! -------------------------------------------------------------
@@ -88,6 +90,12 @@ MODULE Class_Stratigraphy
   
    
   ! -------------------------------------------------------------
+  ! --- MODULE-LEVEL LOGGER (preserves type binary layout)
+  ! -------------------------------------------------------------
+  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
+
+
+  ! -------------------------------------------------------------
   ! --- MISC. DATA
   ! -------------------------------------------------------------
   CHARACTER(LEN=20),PARAMETER :: ModName    = 'Class_Stratigraphy::'
@@ -97,6 +105,15 @@ MODULE Class_Stratigraphy
 
 
 CONTAINS
+
+
+  ! -------------------------------------------------------------
+  ! --- SET MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  SUBROUTINE Stratigraphy_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    ModuleLogger => Logger
+  END SUBROUTINE Stratigraphy_SetModuleLogger
 
 
 
@@ -698,7 +715,11 @@ CONTAINS
     IF (iElem .EQ. 0) THEN
         MessageArray(1) = 'Location described by a coordinate cannot be located in the model area!'
         WRITE (MessageArray(2),'(A,F11.2,A,F11.2,A)') 'X-Y coordinate: (' , rX , ',' , rY , ')'
-        CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+        IF (ASSOCIATED(ModuleLogger)) THEN
+            CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+        ELSE
+            CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+        END IF
         iStat = -1
         RETURN
     END IF

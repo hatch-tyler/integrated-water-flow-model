@@ -23,9 +23,10 @@
 MODULE Class_AtmosphericData
   USE IOInterface          , ONLY: RealTSDataInFileType
   USE TimeSeriesUtilities  , ONLY: TimeStepType
-  USE MessageLogger        , ONLY: EchoProgress         , &
+  USE MessageLogger        , ONLY: MessageLoggerType    , &
+                                   EchoProgress         , &
                                    SetLastMessage       , &
-                                   f_iFatal 
+                                   f_iFatal
   IMPLICIT NONE
 
 
@@ -45,7 +46,8 @@ MODULE Class_AtmosphericData
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: AtmosphericDataType 
+  PUBLIC :: AtmosphericDataType
+  PUBLIC :: AtmosphericData_SetModuleLogger
   
 
   ! -------------------------------------------------------------
@@ -67,6 +69,12 @@ MODULE Class_AtmosphericData
 
 
   ! -------------------------------------------------------------
+  ! --- MODULE-LEVEL LOGGER (preserves type binary layout)
+  ! -------------------------------------------------------------
+  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
+
+
+  ! -------------------------------------------------------------
   ! --- MISC. DATA
   ! -------------------------------------------------------------
   INTEGER,PARAMETER                   :: ModNameLen = 23
@@ -76,6 +84,15 @@ MODULE Class_AtmosphericData
 
 
 CONTAINS
+
+
+  ! -------------------------------------------------------------
+  ! --- SET MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  SUBROUTINE AtmosphericData_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    ModuleLogger => Logger
+  END SUBROUTINE AtmosphericData_SetModuleLogger
 
 
 
@@ -219,12 +236,16 @@ CONTAINS
     !Check for negativity, if desired
     IF (lCheckForNegativity) THEN
         IF (ANY(rOutputValues(1:nActualOutput) .LT. 0.0)) THEN
-            CALL SetLastMessage('Timeseries input for '//TRIM(AtmosphericData%cDataName)//' data cannot be less than zero!',f_iFatal,ThisProcedure)
+            IF (ASSOCIATED(ModuleLogger)) THEN
+                CALL ModuleLogger%SetLastMessage('Timeseries input for '//TRIM(AtmosphericData%cDataName)//' data cannot be less than zero!',f_iFatal,ThisProcedure)
+            ELSE
+                CALL SetLastMessage('Timeseries input for '//TRIM(AtmosphericData%cDataName)//' data cannot be less than zero!',f_iFatal,ThisProcedure)
+            END IF
             iStat = -1
             RETURN
         END IF
     END IF
-    
+
     !Rewind file if necessary
     IF (lForInquiry) CALL AtmosphericData%File%RewindFile_To_BeginningOfTSData(iStat)
 
@@ -245,7 +266,11 @@ CONTAINS
     INTEGER                      :: FileReadCode
 
     !Print progress
-    CALL EchoProgress('Reading time series '//AtmosphericData%cDataName//' data...')
+    IF (ASSOCIATED(ModuleLogger)) THEN
+        CALL ModuleLogger%EchoProgress('Reading time series '//AtmosphericData%cDataName//' data...')
+    ELSE
+        CALL EchoProgress('Reading time series '//AtmosphericData%cDataName//' data...')
+    END IF
 
     !Read data
     CALL AtmosphericData%ReadTSData(TimeStep,AtmosphericData%cDataName,FileReadCode,iStat)
@@ -257,7 +282,11 @@ CONTAINS
         !Check for negativity if desired
         IF (lCheckForNegativity) THEN
             IF (ANY(AtmosphericData%rValues .LT. 0.0)) THEN
-                CALL SetLastMessage('Timeseries input for '//TRIM(AtmosphericData%cDataName)//' data cannot be less than zero!',f_iFatal,ThisProcedure)
+                IF (ASSOCIATED(ModuleLogger)) THEN
+                    CALL ModuleLogger%SetLastMessage('Timeseries input for '//TRIM(AtmosphericData%cDataName)//' data cannot be less than zero!',f_iFatal,ThisProcedure)
+                ELSE
+                    CALL SetLastMessage('Timeseries input for '//TRIM(AtmosphericData%cDataName)//' data cannot be less than zero!',f_iFatal,ThisProcedure)
+                END IF
                 iStat = -1
                 RETURN
             END IF

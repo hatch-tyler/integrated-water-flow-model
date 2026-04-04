@@ -21,6 +21,7 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 MODULE Package_Discretization
+  USE Class_Grid       , ONLY: Grid_SetModuleLogger
   USE Class_AppGrid
   USE Class_AppFace
   USE Class_Stratigraphy
