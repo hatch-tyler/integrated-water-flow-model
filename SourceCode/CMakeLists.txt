@@ -138,6 +138,7 @@ if(IWFM_MONOLITHIC_BUILD AND IWFM_NEED_DEPENDENCIES)
         iwfm_add_monolithic_executable(CalcTypeHyd
             SCOPE KERNEL
             SOURCES
+                ${CMAKE_CURRENT_SOURCE_DIR}/IWFM2OBS/IWFM2OBS_Utilities.f90
                 ${CMAKE_CURRENT_SOURCE_DIR}/CalcTypeHyd/Class_CalcTypeHyd.f90
                 ${CMAKE_CURRENT_SOURCE_DIR}/CalcTypeHyd/CalcTypeHyd_Main.f90
         )
@@ -397,6 +398,7 @@ endif()
 # =============================================================================
 if(IWFM_BUILD_CALCTYPHYD)
     add_executable(CalcTypeHyd
+        IWFM2OBS/IWFM2OBS_Utilities.f90
         CalcTypeHyd/Class_CalcTypeHyd.f90
         CalcTypeHyd/CalcTypeHyd_Main.f90
     )
