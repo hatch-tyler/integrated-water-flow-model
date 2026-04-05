@@ -24,10 +24,11 @@ MODULE Class_AppSubsidence_v50
   USE MessageLogger           , ONLY: SetLastMessage                , &
                                       LogMessage                    , &
                                       EchoProgress                  , &
+                                      MessageLoggerType             , &
                                       f_iFILE                       , &
                                       MessageArray                  , &
                                       f_iFatal                      , &
-                                      f_iMessage                      
+                                      f_iMessage
   USE IOInterface             , ONLY: GenericFileType               , &
                                       f_iTXT                           
   USE GeneralUtilities        , ONLY: StripTextUntilCharacter       , &
@@ -71,6 +72,7 @@ MODULE Class_AppSubsidence_v50
   ! -------------------------------------------------------------
   PRIVATE
   PUBLIC :: AppSubsidence_v50_Type              , &
+            AppSubsidence_v50_SetModuleLogger  , &
             ReadSubsidenceConfig_v50
 
  
@@ -106,17 +108,31 @@ MODULE Class_AppSubsidence_v50
   ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
+  ! -------------------------------------------------------------
+  ! --- MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
+
+
   INTEGER,PARAMETER                   :: ModNameLen = 25
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'Class_AppSubsidence_v50::'
 
-  
-  
-  
+
+
 CONTAINS
-    
-    
-    
-    
+
+
+  ! -------------------------------------------------------------
+  ! --- SET MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  SUBROUTINE AppSubsidence_v50_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    ModuleLogger => Logger
+  END SUBROUTINE AppSubsidence_v50_SetModuleLogger
+
+
+
+
 ! ******************************************************************
 ! ******************************************************************
 ! ******************************************************************
@@ -797,11 +813,19 @@ CONTAINS
     NLayers = SIZE(AppSubs%Subsidence , DIM=2)
     
     !Print parameters
-    CALL LogMessage('',f_iMessage,'',f_iFILE)
-    CALL LogMessage(REPEAT('-',100),f_iMessage,'',f_iFILE)
-    CALL LogMessage(REPEAT(' ',30)//'SUBSIDENCE PARAMETER VALUES FOR EACH NODE',f_iMessage,'',f_iFILE)
-    CALL LogMessage(REPEAT(' ',12)//'*** Note: Values Below are After Multiplication by Conversion Factors ***',f_iMessage,'',f_iFILE)
-    CALL LogMessage(REPEAT('-',100),f_iMessage,'',f_iFILE)
+    IF (ASSOCIATED(ModuleLogger)) THEN
+        CALL ModuleLogger%LogMessage('',f_iMessage,'',f_iFILE)
+        CALL ModuleLogger%LogMessage(REPEAT('-',100),f_iMessage,'',f_iFILE)
+        CALL ModuleLogger%LogMessage(REPEAT(' ',30)//'SUBSIDENCE PARAMETER VALUES FOR EACH NODE',f_iMessage,'',f_iFILE)
+        CALL ModuleLogger%LogMessage(REPEAT(' ',12)//'*** Note: Values Below are After Multiplication by Conversion Factors ***',f_iMessage,'',f_iFILE)
+        CALL ModuleLogger%LogMessage(REPEAT('-',100),f_iMessage,'',f_iFILE)
+    ELSE
+        CALL LogMessage('',f_iMessage,'',f_iFILE)
+        CALL LogMessage(REPEAT('-',100),f_iMessage,'',f_iFILE)
+        CALL LogMessage(REPEAT(' ',30)//'SUBSIDENCE PARAMETER VALUES FOR EACH NODE',f_iMessage,'',f_iFILE)
+        CALL LogMessage(REPEAT(' ',12)//'*** Note: Values Below are After Multiplication by Conversion Factors ***',f_iMessage,'',f_iFILE)
+        CALL LogMessage(REPEAT('-',100),f_iMessage,'',f_iFILE)
+    END IF
     WRITE (Text,'(A,2X,7(A,2X))')            &
       '   NODE','        SCE             '   &
                ,'        SCI             '   &
@@ -810,28 +834,40 @@ CONTAINS
                ,'        HC              '   &
                ,'        KV              '   &
                ,'        NEQ             '
-    CALL LogMessage(TRIM(Text),f_iMessage,'',f_iFILE)
+    IF (ASSOCIATED(ModuleLogger)) THEN
+        CALL ModuleLogger%LogMessage(TRIM(Text),f_iMessage,'',f_iFILE)
+    ELSE
+        CALL LogMessage(TRIM(Text),f_iMessage,'',f_iFILE)
+    END IF
 
     DO indxNode=1,NNodes
-      DO indxLayer=1,NLayers                                                                                     
+      DO indxLayer=1,NLayers
         indx_S = AppSubs%iDataIndex_S(indxNode,indxLayer)
-        IF (indxLayer .EQ. 1) THEN  
-          WRITE (Text,'(I7,2X,10(1PG24.15E3,2X))')                                                                                                                   & 
-               iGWNodeIDs(indxNode) ,AppSubs%ElasticSC(indxNode,indxLayer) / NodeAreas(indxNode) , AppSubs%InelasticSC(indxNode,indxLayer) / NodeAreas(indxNode) ,   & 
+        IF (indxLayer .EQ. 1) THEN
+          WRITE (Text,'(I7,2X,10(1PG24.15E3,2X))')                                                                                                                   &
+               iGWNodeIDs(indxNode) ,AppSubs%ElasticSC(indxNode,indxLayer) / NodeAreas(indxNode) , AppSubs%InelasticSC(indxNode,indxLayer) / NodeAreas(indxNode) ,   &
                                      AppSubs%InterbedThick(indxNode,indxLayer)                   , AppSubs%interbedThickMin(indxNode,indxLayer)                  ,   &
                                      AppSubs%PreCompactHead(indx_S)                              , AppSubs%Kvsub(indxNode,indxLayer)                             ,   &
                                      AppSubs%rNEQ(indxNode,indxLayer)
-        ELSE                                                                                          
-          WRITE (Text,'(9X,10(1PG24.15E3,2X))')                                                                                                          &  
-                         AppSubs%ElasticSC(indxNode,indxLayer) / NodeAreas(indxNode) , AppSubs%InelasticSC(indxNode,indxLayer) / NodeAreas(indxNode) ,   & 
+        ELSE
+          WRITE (Text,'(9X,10(1PG24.15E3,2X))')                                                                                                          &
+                         AppSubs%ElasticSC(indxNode,indxLayer) / NodeAreas(indxNode) , AppSubs%InelasticSC(indxNode,indxLayer) / NodeAreas(indxNode) ,   &
                          AppSubs%InterbedThick(indxNode,indxLayer)                   , AppSubs%interbedThickMin(indxNode,indxLayer)                  ,   &
                          AppSubs%PreCompactHead(indx_S)                              , AppSubs%Kvsub(indxNode,indxLayer)                             ,   &
                          AppSubs%rNEQ(indxNode,indxLayer)
-        END IF                                                                                          
-        CALL LogMessage(TRIM(Text),f_iMessage,'',f_iFILE)                                                                       
-      END DO                                                                                          
-    END DO  
-    CALL LogMessage('',f_iMessage,'',f_iFILE)
+        END IF
+        IF (ASSOCIATED(ModuleLogger)) THEN
+            CALL ModuleLogger%LogMessage(TRIM(Text),f_iMessage,'',f_iFILE)
+        ELSE
+            CALL LogMessage(TRIM(Text),f_iMessage,'',f_iFILE)
+        END IF
+      END DO
+    END DO
+    IF (ASSOCIATED(ModuleLogger)) THEN
+        CALL ModuleLogger%LogMessage('',f_iMessage,'',f_iFILE)
+    ELSE
+        CALL LogMessage('',f_iMessage,'',f_iFILE)
+    END IF
 
   END SUBROUTINE AppSubsidence_v50_PrintParameters
 

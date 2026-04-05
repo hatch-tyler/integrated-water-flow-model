@@ -21,8 +21,9 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 MODULE Util_Package_RootZone
-  USE MessageLogger          , ONLY: SetLastMessage                , &
-                                     f_iFatal                        
+  USE MessageLogger          , ONLY: MessageLoggerType             , &
+                                     SetLastMessage                , &
+                                     f_iFatal
   USE GeneralUtilities       , ONLY: LowerCase                     , &
                                      UpperCase                     , &
                                      IntToText                     , &
@@ -45,7 +46,8 @@ MODULE Util_Package_RootZone
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: WaterSupplyType                      , &
+  PUBLIC :: UtilPkgRootZone_SetModuleLogger       , &
+            WaterSupplyType                      , &
             ReadRealData                         , & 
             ReadPointerData                      , &
             ReadLandUseAreasForTimePeriod        , &
@@ -130,6 +132,12 @@ MODULE Util_Package_RootZone
 
                                            
   ! -------------------------------------------------------------
+  ! --- MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
+
+
+  ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
   INTEGER,PARAMETER                   :: ModNameLen = 23
@@ -140,6 +148,14 @@ MODULE Util_Package_RootZone
   
 CONTAINS
 
+
+  ! -------------------------------------------------------------
+  ! --- SET MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  SUBROUTINE UtilPkgRootZone_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    ModuleLogger => Logger
+  END SUBROUTINE UtilPkgRootZone_SetModuleLogger
 
 
   ! -------------------------------------------------------------
@@ -181,7 +197,11 @@ CONTAINS
         IDs = DummyIntArray(:,1)
         CALL ConvertID_To_Index(IDs,iFeatureIDs,iIndices)
         IF (ANY(iIndices.EQ.0)) THEN
-            CALL SetLastMessage('One or more '//TRIM(cFeatures)//' listed for '//TRIM(LowerCase(cDescription))//' are not in the model!',f_iFatal,ThisProcedure)
+            IF (ASSOCIATED(ModuleLogger)) THEN
+                CALL ModuleLogger%SetLastMessage('One or more '//TRIM(cFeatures)//' listed for '//TRIM(LowerCase(cDescription))//' are not in the model!',f_iFatal,ThisProcedure)
+            ELSE
+                CALL SetLastMessage('One or more '//TRIM(cFeatures)//' listed for '//TRIM(LowerCase(cDescription))//' are not in the model!',f_iFatal,ThisProcedure)
+            END IF
             iStat = -1
             RETURN
         END IF
@@ -231,7 +251,11 @@ CONTAINS
         IDs = DummyRealArray(:,1)
         CALL ConvertID_To_Index(IDs,iFeatureIDs,iIndices)
         IF (ANY(iIndices.EQ.0)) THEN
-            CALL SetLastMessage('One or more '//TRIM(cFeatures)//' listed for '//TRIM(LowerCase(cDescription))//' are not in the model!',f_iFatal,ThisProcedure)
+            IF (ASSOCIATED(ModuleLogger)) THEN
+                CALL ModuleLogger%SetLastMessage('One or more '//TRIM(cFeatures)//' listed for '//TRIM(LowerCase(cDescription))//' are not in the model!',f_iFatal,ThisProcedure)
+            ELSE
+                CALL SetLastMessage('One or more '//TRIM(cFeatures)//' listed for '//TRIM(LowerCase(cDescription))//' are not in the model!',f_iFatal,ThisProcedure)
+            END IF
             iStat = -1
             RETURN
         END IF
@@ -268,7 +292,11 @@ CONTAINS
         IF (lProcessed(iElem)) THEN
             ID                         = iElemIDs(iElem)
             cLowerCaseDescription(1:1) = UpperCase(cLowerCaseDescription(1:1))
-            CALL SetLastMessage(cLowerCaseDescription//' at element '//TRIM(IntToText(ID))//' are defined more than once!',f_iFatal,ThisProcedure)
+            IF (ASSOCIATED(ModuleLogger)) THEN
+                CALL ModuleLogger%SetLastMessage(cLowerCaseDescription//' at element '//TRIM(IntToText(ID))//' are defined more than once!',f_iFatal,ThisProcedure)
+            ELSE
+                CALL SetLastMessage(cLowerCaseDescription//' at element '//TRIM(IntToText(ID))//' are defined more than once!',f_iFatal,ThisProcedure)
+            END IF
             iStat = -1
             RETURN
         END IF

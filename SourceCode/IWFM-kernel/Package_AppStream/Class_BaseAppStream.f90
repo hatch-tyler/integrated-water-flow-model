@@ -23,6 +23,7 @@
 MODULE Class_BaseAppStream
   USE MessageLogger               , ONLY: EchoProgress                           , &
                                           SetLastMessage                         , &
+                                          MessageLoggerType                      , &
                                           f_iWarn                                , &
                                           f_iFatal
   USE IOInterface                 , ONLY: GenericFileType                        
@@ -102,7 +103,8 @@ MODULE Class_BaseAppStream
             RoutingOrderedReachIndex_To_IDOrderedReachIndex , &
             f_iBudgetType_StrmNode                          , &
             f_iBudgetType_StrmReach                         , &
-            f_iBudgetType_DiverDetail 
+            f_iBudgetType_DiverDetail                       , &
+            BaseAppStream_SetModuleLogger
   
 
   ! -------------------------------------------------------------
@@ -281,8 +283,13 @@ MODULE Class_BaseAppStream
   ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
+  ! -------------------------------------------------------------
+  ! --- MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
+
   INTEGER,PARAMETER                   :: ModNameLen = 21
-  CHARACTER(LEN=ModNameLen),PARAMETER :: ModName = 'Class_BaseAppStream::' 
+  CHARACTER(LEN=ModNameLen),PARAMETER :: ModName = 'Class_BaseAppStream::'
   
   
   ! -------------------------------------------------------------
@@ -526,10 +533,18 @@ MODULE Class_BaseAppStream
   
   
 CONTAINS
-    
-    
-    
-    
+
+
+  ! -------------------------------------------------------------
+  ! --- SET MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  SUBROUTINE BaseAppStream_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    ModuleLogger => Logger
+  END SUBROUTINE BaseAppStream_SetModuleLogger
+
+
+
 ! ******************************************************************
 ! ******************************************************************
 ! ******************************************************************
@@ -755,7 +770,11 @@ CONTAINS
                 !Clear memory
                 DEALLOCATE (cColTitles_Local , STAT=iErrorCode)
             ELSE
-                CALL SetLastMessage('Stream reach budget is not defined to retrieve budget column titles!',f_iFatal,ThisProcedure)
+                IF (ASSOCIATED(ModuleLogger)) THEN
+                    CALL ModuleLogger%SetLastMessage('Stream reach budget is not defined to retrieve budget column titles!',f_iFatal,ThisProcedure)
+                ELSE
+                    CALL SetLastMessage('Stream reach budget is not defined to retrieve budget column titles!',f_iFatal,ThisProcedure)
+                END IF
                 iStat = -1
             END IF    
             
@@ -794,17 +813,25 @@ CONTAINS
             IF (AppStream%StrmReachBudRawFile_Defined) THEN
                 CALL GetBudget_MonthlyFlows_GivenFile(AppStream%StrmReachBudRawFile,iBudgetType,iLocationIndex,AppStream%Reaches%ID,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
             ELSE
-                CALL SetLastMessage('Stream reach budget is not defined to retrieve monthly budget flows!',f_iFatal,ThisProcedure)
+                IF (ASSOCIATED(ModuleLogger)) THEN
+                    CALL ModuleLogger%SetLastMessage('Stream reach budget is not defined to retrieve monthly budget flows!',f_iFatal,ThisProcedure)
+                ELSE
+                    CALL SetLastMessage('Stream reach budget is not defined to retrieve monthly budget flows!',f_iFatal,ThisProcedure)
+                END IF
                 ALLOCATE (rFlows(0,0) , cFlowNames(0))
                 iStat = -1
             END IF
             
         CASE (f_iBudgetType_DiverDetail)
-            CALL SetLastMessage('Monthly budget values cannot be retrieved from Diversion Details file!',f_iWarn,ThisProcedure)
+            IF (ASSOCIATED(ModuleLogger)) THEN
+                CALL ModuleLogger%SetLastMessage('Monthly budget values cannot be retrieved from Diversion Details file!',f_iWarn,ThisProcedure)
+            ELSE
+                CALL SetLastMessage('Monthly budget values cannot be retrieved from Diversion Details file!',f_iWarn,ThisProcedure)
+            END IF
             ALLOCATE (rFlows(0,0) , cFlowNames(0))
             iStat = -1
     END SELECT
-        
+
   END SUBROUTINE GetBudget_MonthlyFlows_GivenAppStream
 
   
@@ -834,11 +861,15 @@ CONTAINS
   
             
         CASE (f_iBudgetType_DiverDetail)
-            CALL SetLastMessage('Monthly budget values cannot be retrieved from Diversion Details file!',f_iWarn,ThisProcedure)
+            IF (ASSOCIATED(ModuleLogger)) THEN
+                CALL ModuleLogger%SetLastMessage('Monthly budget values cannot be retrieved from Diversion Details file!',f_iWarn,ThisProcedure)
+            ELSE
+                CALL SetLastMessage('Monthly budget values cannot be retrieved from Diversion Details file!',f_iWarn,ThisProcedure)
+            END IF
             ALLOCATE (rFlows(0,0) , cFlowNames(0))
             iStat = -1
-            
-            
+
+
         CASE (f_iBudgetType_StrmReach)
             !Stream reach index, iLocationIndex, is based on the routing schedule;
             !However, reaches are odered based on their reach IDs in Budget file
@@ -2032,7 +2063,11 @@ CONTAINS
         rFractions(indx) = rDummy(2)
         CALL ConvertID_To_Index(iStrmNode,iStrmNodeIDs,iStrmNodes(indx))
         IF (iStrmNodes(indx) .EQ. 0) THEN
-            CALL SetLastMessage('Stream node ID '//TRIM(IntToText(iStrmNode))//' listed for partal stream-aquifer interaction is not in the model!',f_iFatal,ThisProcedure)
+            IF (ASSOCIATED(ModuleLogger)) THEN
+                CALL ModuleLogger%SetLastMessage('Stream node ID '//TRIM(IntToText(iStrmNode))//' listed for partal stream-aquifer interaction is not in the model!',f_iFatal,ThisProcedure)
+            ELSE
+                CALL SetLastMessage('Stream node ID '//TRIM(IntToText(iStrmNode))//' listed for partal stream-aquifer interaction is not in the model!',f_iFatal,ThisProcedure)
+            END IF
             iStat = -1
             RETURN
         END IF
@@ -2081,7 +2116,11 @@ CONTAINS
     TYPE(StrmLakeConnectorType),INTENT(IN) :: StrmLakeConnector
   
     !Echo progress
-    CALL EchoProgress('Printing results of stream simulation')
+    IF (ASSOCIATED(ModuleLogger)) THEN
+        CALL ModuleLogger%EchoProgress('Printing results of stream simulation')
+    ELSE
+        CALL EchoProgress('Printing results of stream simulation')
+    END IF
     
     !Print stream flow hydrographs
     IF (AppStream%StrmHyd%IsOutFileDefined()) &

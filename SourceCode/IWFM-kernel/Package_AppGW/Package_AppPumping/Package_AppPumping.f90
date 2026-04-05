@@ -27,8 +27,9 @@ MODULE Package_AppPumping
                                           LogMessage                               , &
                                           EchoProgress                             , &
                                           MessageArray                             , &
+                                          MessageLoggerType                        , &
                                           f_iFatal                                 , &
-                                          f_iMessage        
+                                          f_iMessage
   USE TimeSeriesUtilities         , ONLY: TimeStepType
   USE GeneralUtilities            , ONLY: StripTextUntilCharacter                  , &
                                           CleanSpecialCharacters                   , &
@@ -94,8 +95,9 @@ MODULE Package_AppPumping
   ! -------------------------------------------------------------
   PRIVATE
   PUBLIC :: AppPumpingType                          , &
+            AppPumping_SetModuleLogger              , &
             f_iPump_Well                            , &
-            f_iPump_ElemPump                          
+            f_iPump_ElemPump
 
 
   ! -------------------------------------------------------------
@@ -167,13 +169,27 @@ MODULE Package_AppPumping
   ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
+  ! -------------------------------------------------------------
+  ! --- MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
+
+
   INTEGER,PARAMETER                   :: ModNameLen = 20
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'Package_AppPumping::'
   
   
   
 CONTAINS
-     
+
+
+  ! -------------------------------------------------------------
+  ! --- SET MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  SUBROUTINE AppPumping_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    ModuleLogger => Logger
+  END SUBROUTINE AppPumping_SetModuleLogger
 
 
 ! ******************************************************************

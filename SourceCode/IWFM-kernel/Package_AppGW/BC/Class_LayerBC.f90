@@ -38,6 +38,7 @@ MODULE Class_LayerBC
   USE MessageLogger          , ONLY: SetLastMessage          , &
                                      LogMessage              , &
                                      MessageArray            , &
+                                     MessageLoggerType       , &
                                      f_iFatal                , &
                                      f_iWarn
   USE Package_Misc           , ONLY: f_iGWComp               , &
@@ -65,6 +66,7 @@ MODULE Class_LayerBC
   ! -------------------------------------------------------------
   PRIVATE
   PUBLIC :: LayerBCType                            , &
+            LayerBC_SetModuleLogger                , &
             LayerBC_InitSpecifiedFlowBC            , &
             LayerBC_InitSpecifiedHeadBC            , &
             LayerBC_InitGeneralHeadBC              , &
@@ -181,6 +183,12 @@ MODULE Class_LayerBC
   ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
+  ! -------------------------------------------------------------
+  ! --- MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
+
+
   INTEGER,PARAMETER                   :: ModNameLen = 15
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'Class_LayerBC::'
 
@@ -188,10 +196,19 @@ MODULE Class_LayerBC
 
   
 CONTAINS
-    
-    
 
-    
+
+  ! -------------------------------------------------------------
+  ! --- SET MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  SUBROUTINE LayerBC_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    ModuleLogger => Logger
+  END SUBROUTINE LayerBC_SetModuleLogger
+
+
+
+
 ! ******************************************************************
 ! ******************************************************************
 ! ******************************************************************

@@ -25,7 +25,8 @@ MODULE Package_AppTileDrain
   USE MessageLogger           , ONLY: SetLastMessage            , &
                                       EchoProgress              , &
                                       MessageArray              , &
-                                      f_iFatal                    
+                                      MessageLoggerType         , &
+                                      f_iFatal
   USE GeneralUtilities        , ONLY: ConvertID_To_Index        , &
                                       StripTextUntilCharacter   , &
                                       CleanSpecialCharacters    , &
@@ -65,9 +66,10 @@ MODULE Package_AppTileDrain
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: AppTileDrainType         , &
-            f_iTileDrain             , &
-            f_iSubIrig               , &
+  PUBLIC :: AppTileDrainType              , &
+            AppTileDrain_SetModuleLogger , &
+            f_iTileDrain                 , &
+            f_iSubIrig                   , &
             f_cDescription_TDHyd
   
 
@@ -125,14 +127,28 @@ MODULE Package_AppTileDrain
   ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
+  ! -------------------------------------------------------------
+  ! --- MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
+
+
   INTEGER,PARAMETER                   :: ModNameLen = 22
-  CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'Package_AppTileDrain::' 
+  CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'Package_AppTileDrain::'
 
 
   
   
-CONTAINS  
+CONTAINS
 
+
+  ! -------------------------------------------------------------
+  ! --- SET MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  SUBROUTINE AppTileDrain_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    ModuleLogger => Logger
+  END SUBROUTINE AppTileDrain_SetModuleLogger
 
 
 
@@ -832,7 +848,11 @@ CONTAINS
     INTEGER,PARAMETER :: iCompIDs(1) = [f_iGWComp]
 
     !Inform user
-    CALL EchoProgress('Simulating tile drain/subsurface irrigation flows')
+    IF (ASSOCIATED(ModuleLogger)) THEN
+        CALL ModuleLogger%EchoProgress('Simulating tile drain/subsurface irrigation flows')
+    ELSE
+        CALL EchoProgress('Simulating tile drain/subsurface irrigation flows')
+    END IF
 
     !Tile drains
     ASSOCIATE (pTileDrains => AppTileDrain%TileDrains)

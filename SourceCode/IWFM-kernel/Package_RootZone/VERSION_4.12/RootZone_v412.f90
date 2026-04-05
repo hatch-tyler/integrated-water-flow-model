@@ -23,10 +23,11 @@
 MODULE RootZone_v412                                                                         
   !$ USE OMP_LIB      
   USE IWFM_Kernel_Version          , ONLY: IWFMKernelVersion
-  USE MessageLogger                , ONLY: SetLastMessage                                         , &
+  USE MessageLogger                , ONLY: MessageLoggerType                                      , &
+                                           SetLastMessage                                         , &
                                            EchoProgress                                           , &
                                            MessageArray                                           , &
-                                           f_iFatal                                                 
+                                           f_iFatal
   USE GeneralUtilities             , ONLY: StripTextUntilCharacter                                , &
                                            IntToText                                              , &
                                            ArrangeText                                            , &
@@ -119,7 +120,8 @@ MODULE RootZone_v412
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: RootZone_v412_Type                , &
+  PUBLIC :: RootZonev412_SetModuleLogger      , &
+            RootZone_v412_Type                , &
             AgLWUseBudRawFile_New             , &                               
             NonPondedAgRootZoneBudRawFile_New , &                               
             PondedAgRootZoneBudRawFile_New                                
@@ -414,15 +416,23 @@ MODULE RootZone_v412
   ! -------------------------------------------------------------
   INTEGER,PARAMETER                   :: ModNameLen = 15
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'RootZone_v412::'
+  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
   
 
   
   
 CONTAINS
-    
-    
 
-    
+
+  ! -------------------------------------------------------------
+  ! --- SET MODULE LOGGER
+  ! -------------------------------------------------------------
+  SUBROUTINE RootZonev412_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    ModuleLogger => Logger
+  END SUBROUTINE RootZonev412_SetModuleLogger
+
+
 ! ******************************************************************
 ! ******************************************************************
 ! ******************************************************************
@@ -2755,19 +2765,35 @@ CONTAINS
             CASE (f_iLandUse_Urb)
                 piReadCols => iReadCols_LWU_Urb
             CASE (f_iLandUse_NonPondedAg) 
-                CALL SetLastMessage('Non-ponded-crop-specific Land & Water Use Budget cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
+                IF (ASSOCIATED(ModuleLogger)) THEN
+                    CALL ModuleLogger%SetLastMessage('Non-ponded-crop-specific Land & Water Use Budget cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
+                ELSE
+                    CALL SetLastMessage('Non-ponded-crop-specific Land & Water Use Budget cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
+                END IF
                 iStat = -1
                 RETURN
             CASE (f_iLandUse_Rice)
-                CALL SetLastMessage('Land & Water Use Budget for rice cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
+                IF (ASSOCIATED(ModuleLogger)) THEN
+                    CALL ModuleLogger%SetLastMessage('Land & Water Use Budget for rice cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
+                ELSE
+                    CALL SetLastMessage('Land & Water Use Budget for rice cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
+                END IF
                 iStat = -1
                 RETURN
             CASE (f_iLandUse_Refuge)
-                CALL SetLastMessage('Land & Water Use Budget for refuges cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
+                IF (ASSOCIATED(ModuleLogger)) THEN
+                    CALL ModuleLogger%SetLastMessage('Land & Water Use Budget for refuges cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
+                ELSE
+                    CALL SetLastMessage('Land & Water Use Budget for refuges cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
+                END IF
                 iStat = -1
                 RETURN
             CASE (f_iLandUse_NVRV)
-                CALL SetLastMessage('Land & Water Use Budget does not exist for native and riparian vegetation!',f_iFatal,ThisProcedure)
+                IF (ASSOCIATED(ModuleLogger)) THEN
+                    CALL ModuleLogger%SetLastMessage('Land & Water Use Budget does not exist for native and riparian vegetation!',f_iFatal,ThisProcedure)
+                ELSE
+                    CALL SetLastMessage('Land & Water Use Budget does not exist for native and riparian vegetation!',f_iFatal,ThisProcedure)
+                END IF
                 iStat = -1
                 RETURN
         END SELECT
@@ -2870,15 +2896,27 @@ CONTAINS
                 rFlows(8,:)  = -rValues(9,1:iDimActual)                                !Percolation                   
 
             CASE (f_iLandUse_NonPondedAg) 
-                CALL SetLastMessage('Non-ponded-crop-specific Root Zone Budget cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
+                IF (ASSOCIATED(ModuleLogger)) THEN
+                    CALL ModuleLogger%SetLastMessage('Non-ponded-crop-specific Root Zone Budget cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
+                ELSE
+                    CALL SetLastMessage('Non-ponded-crop-specific Root Zone Budget cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
+                END IF
                 iStat = -1
                 RETURN
             CASE (f_iLandUse_Rice)
-                CALL SetLastMessage('Root Zone Budget for rice cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
+                IF (ASSOCIATED(ModuleLogger)) THEN
+                    CALL ModuleLogger%SetLastMessage('Root Zone Budget for rice cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
+                ELSE
+                    CALL SetLastMessage('Root Zone Budget for rice cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
+                END IF
                 iStat = -1
                 RETURN
             CASE (f_iLandUse_Refuge)
-                CALL SetLastMessage('Root Zone Budget for refuges cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
+                IF (ASSOCIATED(ModuleLogger)) THEN
+                    CALL ModuleLogger%SetLastMessage('Root Zone Budget for refuges cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
+                ELSE
+                    CALL SetLastMessage('Root Zone Budget for refuges cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
+                END IF
                 iStat = -1
                 RETURN
         END SELECT
@@ -2974,19 +3012,35 @@ CONTAINS
             CASE (f_iLandUse_Urb)
                 piReadCols => iReadCols_LWU_Urb
             CASE (f_iLandUse_NonPondedAg) 
-                CALL SetLastMessage('Non-ponded-crop-specific Land & Water Use Budget cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
+                IF (ASSOCIATED(ModuleLogger)) THEN
+                    CALL ModuleLogger%SetLastMessage('Non-ponded-crop-specific Land & Water Use Budget cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
+                ELSE
+                    CALL SetLastMessage('Non-ponded-crop-specific Land & Water Use Budget cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
+                END IF
                 iStat = -1
                 RETURN
             CASE (f_iLandUse_Rice)
-                CALL SetLastMessage('Land & Water Use Budget for rice cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
+                IF (ASSOCIATED(ModuleLogger)) THEN
+                    CALL ModuleLogger%SetLastMessage('Land & Water Use Budget for rice cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
+                ELSE
+                    CALL SetLastMessage('Land & Water Use Budget for rice cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
+                END IF
                 iStat = -1
                 RETURN
             CASE (f_iLandUse_Refuge)
-                CALL SetLastMessage('Land & Water Use Budget for refuges cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
+                IF (ASSOCIATED(ModuleLogger)) THEN
+                    CALL ModuleLogger%SetLastMessage('Land & Water Use Budget for refuges cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
+                ELSE
+                    CALL SetLastMessage('Land & Water Use Budget for refuges cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
+                END IF
                 iStat = -1
                 RETURN
             CASE (f_iLandUse_NVRV)
-                CALL SetLastMessage('Land & Water Use Budget does not exist for native and riparian vegetation!',f_iFatal,ThisProcedure)
+                IF (ASSOCIATED(ModuleLogger)) THEN
+                    CALL ModuleLogger%SetLastMessage('Land & Water Use Budget does not exist for native and riparian vegetation!',f_iFatal,ThisProcedure)
+                ELSE
+                    CALL SetLastMessage('Land & Water Use Budget does not exist for native and riparian vegetation!',f_iFatal,ThisProcedure)
+                END IF
                 iStat = -1
                 RETURN
         END SELECT
@@ -3089,15 +3143,27 @@ CONTAINS
                 rFlows(8,:)  = -rValues(9,1:iDimActual)                                !Percolation                   
 
             CASE (f_iLandUse_NonPondedAg) 
-                CALL SetLastMessage('Non-ponded-crop-specific Root Zone Budget cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
+                IF (ASSOCIATED(ModuleLogger)) THEN
+                    CALL ModuleLogger%SetLastMessage('Non-ponded-crop-specific Root Zone Budget cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
+                ELSE
+                    CALL SetLastMessage('Non-ponded-crop-specific Root Zone Budget cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
+                END IF
                 iStat = -1
                 RETURN
             CASE (f_iLandUse_Rice)
-                CALL SetLastMessage('Root Zone Budget for rice cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
+                IF (ASSOCIATED(ModuleLogger)) THEN
+                    CALL ModuleLogger%SetLastMessage('Root Zone Budget for rice cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
+                ELSE
+                    CALL SetLastMessage('Root Zone Budget for rice cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
+                END IF
                 iStat = -1
                 RETURN
             CASE (f_iLandUse_Refuge)
-                CALL SetLastMessage('Root Zone Budget for refuges cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
+                IF (ASSOCIATED(ModuleLogger)) THEN
+                    CALL ModuleLogger%SetLastMessage('Root Zone Budget for refuges cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
+                ELSE
+                    CALL SetLastMessage('Root Zone Budget for refuges cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
+                END IF
                 iStat = -1
                 RETURN
         END SELECT
@@ -3215,7 +3281,11 @@ CONTAINS
                 iColList = [(indx,indx=32,35)]
                 
             CASE DEFAULT
-                CALL SetLastMessage('Land&Water Use ZBudget is not available for the selected land use type!',f_iFatal,ThisProcedure)
+                IF (ASSOCIATED(ModuleLogger)) THEN
+                    CALL ModuleLogger%SetLastMessage('Land&Water Use ZBudget is not available for the selected land use type!',f_iFatal,ThisProcedure)
+                ELSE
+                    CALL SetLastMessage('Land&Water Use ZBudget is not available for the selected land use type!',f_iFatal,ThisProcedure)
+                END IF
                 DEALLOCATE (rFlows , cFlowNames , STAT=ErrorCode)
                 ALLOCATE (rFlows(0,0) , cFlowNames(0))
                 iStat = -1
@@ -3348,7 +3418,11 @@ CONTAINS
                 END DO
                 
             CASE DEFAULT
-                CALL SetLastMessage('Root Zone ZBudget is not available for the selected land use type!',f_iFatal,ThisProcedure)
+                IF (ASSOCIATED(ModuleLogger)) THEN
+                    CALL ModuleLogger%SetLastMessage('Root Zone ZBudget is not available for the selected land use type!',f_iFatal,ThisProcedure)
+                ELSE
+                    CALL SetLastMessage('Root Zone ZBudget is not available for the selected land use type!',f_iFatal,ThisProcedure)
+                END IF
                 DEALLOCATE (rFlows , cFlowNames , STAT=ErrorCode)
                 ALLOCATE (rFlows(0,0) , cFlowNames(0))
                 iStat = -1
@@ -3450,7 +3524,11 @@ CONTAINS
                 iColList = [(indx,indx=32,35)]
                 
             CASE DEFAULT
-                CALL SetLastMessage('Land&Water Use ZBudget is not available for the selected land use type!',f_iFatal,ThisProcedure)
+                IF (ASSOCIATED(ModuleLogger)) THEN
+                    CALL ModuleLogger%SetLastMessage('Land&Water Use ZBudget is not available for the selected land use type!',f_iFatal,ThisProcedure)
+                ELSE
+                    CALL SetLastMessage('Land&Water Use ZBudget is not available for the selected land use type!',f_iFatal,ThisProcedure)
+                END IF
                 DEALLOCATE (rFlows , cFlowNames , STAT=ErrorCode)
                 ALLOCATE (rFlows(0,0) , cFlowNames(0))
                 iStat = -1
@@ -3583,7 +3661,11 @@ CONTAINS
                 END DO
                 
             CASE DEFAULT
-                CALL SetLastMessage('Root Zone ZBudget is not available for the selected land use type!',f_iFatal,ThisProcedure)
+                IF (ASSOCIATED(ModuleLogger)) THEN
+                    CALL ModuleLogger%SetLastMessage('Root Zone ZBudget is not available for the selected land use type!',f_iFatal,ThisProcedure)
+                ELSE
+                    CALL SetLastMessage('Root Zone ZBudget is not available for the selected land use type!',f_iFatal,ThisProcedure)
+                END IF
                 DEALLOCATE (rFlows , cFlowNames , STAT=ErrorCode)
                 ALLOCATE (rFlows(0,0) , cFlowNames(0))
                 iStat = -1
@@ -5818,7 +5900,11 @@ CONTAINS
                     iElemID         = AppGrid%AppElement(indxElem)%ID
                     MessageArray(1) = 'Element '//TRIM(IntToText(iElemID))//' is a lake element.'
                     MessageArray(2) = 'Water supply for lake elements must be zero!'
-                    CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                    IF (ASSOCIATED(ModuleLogger)) THEN
+                        CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                    ELSE
+                        CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                    END IF
                     iStat = -1
                     CYCLE
                 END IF
@@ -5832,7 +5918,11 @@ CONTAINS
                     iElemID         = AppGrid%AppElement(indxElem)%ID
                     MessageArray(1) = 'Agricultural applied water at element '//TRIM(IntToText(iElemID))//' cannot be non-zero'
                     MessageArray(2) = 'when agricultural area is zero!'
-                    CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                    IF (ASSOCIATED(ModuleLogger)) THEN
+                        CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                    ELSE
+                        CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                    END IF
                     iStat = -1
                     CYCLE
                 END IF
@@ -5848,7 +5938,11 @@ CONTAINS
                     iElemID         = AppGrid%AppElement(indxElem)%ID
                     MessageArray(1) = 'Urban applied water at element '//TRIM(IntToText(iElemID))//' cannot be non-zero'
                     MessageArray(2) = 'when urban area is zero!'
-                    CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                    IF (ASSOCIATED(ModuleLogger)) THEN
+                        CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                    ELSE
+                        CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                    END IF
                     iStat = -1
                     CYCLE
                 END IF

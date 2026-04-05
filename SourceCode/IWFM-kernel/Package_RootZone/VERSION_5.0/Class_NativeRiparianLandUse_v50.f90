@@ -21,7 +21,8 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 MODULE Class_NativeRiparianLandUse_v50
-  USE MessageLogger           , ONLY: SetLastMessage                , &
+  USE MessageLogger           , ONLY: MessageLoggerType             , &
+                                      SetLastMessage                , &
                                       EchoProgress                  , &
                                       MessageArray                  , &
                                       f_iFatal
@@ -64,6 +65,7 @@ MODULE Class_NativeRiparianLandUse_v50
   ! -------------------------------------------------------------
   PRIVATE
   PUBLIC :: NativeRiparianDatabase_v50_Type
+  PUBLIC :: NativeRiparianLandUsev50_SetModuleLogger
   
   
   ! -------------------------------------------------------------
@@ -110,6 +112,7 @@ MODULE Class_NativeRiparianLandUse_v50
   ! -------------------------------------------------------------
   INTEGER,PARAMETER                   :: ModNameLen = 33
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'Class_NativeRiparianLandUse_v50::'
+  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
 
 
 
@@ -117,6 +120,13 @@ MODULE Class_NativeRiparianLandUse_v50
 CONTAINS
 
 
+  ! -------------------------------------------------------------
+  ! --- SET MODULE LOGGER
+  ! -------------------------------------------------------------
+  SUBROUTINE NativeRiparianLandUsev50_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    ModuleLogger => Logger
+  END SUBROUTINE NativeRiparianLandUsev50_SetModuleLogger
 
 
 
@@ -497,7 +507,11 @@ CONTAINS
     iStat = 0
     
     !Echo progress
-    CALL EchoProgress('Reading time series data for native and riparian vegitation lands')
+    IF (ASSOCIATED(ModuleLogger)) THEN
+        CALL ModuleLogger%EchoProgress('Reading time series data for native and riparian vegitation lands')
+    ELSE
+        CALL EchoProgress('Reading time series data for native and riparian vegitation lands')
+    END IF
     
     !Land use areas
     CALL NVRVLand%LandUseDataFile%ReadTSData('Native and riparian veg. areas',TimeStep,rRegionAreas,iSubregionIDs,iStat)
@@ -614,7 +628,11 @@ CONTAINS
     iStat = 0
   
     !Inform user
-    CALL EchoProgress('Simulating flows at native and riparian vegetation lands')
+    IF (ASSOCIATED(ModuleLogger)) THEN
+        CALL ModuleLogger%EchoProgress('Simulating flows at native and riparian vegetation lands')
+    ELSE
+        CALL EchoProgress('Simulating flows at native and riparian vegetation lands')
+    END IF
     
     ASSOCIATE (pNV => NVRVLand%NativeVeg      , &
                pRV => NVRVLand%RiparianVeg    )
@@ -699,7 +717,11 @@ CONTAINS
                       MessageArray(3) =                   'Subregion            = '//TRIM(IntToText(iSubregionIDs(indxRegion)))
                       WRITE (MessageArray(4),'(A,F11.8)') 'Desired convergence  = ',SolverData%Tolerance*TotalPorosityCrop
                       WRITE (MessageArray(5),'(A,F11.8)') 'Achieved convergence = ',ABS(AchievedConv)
-                      CALL SetLastMessage(MessageArray(1:5),f_iFatal,ThisProcedure)
+                      IF (ASSOCIATED(ModuleLogger)) THEN
+                          CALL ModuleLogger%SetLastMessage(MessageArray(1:5),f_iFatal,ThisProcedure)
+                      ELSE
+                          CALL SetLastMessage(MessageArray(1:5),f_iFatal,ThisProcedure)
+                      END IF
                       iStat = -1
                       RETURN
                   END IF
@@ -737,7 +759,11 @@ CONTAINS
                       MessageArray(2) = 'This may be due to a too high convergence criteria set for the iterative solution.'
                       MessageArray(3) = 'Try using a smaller value for RZCONV and a higher value for RZITERMX parameters'
                       MessageArray(4) = 'in the Root Zone Main Input File.'
-                      CALL SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
+                      IF (ASSOCIATED(ModuleLogger)) THEN
+                          CALL ModuleLogger%SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
+                      ELSE
+                          CALL SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
+                      END IF
                       iStat = -1
                       RETURN
                   END IF
@@ -782,7 +808,11 @@ CONTAINS
                       MessageArray(3) =                   'Subregion            = '//TRIM(IntToText(iSubregionIDs(indxRegion)))
                       WRITE (MessageArray(4),'(A,F11.8)') 'Desired convergence  = ',SolverData%Tolerance*TotalPorosityCrop
                       WRITE (MessageArray(5),'(A,F11.8)') 'Achieved convergence = ',ABS(AchievedConv)
-                      CALL SetLastMessage(MessageArray(1:5),f_iFatal,ThisProcedure)
+                      IF (ASSOCIATED(ModuleLogger)) THEN
+                          CALL ModuleLogger%SetLastMessage(MessageArray(1:5),f_iFatal,ThisProcedure)
+                      ELSE
+                          CALL SetLastMessage(MessageArray(1:5),f_iFatal,ThisProcedure)
+                      END IF
                       iStat = -1
                       RETURN
                   END IF
@@ -820,7 +850,11 @@ CONTAINS
                       MessageArray(2) = 'This may be due to a too high convergence criteria set for the iterative solution.'
                       MessageArray(3) = 'Try using a smaller value for RZCONV and a higher value for RZITERMX parameters'
                       MessageArray(4) = 'in the Root Zone Main Input File.'
-                      CALL SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
+                      IF (ASSOCIATED(ModuleLogger)) THEN
+                          CALL ModuleLogger%SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
+                      ELSE
+                          CALL SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
+                      END IF
                       iStat = -1
                       RETURN
                   END IF
@@ -877,12 +911,20 @@ CONTAINS
         DO indxRegion=1,NRegions
             DO indxSoil=1,NSoils
                 IF ((pNV%SoilM_Precip(indxSoil,indxRegion) + pNV%SoilM_AW(indxSoil,indxRegion) + pNV%SoilM_Oth(indxSoil,indxRegion)) .GT. TotalPorosity(indxSoil,indxRegion)) THEN
-                    CALL SetLastMessage('Initial moisture content for native vegetation with soil type ' // TRIM(IntToText(indxSoil)) // ' at subregion ' // TRIM(IntToText(iSubregionIDs(indxRegion))) // ' is greater than total porosity!',f_iFatal,ThisProcedure)
+                    IF (ASSOCIATED(ModuleLogger)) THEN
+                        CALL ModuleLogger%SetLastMessage('Initial moisture content for native vegetation with soil type ' // TRIM(IntToText(indxSoil)) // ' at subregion ' // TRIM(IntToText(iSubregionIDs(indxRegion))) // ' is greater than total porosity!',f_iFatal,ThisProcedure)
+                    ELSE
+                        CALL SetLastMessage('Initial moisture content for native vegetation with soil type ' // TRIM(IntToText(indxSoil)) // ' at subregion ' // TRIM(IntToText(iSubregionIDs(indxRegion))) // ' is greater than total porosity!',f_iFatal,ThisProcedure)
+                    END IF
                     iStat = -1
                     RETURN
                 END IF
                 IF ((pRV%SoilM_Precip(indxSoil,indxRegion) + pRV%SoilM_AW(indxSoil,indxRegion) + pRV%SoilM_Oth(indxSoil,indxRegion)) .GT. TotalPorosity(indxSoil,indxRegion)) THEN
-                    CALL SetLastMessage('Initial moisture content for riparian vegetation with soil type ' // TRIM(IntToText(indxSoil)) // ' at subregion ' // TRIM(IntToText(iSubregionIDs(indxRegion))) // ' is greater than total porosity!',f_iFatal,ThisProcedure)
+                    IF (ASSOCIATED(ModuleLogger)) THEN
+                        CALL ModuleLogger%SetLastMessage('Initial moisture content for riparian vegetation with soil type ' // TRIM(IntToText(indxSoil)) // ' at subregion ' // TRIM(IntToText(iSubregionIDs(indxRegion))) // ' is greater than total porosity!',f_iFatal,ThisProcedure)
+                    ELSE
+                        CALL SetLastMessage('Initial moisture content for riparian vegetation with soil type ' // TRIM(IntToText(indxSoil)) // ' at subregion ' // TRIM(IntToText(iSubregionIDs(indxRegion))) // ' is greater than total porosity!',f_iFatal,ThisProcedure)
+                    END IF
                     iStat = -1
                     RETURN
                 END IF

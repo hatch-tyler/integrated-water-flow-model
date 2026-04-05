@@ -23,7 +23,8 @@
 MODULE Class_StrmNodeBudget
   USE MessageLogger       , ONLY: SetLastMessage                 , &
                                   MessageArray                   , &
-                                  f_iFatal                         
+                                  MessageLoggerType              , &
+                                  f_iFatal
   USE IOInterface         , ONLY: GenericFileType                                                
   USE TimeSeriesUtilities , ONLY: TimeStepType                                       
   USE GeneralUtilities    , ONLY: GetUniqueArrayComponents       , &
@@ -57,7 +58,8 @@ MODULE Class_StrmNodeBudget
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: StrmNodeBudgetType                     
+  PUBLIC :: StrmNodeBudgetType                     , &
+            StrmNodeBudget_SetModuleLogger
 
 
   ! -------------------------------------------------------------
@@ -103,6 +105,11 @@ MODULE Class_StrmNodeBudget
   ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
+  ! -------------------------------------------------------------
+  ! --- MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
+
   INTEGER,PARAMETER                   :: ModNameLen = 22
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'Class_StrmNodeBudget::'
   
@@ -110,9 +117,18 @@ MODULE Class_StrmNodeBudget
   
   
 CONTAINS
-    
-    
-    
+
+
+  ! -------------------------------------------------------------
+  ! --- SET MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  SUBROUTINE StrmNodeBudget_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    ModuleLogger => Logger
+  END SUBROUTINE StrmNodeBudget_SetModuleLogger
+
+
+
     
 ! ******************************************************************
 ! ******************************************************************
@@ -291,7 +307,11 @@ CONTAINS
     
     !Check if a budget file is defined
     IF (.NOT. StrmNodeBudget%StrmNodeBudRawFile_Defined) THEN
-        CALL SetLastMessage('Stream node budget file does not exist to retrieve the number of budget columns!',f_iFatal,ThisProcedure)
+        IF (ASSOCIATED(ModuleLogger)) THEN
+            CALL ModuleLogger%SetLastMessage('Stream node budget file does not exist to retrieve the number of budget columns!',f_iFatal,ThisProcedure)
+        ELSE
+            CALL SetLastMessage('Stream node budget file does not exist to retrieve the number of budget columns!',f_iFatal,ThisProcedure)
+        END IF
         iStat = -1
         RETURN
     END IF
@@ -322,7 +342,11 @@ CONTAINS
     
     !Check if a budget file is defined
     IF (.NOT. StrmNodeBudget%StrmNodeBudRawFile_Defined) THEN
-        CALL SetLastMessage('Stream node budget file does not exist to retrieve the budget column titles!',f_iFatal,ThisProcedure)
+        IF (ASSOCIATED(ModuleLogger)) THEN
+            CALL ModuleLogger%SetLastMessage('Stream node budget file does not exist to retrieve the budget column titles!',f_iFatal,ThisProcedure)
+        ELSE
+            CALL SetLastMessage('Stream node budget file does not exist to retrieve the budget column titles!',f_iFatal,ThisProcedure)
+        END IF
         iStat = -1
         RETURN
     END IF
@@ -367,7 +391,11 @@ CONTAINS
     
     !Check if a budget file is defined
     IF (.NOT. StrmNodeBudget%StrmNodeBudRawFile_Defined) THEN
-        CALL SetLastMessage('Stream node budget file does not exist to retrieve monthly budget flows!',f_iFatal,ThisProcedure)
+        IF (ASSOCIATED(ModuleLogger)) THEN
+            CALL ModuleLogger%SetLastMessage('Stream node budget file does not exist to retrieve monthly budget flows!',f_iFatal,ThisProcedure)
+        ELSE
+            CALL SetLastMessage('Stream node budget file does not exist to retrieve monthly budget flows!',f_iFatal,ThisProcedure)
+        END IF
         iStat = -1
         RETURN
     END IF

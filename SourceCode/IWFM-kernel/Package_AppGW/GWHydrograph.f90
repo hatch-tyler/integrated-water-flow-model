@@ -24,6 +24,7 @@ MODULE GWHydrograph
   USE MessageLogger          , ONLY: SetLastMessage            , &
                                      EchoProgress              , &
                                      MessageArray              , &
+                                     MessageLoggerType         , &
                                      f_iFatal
   USE IOInterface            , ONLY: GenericFileType           , &
                                      Real2DTSDataInFileType    , &
@@ -74,8 +75,9 @@ MODULE GWHydrograph
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: GWHydrographType          , & 
-            f_iTecPlot_PrintGWHeads   
+  PUBLIC :: GWHydrographType          , &
+            GWHydrograph_SetModuleLogger , &
+            f_iTecPlot_PrintGWHeads
   
   
   ! -------------------------------------------------------------
@@ -146,6 +148,12 @@ MODULE GWHydrograph
   ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
+  ! -------------------------------------------------------------
+  ! --- MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
+
+
   INTEGER,PARAMETER                   :: ModNameLen = 14
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'GWHydrograph::'
   
@@ -153,10 +161,19 @@ MODULE GWHydrograph
   
   
 CONTAINS
-    
-    
-    
-    
+
+
+  ! -------------------------------------------------------------
+  ! --- SET MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  SUBROUTINE GWHydrograph_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    ModuleLogger => Logger
+  END SUBROUTINE GWHydrograph_SetModuleLogger
+
+
+
+
 ! ******************************************************************
 ! ******************************************************************
 ! ******************************************************************

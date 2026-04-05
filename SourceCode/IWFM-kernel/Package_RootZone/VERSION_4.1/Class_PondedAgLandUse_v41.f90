@@ -22,10 +22,11 @@
 !***********************************************************************
 MODULE Class_PondedAgLandUse_v41
   !$ USE OMP_LIB
-  USE MessageLogger           , ONLY: SetLastMessage                   , &
+  USE MessageLogger           , ONLY: MessageLoggerType                , &
+                                      SetLastMessage                   , &
                                       EchoProgress                     , &
                                       MessageArray                     , &
-                                      f_iFatal                           
+                                      f_iFatal
   USE GeneralUtilities        , ONLY: StripTextUntilCharacter          , &
                                       CleanSpecialCharacters           , &
                                       EstablishAbsolutePathFileName    , & 
@@ -82,7 +83,8 @@ MODULE Class_PondedAgLandUse_v41
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: PondedAgLandUse_v41_Type                    
+  PUBLIC :: PondedAgLandUse_v41_Type
+  PUBLIC :: PondedAgLandUsev41_SetModuleLogger
             
   
   
@@ -174,6 +176,7 @@ MODULE Class_PondedAgLandUse_v41
   ! -------------------------------------------------------------
   INTEGER,PARAMETER                   :: ModNameLen = 27
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'Class_PondedAgLandUse_v41::'
+  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
 
 
 
@@ -181,6 +184,13 @@ MODULE Class_PondedAgLandUse_v41
 CONTAINS
 
 
+  ! -------------------------------------------------------------
+  ! --- SET MODULE LOGGER
+  ! -------------------------------------------------------------
+  SUBROUTINE PondedAgLandUsev41_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    ModuleLogger => Logger
+  END SUBROUTINE PondedAgLandUsev41_SetModuleLogger
 
 
 ! ******************************************************************
@@ -905,7 +915,11 @@ CONTAINS
     iNCrops = PondLand%iNCrops
     
     !Echo progress
-    CALL EchoProgress('Reading time series data for ponded agricultural crops')
+    IF (ASSOCIATED(ModuleLogger)) THEN
+        CALL ModuleLogger%EchoProgress('Reading time series data for ponded agricultural crops')
+    ELSE
+        CALL EchoProgress('Reading time series data for ponded agricultural crops')
+    END IF
     
     !Land use areas
     CALL PondLand%LandUseDataFile%ReadTSData('Ponded crop areas',TimeStep,rElemAreas,iElemIDs,iStat)
@@ -958,14 +972,18 @@ CONTAINS
                     MessageArray(1) = 'Re-use depth for ' // TRIM(f_cCropCodes(indxCrop)) // ' at element ' // TRIM(IntToText(iElemID))//' is greater than return flow depth!'
                     WRITE (MessageArray(2),'(A,F5.3)') 'Re-use depth      = ',pPondOps(pCrops%iColReuse(indxCrop,indxElem))
                     WRITE (MessageArray(3),'(A,F5.3)') 'Return flow depth = ',pPondOps(pCrops%iColReturn(indxCrop,indxElem))
-                    CALL SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+                    IF (ASSOCIATED(ModuleLogger)) THEN
+                        CALL ModuleLogger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+                    ELSE
+                        CALL SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+                    END IF
                     iStat = -1
                     RETURN
                 END IF
-                
+
             END DO
         END DO
-      
+
     END ASSOCIATE
 
   END SUBROUTINE ReadTSData
@@ -1266,7 +1284,11 @@ CONTAINS
     iNCrops = PondedAg%iNCrops
                                     
     !Inform user
-    CALL EchoProgress('Simulating flows at ponded agricultural crop lands')
+    IF (ASSOCIATED(ModuleLogger)) THEN
+        CALL ModuleLogger%EchoProgress('Simulating flows at ponded agricultural crop lands')
+    ELSE
+        CALL EchoProgress('Simulating flows at ponded agricultural crop lands')
+    END IF
     
     ASSOCIATE (pCrops => PondedAg%Crops)
         !$OMP PARALLEL DEFAULT(PRIVATE) SHARED(AppGrid,lLakeElem,SoilsData,HydCondPonded,ETData,Precip,GenericMoisture,    &
@@ -1365,7 +1387,11 @@ CONTAINS
                     MessageArray(3) = 'Crop type            = '//TRIM(f_cCropCodes(indxCrop))
                     WRITE (MessageArray(4),'(A,F11.8)') 'Desired convergence  = ',SolverData%Tolerance*TotalPorosityCrop
                     WRITE (MessageArray(5),'(A,F11.8)') 'Achieved convergence = ',ABS(AchievedConv)
-                    CALL SetLastMessage(MessageArray(1:5),f_iFatal,ThisProcedure)
+                    IF (ASSOCIATED(ModuleLogger)) THEN
+                        CALL ModuleLogger%SetLastMessage(MessageArray(1:5),f_iFatal,ThisProcedure)
+                    ELSE
+                        CALL SetLastMessage(MessageArray(1:5),f_iFatal,ThisProcedure)
+                    END IF
                     iStat = -1
                     !$OMP END CRITICAL (CRIT_PONDED_CONV)
                     EXIT
@@ -1435,7 +1461,11 @@ CONTAINS
                     MessageArray(2) = 'This may be due to a too high convergence criteria set for the iterative solution.'
                     MessageArray(3) = 'Try using a smaller value for RZCONV and a higher value for RZITERMX parameters'
                     MessageArray(4) = 'in the Root Zone Main Input File.'
-                    CALL SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
+                    IF (ASSOCIATED(ModuleLogger)) THEN
+                        CALL ModuleLogger%SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
+                    ELSE
+                        CALL SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
+                    END IF
                     iStat = -1
                     !$OMP END CRITICAL (CRIT_PONDED_SOILM)
                     EXIT

@@ -24,7 +24,8 @@ MODULE Class_Diversion
   USE MessageLogger                , ONLY: SetLastMessage           , &
                                            EchoProgress             , &
                                            MessageArray             , &
-                                           f_iFatal                   
+                                           MessageLoggerType        , &
+                                           f_iFatal
   USE GeneralUtilities             , ONLY: ConvertID_To_Index       , &
                                            IntToText                , &
                                            StripTextUntilCharacter  , &
@@ -68,10 +69,11 @@ MODULE Class_Diversion
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: DiversionType        , &
-            DeliveryType         , &
-            Diversion_New        , &
-            Diversion_GetPurpose
+  PUBLIC :: DiversionType              , &
+            DeliveryType               , &
+            Diversion_New              , &
+            Diversion_GetPurpose       , &
+            Diversion_SetModuleLogger
   
   
   ! -------------------------------------------------------------
@@ -119,6 +121,11 @@ MODULE Class_Diversion
   ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
+  ! -------------------------------------------------------------
+  ! --- MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
+
   INTEGER,PARAMETER                   :: ModNameLen = 17
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'Class_Diversion::'
   
@@ -127,6 +134,14 @@ MODULE Class_Diversion
 
 CONTAINS
 
+
+  ! -------------------------------------------------------------
+  ! --- SET MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  SUBROUTINE Diversion_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    ModuleLogger => Logger
+  END SUBROUTINE Diversion_SetModuleLogger
 
 
 
@@ -174,7 +189,11 @@ CONTAINS
     END IF
     
     !Echo progress
-    CALL EchoProgress('Instantiating diversions')
+    IF (ASSOCIATED(ModuleLogger)) THEN
+        CALL ModuleLogger%EchoProgress('Instantiating diversions')
+    ELSE
+        CALL EchoProgress('Instantiating diversions')
+    END IF
 
     !Open file
     CALL InFile%New(FileName=TRIM(ADJUSTL(cFileName)),InputFile=.TRUE.,IsTSFile=.FALSE.,Descriptor='Diversions specifications data file',iStat=iStat)
@@ -186,7 +205,11 @@ CONTAINS
     !Allocate memory
     ALLOCATE (Diversions(NDiver) , DeliDest(NDiver) , iColIrigFrac(NDiver) , iColAdjust(NDiver) , iDiverIDs(NDiver) , STAT=ErrorCode)
     IF (ErrorCode .NE. 0) THEN
-        CALL SetLastMessage('Error in allocating memory for diversions data!',f_iFatal,ThisProcedure)
+        IF (ASSOCIATED(ModuleLogger)) THEN
+            CALL ModuleLogger%SetLastMessage('Error in allocating memory for diversions data!',f_iFatal,ThisProcedure)
+        ELSE
+            CALL SetLastMessage('Error in allocating memory for diversions data!',f_iFatal,ThisProcedure)
+        END IF
         iStat = -1
         RETURN
     END IF
@@ -252,7 +275,11 @@ CONTAINS
             !Make sure same ID is not used more than once
             DO indxDiver1=1,indxDiver-1
                 IF (ID .EQ. Diversions(indxDiver1)%Deli%ID) THEN 
-                    CALL SetLastMessage('Diversion ID '//TRIM(IntToText(ID))//' is used more than once!',f_iFatal,ThisProcedure)
+                    IF (ASSOCIATED(ModuleLogger)) THEN
+                        CALL ModuleLogger%SetLastMessage('Diversion ID '//TRIM(IntToText(ID))//' is used more than once!',f_iFatal,ThisProcedure)
+                    ELSE
+                        CALL SetLastMessage('Diversion ID '//TRIM(IntToText(ID))//' is used more than once!',f_iFatal,ThisProcedure)
+                    END IF
                     iStat = -1
                     RETURN
                 END IF
@@ -262,7 +289,11 @@ CONTAINS
             IF (pDiver%iStrmNode .GT. 0) THEN
                 CALL ConvertID_To_Index(pDiver%iStrmNode,iStrmNodeIDs,iStrmNode)
                 IF (iStrmNode .EQ. 0) THEN
-                    CALL SetLastMessage('Stream node '//TRIM(IntToText(pDiver%iStrmNode))//' where diversion '//TRIM(IntToText(ID))//' is originating from is not in the model!',f_iFatal,ThisProcedure)
+                    IF (ASSOCIATED(ModuleLogger)) THEN
+                        CALL ModuleLogger%SetLastMessage('Stream node '//TRIM(IntToText(pDiver%iStrmNode))//' where diversion '//TRIM(IntToText(ID))//' is originating from is not in the model!',f_iFatal,ThisProcedure)
+                    ELSE
+                        CALL SetLastMessage('Stream node '//TRIM(IntToText(pDiver%iStrmNode))//' where diversion '//TRIM(IntToText(ID))//' is originating from is not in the model!',f_iFatal,ThisProcedure)
+                    END IF
                     iStat = -1
                     RETURN
                 END IF
@@ -280,7 +311,11 @@ CONTAINS
                 CASE (f_iFlowDest_Element)
                     CALL ConvertID_To_Index(pDeliDest%iDest,iElemIDs,iElem)
                     IF (iElem .EQ. 0) THEN
-                        CALL SetLastMessage('Element '//TRIM(IntToText(pDeliDest%iDest))//' that receives water from diversion '//TRIM(IntToText(ID))//' is not in the model!',f_iFatal,ThisProcedure)
+                        IF (ASSOCIATED(ModuleLogger)) THEN
+                            CALL ModuleLogger%SetLastMessage('Element '//TRIM(IntToText(pDeliDest%iDest))//' that receives water from diversion '//TRIM(IntToText(ID))//' is not in the model!',f_iFatal,ThisProcedure)
+                        ELSE
+                            CALL SetLastMessage('Element '//TRIM(IntToText(pDeliDest%iDest))//' that receives water from diversion '//TRIM(IntToText(ID))//' is not in the model!',f_iFatal,ThisProcedure)
+                        END IF
                         iStat = -1
                         RETURN
                     END IF
@@ -289,14 +324,22 @@ CONTAINS
                 CASE (f_iFlowDest_Subregion)
                     CALL ConvertID_To_Index(pDeliDest%iDest,iSubregionIDs,iRegion)
                     IF (iRegion .EQ. 0) THEN
-                        CALL SetLastMessage('Subregion '//TRIM(IntToText(pDeliDest%iDest))//' that receives water from diversion '//TRIM(IntToText(ID))//' is not in the model!',f_iFatal,ThisProcedure)
+                        IF (ASSOCIATED(ModuleLogger)) THEN
+                            CALL ModuleLogger%SetLastMessage('Subregion '//TRIM(IntToText(pDeliDest%iDest))//' that receives water from diversion '//TRIM(IntToText(ID))//' is not in the model!',f_iFatal,ThisProcedure)
+                        ELSE
+                            CALL SetLastMessage('Subregion '//TRIM(IntToText(pDeliDest%iDest))//' that receives water from diversion '//TRIM(IntToText(ID))//' is not in the model!',f_iFatal,ThisProcedure)
+                        END IF
                         iStat = -1
                         RETURN
                     END IF
                     pDeliDest%iDest = iRegion
                     
                 CASE DEFAULT
-                    CALL SetLastMessage('Destination type for diversion '//TRIM(IntToText(ID))//' is not recognized!',f_iFatal,ThisProcedure)
+                    IF (ASSOCIATED(ModuleLogger)) THEN
+                        CALL ModuleLogger%SetLastMessage('Destination type for diversion '//TRIM(IntToText(ID))//' is not recognized!',f_iFatal,ThisProcedure)
+                    ELSE
+                        CALL SetLastMessage('Destination type for diversion '//TRIM(IntToText(ID))//' is not recognized!',f_iFatal,ThisProcedure)
+                    END IF
                     iStat = -1
                     RETURN
             END SELECT
@@ -315,7 +358,11 @@ CONTAINS
         !Make sure same element group ID is not used more than once
         DO indxGroup1=1,indxGroup-1
             IF (ID .EQ. ElemGroups(indxGroup1)%ID) THEN
-                CALL SetLastMessage('Element group ID '//TRIM(IntToText(ID))//' for diversion destinations is specified more than once!',f_iFatal,ThisProcedure)
+                IF (ASSOCIATED(ModuleLogger)) THEN
+                    CALL ModuleLogger%SetLastMessage('Element group ID '//TRIM(IntToText(ID))//' for diversion destinations is specified more than once!',f_iFatal,ThisProcedure)
+                ELSE
+                    CALL SetLastMessage('Element group ID '//TRIM(IntToText(ID))//' for diversion destinations is specified more than once!',f_iFatal,ThisProcedure)
+                END IF
                 iStat = -1
                 RETURN
             END IF
@@ -342,7 +389,11 @@ CONTAINS
         !Make sure elements are in the model
         CALL ConvertID_To_Index(ElemGroups(indxGroup)%iElems,iElemIDs,Indices)
         IF (ANY(Indices.EQ.0)) THEN
-            CALL SetLastMessage('One or more elements listed in element group ID '//TRIM(IntToText(ID))//' listed for diversion destinations are not in the model!',f_iFatal,ThisProcedure)
+            IF (ASSOCIATED(ModuleLogger)) THEN
+                CALL ModuleLogger%SetLastMessage('One or more elements listed in element group ID '//TRIM(IntToText(ID))//' listed for diversion destinations are not in the model!',f_iFatal,ThisProcedure)
+            ELSE
+                CALL SetLastMessage('One or more elements listed in element group ID '//TRIM(IntToText(ID))//' listed for diversion destinations are not in the model!',f_iFatal,ThisProcedure)
+            END IF
             iStat = -1
             RETURN
         END IF
@@ -366,7 +417,11 @@ CONTAINS
             iDest = LocateInList(iDestID,ElemGroups%ID)
             IF (iDest .EQ. 0) THEN
                 ID = Diversions(indxDiver)%Deli%ID
-                CALL SetLastMessage('Element group number '//TRIM(IntToText(iDestID))//' to which diversion '//TRIM(IntToText(ID))//' is delivered is not defined!',f_iFatal,ThisProcedure)  
+                IF (ASSOCIATED(ModuleLogger)) THEN
+                    CALL ModuleLogger%SetLastMessage('Element group number '//TRIM(IntToText(iDestID))//' to which diversion '//TRIM(IntToText(ID))//' is delivered is not defined!',f_iFatal,ThisProcedure)
+                ELSE
+                    CALL SetLastMessage('Element group number '//TRIM(IntToText(iDestID))//' to which diversion '//TRIM(IntToText(ID))//' is delivered is not defined!',f_iFatal,ThisProcedure)
+                END IF
                 iStat = -1
                 RETURN
             END IF
@@ -375,7 +430,11 @@ CONTAINS
             !Make sure there is at least one element in the group
             IF (ElemGroups(iDest)%NElems .EQ. 0) THEN
                 ID = Diversions(indxDiver)%Deli%ID
-                CALL SetLastMessage('Element group '//TRIM(IntToText(iDestID))//' as destination for diversion '//TRIM(IntToText(ID))//' has no elements listed!',f_iFatal,ThisProcedure)
+                IF (ASSOCIATED(ModuleLogger)) THEN
+                    CALL ModuleLogger%SetLastMessage('Element group '//TRIM(IntToText(iDestID))//' as destination for diversion '//TRIM(IntToText(ID))//' has no elements listed!',f_iFatal,ThisProcedure)
+                ELSE
+                    CALL SetLastMessage('Element group '//TRIM(IntToText(iDestID))//' as destination for diversion '//TRIM(IntToText(ID))//' has no elements listed!',f_iFatal,ThisProcedure)
+                END IF
                 iStat = -1
                 RETURN
             END IF

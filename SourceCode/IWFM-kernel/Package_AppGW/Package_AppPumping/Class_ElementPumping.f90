@@ -23,7 +23,8 @@
 MODULE Class_ElementPumping
   USE MessageLogger               , ONLY: SetLastMessage           , &
                                           MessageArray             , &
-                                          f_iFatal                   
+                                          MessageLoggerType        , &
+                                          f_iFatal
   USE GeneralUtilities            , ONLY: ConvertID_To_Index       , &
                                           IntToText                , &
                                           LocateInList             , &
@@ -62,8 +63,9 @@ MODULE Class_ElementPumping
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: ElemPumpType , &
-            ElemPump_New
+  PUBLIC :: ElemPumpType              , &
+            ElemPump_New             , &
+            ElemPump_SetModuleLogger
 
 
   ! -------------------------------------------------------------
@@ -76,6 +78,12 @@ MODULE Class_ElementPumping
   ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
+  ! -------------------------------------------------------------
+  ! --- MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
+
+
   INTEGER,PARAMETER                   :: ModNameLen = 22
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName = 'Class_ElementPumping::'
 
@@ -84,6 +92,14 @@ MODULE Class_ElementPumping
 
 CONTAINS
 
+
+  ! -------------------------------------------------------------
+  ! --- SET MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  SUBROUTINE ElemPump_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    ModuleLogger => Logger
+  END SUBROUTINE ElemPump_SetModuleLogger
 
 
 

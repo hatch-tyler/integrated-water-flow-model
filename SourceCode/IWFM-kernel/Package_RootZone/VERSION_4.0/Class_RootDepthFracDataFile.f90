@@ -21,7 +21,8 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 MODULE Class_RootDepthFracDataFile
-  USE MessageLogger        , ONLY: SetLastMessage        , &
+  USE MessageLogger        , ONLY: MessageLoggerType     , &
+                                   SetLastMessage        , &
                                    f_iFatal
   USE IOInterface          , ONLY: RealTSDataInFileType  
   USE TimeseriesUtilities  , ONLY: TimeStepType
@@ -44,7 +45,8 @@ MODULE Class_RootDepthFracDataFile
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: RootDepthFracDataFileType      
+  PUBLIC :: RootDepthFracDataFile_SetModuleLogger , &
+            RootDepthFracDataFileType
 
 
   ! -------------------------------------------------------------
@@ -63,6 +65,12 @@ MODULE Class_RootDepthFracDataFile
   ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
+  ! -------------------------------------------------------------
+  ! --- MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
+
+
   INTEGER,PARAMETER                   :: ModNameLen = 29
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'Class_RootDepthFracDataFile::'
 
@@ -72,6 +80,13 @@ MODULE Class_RootDepthFracDataFile
 CONTAINS
 
 
+  ! -------------------------------------------------------------
+  ! --- SET MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  SUBROUTINE RootDepthFracDataFile_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    ModuleLogger => Logger
+  END SUBROUTINE RootDepthFracDataFile_SetModuleLogger
 
 
   ! -------------------------------------------------------------
@@ -133,12 +148,20 @@ CONTAINS
     
     !Make sure all values are between 0.0 and 1.0
     IF (ANY(RootDepthFracDataFile%rValues .LT. 0.0))  THEN
-        CALL SetLastMessage('Root depth fractions cannot be less than zero!',f_iFatal,ThisProcedure)
+        IF (ASSOCIATED(ModuleLogger)) THEN
+            CALL ModuleLogger%SetLastMessage('Root depth fractions cannot be less than zero!',f_iFatal,ThisProcedure)
+        ELSE
+            CALL SetLastMessage('Root depth fractions cannot be less than zero!',f_iFatal,ThisProcedure)
+        END IF
         iStat = -1
         RETURN
     END IF
     IF (ANY(RootDepthFracDataFile%rValues .GT. 1.0))  THEN
-        CALL SetLastMessage('Root depth fractions cannot be greater than zero!',f_iFatal,ThisProcedure)
+        IF (ASSOCIATED(ModuleLogger)) THEN
+            CALL ModuleLogger%SetLastMessage('Root depth fractions cannot be greater than zero!',f_iFatal,ThisProcedure)
+        ELSE
+            CALL SetLastMessage('Root depth fractions cannot be greater than zero!',f_iFatal,ThisProcedure)
+        END IF
         iStat = -1
         RETURN
     END IF

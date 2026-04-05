@@ -21,9 +21,10 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 MODULE Class_RVETFromStrm
-  USE MessageLogger           , ONLY: SetLastMessage              , &
-                                      MessageArray                , & 
-                                      f_iFatal                      
+  USE MessageLogger           , ONLY: MessageLoggerType           , &
+                                      SetLastMessage              , &
+                                      MessageArray                , &
+                                      f_iFatal
   USE Package_Discretization  , ONLY: AppGridType                 
   IMPLICIT NONE
   
@@ -43,7 +44,8 @@ MODULE Class_RVETFromStrm
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: RVETFromStrmType                           
+  PUBLIC :: RVETFromStrm_SetModuleLogger , &
+            RVETFromStrmType
 
 
   ! -------------------------------------------------------------
@@ -95,6 +97,12 @@ MODULE Class_RVETFromStrm
   ! -------------------------------------------------------------
   ! --- MISC VARIABLES
   ! -------------------------------------------------------------
+  ! -------------------------------------------------------------
+  ! --- MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
+
+
   INTEGER,PARAMETER                   :: ModNameLen = 20
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'Class_RVETFromStrm::'
   
@@ -103,6 +111,13 @@ MODULE Class_RVETFromStrm
 CONTAINS
 
 
+  ! -------------------------------------------------------------
+  ! --- SET MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  SUBROUTINE RVETFromStrm_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    ModuleLogger => Logger
+  END SUBROUTINE RVETFromStrm_SetModuleLogger
 
 
 ! ******************************************************************
@@ -143,7 +158,11 @@ CONTAINS
     IF (iErrorCode .NE. 0) THEN
         MessageArray(1) = 'Error allocating memory for element-to-stream node connectivity ' 
         MessageArray(2) = 'for the simulation of riparian vegetation!'
-        CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+        IF (ASSOCIATED(ModuleLogger)) THEN
+            CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+        ELSE
+            CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+        END IF
         iStat = -1
         RETURN
     END IF

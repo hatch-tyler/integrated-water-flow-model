@@ -23,10 +23,11 @@
 MODULE RootZone_v413                                                                         
   !$ USE OMP_LIB  
   USE IWFM_Kernel_Version     , ONLY: IWFMKernelVersion
-  USE MessageLogger           , ONLY: SetLastMessage                                          , &
+  USE MessageLogger           , ONLY: MessageLoggerType                                       , &
+                                      SetLastMessage                                          , &
                                       EchoProgress                                            , &
                                       MessageArray                                            , &
-                                      f_iFatal                                                                               
+                                      f_iFatal
   USE GeneralUtilities        , ONLY: StripTextUntilCharacter                                 , &
                                       CleanSpecialCharacters                                  , &
                                       EstablishAbsolutePathFileName                           , &
@@ -73,7 +74,8 @@ MODULE RootZone_v413
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: RootZone_v413_Type 
+  PUBLIC :: RootZone_v413_Type
+  PUBLIC :: RootZonev413_SetModuleLogger
   
   
   ! -------------------------------------------------------------
@@ -101,14 +103,22 @@ MODULE RootZone_v413
   ! -------------------------------------------------------------
   INTEGER,PARAMETER                   :: ModNameLen = 15
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'RootZone_v413::'
+  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
   
 
   
   
 CONTAINS
-    
- 
-    
+
+
+  ! -------------------------------------------------------------
+  ! --- SET MODULE LOGGER
+  ! -------------------------------------------------------------
+  SUBROUTINE RootZonev413_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    ModuleLogger => Logger
+  END SUBROUTINE RootZonev413_SetModuleLogger
+
 
 ! ******************************************************************
 ! ******************************************************************
@@ -786,7 +796,11 @@ CONTAINS
     !$OMP SECTION
     !Riparian ET demand from streams
     IF (RootZone%Flags%lNVRV_Defined)  THEN
-        CALL EchoProgress('Computing riparian ET demand from streams...')
+        IF (ASSOCIATED(ModuleLogger)) THEN
+            CALL ModuleLogger%EchoProgress('Computing riparian ET demand from streams...')
+        ELSE
+            CALL EchoProgress('Computing riparian ET demand from streams...')
+        END IF
         CALL RootZone%NVRVRootZone%ComputeWaterDemand(iNElements                                    , &
                                                       iElemIDs                                      , &
                                                       ETData                                        , &
@@ -802,7 +816,11 @@ CONTAINS
     
     !$OMP SECTION
     !Echo progress
-    CALL EchoProgress('Computing agricultural water demand...')
+    IF (ASSOCIATED(ModuleLogger)) THEN
+        CALL ModuleLogger%EchoProgress('Computing agricultural water demand...')
+    ELSE
+        CALL EchoProgress('Computing agricultural water demand...')
+    END IF
 
     !Compute ag water demand (urban water demands are read in as input)
     !Non-ponded ag
@@ -891,7 +909,11 @@ CONTAINS
     END IF
     
     !Echo progress
-    CALL EchoProgress('Computing future water demand')
+    IF (ASSOCIATED(ModuleLogger)) THEN
+        CALL ModuleLogger%EchoProgress('Computing future water demand')
+    ELSE
+        CALL EchoProgress('Computing future water demand')
+    END IF
     
     !Initialize the working RootZone and TimeStep objects
     RootZone_Work = RootZone
@@ -1020,7 +1042,11 @@ CONTAINS
                     iElemID         = AppGrid%AppElement(indxElem)%ID
                     MessageArray(1) = 'Element '//TRIM(IntToText(iElemID))//' is a lake element.'
                     MessageArray(2) = 'Water supply for lake elements must be zero!'
-                    CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                    IF (ASSOCIATED(ModuleLogger)) THEN
+                        CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                    ELSE
+                        CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                    END IF
                     iStat = -1
                     CYCLE
                 END IF
@@ -1034,7 +1060,11 @@ CONTAINS
                     iElemID         = AppGrid%AppElement(indxElem)%ID
                     MessageArray(1) = 'Agricultural applied water at element '//TRIM(IntToText(iElemID))//' cannot be non-zero'
                     MessageArray(2) = 'when agricultural area is zero!'
-                    CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                    IF (ASSOCIATED(ModuleLogger)) THEN
+                        CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                    ELSE
+                        CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                    END IF
                     iStat = -1
                     CYCLE
                 END IF
@@ -1050,7 +1080,11 @@ CONTAINS
                     iElemID         = AppGrid%AppElement(indxElem)%ID
                     MessageArray(1) = 'Urban applied water at element '//TRIM(IntToText(iElemID))//' cannot be non-zero'
                     MessageArray(2) = 'when urban area is zero!'
-                    CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                    IF (ASSOCIATED(ModuleLogger)) THEN
+                        CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                    ELSE
+                        CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                    END IF
                     iStat = -1
                     CYCLE
                 END IF
@@ -1183,7 +1217,11 @@ CONTAINS
                 MessageArray(1) = 'Crop coefficient data column(s) referenced by non-ponded crop data file for'
                 MessageArray(2) = 'element '//TRIM(IntToText(ID))//' is greater than the columns in the'
                 MessageArray(3) = 'Crop/Habitat Coeffcient Data File!'
-                CALL SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+                IF (ASSOCIATED(ModuleLogger)) THEN
+                    CALL ModuleLogger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+                ELSE
+                    CALL SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+                END IF
                 iStat = -1
                 RETURN
             END IF
@@ -1197,7 +1235,11 @@ CONTAINS
                 MessageArray(1) = 'Crop coefficient data column(s) referenced by ponded crop data file for'
                 MessageArray(2) = 'element '//TRIM(IntToText(ID))//' is greater than the columns in the'
                 MessageArray(3) = 'Crop/Habitat Coeffcient Data File!'
-                CALL SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+                IF (ASSOCIATED(ModuleLogger)) THEN
+                    CALL ModuleLogger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+                ELSE
+                    CALL SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+                END IF
                 iStat = -1
                 RETURN
             END IF
@@ -1211,7 +1253,11 @@ CONTAINS
                 MessageArray(1) = 'Crop coefficient data column(s) referenced by urban data file for'
                 MessageArray(2) = 'element '//TRIM(IntToText(ID))//' is greater than the columns in the'
                 MessageArray(3) = 'Crop/Habitat Coeffcient Data File!'
-                CALL SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+                IF (ASSOCIATED(ModuleLogger)) THEN
+                    CALL ModuleLogger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+                ELSE
+                    CALL SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+                END IF
                 iStat = -1
                 RETURN
             END IF
@@ -1225,7 +1271,11 @@ CONTAINS
                 MessageArray(1) = 'Crop coefficient data column(s) referenced by native&riparain vegetation data file for'
                 MessageArray(2) = 'element '//TRIM(IntToText(ID))//' is greater than the columns in the'
                 MessageArray(3) = 'Crop/Habitat Coeffcient Data File!'
-                CALL SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+                IF (ASSOCIATED(ModuleLogger)) THEN
+                    CALL ModuleLogger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+                ELSE
+                    CALL SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+                END IF
                 iStat = -1
                 RETURN
             END IF

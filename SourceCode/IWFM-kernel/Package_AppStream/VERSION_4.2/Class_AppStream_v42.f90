@@ -29,10 +29,11 @@ MODULE Class_AppStream_v42
                                             LogMessage                      , &
                                             EchoProgress                    , &
                                             MessageArray                    , &
+                                            MessageLoggerType               , &
                                             f_iFILE                         , &
                                             f_iFatal                        , &
                                             f_iWarn                         , &
-                                            f_iMessage                        
+                                            f_iMessage
   USE GeneralUtilities              , ONLY: StripTextUntilCharacter         , &
                                             IntToText                       , &
                                             FirstLocation                   , &
@@ -87,9 +88,10 @@ MODULE Class_AppStream_v42
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: AppStream_v42_Type   , &
-            ReadFractionsForGW   , &
-            CompileUpstrmNodes 
+  PUBLIC :: AppStream_v42_Type          , &
+            ReadFractionsForGW          , &
+            CompileUpstrmNodes          , &
+            AppStream_v42_SetModuleLogger
  
   
   ! -------------------------------------------------------------
@@ -129,6 +131,11 @@ MODULE Class_AppStream_v42
   ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
+  ! -------------------------------------------------------------
+  ! --- MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
+
   INTEGER,PARAMETER                   :: ModNameLen      = 21
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName         = 'Class_AppStream_v42::'
   
@@ -137,6 +144,14 @@ MODULE Class_AppStream_v42
   
 CONTAINS
 
+
+  ! -------------------------------------------------------------
+  ! --- SET MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  SUBROUTINE AppStream_v42_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    ModuleLogger => Logger
+  END SUBROUTINE AppStream_v42_SetModuleLogger
 
 
 

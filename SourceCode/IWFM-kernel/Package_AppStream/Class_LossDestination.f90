@@ -21,8 +21,9 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 MODULE Class_LossDestination
-  USE MessageLogger     , ONLY: SetLastMessage , &
-                                MessageArray   , &
+  USE MessageLogger     , ONLY: SetLastMessage     , &
+                                MessageArray       , &
+                                MessageLoggerType  , &
                                 f_iFatal
   USE GeneralUtilities
   USE IOInterface
@@ -45,8 +46,9 @@ MODULE Class_LossDestination
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: LossDestinationType   , &
-            LossDestination_New
+  PUBLIC :: LossDestinationType          , &
+            LossDestination_New            , &
+            LossDestination_SetModuleLogger
   
 
   ! -------------------------------------------------------------
@@ -62,12 +64,26 @@ MODULE Class_LossDestination
   ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
+  ! -------------------------------------------------------------
+  ! --- MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
+
   INTEGER,PARAMETER                   :: ModNameLen = 23
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'Class_LossDestination::'
     
 
 
 CONTAINS
+
+
+  ! -------------------------------------------------------------
+  ! --- SET MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  SUBROUTINE LossDestination_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    ModuleLogger => Logger
+  END SUBROUTINE LossDestination_SetModuleLogger
 
 
 
@@ -113,14 +129,22 @@ CONTAINS
         ID = INT(rDummyArray(1))
         CALL ConvertID_To_Index(ID,iDiverIDs,iDiver)
         IF (iDiver .EQ. 0) THEN
-            CALL SetLastMessage(TRIM(cBypassOrDiver)//' ID '//TRIM(IntToText(ID))//' listed for '//TRIM(cDestDescription)//' is not in the model!',f_iFatal,ThisProcedure)
+            IF (ASSOCIATED(ModuleLogger)) THEN
+                CALL ModuleLogger%SetLastMessage(TRIM(cBypassOrDiver)//' ID '//TRIM(IntToText(ID))//' listed for '//TRIM(cDestDescription)//' is not in the model!',f_iFatal,ThisProcedure)
+            ELSE
+                CALL SetLastMessage(TRIM(cBypassOrDiver)//' ID '//TRIM(IntToText(ID))//' listed for '//TRIM(cDestDescription)//' is not in the model!',f_iFatal,ThisProcedure)
+            END IF
             iStat = -1
             RETURN
         END IF
         
         !Make sure same diversion ID is not used
         IF (lProcessed(iDiver)) THEN
-            CALL SetLastMessage(TRIM(cBypassOrDiver)//' ID '//TRIM(IntToText(ID))//' is used more than once for '//TRIM(cDestDescription)//' description!',f_iFatal,ThisProcedure)
+            IF (ASSOCIATED(ModuleLogger)) THEN
+                CALL ModuleLogger%SetLastMessage(TRIM(cBypassOrDiver)//' ID '//TRIM(IntToText(ID))//' is used more than once for '//TRIM(cDestDescription)//' description!',f_iFatal,ThisProcedure)
+            ELSE
+                CALL SetLastMessage(TRIM(cBypassOrDiver)//' ID '//TRIM(IntToText(ID))//' is used more than once for '//TRIM(cDestDescription)//' description!',f_iFatal,ThisProcedure)
+            END IF
             iStat = -1
             RETURN
         END IF
@@ -137,7 +161,11 @@ CONTAINS
         DEALLOCATE (iDestList , STAT=iErrorCode)
         ALLOCATE (iDestList(iNDest) , pDest%iDestList(iNDest) , pDest%rFracs(iNDest) ,STAT=iErrorCode)
         IF (iErrorCode .NE. 0) THEN
-            CALL SetLastMessage('Error allocating memory for '//TRIM(cDestDescription)//' for '//TRIM(LowerCase(cBypassOrDiver))//' '//TRIM(IntToText(ID))//'!',f_iFatal,ThisProcedure)
+            IF (ASSOCIATED(ModuleLogger)) THEN
+                CALL ModuleLogger%SetLastMessage('Error allocating memory for '//TRIM(cDestDescription)//' for '//TRIM(LowerCase(cBypassOrDiver))//' '//TRIM(IntToText(ID))//'!',f_iFatal,ThisProcedure)
+            ELSE
+                CALL SetLastMessage('Error allocating memory for '//TRIM(cDestDescription)//' for '//TRIM(LowerCase(cBypassOrDiver))//' '//TRIM(IntToText(ID))//'!',f_iFatal,ThisProcedure)
+            END IF
             iStat = -1
             RETURN
         END IF
@@ -159,7 +187,11 @@ CONTAINS
             END IF
             CALL ConvertID_To_Index(iDestList(indxDest),iDestIDs,pDest%iDestList(indxDest))
             IF (pDest%iDestList(indxDest) .EQ. 0) THEN
-                CALL SetLastMessage('Destination '//TRIM(IntToText(iDestList(indxDest)))//' for '//TRIM(cDestDescription)//' listed for '//TRIM(LowerCase(cBypassOrDiver))//' ID '//TRIM(IntToText(ID))//' is not in the model!',f_iFatal,ThisProcedure)
+                IF (ASSOCIATED(ModuleLogger)) THEN
+                    CALL ModuleLogger%SetLastMessage('Destination '//TRIM(IntToText(iDestList(indxDest)))//' for '//TRIM(cDestDescription)//' listed for '//TRIM(LowerCase(cBypassOrDiver))//' ID '//TRIM(IntToText(ID))//' is not in the model!',f_iFatal,ThisProcedure)
+                ELSE
+                    CALL SetLastMessage('Destination '//TRIM(IntToText(iDestList(indxDest)))//' for '//TRIM(cDestDescription)//' listed for '//TRIM(LowerCase(cBypassOrDiver))//' ID '//TRIM(IntToText(ID))//' is not in the model!',f_iFatal,ThisProcedure)
+                END IF
                 iStat = -1
                 RETURN
             END IF

@@ -22,10 +22,11 @@
 !***********************************************************************
 MODULE Class_UrbanLandUse_v41
   !$ USE OMP_LIB
-  USE MessageLogger            , ONLY: SetLastMessage                   , &
+  USE MessageLogger            , ONLY: MessageLoggerType                , &
+                                       SetLastMessage                   , &
                                        EchoProgress                     , &
                                        MessageArray                     , &
-                                       f_iFatal                           
+                                       f_iFatal
   USE GeneralUtilities         , ONLY: StripTextUntilCharacter          , &
                                        EstablishAbsolutePathFileName    , &
                                        CleanSpecialCharacters           , &
@@ -74,6 +75,7 @@ MODULE Class_UrbanLandUse_v41
   ! -------------------------------------------------------------
   PRIVATE
   PUBLIC :: UrbanLandUse_v41_Type
+  PUBLIC :: UrbanLandUsev41_SetModuleLogger
  
   
   ! -------------------------------------------------------------
@@ -134,6 +136,7 @@ MODULE Class_UrbanLandUse_v41
   ! -------------------------------------------------------------
   INTEGER,PARAMETER                   :: ModNameLen = 24
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'Class_UrbanLandUse_v41::'
+  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
 
   
 
@@ -141,6 +144,13 @@ MODULE Class_UrbanLandUse_v41
 CONTAINS
 
 
+  ! -------------------------------------------------------------
+  ! --- SET MODULE LOGGER
+  ! -------------------------------------------------------------
+  SUBROUTINE UrbanLandUsev41_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    ModuleLogger => Logger
+  END SUBROUTINE UrbanLandUsev41_SetModuleLogger
 
 
 ! ******************************************************************
@@ -669,7 +679,11 @@ CONTAINS
     iStat = 0
 
     !Echo progress
-    CALL EchoProgress('Reading time series data for urban lands')
+    IF (ASSOCIATED(ModuleLogger)) THEN
+        CALL ModuleLogger%EchoProgress('Reading time series data for urban lands')
+    ELSE
+        CALL EchoProgress('Reading time series data for urban lands')
+    END IF
     
     !Land use areas
     CALL UrbanLand%LandUseDataFile%ReadTSData('Urban areas',TimeStep,rElemAreas,iElemIDs,iStat)  ;  IF (iStat .EQ. -1) RETURN
@@ -766,7 +780,11 @@ CONTAINS
     iStat = 0
   
     !Inform user
-    CALL EchoProgress('Simulating flows at urban lands')
+    IF (ASSOCIATED(ModuleLogger)) THEN
+        CALL ModuleLogger%EchoProgress('Simulating flows at urban lands')
+    ELSE
+        CALL EchoProgress('Simulating flows at urban lands')
+    END IF
     
     !Initialize
     RootDepth = UrbanLand%RootDepth  
@@ -876,7 +894,11 @@ CONTAINS
                 MessageArray(2) = 'Element              = '//TRIM(IntToText(iElemID))
                 WRITE (MessageArray(3),'(A,F11.8)') 'Desired convergence  = ',SolverData%Tolerance*TotalPorosityUrban
                 WRITE (MessageArray(4),'(A,F11.8)') 'Achieved convergence = ',ABS(AchievedConv)
-                CALL SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
+                IF (ASSOCIATED(ModuleLogger)) THEN
+                    CALL ModuleLogger%SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
+                ELSE
+                    CALL SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
+                END IF
                 iStat = -1
                 !$OMP END CRITICAL (CRIT_URBAN_CONV)
                 CYCLE
@@ -920,7 +942,11 @@ CONTAINS
                 MessageArray(2) = 'This may be due to a too high convergence criteria set for the iterative solution.'
                 MessageArray(3) = 'Try using a smaller value for RZCONV and a higher value for RZITERMX parameters'
                 MessageArray(4) = 'in the Root Zone Main Input File.'
-                CALL SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
+                IF (ASSOCIATED(ModuleLogger)) THEN
+                    CALL ModuleLogger%SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
+                ELSE
+                    CALL SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
+                END IF
                 iStat = -1
                 !$OMP END CRITICAL (CRIT_URBAN_SOILM)
                 CYCLE
@@ -1029,7 +1055,11 @@ CONTAINS
     ASSOCIATE (pUrbData => UrbanLand%UrbData) 
         DO indxElem=1,NElements
             IF ((pUrbData%SoilM_Precip(indxElem,1) + pUrbData%SoilM_AW(indxElem,1) + pUrbData%SoilM_Oth(indxElem,1)) .GT. TotalPorosity(indxElem)) THEN
-                CALL SetLastMessage('Initial moisture content for urban land at element ' // TRIM(IntToText(iElemIDs(indxElem))) // ' is greater than total porosity!',f_iFatal,ThisProcedure)
+                IF (ASSOCIATED(ModuleLogger)) THEN
+                    CALL ModuleLogger%SetLastMessage('Initial moisture content for urban land at element ' // TRIM(IntToText(iElemIDs(indxElem))) // ' is greater than total porosity!',f_iFatal,ThisProcedure)
+                ELSE
+                    CALL SetLastMessage('Initial moisture content for urban land at element ' // TRIM(IntToText(iElemIDs(indxElem))) // ' is greater than total porosity!',f_iFatal,ThisProcedure)
+                END IF
                 iStat = -1
                 RETURN
             END IF

@@ -22,10 +22,11 @@
 !***********************************************************************
 MODULE RootZone_v401
   USE IWFM_Kernel_Version          , ONLY: IWFMKernelVersion
-  USE MessageLogger                , ONLY: SetLastMessage                          , &
+  USE MessageLogger                , ONLY: MessageLoggerType                       , &
+                                           SetLastMessage                          , &
                                            EchoProgress                            , &
                                            MessageArray                            , &
-                                           f_iFatal                                  
+                                           f_iFatal
   USE Package_Misc                 , ONLY: f_iFlowDest_Outside                     , &
                                            f_iFlowDest_StrmNode                    , &
                                            f_iFlowDest_Element                     , &
@@ -106,7 +107,8 @@ MODULE RootZone_v401
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: RootZone_v401_Type 
+  PUBLIC :: RootZone_v401_Type
+  PUBLIC :: RootZonev401_SetModuleLogger
   
   
   ! -------------------------------------------------------------
@@ -256,15 +258,23 @@ MODULE RootZone_v401
   ! -------------------------------------------------------------
   INTEGER,PARAMETER                   :: ModNameLen = 15
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'RootZone_v401::'
+  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
   
 
   
   
 CONTAINS
-    
-    
 
-    
+
+  ! -------------------------------------------------------------
+  ! --- SET MODULE LOGGER
+  ! -------------------------------------------------------------
+  SUBROUTINE RootZonev401_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    ModuleLogger => Logger
+  END SUBROUTINE RootZonev401_SetModuleLogger
+
+
 ! ******************************************************************
 ! ******************************************************************
 ! ******************************************************************
@@ -1658,13 +1668,17 @@ CONTAINS
                 iColList = [(indx,indx=32,36)]
                 
             CASE DEFAULT
-                CALL SetLastMessage('Land&Water Use ZBudget is not available for the selected land use type!',f_iFatal,ThisProcedure)
+                IF (ASSOCIATED(ModuleLogger)) THEN
+                    CALL ModuleLogger%SetLastMessage('Land&Water Use ZBudget is not available for the selected land use type!',f_iFatal,ThisProcedure)
+                ELSE
+                    CALL SetLastMessage('Land&Water Use ZBudget is not available for the selected land use type!',f_iFatal,ThisProcedure)
+                END IF
                 DEALLOCATE (rFlows , cFlowNames , STAT=ErrorCode)
                 ALLOCATE (rFlows(0,0) , cFlowNames(0))
                 iStat = -1
                 RETURN
         END SELECT
-        
+
         !Read data for the interval
         CALL ZBudget%ReadData(ZoneList,iZoneID,iColList,'1YEAR',cBeginDate,cEndDate,1d0,rFactVL,iDataUnitTypes,iNPopulatedValues,rValues,iStat)
         IF (iStat .NE. 0) RETURN
@@ -1786,14 +1800,18 @@ CONTAINS
                 END DO
                 
             CASE DEFAULT
-                CALL SetLastMessage('Root Zone ZBudget is not available for the selected land use type!',f_iFatal,ThisProcedure)
+                IF (ASSOCIATED(ModuleLogger)) THEN
+                    CALL ModuleLogger%SetLastMessage('Root Zone ZBudget is not available for the selected land use type!',f_iFatal,ThisProcedure)
+                ELSE
+                    CALL SetLastMessage('Root Zone ZBudget is not available for the selected land use type!',f_iFatal,ThisProcedure)
+                END IF
                 DEALLOCATE (rFlows , cFlowNames , STAT=ErrorCode)
                 ALLOCATE (rFlows(0,0) , cFlowNames(0))
                 iStat = -1
                 RETURN
-        END SELECT        
-    END IF  
-    
+        END SELECT
+    END IF
+
   END SUBROUTINE RootZone_v401_GetZBudget_AnnualFlows_GivenFile
   
   
@@ -1888,13 +1906,17 @@ CONTAINS
                 iColList = [(indx,indx=32,36)]
                 
             CASE DEFAULT
-                CALL SetLastMessage('Land&Water Use ZBudget is not available for the selected land use type!',f_iFatal,ThisProcedure)
+                IF (ASSOCIATED(ModuleLogger)) THEN
+                    CALL ModuleLogger%SetLastMessage('Land&Water Use ZBudget is not available for the selected land use type!',f_iFatal,ThisProcedure)
+                ELSE
+                    CALL SetLastMessage('Land&Water Use ZBudget is not available for the selected land use type!',f_iFatal,ThisProcedure)
+                END IF
                 DEALLOCATE (rFlows , cFlowNames , STAT=ErrorCode)
                 ALLOCATE (rFlows(0,0) , cFlowNames(0))
                 iStat = -1
                 RETURN
         END SELECT
-        
+
         !Read data for the interval
         CALL ZBudget%ReadData(ZoneList,iZoneID,iColList,'1MON',cBeginDate,cEndDate,1d0,rFactVL,iDataUnitTypes,iNPopulatedValues,rValues,iStat)
         IF (iStat .NE. 0) RETURN
@@ -2016,14 +2038,18 @@ CONTAINS
                 END DO
                 
             CASE DEFAULT
-                CALL SetLastMessage('Root Zone ZBudget is not available for the selected land use type!',f_iFatal,ThisProcedure)
+                IF (ASSOCIATED(ModuleLogger)) THEN
+                    CALL ModuleLogger%SetLastMessage('Root Zone ZBudget is not available for the selected land use type!',f_iFatal,ThisProcedure)
+                ELSE
+                    CALL SetLastMessage('Root Zone ZBudget is not available for the selected land use type!',f_iFatal,ThisProcedure)
+                END IF
                 DEALLOCATE (rFlows , cFlowNames , STAT=ErrorCode)
                 ALLOCATE (rFlows(0,0) , cFlowNames(0))
                 iStat = -1
                 RETURN
-        END SELECT        
-    END IF  
-    
+        END SELECT
+    END IF
+
   END SUBROUTINE RootZone_v401_GetZBudget_MonthlyFlows_GivenFile
   
   
@@ -2052,15 +2078,23 @@ CONTAINS
     SELECT CASE (iZBudgetType)
         CASE (f_iZBudgetType_LWU)
             IF (.NOT. RootZone%Flags%LWUseZoneBudRawFile_Defined) THEN
-                CALL SetLastMessage('Land and Water Use zone budget is not part of the model output to retrieve data!',f_iFatal,ThisProcedure)
+                IF (ASSOCIATED(ModuleLogger)) THEN
+                    CALL ModuleLogger%SetLastMessage('Land and Water Use zone budget is not part of the model output to retrieve data!',f_iFatal,ThisProcedure)
+                ELSE
+                    CALL SetLastMessage('Land and Water Use zone budget is not part of the model output to retrieve data!',f_iFatal,ThisProcedure)
+                END IF
                 iStat = -1
                 RETURN
             END IF
             pZBudget => RootZone%LWUZoneBudRawFile
-            
+
         CASE (f_iZBudgetType_RootZone)
             IF (.NOT. RootZone%Flags%RootZoneZoneBudRawFile_Defined) THEN
-                CALL SetLastMessage('Root Zone zone budget is not part of the model output to retrieve data!',f_iFatal,ThisProcedure)
+                IF (ASSOCIATED(ModuleLogger)) THEN
+                    CALL ModuleLogger%SetLastMessage('Root Zone zone budget is not part of the model output to retrieve data!',f_iFatal,ThisProcedure)
+                ELSE
+                    CALL SetLastMessage('Root Zone zone budget is not part of the model output to retrieve data!',f_iFatal,ThisProcedure)
+                END IF
                 iStat = -1
                 RETURN
             END IF

@@ -22,8 +22,9 @@
 !***********************************************************************
 MODULE Class_BaseRootZone
   !$ USE OMP_LIB
-  USE MessageLogger               , ONLY: SetLastMessage                       , &
-                                          f_iFatal                               
+  USE MessageLogger               , ONLY: MessageLoggerType                    , &
+                                          SetLastMessage                       , &
+                                          f_iFatal
   USE IOInterface                 , ONLY: GenericFileType                      , &
                                           RealTSDataInFileType
   USE TimeSeriesUtilities         , ONLY: TimeStepType                         , &
@@ -71,7 +72,8 @@ MODULE Class_BaseRootZone
             CalculateUrbanFracDemand                , &
             ElementLU_InterpolateExtrapolate        , &
             f_iMeasuredLUDataForSubregion           , &
-            f_iMeasuredLUDataForModelDomain           
+            f_iMeasuredLUDataForModelDomain           , &
+            BaseRootZone_SetModuleLogger
   
   
   ! -------------------------------------------------------------
@@ -786,12 +788,27 @@ MODULE Class_BaseRootZone
   ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
+  ! -------------------------------------------------------------
+  ! --- MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
+
+
   INTEGER,PARAMETER                   :: ModNameLen    = 20
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName       = 'Class_BaseRootZone::'
   
   
   
 CONTAINS
+
+
+  ! -------------------------------------------------------------
+  ! --- SET MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  SUBROUTINE BaseRootZone_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    ModuleLogger => Logger
+  END SUBROUTINE BaseRootZone_SetModuleLogger
 
 
 
@@ -1264,7 +1281,11 @@ CONTAINS
                 rElemAgDemand  = -1.0
                 rElemUrbDemand = -1.0
                 iStat          = -1
-                CALL SetLastMessage('Future demands for '//TRIM(cFutureDemandDate)//' have not been computed!',f_iFatal,ThisProcedure)
+                IF (ASSOCIATED(ModuleLogger)) THEN
+                    CALL ModuleLogger%SetLastMessage('Future demands for '//TRIM(cFutureDemandDate)//' have not been computed!',f_iFatal,ThisProcedure)
+                ELSE
+                    CALL SetLastMessage('Future demands for '//TRIM(cFutureDemandDate)//' have not been computed!',f_iFatal,ThisProcedure)
+                END IF
             END IF
             RETURN
         END IF
@@ -1274,7 +1295,11 @@ CONTAINS
     rElemAgDemand  = -1.0
     rElemUrbDemand = -1.0
     iStat          = -1
-    CALL SetLastMessage('Future demands for '//TRIM(cFutureDemandDate)//' have not been computed!',f_iFatal,ThisProcedure)
+    IF (ASSOCIATED(ModuleLogger)) THEN
+        CALL ModuleLogger%SetLastMessage('Future demands for '//TRIM(cFutureDemandDate)//' have not been computed!',f_iFatal,ThisProcedure)
+    ELSE
+        CALL SetLastMessage('Future demands for '//TRIM(cFutureDemandDate)//' have not been computed!',f_iFatal,ThisProcedure)
+    END IF
 
   END SUBROUTINE GetFutureDemands
   
@@ -1708,8 +1733,13 @@ CONTAINS
     !Make sure that there is at least one element for land-use adjustment
     IF (LocateInList(1,iElemWork) .EQ. 0) THEN
         iSubregionID = AppGrid%AppSubregion(iRegion)%ID
-        CALL SetLastMessage('There are no elements where land use can be adjusted for subregion '//TRIM(IntToText(iSubregionID))//  &
-                        ' and land use type '//TRIM(cLUCode)//'!',f_iFatal,ThisProcedure)
+        IF (ASSOCIATED(ModuleLogger)) THEN
+            CALL ModuleLogger%SetLastMessage('There are no elements where land use can be adjusted for subregion '//TRIM(IntToText(iSubregionID))//  &
+                            ' and land use type '//TRIM(cLUCode)//'!',f_iFatal,ThisProcedure)
+        ELSE
+            CALL SetLastMessage('There are no elements where land use can be adjusted for subregion '//TRIM(IntToText(iSubregionID))//  &
+                            ' and land use type '//TRIM(cLUCode)//'!',f_iFatal,ThisProcedure)
+        END IF
         iStat = -1
         RETURN
     END IF
@@ -1754,8 +1784,13 @@ CONTAINS
       
     ELSE
         iSubregionID = AppGrid%AppSubregion(iRegion)%ID
-        CALL SetLastMessage('Total land use area for land use type '//TRIM(cLUCode)//  &
-                            ' at subregion '//TRIM(IntToText(iSubregionID))//' is less than zero!',f_iFatal,ThisProcedure)
+        IF (ASSOCIATED(ModuleLogger)) THEN
+            CALL ModuleLogger%SetLastMessage('Total land use area for land use type '//TRIM(cLUCode)//  &
+                                ' at subregion '//TRIM(IntToText(iSubregionID))//' is less than zero!',f_iFatal,ThisProcedure)
+        ELSE
+            CALL SetLastMessage('Total land use area for land use type '//TRIM(cLUCode)//  &
+                                ' at subregion '//TRIM(IntToText(iSubregionID))//' is less than zero!',f_iFatal,ThisProcedure)
+        END IF
         iStat = -1
     END IF
     

@@ -22,10 +22,11 @@
 !***********************************************************************
 MODULE RootZone_v50
   USE IWFM_Kernel_Version              , ONLY: IWFMKernelVersion
-  USE MessageLogger                    , ONLY: SetLastMessage                              , &
+  USE MessageLogger                    , ONLY: MessageLoggerType                           , &
+                                               SetLastMessage                              , &
                                                EchoProgress                                , &
                                                MessageArray                                , &
-                                               f_iFatal                                      
+                                               f_iFatal
   USE TimeSeriesUtilities              , ONLY: TimeStepType                                , &
                                                IncrementTimeStamp                          , &
                                                NPeriods                                    , &
@@ -133,7 +134,8 @@ MODULE RootZone_v50
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: RootZone_v50_Type                                  
+  PUBLIC :: RootZone_v50_Type
+  PUBLIC :: RootZonev50_SetModuleLogger
   
   
   ! -------------------------------------------------------------
@@ -302,11 +304,20 @@ MODULE RootZone_v50
   INTEGER,PARAMETER                   :: f_iNLands        = 4    !Ag, urban, native and riparian
   INTEGER,PARAMETER                   :: ModNameLen       = 14
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName          = 'RootZone_v50::'
+  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
   
   
   
 CONTAINS
 
+
+  ! -------------------------------------------------------------
+  ! --- SET MODULE LOGGER
+  ! -------------------------------------------------------------
+  SUBROUTINE RootZonev50_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    ModuleLogger => Logger
+  END SUBROUTINE RootZonev50_SetModuleLogger
 
 
 ! ******************************************************************
@@ -3408,7 +3419,11 @@ CONTAINS
     
     IF (iDemandFor .EQ. f_iLandUse_Ag) THEN
         IF (RootZone%Flags%lAg_Defined) THEN
-            CALL EchoProgress('Retrieving subregional agricultural water demand ... ',lAdvance=.FALSE.)
+            IF (ASSOCIATED(ModuleLogger)) THEN
+                CALL ModuleLogger%EchoProgress('Retrieving subregional agricultural water demand ... ',lAdvance=.FALSE.)
+            ELSE
+                CALL EchoProgress('Retrieving subregional agricultural water demand ... ',lAdvance=.FALSE.)
+            END IF
             rDemand = RootZone%AgRootZone%SubregionalDemand
             CALL EchoProgress('DONE')
         ELSE
@@ -3416,7 +3431,11 @@ CONTAINS
         END IF
     ELSE
         IF (RootZone%Flags%lUrban_Defined) THEN
-            CALL EchoProgress('Retrieving subregional urban water demand ... ',lAdvance=.FALSE.)
+            IF (ASSOCIATED(ModuleLogger)) THEN
+                CALL ModuleLogger%EchoProgress('Retrieving subregional urban water demand ... ',lAdvance=.FALSE.)
+            ELSE
+                CALL EchoProgress('Retrieving subregional urban water demand ... ',lAdvance=.FALSE.)
+            END IF
             rDemand = RootZone%UrbanRootZone%Demand
             CALL EchoProgress('DONE')
         ELSE

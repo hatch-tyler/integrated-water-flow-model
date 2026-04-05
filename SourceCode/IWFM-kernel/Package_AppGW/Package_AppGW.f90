@@ -1,7 +1,7 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2025  
-!  State of California, Department of Water Resources 
+!  Copyright (C) 2005-2025
+!  State of California, Department of Water Resources
 !
 !  This program is free software; you can redistribute it and/or
 !  modify it under the terms of the GNU General Public License
@@ -18,12 +18,76 @@
 !  along with this program; if not, write to the Free Software
 !  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 !
-!  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
+!  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov
 !***********************************************************************
 MODULE Package_AppGW
-  USE Package_AppTileDrain  , ONLY : f_iTileDrain     , &
-                                     f_iSubIrig
-  USE Package_AppPumping    , ONLY : f_iPump_Well     , &
-                                     f_iPump_ElemPump
-  USE Class_AppGW  
+  USE MessageLogger        , ONLY: MessageLoggerType
+  USE Package_AppTileDrain , ONLY: f_iTileDrain                      , &
+                                   f_iSubIrig                        , &
+                                   AppTileDrain_SetModuleLogger
+  USE Package_AppPumping   , ONLY: f_iPump_Well                      , &
+                                   f_iPump_ElemPump                  , &
+                                   AppPumping_SetModuleLogger
+  USE Package_AppSubsidence, ONLY: AppSubsidence_SetModuleLogger     , &
+                                   BaseAppSubsidence_SetModuleLogger , &
+                                   AppSubsidence_v40_SetModuleLogger , &
+                                   AppSubsidence_v41_SetModuleLogger , &
+                                   AppSubsidence_v50_SetModuleLogger , &
+                                   AppSubsidence_v51_SetModuleLogger
+  USE Class_AppGW   ! Re-export all public entities (AppGWType, constants, etc.)
+  USE Class_GWState        , ONLY: GWState_SetModuleLogger
+  USE GWHydrograph         , ONLY: GWHydrograph_SetModuleLogger
+  USE VerticalFlow         , ONLY: VerticalFlow_SetModuleLogger
+  USE Class_AppBC          , ONLY: AppBC_SetModuleLogger
+  USE Class_LayerBC        , ONLY: LayerBC_SetModuleLogger
+  USE Class_TSBCDataFile   , ONLY: TSBCDataFile_SetModuleLogger
+  USE TileDrainHydrograph  , ONLY: TDHydrograph_SetModuleLogger
+  USE Class_Well           , ONLY: Well_SetModuleLogger
+  USE Class_ElementPumping , ONLY: ElemPump_SetModuleLogger
+  IMPLICIT NONE
+
+  ! All public entities from Class_AppGW are re-exported via USE without ONLY
+  PUBLIC :: AppGW_SetAllModuleLoggers
+
+CONTAINS
+
+
+  ! -------------------------------------------------------------
+  ! --- PROPAGATE LOGGER TO ALL SUB-MODULES
+  ! -------------------------------------------------------------
+  SUBROUTINE AppGW_SetAllModuleLoggers(Logger)
+    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+
+    !Main orchestrator
+    CALL AppGW_SetModuleLogger(Logger)
+
+    !State and hydrograph
+    CALL GWState_SetModuleLogger(Logger)
+    CALL GWHydrograph_SetModuleLogger(Logger)
+    CALL VerticalFlow_SetModuleLogger(Logger)
+
+    !Boundary conditions
+    CALL AppBC_SetModuleLogger(Logger)
+    CALL LayerBC_SetModuleLogger(Logger)
+    CALL TSBCDataFile_SetModuleLogger(Logger)
+
+    !Pumping
+    CALL AppPumping_SetModuleLogger(Logger)
+    CALL Well_SetModuleLogger(Logger)
+    CALL ElemPump_SetModuleLogger(Logger)
+
+    !Tile drain
+    CALL AppTileDrain_SetModuleLogger(Logger)
+    CALL TDHydrograph_SetModuleLogger(Logger)
+
+    !Subsidence
+    CALL AppSubsidence_SetModuleLogger(Logger)
+    CALL BaseAppSubsidence_SetModuleLogger(Logger)
+    CALL AppSubsidence_v40_SetModuleLogger(Logger)
+    CALL AppSubsidence_v41_SetModuleLogger(Logger)
+    CALL AppSubsidence_v50_SetModuleLogger(Logger)
+    CALL AppSubsidence_v51_SetModuleLogger(Logger)
+
+  END SUBROUTINE AppGW_SetAllModuleLoggers
+
 END MODULE

@@ -21,8 +21,9 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 MODULE Util_RootZone_v41
-  USE MessageLogger         , ONLY: SetLastMessage                       , &
-                                    MessageArray                         , & 
+  USE MessageLogger         , ONLY: MessageLoggerType                    , &
+                                    SetLastMessage                       , &
+                                    MessageArray                         , &
                                     f_iFatal
   USE IOInterface           , ONLY: GenericFileType                      , &
                                     iGetFileType_FromName                , &
@@ -59,7 +60,8 @@ MODULE Util_RootZone_v41
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: RootZoneSoil_v41_Type                , &
+  PUBLIC :: UtilRZv41_SetModuleLogger             , &
+            RootZoneSoil_v41_Type                , &
             LWUseBudRawFile_New                  , &
             RootZoneBudRawFile_New               , &
             AgLWUseBudRawFile_New                , &
@@ -161,6 +163,12 @@ MODULE Util_RootZone_v41
 
                    
   ! -------------------------------------------------------------
+  ! --- MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
+
+
+  ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
   INTEGER,PARAMETER                      :: f_iModNameLen = 19
@@ -171,6 +179,14 @@ MODULE Util_RootZone_v41
   
 CONTAINS
 
+
+  ! -------------------------------------------------------------
+  ! --- SET MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  SUBROUTINE UtilRZv41_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    ModuleLogger => Logger
+  END SUBROUTINE UtilRZv41_SetModuleLogger
 
 
   ! -------------------------------------------------------------
@@ -201,7 +217,11 @@ CONTAINS
             MessageArray(1) = 'Land Use Area Scaling Factors Output File'
             MessageArray(2) ='('//TRIM(cFileName)//') defined in the'
             MessageArray(3) = 'Root Zone Component Main Input File must be a text file!'
-            CALL SetLastMessage(MessageArray(1:3),f_iFatal,cThisProcedure)
+            IF (ASSOCIATED(ModuleLogger)) THEN
+                CALL ModuleLogger%SetLastMessage(MessageArray(1:3),f_iFatal,cThisProcedure)
+            ELSE
+                CALL SetLastMessage(MessageArray(1:3),f_iFatal,cThisProcedure)
+            END IF
             iStat = -1
             RETURN
         END IF

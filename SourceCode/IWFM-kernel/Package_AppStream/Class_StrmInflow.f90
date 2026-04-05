@@ -29,7 +29,8 @@ MODULE Class_StrmInflow
   USE TimeSeriesUtilities  , ONLY: TimeStepType
   USE MessageLogger        , ONLY: SetLastMessage          , &
                                    MessageArray            , &
-                                   f_iFatal                  
+                                   MessageLoggerType       , &
+                                   f_iFatal
   USE IOInterface          , ONLY: RealTSDataInFileType   
   IMPLICIT NONE
   
@@ -50,7 +51,8 @@ MODULE Class_StrmInflow
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: StrmInflowType         
+  PUBLIC :: StrmInflowType              , &
+            StrmInflow_SetModuleLogger
   
   
   ! -------------------------------------------------------------
@@ -81,6 +83,11 @@ MODULE Class_StrmInflow
   ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
+  ! -------------------------------------------------------------
+  ! --- MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
+
   INTEGER,PARAMETER                   :: ModNameLen = 18
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'Class_StrmInflow::'
 
@@ -89,6 +96,14 @@ MODULE Class_StrmInflow
   
 CONTAINS
 
+
+  ! -------------------------------------------------------------
+  ! --- SET MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  SUBROUTINE StrmInflow_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    ModuleLogger => Logger
+  END SUBROUTINE StrmInflow_SetModuleLogger
 
 
 
@@ -438,7 +453,11 @@ CONTAINS
                     ID = StrmInflow%IDs(indx)
                     MessageArray(1) = 'Stream inflows cannot be less than zero.'
                     MessageArray(2) = 'Inflow specified at inflow ID '//TRIM(IntToText(ID))//' is less than zero!'
-                    CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                    IF (ASSOCIATED(ModuleLogger)) THEN
+                        CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                    ELSE
+                        CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                    END IF
                     iStat = -1
                     RETURN
                 END IF

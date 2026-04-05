@@ -34,7 +34,8 @@ MODULE Class_AgLandUse_v50
                                       LocateInList                            , &
                                       EstablishAbsolutePathFileName, &
                                    f_cInlineCommentChar
-  USE MessageLogger           , ONLY: EchoProgress                            , &
+  USE MessageLogger           , ONLY: MessageLoggerType                       , &
+                                      EchoProgress                            , &
                                       SetLastMessage                          , &
                                       LogMessage                              , &
                                       MessageArray                            , &
@@ -82,6 +83,7 @@ MODULE Class_AgLandUse_v50
   ! -------------------------------------------------------------
   PRIVATE
   PUBLIC :: AgDatabase_v50_Type
+  PUBLIC :: AgLandUsev50_SetModuleLogger
 
 
   ! -------------------------------------------------------------
@@ -167,6 +169,7 @@ MODULE Class_AgLandUse_v50
   ! -------------------------------------------------------------
   INTEGER,PARAMETER                   :: ModNameLen = 21
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'Class_AgLandUse_v50::'
+  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
   
   
   
@@ -174,6 +177,13 @@ MODULE Class_AgLandUse_v50
 CONTAINS
 
 
+  ! -------------------------------------------------------------
+  ! --- SET MODULE LOGGER
+  ! -------------------------------------------------------------
+  SUBROUTINE AgLandUsev50_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    ModuleLogger => Logger
+  END SUBROUTINE AgLandUsev50_SetModuleLogger
 
 
 ! ******************************************************************
@@ -818,7 +828,11 @@ CONTAINS
     iStat = 0
     
     !Echo progress
-    CALL EchoProgress('Reading time series data for agricultural lands')
+    IF (ASSOCIATED(ModuleLogger)) THEN
+        CALL ModuleLogger%EchoProgress('Reading time series data for agricultural lands')
+    ELSE
+        CALL EchoProgress('Reading time series data for agricultural lands')
+    END IF
     
     !Elemental ag areas
     CALL AgLand%ElemAgAreaDataFile%ReadTSData('Elemental agricultural areas',TimeStep,rRegionAreas,iSubregionIDs,iStat)
@@ -846,7 +860,11 @@ CONTAINS
     IF (AgLand%IrigPeriodFile%lUpdated) THEN
         DO indxCol=1,AgLand%IrigPeriodFile%iSize
             IF (LocateInList(AgLand%IrigPeriodFile%iValues(indxCol) , f_iIrigPeriodFlags) .EQ. 0) THEN
-                CALL SetLastMessage('One or more irrigation period flags are not recognized!',f_iFatal,ThisProcedure)
+                IF (ASSOCIATED(ModuleLogger)) THEN
+                    CALL ModuleLogger%SetLastMessage('One or more irrigation period flags are not recognized!',f_iFatal,ThisProcedure)
+                ELSE
+                    CALL SetLastMessage('One or more irrigation period flags are not recognized!',f_iFatal,ThisProcedure)
+                END IF
                 iStat = -1
                 RETURN
             END IF
@@ -875,7 +893,11 @@ CONTAINS
                     IF (TargetSoilM .LT. MinSoilM) THEN
                         MessageArray(1) = 'Irrigation target soil moisture for agricultural crop' // TRIM(IntToText(indxCrop)) // ' is less than minimum '
                         MessageArray(2) = 'soil moisture at subregion ' // TRIM(IntToText(iSubregionIDs(indxRegion))) // '!'
-                        CALL SetLastMessage(MessageArray(:2),f_iFatal,ThisProcedure)
+                        IF (ASSOCIATED(ModuleLogger)) THEN
+                            CALL ModuleLogger%SetLastMessage(MessageArray(:2),f_iFatal,ThisProcedure)
+                        ELSE
+                            CALL SetLastMessage(MessageArray(:2),f_iFatal,ThisProcedure)
+                        END IF
                         iStat = -1
                         RETURN
                     END IF 
@@ -897,7 +919,11 @@ CONTAINS
                         MessageArray(1) = 'Deficit irrigation is being simulated for crop ID '//TRIM(IntToText(indxCrop))//' at soil type '//TRIM(IntToText(indxSoil))//' in subregion '//TRIM(IntToText(iSubregionIDs(indxRegion)))//'!'
                         WRITE (MessageArray(2),'(A,F6.3)') 'Irrigation trigger minimum moisture       = ' , WP + rFrac*(FC-WP)
                         WRITE (MessageArray(3),'(A,F6.3)') 'Moisture at half of Total Available Water = ' , 0.5D0 * (FC+WP)
-                        CALL LogMessage(MessageArray(1:3),f_iInfo,ThisProcedure)
+                        IF (ASSOCIATED(ModuleLogger)) THEN
+                            CALL ModuleLogger%LogMessage(MessageArray(1:3),f_iInfo,ThisProcedure)
+                        ELSE
+                            CALL LogMessage(MessageArray(1:3),f_iInfo,ThisProcedure)
+                        END IF
                     END IF
                 END DO
             END DO
@@ -914,7 +940,11 @@ CONTAINS
                 !Make sure that ag area is non-zero when there is non-zero demand
                 IF (AgLand%SubregionalDemand(indxRegion) .GT. 0.0) THEN
                     IF (AgLand%SubregionalArea(indxRegion) .EQ. 0.0) THEN
-                        CALL SetLastMessage('Agricultural water supply requirement at subregion '//TRIM(IntToText(iSubregionIDs(indxRegion)))//' is greater than zero when agricultural area is zero!',f_iFatal,ThisProcedure) 
+                        IF (ASSOCIATED(ModuleLogger)) THEN
+                            CALL ModuleLogger%SetLastMessage('Agricultural water supply requirement at subregion '//TRIM(IntToText(iSubregionIDs(indxRegion)))//' is greater than zero when agricultural area is zero!',f_iFatal,ThisProcedure)
+                        ELSE
+                            CALL SetLastMessage('Agricultural water supply requirement at subregion '//TRIM(IntToText(iSubregionIDs(indxRegion)))//' is greater than zero when agricultural area is zero!',f_iFatal,ThisProcedure)
+                        END IF
                         iStat = -1
                         RETURN
                     END IF
@@ -936,7 +966,11 @@ CONTAINS
            !Make sure crop fractions are non-zero if there is specified elemental ag 
            IF (SUM(AgLand%SubregionalCropAreaFrac(:,indxRegion)) .EQ. 0.0) THEN
                IF (AgLand%SubregionalArea(indxRegion) .GT. 0.0) THEN
-                   CALL SetLastMessage('Subregional crop areas cannot be all zero in subregion '//TRIM(IntToText(iSubregionIDs(indxRegion)))//' when elemental agricultural areas are non-zero!',f_iFatal,ThisProcedure)
+                   IF (ASSOCIATED(ModuleLogger)) THEN
+                       CALL ModuleLogger%SetLastMessage('Subregional crop areas cannot be all zero in subregion '//TRIM(IntToText(iSubregionIDs(indxRegion)))//' when elemental agricultural areas are non-zero!',f_iFatal,ThisProcedure)
+                   ELSE
+                       CALL SetLastMessage('Subregional crop areas cannot be all zero in subregion '//TRIM(IntToText(iSubregionIDs(indxRegion)))//' when elemental agricultural areas are non-zero!',f_iFatal,ThisProcedure)
+                   END IF
                    iStat = -1
                    RETURN
                END IF
@@ -955,7 +989,11 @@ CONTAINS
                !Make sure crop fractions are non-zero if there is specified elemental ag 
                IF (SUM(AgLand%SubregionalCropAreaFrac(:,indxRegion)) .EQ. 0.0) THEN
                    IF (AgLand%SubregionalArea(indxRegion) .GT. 0.0) THEN
+                       IF (ASSOCIATED(ModuleLogger)) THEN
+                       CALL ModuleLogger%SetLastMessage('Subregional crop areas cannot be all zero in subregion '//TRIM(IntToText(iSubregionIDs(indxRegion)))//' when elemental agricultural areas are non-zero!',f_iFatal,ThisProcedure)
+                   ELSE
                        CALL SetLastMessage('Subregional crop areas cannot be all zero in subregion '//TRIM(IntToText(iSubregionIDs(indxRegion)))//' when elemental agricultural areas are non-zero!',f_iFatal,ThisProcedure)
+                   END IF
                        iStat = -1
                        RETURN
                    END IF
@@ -1095,7 +1133,11 @@ CONTAINS
     iNSubregions = SIZE(AgLand%AgDAta%SMax , DIM=2)
     
     !Inform user
-    CALL EchoProgress('Simulating flows at agricultural lands...')
+    IF (ASSOCIATED(ModuleLogger)) THEN
+        CALL ModuleLogger%EchoProgress('Simulating flows at agricultural lands...')
+    ELSE
+        CALL EchoProgress('Simulating flows at agricultural lands...')
+    END IF
     
     ASSOCIATE (pAgData  => AgLand%AgData   , &
                pAvgCrop => AgLand%AvgCrop  )
@@ -1162,7 +1204,11 @@ CONTAINS
                     MessageArray(3) =                   'Subregion            = '//TRIM(IntToText(iSubregionIDs(indxRegion)))
                     WRITE (MessageArray(4),'(A,F11.8)') 'Desired convergence  = ',SolverData%Tolerance*TotalPorosity
                     WRITE (MessageArray(5),'(A,F11.8)') 'Achieved convergence = ',ABS(AchievedConv)
-                    CALL SetLastMessage(MessageArray(1:5),f_iFatal,ThisProcedure)
+                    IF (ASSOCIATED(ModuleLogger)) THEN
+                        CALL ModuleLogger%SetLastMessage(MessageArray(1:5),f_iFatal,ThisProcedure)
+                    ELSE
+                        CALL SetLastMessage(MessageArray(1:5),f_iFatal,ThisProcedure)
+                    END IF
                     iStat = -1
                     RETURN
                 END IF
@@ -1208,7 +1254,11 @@ CONTAINS
                     MessageArray(2) = 'This may be due to a too high convergence criteria set for the iterative solution.'
                     MessageArray(3) = 'Try using a smaller value for RZCONV and a higher value for RZITERMX parameters'
                     MessageArray(4) = 'in the Root Zone Main Input File.'
-                    CALL SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
+                    IF (ASSOCIATED(ModuleLogger)) THEN
+                        CALL ModuleLogger%SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
+                    ELSE
+                        CALL SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
+                    END IF
                     iStat = -1
                     RETURN
                 END IF 
@@ -1326,7 +1376,11 @@ CONTAINS
                             MessageArray(3) =                   'Subregion            = '//TRIM(IntToText(iSubregionIDs(indxRegion)))
                             WRITE (MessageArray(4),'(A,F11.8)') 'Desired convergence  = ',SolverData%Tolerance*TotalPorosity
                             WRITE (MessageArray(5),'(A,F11.8)') 'Achieved convergence = ',ABS(AchievedConv)
-                            CALL SetLastMessage(MessageArray(1:5),f_iFatal,ThisProcedure)
+                            IF (ASSOCIATED(ModuleLogger)) THEN
+                        CALL ModuleLogger%SetLastMessage(MessageArray(1:5),f_iFatal,ThisProcedure)
+                    ELSE
+                        CALL SetLastMessage(MessageArray(1:5),f_iFatal,ThisProcedure)
+                    END IF
                             iStat = -1
                             RETURN
                         END IF
@@ -1368,7 +1422,11 @@ CONTAINS
                     MessageArray(2) = 'for soil type '//TRIM(IntToText(indxSoil))//' in subregion '//TRIM(IntToText(iSubregionIDs(indxRegion)))//'!'
                     WRITE (MessageArray(3),'(A,F11.8)') 'Desired convergence  = ',SolverData%Tolerance*TotalPorosity
                     WRITE (MessageArray(4),'(A,F11.8)') 'Achieved convergence = ',ABS(AchievedConv)
-                    CALL SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
+                    IF (ASSOCIATED(ModuleLogger)) THEN
+                        CALL ModuleLogger%SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
+                    ELSE
+                        CALL SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
+                    END IF
                     iStat = -1
                     RETURN
                 END IF
@@ -1416,7 +1474,11 @@ CONTAINS
         DO indxRegion=1,NRegions
             DO indxSoil=1,NSoils
                 IF ((pAgData%SoilM_Precip(indxSoil,indxRegion) + pAgData%SoilM_AW(indxSoil,indxRegion) + pAgData%SoilM_Oth(indxSoil,indxRegion)) .GT. TotalPorosity(indxSoil,indxRegion)) THEN
-                    CALL SetLastMessage('Initial moisture content for agricultural lands with soil type ' // TRIM(IntToText(indxSoil)) // ' at subregion ' // TRIM(IntToText(iSubregionIDs(indxRegion))) // ' is greater than total porosity!',f_iFatal,ThisProcedure)
+                    IF (ASSOCIATED(ModuleLogger)) THEN
+                        CALL ModuleLogger%SetLastMessage('Initial moisture content for agricultural lands with soil type ' // TRIM(IntToText(indxSoil)) // ' at subregion ' // TRIM(IntToText(iSubregionIDs(indxRegion))) // ' is greater than total porosity!',f_iFatal,ThisProcedure)
+                    ELSE
+                        CALL SetLastMessage('Initial moisture content for agricultural lands with soil type ' // TRIM(IntToText(indxSoil)) // ' at subregion ' // TRIM(IntToText(iSubregionIDs(indxRegion))) // ' is greater than total porosity!',f_iFatal,ThisProcedure)
+                    END IF
                     iStat = -1
                     RETURN
                 END IF

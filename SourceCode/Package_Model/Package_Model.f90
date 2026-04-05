@@ -125,17 +125,19 @@ MODULE Package_Model
                                           AppFace_SetModuleLogger                     , &
                                           Stratigraphy_SetModuleLogger
   USE Package_AppGW               , ONLY: AppGWType                                   , &
+                                          AppGW_SetAllModuleLoggers                   , &
                                           f_iSpFlowBCID                               , &
                                           f_iSpHeadBCID                               , &
                                           f_iGHBCID                                   , &
                                           f_iConstrainedGHBCID                        , &
                                           f_iTileDrain                                , &
                                           f_iPump_Well                                , &
-                                          f_iPump_ElemPump                            , &  
-                                          f_iBudgetType_GW                              
+                                          f_iPump_ElemPump                            , &
+                                          f_iBudgetType_GW
   USE Package_AppSubsidence       , ONLY: AppSubsidenceType
   USE Package_AppStream           , ONLY: AppStreamType                               , &
-                                          f_iAllRecvLoss                              , &  
+                                          AppStream_SetAllModuleLoggers               , &
+                                          f_iAllRecvLoss                              , &
                                           f_iBudgetType_StrmNode                      , &
                                           f_iBudgetType_StrmReach                     , &
                                           f_iBudgetType_DiverDetail        
@@ -147,6 +149,7 @@ MODULE Package_Model
                                           AppLake_v50_SetModuleLogger                 , &
                                           f_iBudgetType_Lake
   USE Package_RootZone            , ONLY: RootZoneType                                , &
+                                          RootZone_SetAllModuleLoggers                , &
                                           f_iBudgetType_RootZone                      , &
                                           f_iBudgetType_LWU                           , &
                                           f_iBudgetType_NonPondedCrop_RZ              , &
@@ -891,6 +894,9 @@ CONTAINS
     CALL BaseAppSWShed_SetModuleLogger(DefaultLogger)
     CALL AppSWShed_v40_SetModuleLogger(DefaultLogger)
     CALL AppSWShed_v41_SetModuleLogger(DefaultLogger)
+    CALL AppGW_SetAllModuleLoggers(DefaultLogger)
+    CALL AppStream_SetAllModuleLoggers(DefaultLogger)
+    CALL RootZone_SetAllModuleLoggers(DefaultLogger)
 
     !Matrix data
     CALL Model%Matrix%SetLogger(DefaultLogger)
@@ -1012,6 +1018,9 @@ CONTAINS
     CALL TecplotOutput_SetModuleLogger(DefaultLogger)
     CALL PairedData_SetModuleLogger(DefaultLogger)
     CALL PrecipET_SetModuleLogger(DefaultLogger)
+    CALL AppGW_SetAllModuleLoggers(DefaultLogger)
+    CALL AppStream_SetAllModuleLoggers(DefaultLogger)
+    CALL RootZone_SetAllModuleLoggers(DefaultLogger)
 
     !Solution scheme control data
     CALL Model%Matrix%SetSolver(MSOLVE,0.01d0*Model%Convergence%Tolerance,Model%Convergence%IterMax,RELAX,iStat)  ;  iF (iStat .EQ. -1) RETURN
@@ -1370,6 +1379,9 @@ CONTAINS
     CALL TecplotOutput_SetModuleLogger(DefaultLogger)
     CALL PairedData_SetModuleLogger(DefaultLogger)
     CALL PrecipET_SetModuleLogger(DefaultLogger)
+    CALL AppGW_SetAllModuleLoggers(DefaultLogger)
+    CALL AppStream_SetAllModuleLoggers(DefaultLogger)
+    CALL RootZone_SetAllModuleLoggers(DefaultLogger)
 
     !Solution scheme control data
     CALL Model%Matrix%SetSolver(MSOLVE,0.01d0*Model%Convergence%Tolerance,Model%Convergence%IterMax,RELAX,iStat)  ;  IF (iStat .EQ. -1) RETURN
@@ -1733,6 +1745,9 @@ CONTAINS
     CALL TecplotOutput_SetModuleLogger(DefaultLogger)
     CALL PairedData_SetModuleLogger(DefaultLogger)
     CALL PrecipET_SetModuleLogger(DefaultLogger)
+    CALL AppGW_SetAllModuleLoggers(DefaultLogger)
+    CALL AppStream_SetAllModuleLoggers(DefaultLogger)
+    CALL RootZone_SetAllModuleLoggers(DefaultLogger)
 
     !Solution scheme control data
     Model%Convergence%Tolerance = Toler

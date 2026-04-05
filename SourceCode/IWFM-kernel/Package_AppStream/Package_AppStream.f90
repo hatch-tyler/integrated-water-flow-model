@@ -26,6 +26,7 @@ MODULE Package_AppStream
   USE MessageLogger               , ONLY: SetLastMessage                                   , &
                                           EchoProgress                                     , &
                                           MessageArray                                     , &
+                                          MessageLoggerType                                , &
                                           f_iFatal                                         , &
                                           f_iWarn
   USE GeneralUtilities            , ONLY: IntToText                                        , &
@@ -52,27 +53,43 @@ MODULE Package_AppStream
                                           SupplyToDestinationType                          , &
                                           SupplyDestinationConnectorType                   , &
                                           Supply_GetDestination                            
-  USE StrmHydrograph              , ONLY: iHydFlow                                         
+  USE StrmHydrograph              , ONLY: iHydFlow                                         , &
+                                          StrmHydrograph_SetModuleLogger
   USE Class_BaseAppStream         , ONLY: BaseAppStreamType                                , &
                                           RoutingOrderedReachIndex_To_IDOrderedReachIndex  , &
+                                          BaseAppStream_SetModuleLogger                    , &
                                           f_iBudgetType_StrmNode                           , &
                                           f_iBudgetType_StrmReach                          , &
-                                          f_iBudgetType_DiverDetail 
-  USE Class_AppStream_v40         , ONLY: AppStream_v40_Type                               
-  USE Class_AppStream_v41         , ONLY: AppStream_v41_Type                               
-  USE Class_AppStream_v42         , ONLY: AppStream_v42_Type                               
-  USE Class_AppStream_v42_WSA     , ONLY: AppStream_v42_WSA_Type                               
-  USE Class_AppStream_v421        , ONLY: AppStream_v421_Type                               
-  USE Class_AppStream_v50         , ONLY: AppStream_v50_Type                               
+                                          f_iBudgetType_DiverDetail
+  USE Class_AppStream_v40         , ONLY: AppStream_v40_Type                               , &
+                                          AppStream_v40_SetModuleLogger
+  USE Class_AppStream_v41         , ONLY: AppStream_v41_Type                               , &
+                                          AppStream_v41_SetModuleLogger
+  USE Class_AppStream_v42         , ONLY: AppStream_v42_Type                               , &
+                                          AppStream_v42_SetModuleLogger
+  USE Class_AppStream_v42_WSA     , ONLY: AppStream_v42_WSA_Type                           , &
+                                          AppStream_v42_WSA_SetModuleLogger
+  USE Class_AppStream_v421        , ONLY: AppStream_v421_Type                              , &
+                                          AppStream_v421_SetModuleLogger
+  USE Class_AppStream_v50         , ONLY: AppStream_v50_Type                               , &
+                                          AppStream_v50_SetModuleLogger
   USE Class_AppDiverBypass        , ONLY: f_iDiverRecvLoss                                 , &
                                           f_iBypassRecvLoss                                , &
-                                          f_iAllRecvLoss                                     
-  USE Class_Diversion             , ONLY: DiversionType                                    , & 
-                                          DeliveryType   
-  USE Class_StrmNodeBudget        , ONLY: StrmNodeBudgetType   
+                                          f_iAllRecvLoss                                   , &
+                                          AppDiverBypass_SetModuleLogger
+  USE Class_Diversion             , ONLY: DiversionType                                    , &
+                                          DeliveryType                                     , &
+                                          Diversion_SetModuleLogger
+  USE Class_StrmNodeBudget        , ONLY: StrmNodeBudgetType                               , &
+                                          StrmNodeBudget_SetModuleLogger
   USE Package_Matrix              , ONLY: MatrixType                                       , &
                                           ConnectivityListType
   USE Package_Budget              , ONLY: BudgetType
+  USE Class_StrmReach             , ONLY: StrmReach_SetModuleLogger
+  USE Class_StrmInflow            , ONLY: StrmInflow_SetModuleLogger
+  USE Class_StrmEvap              , ONLY: StrmEvap_SetModuleLogger
+  USE Class_Bypass                , ONLY: Bypass_SetModuleLogger
+  USE Class_LossDestination       , ONLY: LossDestination_SetModuleLogger
   IMPLICIT NONE
   
   
@@ -92,14 +109,15 @@ MODULE Package_AppStream
   ! -------------------------------------------------------------
   PRIVATE
   PUBLIC :: AppStreamType                                    , &
-            StrmNodeBudgetType                               , & 
+            StrmNodeBudgetType                               , &
             RoutingOrderedReachIndex_To_IDOrderedReachIndex  , &
             f_iDiverRecvLoss                                 , &
             f_iBypassRecvLoss                                , &
             f_iAllRecvLoss                                   , &
             f_iBudgetType_StrmNode                           , &
             f_iBudgetType_StrmReach                          , &
-            f_iBudgetType_DiverDetail 
+            f_iBudgetType_DiverDetail                        , &
+            AppStream_SetAllModuleLoggers
   
   
   ! -------------------------------------------------------------
@@ -247,17 +265,45 @@ MODULE Package_AppStream
   ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
+  ! -------------------------------------------------------------
+  ! --- MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
+
   INTEGER,PARAMETER                   :: ModNameLen = 19
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'Package_AppStream::'
 
   
 
   
-CONTAINS  
+CONTAINS
 
-  
 
-    
+  ! -------------------------------------------------------------
+  ! --- SET MODULE-LEVEL LOGGER AND PROPAGATE TO SUB-MODULES
+  ! -------------------------------------------------------------
+  SUBROUTINE AppStream_SetAllModuleLoggers(Logger)
+    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    ModuleLogger => Logger
+    CALL BaseAppStream_SetModuleLogger(Logger)
+    CALL AppStream_v40_SetModuleLogger(Logger)
+    CALL AppStream_v41_SetModuleLogger(Logger)
+    CALL AppStream_v42_SetModuleLogger(Logger)
+    CALL AppStream_v42_WSA_SetModuleLogger(Logger)
+    CALL AppStream_v421_SetModuleLogger(Logger)
+    CALL AppStream_v50_SetModuleLogger(Logger)
+    CALL AppDiverBypass_SetModuleLogger(Logger)
+    CALL Diversion_SetModuleLogger(Logger)
+    CALL Bypass_SetModuleLogger(Logger)
+    CALL StrmReach_SetModuleLogger(Logger)
+    CALL StrmInflow_SetModuleLogger(Logger)
+    CALL StrmEvap_SetModuleLogger(Logger)
+    CALL StrmNodeBudget_SetModuleLogger(Logger)
+    CALL StrmHydrograph_SetModuleLogger(Logger)
+    CALL LossDestination_SetModuleLogger(Logger)
+  END SUBROUTINE AppStream_SetAllModuleLoggers
+
+
 ! ******************************************************************
 ! ******************************************************************
 ! ******************************************************************
@@ -940,7 +986,11 @@ CONTAINS
     
     !If filename is empty, return with error
     IF (LEN_TRIM(cFileName) .EQ. 0) THEN
-        CALL SetLastMessage('Stream hydrographs are not part of model output!',f_iFatal,ThisProcedure)
+        IF (ASSOCIATED(ModuleLogger)) THEN
+            CALL ModuleLogger%SetLastMessage('Stream hydrographs are not part of model output!',f_iFatal,ThisProcedure)
+        ELSE
+            CALL SetLastMessage('Stream hydrographs are not part of model output!',f_iFatal,ThisProcedure)
+        END IF
         iStat = -1
         RETURN
     END IF
@@ -1140,7 +1190,11 @@ CONTAINS
         CASE ('5.0')
             ALLOCATE(AppStream_v50_Type :: AppStream%Me)
         CASE DEFAULT
-            CALL SetLastMessage('Stream Component version number is not recognized ('//TRIM(cVersion)//')!',f_iFatal,ThisProcedure)
+            IF (ASSOCIATED(ModuleLogger)) THEN
+                CALL ModuleLogger%SetLastMessage('Stream Component version number is not recognized ('//TRIM(cVersion)//')!',f_iFatal,ThisProcedure)
+            ELSE
+                CALL SetLastMessage('Stream Component version number is not recognized ('//TRIM(cVersion)//')!',f_iFatal,ThisProcedure)
+            END IF
             iStat = -1
             RETURN
     END SELECT
@@ -1576,7 +1630,11 @@ CONTAINS
     IF (AppStream%lDefined) THEN
         CALL AppStream%Me%GetReachStrmNodes(iReach,iStrmNodes,iStat)
     ELSE
-        CALL SetLastMessage('Streams are not defined to retrieve stream node IDs for a given reach!',f_iFatal,ThisProcedure)
+        IF (ASSOCIATED(ModuleLogger)) THEN
+            CALL ModuleLogger%SetLastMessage('Streams are not defined to retrieve stream node IDs for a given reach!',f_iFatal,ThisProcedure)
+        ELSE
+            CALL SetLastMessage('Streams are not defined to retrieve stream node IDs for a given reach!',f_iFatal,ThisProcedure)
+        END IF
         iStat = -1
     END IF
     
@@ -1837,7 +1895,11 @@ CONTAINS
         IF (lModel_ForInquiry_Defined) THEN
             SELECT TYPE (p => AppStream%Me)
                 TYPE IS (AppStream_v50_Type)
-                    CALL SetLastMessage('Model is instantiated only partially. Stream bottom elevations for Stream Package Component v5.0 cannot be retrieved from a partially instantiated model.',f_iWarn,ThisProcedure)
+                    IF (ASSOCIATED(ModuleLogger)) THEN
+                        CALL ModuleLogger%SetLastMessage('Model is instantiated only partially. Stream bottom elevations for Stream Package Component v5.0 cannot be retrieved from a partially instantiated model.',f_iWarn,ThisProcedure)
+                    ELSE
+                        CALL SetLastMessage('Model is instantiated only partially. Stream bottom elevations for Stream Package Component v5.0 cannot be retrieved from a partially instantiated model.',f_iWarn,ThisProcedure)
+                    END IF
                     BottomElev = 0.0
                     iStat      = -1
                 CLASS DEFAULT
@@ -2011,7 +2073,11 @@ CONTAINS
         IF (lModel_ForInquiry_Defined) THEN
             SELECT TYPE (p => AppStream%Me)
                 TYPE IS (AppStream_v50_Type)
-                    CALL SetLastMessage('Model is instantiated only partially. Stream stages for Stream Package Component v5.0 cannot be retrieved from a partially instantiated model.',f_iWarn,ThisProcedure)
+                    IF (ASSOCIATED(ModuleLogger)) THEN
+                        CALL ModuleLogger%SetLastMessage('Model is instantiated only partially. Stream stages for Stream Package Component v5.0 cannot be retrieved from a partially instantiated model.',f_iWarn,ThisProcedure)
+                    ELSE
+                        CALL SetLastMessage('Model is instantiated only partially. Stream stages for Stream Package Component v5.0 cannot be retrieved from a partially instantiated model.',f_iWarn,ThisProcedure)
+                    END IF
                     Stages = 0.0
                     iStat  = -1
                 CLASS DEFAULT
@@ -2436,7 +2502,11 @@ CONTAINS
     IF (AppStream%lDefined) THEN
         !Make sure this is done only when streams are non-routed
         IF (AppStream%Me%lRouted) THEN
-            CALL SetLastMessage('Stream flows can only be assigned when streams are simulated as non-routed streams!',f_iFatal,ThisProcedure)
+            IF (ASSOCIATED(ModuleLogger)) THEN
+                CALL ModuleLogger%SetLastMessage('Stream flows can only be assigned when streams are simulated as non-routed streams!',f_iFatal,ThisProcedure)
+            ELSE
+                CALL SetLastMessage('Stream flows can only be assigned when streams are simulated as non-routed streams!',f_iFatal,ThisProcedure)
+            END IF
             iStat = -1
             RETURN
         END IF
@@ -2880,7 +2950,11 @@ CONTAINS
     
     IF (AppStream%lDefined) THEN
         IF (AppStream%Me%lRouted) THEN
-            CALL EchoProgress('Registering stream component with matrix...')
+            IF (ASSOCIATED(ModuleLogger)) THEN
+                CALL ModuleLogger%EchoProgress('Registering stream component with matrix...')
+            ELSE
+                CALL EchoProgress('Registering stream component with matrix...')
+            END IF
             CALL AppStream%Me%RegisterWithMatrix(Matrix,iStat)
         END IF
     END IF
@@ -2943,7 +3017,11 @@ CONTAINS
     IF (AppStream%lDefined) THEN
         CALL AppStream%Me%AddBypass(ID,iNode_Exp,iColBypass,cName,rFracRecvLoss,rFracNonRecvLoss,iNRechargeElems,iRechargeElems,rRechargeFractions,iDestType,iDest,StrmLakeConnector,iStat)
     ELSE
-        CALL SetLastMessage('Streams not not defined to add bypass!',f_iFatal,ThisProcedure)
+        IF (ASSOCIATED(ModuleLogger)) THEN
+            CALL ModuleLogger%SetLastMessage('Streams not not defined to add bypass!',f_iFatal,ThisProcedure)
+        ELSE
+            CALL SetLastMessage('Streams not not defined to add bypass!',f_iFatal,ThisProcedure)
+        END IF
         iStat = -1
     END IF
     

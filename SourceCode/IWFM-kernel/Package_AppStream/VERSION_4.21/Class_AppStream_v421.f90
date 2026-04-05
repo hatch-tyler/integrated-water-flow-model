@@ -27,8 +27,9 @@ MODULE Class_AppStream_v421
                                             LogMessage                      , &
                                             EchoProgress                    , &
                                             MessageArray                    , &
+                                            MessageLoggerType               , &
                                             f_iWarn                         , &
-                                            f_iFatal                          
+                                            f_iFatal
   USE GeneralUtilities              , ONLY: StripTextUntilCharacter         , &
                                             CleanSpecialCharacters          , &
                                             FirstLocation                   , &
@@ -85,7 +86,8 @@ MODULE Class_AppStream_v421
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: AppStream_v421_Type                                              
+  PUBLIC :: AppStream_v421_Type              , &
+            AppStream_v421_SetModuleLogger
  
   
   ! -------------------------------------------------------------
@@ -110,6 +112,11 @@ MODULE Class_AppStream_v421
   ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
+  ! -------------------------------------------------------------
+  ! --- MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
+
   INTEGER,PARAMETER                   :: ModNameLen = 22
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'Class_AppStream_v421::'
   
@@ -118,6 +125,14 @@ MODULE Class_AppStream_v421
   
 CONTAINS
 
+
+  ! -------------------------------------------------------------
+  ! --- SET MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  SUBROUTINE AppStream_v421_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    ModuleLogger => Logger
+  END SUBROUTINE AppStream_v421_SetModuleLogger
 
 
 

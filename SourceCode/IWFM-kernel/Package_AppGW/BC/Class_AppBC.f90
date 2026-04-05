@@ -40,7 +40,8 @@ MODULE Class_AppBC
   USE MessageLogger           , ONLY: SetLastMessage                , &
                                       EchoProgress                  , &
                                       MessageArray                  , &
-                                      f_iFatal                      
+                                      MessageLoggerType             , &
+                                      f_iFatal
   USE Package_Discretization  , ONLY: AppGridType                   , &
                                       StratigraphyType              , &
                                       ConvertID_To_Index            
@@ -65,7 +66,8 @@ MODULE Class_AppBC
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: AppBCType                              
+  PUBLIC :: AppBCType                              , &
+            AppBC_SetModuleLogger
   
   
   ! -------------------------------------------------------------
@@ -119,16 +121,31 @@ MODULE Class_AppBC
   ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
+  ! -------------------------------------------------------------
+  ! --- MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
+
+
   INTEGER,PARAMETER                   :: ModNameLen = 13
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'Class_AppBC::'
 
   
   
 CONTAINS
-    
-    
 
-    
+
+  ! -------------------------------------------------------------
+  ! --- SET MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  SUBROUTINE AppBC_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    ModuleLogger => Logger
+  END SUBROUTINE AppBC_SetModuleLogger
+
+
+
+
 ! ******************************************************************
 ! ******************************************************************
 ! ******************************************************************

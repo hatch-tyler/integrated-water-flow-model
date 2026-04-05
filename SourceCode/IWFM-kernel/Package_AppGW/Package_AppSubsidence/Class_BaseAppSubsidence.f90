@@ -22,8 +22,9 @@
 !***********************************************************************
 MODULE Class_BaseAppSubsidence
   USE MessageLogger           , ONLY: LogMessage          , &
+                                      MessageLoggerType   , &
                                       f_iFILE             , &
-                                      f_iMessage            
+                                      f_iMessage
   USE IOInterface             , ONLY: GenericFileType      , &
                                       f_iHDF
   USE GeneralUtilities        , ONLY: IntToText           
@@ -53,8 +54,9 @@ MODULE Class_BaseAppSubsidence
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: BaseAppSubsidenceType        , &
-            ComputeRegionalCumSubsidence , &
+  PUBLIC :: BaseAppSubsidenceType             , &
+            BaseAppSubsidence_SetModuleLogger , &
+            ComputeRegionalCumSubsidence      , &
             f_cDescription_SubsHyd
 
   
@@ -121,6 +123,12 @@ MODULE Class_BaseAppSubsidence
   ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
+  ! -------------------------------------------------------------
+  ! --- MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
+
+
   INTEGER,PARAMETER                   :: ModNameLen = 25
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'Class_BaseAppSubsidence::'
 
@@ -229,10 +237,19 @@ MODULE Class_BaseAppSubsidence
   
   
 CONTAINS
-    
-    
-    
-    
+
+
+  ! -------------------------------------------------------------
+  ! --- SET MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  SUBROUTINE BaseAppSubsidence_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    ModuleLogger => Logger
+  END SUBROUTINE BaseAppSubsidence_SetModuleLogger
+
+
+
+
 ! ******************************************************************
 ! ******************************************************************
 ! ******************************************************************

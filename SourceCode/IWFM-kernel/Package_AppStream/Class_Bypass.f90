@@ -24,7 +24,8 @@ MODULE Class_Bypass
   USE MessageLogger                , ONLY: SetLastMessage                          , &
                                            EchoProgress                            , &
                                            MessageArray                            , &
-                                           f_iFatal                                  
+                                           MessageLoggerType                       , &
+                                           f_iFatal
   USE GeneralUtilities             , ONLY: StripTextUntilCharacter                 , &
                                            CleanSpecialCharacters                  , & 
                                            IntToText                               , &
@@ -67,7 +68,8 @@ MODULE Class_Bypass
   PRIVATE
   PUBLIC :: BypassType                 ,  &
             Bypass_New                 ,  &
-            f_iDestTypes
+            f_iDestTypes               ,  &
+            Bypass_SetModuleLogger
             
   
   ! -------------------------------------------------------------
@@ -92,6 +94,11 @@ MODULE Class_Bypass
   ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
+  ! -------------------------------------------------------------
+  ! --- MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
+
   INTEGER,PARAMETER                   :: f_iDestTypes(3) = [f_iFlowDest_Outside , f_iFlowDest_StrmNode , f_iFlowDest_Lake]
   INTEGER,PARAMETER                   :: ModNameLen = 14
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'Class_Bypass::'
@@ -101,6 +108,14 @@ MODULE Class_Bypass
   
 CONTAINS
 
+
+  ! -------------------------------------------------------------
+  ! --- SET MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  SUBROUTINE Bypass_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    ModuleLogger => Logger
+  END SUBROUTINE Bypass_SetModuleLogger
 
 
 
@@ -147,7 +162,11 @@ CONTAINS
     END IF
     
     !Echo progress
-    CALL EchoProgress('Instantiating bypasses')
+    IF (ASSOCIATED(ModuleLogger)) THEN
+        CALL ModuleLogger%EchoProgress('Instantiating bypasses')
+    ELSE
+        CALL EchoProgress('Instantiating bypasses')
+    END IF
 
     !Open file
     CALL InFile%New(FileName=TRIM(ADJUSTL(cFileName)),InputFile=.TRUE.,IsTSFile=.FALSE.,Descriptor='Bypass specifications data file',iStat=iStat)
@@ -157,7 +176,11 @@ CONTAINS
     CALL InFile%ReadData(NBypass,iStat)  ;  IF (iStat .EQ. -1) RETURN
     ALLOCATE (Bypasses(NBypass) , iBypassIDs(NBypass) , iBypassOutReachIDs(NBypass) , iBypassInReachIDs(NBypass) , STAT=ErrorCode)
     IF (ErrorCode .NE. 0) THEN
-        CALL SetLastMessage('Error in allocating memory for bypasses!',f_iFatal,ThisProcedure)
+        IF (ASSOCIATED(ModuleLogger)) THEN
+            CALL ModuleLogger%SetLastMessage('Error in allocating memory for bypasses!',f_iFatal,ThisProcedure)
+        ELSE
+            CALL SetLastMessage('Error in allocating memory for bypasses!',f_iFatal,ThisProcedure)
+        END IF
         iStat = -1
         RETURN
     END IF
@@ -201,7 +224,11 @@ CONTAINS
         !Make sure same ID is not used more than once
         DO indxBypass1=1,indxBypass-1
             IF (ID .EQ. Bypasses(indxBypass1)%ID) THEN
-                CALL SetLastMessage('Bypass ID '//TRIM(IntToText(ID))//' is used more than once!',f_iFatal,ThisProcedure)
+                IF (ASSOCIATED(ModuleLogger)) THEN
+                    CALL ModuleLogger%SetLastMessage('Bypass ID '//TRIM(IntToText(ID))//' is used more than once!',f_iFatal,ThisProcedure)
+                ELSE
+                    CALL SetLastMessage('Bypass ID '//TRIM(IntToText(ID))//' is used more than once!',f_iFatal,ThisProcedure)
+                END IF
                 iStat = -1
                 RETURN
             END IF
@@ -212,8 +239,12 @@ CONTAINS
             CALL ConvertID_To_Index(iNode_Exp_ID,iStrmNodeIDs,pBypass%iNode_Exp)
             IF (pBypass%iNode_Exp .EQ. 0) THEN
                 MessageArray(1) = 'For bypass ID '//TRIM(IntToText(ID))//', stream node number ('//TRIM(IntToText(iNode_Exp_ID))//') where the '
-                MessageArray(2) = 'bypass originates from is not in the model!' 
-                CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                MessageArray(2) = 'bypass originates from is not in the model!'
+                IF (ASSOCIATED(ModuleLogger)) THEN
+                    CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                ELSE
+                    CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                END IF
                 iStat = -1
                 RETURN
             END IF
@@ -226,7 +257,11 @@ CONTAINS
             IF (pBypass%iColBypass .EQ. 0) THEN
                 MessageArray(1) = 'A rating table for bypass number '//TRIM(IntToText(ID))//' ,which originates '
                 MessageArray(2) = 'outside the model area, cannot be specifed!'
-                CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                IF (ASSOCIATED(ModuleLogger)) THEN
+                    CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                ELSE
+                    CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                END IF
                 iStat = -1
                 RETURN
             END IF
@@ -234,7 +269,11 @@ CONTAINS
         
         !Make sure destination type is recognized
         IF (.NOT. ANY(pBypass%iDestType.EQ.f_iDestTypes)) THEN
-            CALL SetLastMessage('Destination type for bypass number '//TRIM(IntToText(ID))//' is not recognized!',f_iFatal,ThisProcedure)
+            IF (ASSOCIATED(ModuleLogger)) THEN
+                CALL ModuleLogger%SetLastMessage('Destination type for bypass number '//TRIM(IntToText(ID))//' is not recognized!',f_iFatal,ThisProcedure)
+            ELSE
+                CALL SetLastMessage('Destination type for bypass number '//TRIM(IntToText(ID))//' is not recognized!',f_iFatal,ThisProcedure)
+            END IF
             iStat = -1
             RETURN
         END IF
@@ -244,14 +283,22 @@ CONTAINS
             CASE (f_iFlowDest_StrmNode)
                 CALL ConvertID_To_Index(iDest_ID,iStrmNodeIDs,pBypass%iDest)
                 IF (pBypass%iDest .EQ. 0) THEN
-                    CALL SetLastMessage('Stream node '//TRIM(IntToText(iDest_ID))//' that receives water from bypass '//TRIM(IntToText(ID))//' is not in the model!',f_iFatal,ThisProcedure)
+                    IF (ASSOCIATED(ModuleLogger)) THEN
+                        CALL ModuleLogger%SetLastMessage('Stream node '//TRIM(IntToText(iDest_ID))//' that receives water from bypass '//TRIM(IntToText(ID))//' is not in the model!',f_iFatal,ThisProcedure)
+                    ELSE
+                        CALL SetLastMessage('Stream node '//TRIM(IntToText(iDest_ID))//' that receives water from bypass '//TRIM(IntToText(ID))//' is not in the model!',f_iFatal,ThisProcedure)
+                    END IF
                     iStat = -1
                     RETURN
                 END IF
             CASE (f_iFlowDest_Lake)
                 CALL ConvertID_To_Index(iDest_ID,iLakeIDs,pBypass%iDest)
                 IF (pBypass%iDest .EQ. 0) THEN
-                    CALL SetLastMessage('Lake '//TRIM(IntToText(iDest_ID))//' that receives water from bypass '//TRIM(IntToText(ID))//' is not in the model!',f_iFatal,ThisProcedure)
+                    IF (ASSOCIATED(ModuleLogger)) THEN
+                        CALL ModuleLogger%SetLastMessage('Lake '//TRIM(IntToText(iDest_ID))//' that receives water from bypass '//TRIM(IntToText(ID))//' is not in the model!',f_iFatal,ThisProcedure)
+                    ELSE
+                        CALL SetLastMessage('Lake '//TRIM(IntToText(iDest_ID))//' that receives water from bypass '//TRIM(IntToText(ID))//' is not in the model!',f_iFatal,ThisProcedure)
+                    END IF
                     iStat = -1
                     RETURN
                 END IF
@@ -266,7 +313,11 @@ CONTAINS
                 !If exporting and importing nodes are in the same reach
                 IF (iReach_Exp .EQ. iReach_Imp) THEN
                     IF (pBypass%iNode_Exp .GE. pBypass%iDest) THEN
-                        CALL SetLastMessage('Exporting stream node for by-pass '//TRIM(IntToText(ID))//' must be upstream from the receiving node!',f_iFatal,ThisProcedure)
+                        IF (ASSOCIATED(ModuleLogger)) THEN
+                            CALL ModuleLogger%SetLastMessage('Exporting stream node for by-pass '//TRIM(IntToText(ID))//' must be upstream from the receiving node!',f_iFatal,ThisProcedure)
+                        ELSE
+                            CALL SetLastMessage('Exporting stream node for by-pass '//TRIM(IntToText(ID))//' must be upstream from the receiving node!',f_iFatal,ThisProcedure)
+                        END IF
                         iStat = -1
                         RETURN
                     END IF
@@ -276,7 +327,11 @@ CONTAINS
                     DEALLOCATE (iReachesUpNetwork,STAT=ErrorCode)
                     CALL StrmReach_GetReaches_InUpstrmNetwork(Reaches,iReach_Exp,iReachesUpNetwork)
                     IF (LocateInList(iReach_Imp,iReachesUpNetwork) .GT. 0) THEN
-                        CALL SetLastMessage('Exporting stream node for by-pass '//TRIM(IntToText(ID))//' must be upstream from the receiving node!',f_iFatal,ThisProcedure)
+                        IF (ASSOCIATED(ModuleLogger)) THEN
+                            CALL ModuleLogger%SetLastMessage('Exporting stream node for by-pass '//TRIM(IntToText(ID))//' must be upstream from the receiving node!',f_iFatal,ThisProcedure)
+                        ELSE
+                            CALL SetLastMessage('Exporting stream node for by-pass '//TRIM(IntToText(ID))//' must be upstream from the receiving node!',f_iFatal,ThisProcedure)
+                        END IF
                         iStat = -1
                         RETURN
                     END IF
@@ -290,7 +345,11 @@ CONTAINS
                 IF (pBypass%iNode_Exp .EQ. Bypasses(indxBypass1)%iNode_Exp) THEN
                     MessageArray(1) = 'There are multiple bypassses defined at stream node '//TRIM(IntToText(iNode_Exp_ID))//'.'
                     MessageArray(2) = 'Only one bypass is allowed from a stream node!'
-                    CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                    IF (ASSOCIATED(ModuleLogger)) THEN
+                        CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                    ELSE
+                        CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                    END IF
                     iStat = -1
                     RETURN
                 END IF
@@ -300,7 +359,11 @@ CONTAINS
         !Compute and save the points in rating table for bypass flows
         IF (iNum .LT. 0) THEN
             IF (NPoints .LT. 2) THEN
-                CALL SetLastMessage('There should be at least 2 rating table points for bypass '//TRIM(IntToText(ID))//'!',f_iFatal,ThisProcedure)
+                IF (ASSOCIATED(ModuleLogger)) THEN
+                    CALL ModuleLogger%SetLastMessage('There should be at least 2 rating table points for bypass '//TRIM(IntToText(ID))//'!',f_iFatal,ThisProcedure)
+                ELSE
+                    CALL SetLastMessage('There should be at least 2 rating table points for bypass '//TRIM(IntToText(ID))//'!',f_iFatal,ThisProcedure)
+                END IF
                 iStat = -1
                 RETURN
             END IF

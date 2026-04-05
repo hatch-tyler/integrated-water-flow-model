@@ -25,7 +25,8 @@ MODULE VerticalFlow
                                        PrepareTSDOutputFile
   USE MessageLogger            , ONLY: LogMessage           , &
                                        MessageArray         , &
-                                       f_iWarn                
+                                       MessageLoggerType    , &
+                                       f_iWarn
   USe GeneralUtilities         , ONLY: FEXP                 , &
                                        IntToText            , &
                                        ArrangeText          , &
@@ -57,11 +58,12 @@ MODULE VerticalFlow
             VerticalFlowOutput_New                             , &
             VerticalFlowOutput_Kill                            , &
             VerticalFlowOutput_PrintResults                    , &
-  
+            VerticalFlow_SetModuleLogger                       , &
+
             !Entities related to vertical flow computation
             VerticalFlow_ComputeAtNodesLayer                   , &
             VerticalFlow_ComputeDerivativesAtNodesLayer        , &
-            VerticalFlow_ComputeElementsUpwardDownward_AtLayer 
+            VerticalFlow_ComputeElementsUpwardDownward_AtLayer
   
   
   ! -------------------------------------------------------------
@@ -76,15 +78,31 @@ MODULE VerticalFlow
   ! -------------------------------------------------------------
   ! --- MISC ENTITIES
   ! -------------------------------------------------------------
+  ! -------------------------------------------------------------
+  ! --- MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
+
+
   INTEGER,PARAMETER                   :: ModNameLen = 14
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'VerticalFlow::'
   
   
   
 CONTAINS
-    
-    
-    
+
+
+  ! -------------------------------------------------------------
+  ! --- SET MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  SUBROUTINE VerticalFlow_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    ModuleLogger => Logger
+  END SUBROUTINE VerticalFlow_SetModuleLogger
+
+
+
+
 ! ******************************************************************
 ! ******************************************************************
 ! ******************************************************************

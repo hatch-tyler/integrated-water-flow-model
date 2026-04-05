@@ -23,8 +23,9 @@
 MODULE TileDrainHydrograph
   USE MessageLogger           , ONLY: SetLastMessage                , &
                                       LogMessage                    , &
+                                      MessageLoggerType             , &
                                       f_iFatal                      , &
-                                      f_iWarn                         
+                                      f_iWarn
   USE GeneralUtilities        , ONLY: ConvertID_To_Index            , &
                                       IntToText                     , &
                                       StripTextUntilCharacter       , &
@@ -60,7 +61,8 @@ MODULE TileDrainHydrograph
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: TileDrainHydrographType  
+  PUBLIC :: TileDrainHydrographType       , &
+            TDHydrograph_SetModuleLogger
 
 
   ! -------------------------------------------------------------
@@ -95,6 +97,12 @@ MODULE TileDrainHydrograph
   ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
+  ! -------------------------------------------------------------
+  ! --- MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
+
+
   INTEGER,PARAMETER                   :: ModNameLen    = 21
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName       = 'TileDrainHydrograph::'
 
@@ -103,7 +111,16 @@ MODULE TileDrainHydrograph
   
 CONTAINS
 
-  
+
+  ! -------------------------------------------------------------
+  ! --- SET MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  SUBROUTINE TDHydrograph_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    ModuleLogger => Logger
+  END SUBROUTINE TDHydrograph_SetModuleLogger
+
+
 
 ! ******************************************************************
 ! ******************************************************************
@@ -406,7 +423,11 @@ CONTAINS
         END IF
     END DO
     IF (iHydIndex .EQ. 0) THEN
-        CALL SetLastMessage('Tile drain/subsurface irrigation hydrograph ID '//TRIM(IntToText(iHydID))//' for results retrieval is not in the model!',f_iFatal,ThisProcedure)
+        IF (ASSOCIATED(ModuleLogger)) THEN
+            CALL ModuleLogger%SetLastMessage('Tile drain/subsurface irrigation hydrograph ID '//TRIM(IntToText(iHydID))//' for results retrieval is not in the model!',f_iFatal,ThisProcedure)
+        ELSE
+            CALL SetLastMessage('Tile drain/subsurface irrigation hydrograph ID '//TRIM(IntToText(iHydID))//' for results retrieval is not in the model!',f_iFatal,ThisProcedure)
+        END IF
         iStat = -1
         RETURN
     END IF

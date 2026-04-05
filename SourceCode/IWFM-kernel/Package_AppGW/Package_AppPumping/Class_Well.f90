@@ -23,7 +23,8 @@
 MODULE Class_Well
   USE MessageLogger               , ONLY: SetLastMessage           , &
                                           MessageArray             , &
-                                          f_iFatal                   
+                                          MessageLoggerType        , &
+                                          f_iFatal
   USE GeneralUtilities            , ONLY: ConvertID_To_Index       , &
                                           IntToText                , &
                                           ShellSort                , &
@@ -62,8 +63,9 @@ MODULE Class_Well
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: WellType                    ,  &
-            Well_New                    
+  PUBLIC :: WellType                    , &
+            Well_New                   , &
+            Well_SetModuleLogger
 
 
   ! -------------------------------------------------------------
@@ -82,6 +84,12 @@ MODULE Class_Well
   ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
+  ! -------------------------------------------------------------
+  ! --- MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
+
+
   INTEGER,PARAMETER           :: ModNameLen = 12
   CHARACTER(LEN=12),PARAMETER :: ModName = 'Class_Well::'
 
@@ -90,6 +98,14 @@ MODULE Class_Well
   
 CONTAINS
 
+
+  ! -------------------------------------------------------------
+  ! --- SET MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  SUBROUTINE Well_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    ModuleLogger => Logger
+  END SUBROUTINE Well_SetModuleLogger
 
 
 

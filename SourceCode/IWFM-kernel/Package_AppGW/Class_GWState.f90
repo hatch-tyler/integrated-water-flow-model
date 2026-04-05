@@ -21,9 +21,10 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 MODULE Class_GWState
-  USE MessageLogger , ONLY: SetLastMessage , &
-                            MessageArray   , &
-                            f_iFatal 
+  USE MessageLogger , ONLY: SetLastMessage    , &
+                            MessageArray      , &
+                            MessageLoggerType , &
+                            f_iFatal
   IMPLICIT NONE
   
   
@@ -43,7 +44,8 @@ MODULE Class_GWState
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: GWStateType
+  PUBLIC :: GWStateType              , &
+            GWState_SetModuleLogger
   
   
   ! -------------------------------------------------------------
@@ -65,15 +67,31 @@ MODULE Class_GWState
   ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
+  ! -------------------------------------------------------------
+  ! --- MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
+
+
   INTEGER,PARAMETER                   :: ModNameLen = 15
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'Class_GWState::'
   
   
 CONTAINS
 
-    
-    
-    
+
+  ! -------------------------------------------------------------
+  ! --- SET MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  SUBROUTINE GWState_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    ModuleLogger => Logger
+  END SUBROUTINE GWState_SetModuleLogger
+
+
+
+
+
 ! ******************************************************************
 ! ******************************************************************
 ! ******************************************************************

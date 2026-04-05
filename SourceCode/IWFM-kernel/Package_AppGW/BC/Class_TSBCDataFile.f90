@@ -25,6 +25,7 @@ MODULE Class_TSBCDataFile
   USE TimeSeriesUtilities , ONLY: TimeStepType          , &
                                   IncrementTimeStamp
   USE MessageLogger       , ONLY: SetLastMessage        , &
+                                  MessageLoggerType     , &
                                   f_iFatal
   USE IOInterface         , ONLY: RealTSDataInFileType 
   IMPLICIT NONE
@@ -45,7 +46,8 @@ MODULE Class_TSBCDataFile
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: TSBCDataFileType        
+  PUBLIC :: TSBCDataFileType              , &
+            TSBCDataFile_SetModuleLogger
   
   
   ! -------------------------------------------------------------
@@ -69,12 +71,27 @@ MODULE Class_TSBCDataFile
   ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
+  ! -------------------------------------------------------------
+  ! --- MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
+
+
   INTEGER,PARAMETER                   :: ModNameLen = 20
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'Class_TSBCDataFile::'
 
 
 
 CONTAINS
+
+
+  ! -------------------------------------------------------------
+  ! --- SET MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  SUBROUTINE TSBCDataFile_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    ModuleLogger => Logger
+  END SUBROUTINE TSBCDataFile_SetModuleLogger
     
     
 

@@ -23,6 +23,7 @@
 MODULE Class_StrmReach
   USE MessageLogger    , ONLY: SetLastMessage       , &
                                MessageArray         , &
+                               MessageLoggerType    , &
                                f_iFatal
   USE Package_Misc     , ONLY: FlowDestinationType  , &
                                f_iFlowDest_StrmNode , &
@@ -58,7 +59,8 @@ MODULE Class_StrmReach
             StrmReach_ID_To_Index                  , &
             StrmReach_IsUpstreamNode               , &
             StrmReach_GetNReaches_InUpstrmNetwork  , &
-            StrmReach_GetReaches_InUpstrmNetwork
+            StrmReach_GetReaches_InUpstrmNetwork   , &
+            StrmReach_SetModuleLogger
   
   
   ! -------------------------------------------------------------
@@ -87,12 +89,26 @@ MODULE Class_StrmReach
   ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
+  ! -------------------------------------------------------------
+  ! --- MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
+
   INTEGER,PARAMETER                   :: ModNameLen = 17
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'Class_StrmReach::'
   
   
   
 CONTAINS
+
+
+  ! -------------------------------------------------------------
+  ! --- SET MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  SUBROUTINE StrmReach_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    ModuleLogger => Logger
+  END SUBROUTINE StrmReach_SetModuleLogger
 
 
 
@@ -262,7 +278,11 @@ CONTAINS
             iLake   = LocateInList(iLakeID,iLakeIDs)
             IF (iLake .EQ. 0) THEN
                 iReachID = Reaches(indx)%ID
-                CALL SetLastMessage('Lake '//TRIM(IntToText(iLakeID))//' that receive flow from stream reach '//TRIM(IntToText(iReachID))//' is not in the model!',f_iFatal,ThisProcedure)
+                IF (ASSOCIATED(ModuleLogger)) THEN
+                    CALL ModuleLogger%SetLastMessage('Lake '//TRIM(IntToText(iLakeID))//' that receive flow from stream reach '//TRIM(IntToText(iReachID))//' is not in the model!',f_iFatal,ThisProcedure)
+                ELSE
+                    CALL SetLastMessage('Lake '//TRIM(IntToText(iLakeID))//' that receive flow from stream reach '//TRIM(IntToText(iReachID))//' is not in the model!',f_iFatal,ThisProcedure)
+                END IF
                 iStat = -1
                 RETURN
             END IF
@@ -315,7 +335,11 @@ CONTAINS
     IF (NDownstrmReaches .EQ. 0) THEN
         MessageArray(1) = 'There is something wrong with stream network set-up!'
         MessageArray(2) = 'Cannot find the most downstream reach(es).'
-        CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+        IF (ASSOCIATED(ModuleLogger)) THEN
+            CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+        ELSE
+            CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+        END IF
         iStat = -1
         RETURN
     END IF

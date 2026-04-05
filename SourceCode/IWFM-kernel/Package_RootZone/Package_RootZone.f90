@@ -23,10 +23,11 @@
 MODULE Package_RootZone
   USE IWFM_Kernel_Version        , ONLY : ReadVersion                        , &
                                           IWFMKernelVersion
-  USE MessageLogger              , ONLY : SetLastMessage                     , & 
+  USE MessageLogger              , ONLY : MessageLoggerType                  , &
+                                          SetLastMessage                     , &
                                           EchoProgress                       , &
                                           MessageArray                       , &
-                                          f_iFatal                             
+                                          f_iFatal
   USE TimeSeriesUtilities        , ONLY : TimeStepType                       
   USE GeneralUtilities           , ONLY : FirstLocation                      , &
                                           CleanSpecialCharacters             , &
@@ -43,10 +44,12 @@ MODULE Package_RootZone
                                           f_iSupply_Well                     
   USE Package_Discretization     , ONLY : AppGridType
   USE Class_BaseRootZone         , ONLY : BaseRootZoneType                   , &
+                                          BaseRootZone_SetModuleLogger       , &
                                           ElementLU_InterpolateExtrapolate   , &
                                           f_iMeasuredLUDataForSubregion      , &
-                                          f_iMeasuredLUDataForModelDomain 
-  USE Util_Package_RootZone      , ONLY : f_iBudgetType_LWU                  , &
+                                          f_iMeasuredLUDataForModelDomain
+  USE Util_Package_RootZone      , ONLY : UtilPkgRootZone_SetModuleLogger    , &
+                                          f_iBudgetType_LWU                  , &
                                           f_iBudgetType_RootZone             , &
                                           f_iBudgetType_NonPondedCrop_LWU    , &
                                           f_iBudgetType_NonPondedCrop_RZ     , & 
@@ -54,13 +57,30 @@ MODULE Package_RootZone
                                           f_iBudgetType_PondedCrop_RZ        , & 
                                           f_iZBudgetType_RootZone            , &
                                           f_iZBudgetType_LWU             
-  USE RootZone_v40               , ONLY : RootZone_v40_Type
-  USE RootZone_v401              , ONLY : RootZone_v401_Type
-  USE RootZone_v41               , ONLY : RootZone_v41_Type
-  USE RootZone_v411              , ONLY : RootZone_v411_Type
-  USE RootZone_v412              , ONLY : RootZone_v412_Type
-  USE RootZone_v413              , ONLY : RootZone_v413_Type
-  USE RootZone_v50               , ONLY : RootZone_v50_Type 
+  USE Class_LandUseDataFile      , ONLY : LandUseDataFile_SetModuleLogger
+  USE Class_GenericMoistureData  , ONLY : GenericMoistureData_SetModuleLogger
+  USE RootZone_v40               , ONLY : RootZone_v40_Type                  , &
+                                          RootZonev40_SetModuleLogger
+  USE RootZone_v401              , ONLY : RootZone_v401_Type                 , &
+                                          RootZonev401_SetModuleLogger
+  USE RootZone_v41               , ONLY : RootZone_v41_Type                  , &
+                                          RootZonev41_SetModuleLogger
+  USE RootZone_v411              , ONLY : RootZone_v411_Type                 , &
+                                          RootZonev411_SetModuleLogger
+  USE RootZone_v412              , ONLY : RootZone_v412_Type                 , &
+                                          RootZonev412_SetModuleLogger
+  USE RootZone_v413              , ONLY : RootZone_v413_Type                 , &
+                                          RootZonev413_SetModuleLogger
+  USE RootZone_v50               , ONLY : RootZone_v50_Type                  , &
+                                          RootZonev50_SetModuleLogger
+  USE Class_NativeRiparianLandUse_v40, ONLY : NativeRiparianLandUsev40_SetModuleLogger
+  USE Class_NonPondedAgLandUse_v41   , ONLY : NonPondedAgLandUsev41_SetModuleLogger
+  USE Class_PondedAgLandUse_v41      , ONLY : PondedAgLandUsev41_SetModuleLogger
+  USE Class_UrbanLandUse_v41         , ONLY : UrbanLandUsev41_SetModuleLogger
+  USE Class_NativeRiparianLandUse_v41, ONLY : NativeRiparianLandUsev41_SetModuleLogger
+  USE Class_AgLandUse_v50            , ONLY : AgLandUsev50_SetModuleLogger
+  USE Class_UrbanLandUse_v50         , ONLY : UrbanLandUsev50_SetModuleLogger
+  USE Class_NativeRiparianLandUse_v50, ONLY : NativeRiparianLandUsev50_SetModuleLogger
   USE Package_PrecipitationET    , ONLY : PrecipitationType                  ,  &
                                           ETType
   USE Package_ComponentConnectors, ONLY : SupplyDestinationConnectorType
@@ -86,17 +106,38 @@ MODULE Package_RootZone
   ! -------------------------------------------------------------
   PRIVATE
   PUBLIC :: RootZoneType                       , &
+            PackageRootZone_SetModuleLogger    , &
+            BaseRootZone_SetModuleLogger       , &
+            UtilPkgRootZone_SetModuleLogger    , &
+            LandUseDataFile_SetModuleLogger    , &
+            GenericMoistureData_SetModuleLogger, &
+            RootZonev40_SetModuleLogger        , &
+            RootZonev401_SetModuleLogger       , &
+            RootZonev41_SetModuleLogger        , &
+            RootZonev411_SetModuleLogger       , &
+            RootZonev412_SetModuleLogger       , &
+            RootZonev413_SetModuleLogger       , &
+            RootZonev50_SetModuleLogger        , &
+            NativeRiparianLandUsev40_SetModuleLogger, &
+            NonPondedAgLandUsev41_SetModuleLogger   , &
+            PondedAgLandUsev41_SetModuleLogger      , &
+            UrbanLandUsev41_SetModuleLogger         , &
+            NativeRiparianLandUsev41_SetModuleLogger, &
+            AgLandUsev50_SetModuleLogger            , &
+            UrbanLandUsev50_SetModuleLogger         , &
+            NativeRiparianLandUsev50_SetModuleLogger, &
+            RootZone_SetAllModuleLoggers       , &
             ElementLU_InterpolateExtrapolate   , &
             f_iMeasuredLUDataForSubregion      , &
             f_iMeasuredLUDataForModelDomain    , &
             f_iBudgetType_LWU                  , &
             f_iBudgetType_RootZone             , &
             f_iBudgetType_NonPondedCrop_LWU    , &
-            f_iBudgetType_NonPondedCrop_RZ     , & 
+            f_iBudgetType_NonPondedCrop_RZ     , &
             f_iBudgetType_PondedCrop_LWU       , &
             f_iBudgetType_PondedCrop_RZ        , &
             f_iZBudgetType_RootZone            , &
-            f_iZBudgetType_LWU             
+            f_iZBudgetType_LWU
   
   
   ! -------------------------------------------------------------
@@ -204,15 +245,56 @@ MODULE Package_RootZone
   ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
+  ! -------------------------------------------------------------
+  ! --- MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
+
+
   INTEGER,PARAMETER                   :: ModNameLen = 18
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'Package_RootZone::'
 
   
   
   
-CONTAINS  
+CONTAINS
 
-  
+
+  ! -------------------------------------------------------------
+  ! --- SET MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  SUBROUTINE PackageRootZone_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    ModuleLogger => Logger
+  END SUBROUTINE PackageRootZone_SetModuleLogger
+
+  ! -------------------------------------------------------------
+  ! --- SET ALL MODULE-LEVEL LOGGERS (propagates to all sub-modules)
+  ! -------------------------------------------------------------
+  SUBROUTINE RootZone_SetAllModuleLoggers(Logger)
+    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    CALL PackageRootZone_SetModuleLogger(Logger)
+    CALL BaseRootZone_SetModuleLogger(Logger)
+    CALL UtilPkgRootZone_SetModuleLogger(Logger)
+    CALL LandUseDataFile_SetModuleLogger(Logger)
+    CALL GenericMoistureData_SetModuleLogger(Logger)
+    CALL RootZonev40_SetModuleLogger(Logger)
+    CALL RootZonev401_SetModuleLogger(Logger)
+    CALL RootZonev41_SetModuleLogger(Logger)
+    CALL RootZonev411_SetModuleLogger(Logger)
+    CALL RootZonev412_SetModuleLogger(Logger)
+    CALL RootZonev413_SetModuleLogger(Logger)
+    CALL RootZonev50_SetModuleLogger(Logger)
+    CALL NativeRiparianLandUsev40_SetModuleLogger(Logger)
+    CALL NonPondedAgLandUsev41_SetModuleLogger(Logger)
+    CALL PondedAgLandUsev41_SetModuleLogger(Logger)
+    CALL UrbanLandUsev41_SetModuleLogger(Logger)
+    CALL NativeRiparianLandUsev41_SetModuleLogger(Logger)
+    CALL AgLandUsev50_SetModuleLogger(Logger)
+    CALL UrbanLandUsev50_SetModuleLogger(Logger)
+    CALL NativeRiparianLandUsev50_SetModuleLogger(Logger)
+  END SUBROUTINE RootZone_SetAllModuleLoggers
+
 
 ! ******************************************************************
 ! ******************************************************************
@@ -285,7 +367,11 @@ CONTAINS
             ALLOCATE(RootZone_v50_Type :: RootZone%Me)
             RootZone%iComponentVersion = 50
         CASE DEFAULT
-            CALL SetLastMessage('Root Zone Component version number is not recognized ('//TRIM(cVersion)//')!',f_iFatal,ThisProcedure)
+            IF (ASSOCIATED(ModuleLogger)) THEN
+                CALL ModuleLogger%SetLastMessage('Root Zone Component version number is not recognized ('//TRIM(cVersion)//')!',f_iFatal,ThisProcedure)
+            ELSE
+                CALL SetLastMessage('Root Zone Component version number is not recognized ('//TRIM(cVersion)//')!',f_iFatal,ThisProcedure)
+            END IF
             iStat = -1
             RETURN
     END SELECT
@@ -497,7 +583,11 @@ CONTAINS
         CASE ('5.0')
             ALLOCATE(RootZone_v50_Type :: RootZone%Me)
         CASE DEFAULT
-            CALL SetLastMessage('Root Zone Component version number is not recognized ('//TRIM(cVersion)//')!',f_iFatal,ThisProcedure)
+            IF (ASSOCIATED(ModuleLogger)) THEN
+                CALL ModuleLogger%SetLastMessage('Root Zone Component version number is not recognized ('//TRIM(cVersion)//')!',f_iFatal,ThisProcedure)
+            ELSE
+                CALL SetLastMessage('Root Zone Component version number is not recognized ('//TRIM(cVersion)//')!',f_iFatal,ThisProcedure)
+            END IF
             iStat = -1
             RETURN
     END SELECT
@@ -667,7 +757,11 @@ CONTAINS
         CASE ('5.0')
             ALLOCATE(RootZone_v50_Type :: RootZone%Me)
         CASE DEFAULT
-            CALL SetLastMessage('Root Zone Component version number is not recognized ('//TRIM(cVersion)//')!',f_iFatal,ThisProcedure)
+            IF (ASSOCIATED(ModuleLogger)) THEN
+                CALL ModuleLogger%SetLastMessage('Root Zone Component version number is not recognized ('//TRIM(cVersion)//')!',f_iFatal,ThisProcedure)
+            ELSE
+                CALL SetLastMessage('Root Zone Component version number is not recognized ('//TRIM(cVersion)//')!',f_iFatal,ThisProcedure)
+            END IF
             iStat = -1
             RETURN
     END SELECT
@@ -1539,7 +1633,11 @@ CONTAINS
         CASE ('5.0')
             ALLOCATE(RootZone_v50_Type :: DummyRootZone%Me)
         CASE DEFAULT
-            CALL SetLastMessage('Root Zone Component version number is not recognized ('//TRIM(cVersion)//')!',f_iFatal,ThisProcedure)
+            IF (ASSOCIATED(ModuleLogger)) THEN
+                CALL ModuleLogger%SetLastMessage('Root Zone Component version number is not recognized ('//TRIM(cVersion)//')!',f_iFatal,ThisProcedure)
+            ELSE
+                CALL SetLastMessage('Root Zone Component version number is not recognized ('//TRIM(cVersion)//')!',f_iFatal,ThisProcedure)
+            END IF
             iStat = -1
             RETURN
    END SELECT
@@ -1723,7 +1821,11 @@ CONTAINS
     IF (RootZone%iComponentVersion .EQ. 0) RETURN
     
     !Print progress
-    CALL EchoProgress('Retrieving percolation at all elements')
+    IF (ASSOCIATED(ModuleLogger)) THEN
+        CALL ModuleLogger%EchoProgress('Retrieving percolation at all elements')
+    ELSE
+        CALL EchoProgress('Retrieving percolation at all elements')
+    END IF
         
     CALL RootZone%Me%GetElementPerc(iElemRegions,rPerc)
     
@@ -1742,7 +1844,11 @@ CONTAINS
     IF (RootZone%iComponentVersion .EQ. 0) RETURN
 
     !Print progress
-    CALL EchoProgress('Retrieving percolation at a specified element')
+    IF (ASSOCIATED(ModuleLogger)) THEN
+        CALL ModuleLogger%EchoProgress('Retrieving percolation at a specified element')
+    ELSE
+        CALL EchoProgress('Retrieving percolation at a specified element')
+    END IF
     
     Perc = RootZone%Me%GetPercElement(iLocation)
     

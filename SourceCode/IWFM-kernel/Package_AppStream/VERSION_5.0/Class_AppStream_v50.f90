@@ -32,10 +32,11 @@ MODULE Class_AppStream_v50
                                             LogMessage                                      , &
                                             EchoProgress                                    , &
                                             MessageArray                                    , &
+                                            MessageLoggerType                               , &
                                             f_iFILE                                         , &
                                             f_iWarn                                         , &
                                             f_iFatal                                        , &
-                                            f_iMessage                                      
+                                            f_iMessage
   USE GeneralUtilities              , ONLY: StripTextUntilCharacter                         , &
                                             CleanSpecialCharacters                          , &
                                             ArrangeText                                     , &
@@ -102,7 +103,8 @@ MODULE Class_AppStream_v50
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: AppStream_v50_Type                                              
+  PUBLIC :: AppStream_v50_Type              , &
+            AppStream_v50_SetModuleLogger
  
   
   ! -------------------------------------------------------------
@@ -174,6 +176,11 @@ MODULE Class_AppStream_v50
   ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
+  ! -------------------------------------------------------------
+  ! --- MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
+
   INTEGER,PARAMETER                   :: ModNameLen      = 21
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName         = 'Class_AppStream_v50::'
   
@@ -182,6 +189,14 @@ MODULE Class_AppStream_v50
   
 CONTAINS
 
+
+  ! -------------------------------------------------------------
+  ! --- SET MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  SUBROUTINE AppStream_v50_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    ModuleLogger => Logger
+  END SUBROUTINE AppStream_v50_SetModuleLogger
 
 
 

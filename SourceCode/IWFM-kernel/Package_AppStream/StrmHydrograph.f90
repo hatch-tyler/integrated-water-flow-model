@@ -24,6 +24,7 @@ MODULE StrmHydrograph
   USE MessageLogger          , ONLY: SetLastMessage                , &
                                      LogMessage                    , &
                                      MessageArray                  , &
+                                     MessageLoggerType             , &
                                      f_iFatal                      , &
                                      f_iInfo
   USE IOInterface            , ONLY: GenericFileType               , &
@@ -67,10 +68,11 @@ MODULE StrmHydrograph
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: StrmHydrographType , &
-            iHydFlow           , &
-            iHydStage          , &
-            iHydBoth
+  PUBLIC :: StrmHydrographType        , &
+            iHydFlow                  , &
+            iHydStage                 , &
+            iHydBoth                  , &
+            StrmHydrograph_SetModuleLogger
   
   
   ! -------------------------------------------------------------
@@ -115,6 +117,11 @@ MODULE StrmHydrograph
   ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
+  ! -------------------------------------------------------------
+  ! --- MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
+
   INTEGER,PARAMETER                   :: ModNameLen    = 16
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName       = 'StrmHydrograph::'
 
@@ -123,7 +130,15 @@ MODULE StrmHydrograph
   
 CONTAINS
 
-  
+
+  ! -------------------------------------------------------------
+  ! --- SET MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  SUBROUTINE StrmHydrograph_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    ModuleLogger => Logger
+  END SUBROUTINE StrmHydrograph_SetModuleLogger
+
 
 ! ******************************************************************
 ! ******************************************************************
@@ -391,7 +406,11 @@ CONTAINS
     !Convert node ID to hydrograph index
     iHydIndex = LocateInList(iNode,StrmHyd%iHydNodes)
     IF (iHydIndex .EQ. 0) THEN
-        CALL SetLastMessage('Stream node ID '//TRIM(IntToText(iNodeID))//' does not have a hydrograph printed as model results!',f_iFatal,ThisProcedure)
+        IF (ASSOCIATED(ModuleLogger)) THEN
+            CALL ModuleLogger%SetLastMessage('Stream node ID '//TRIM(IntToText(iNodeID))//' does not have a hydrograph printed as model results!',f_iFatal,ThisProcedure)
+        ELSE
+            CALL SetLastMessage('Stream node ID '//TRIM(IntToText(iNodeID))//' does not have a hydrograph printed as model results!',f_iFatal,ThisProcedure)
+        END IF
         iStat = -1
         RETURN
     END IF

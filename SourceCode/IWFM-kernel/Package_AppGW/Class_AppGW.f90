@@ -52,11 +52,12 @@ MODULE Class_AppGW
                                           EchoProgress                                       , &
                                           IsLogFileDefined                                   , &
                                           MessageArray                                       , &
+                                          MessageLoggerType                                  , &
                                           f_iFILE                                            , &
                                           f_iMessage                                         , &
                                           f_iFatal                                           , &
                                           f_iWarn                                            , &
-                                          f_iInfo                                              
+                                          f_iInfo
   USE Package_Budget              , ONLY: BudgetType                                         , &
                                           BudgetHeaderType                                   , &
                                           f_iColumnHeaderLen                                 , &
@@ -137,6 +138,7 @@ MODULE Class_AppGW
   ! -------------------------------------------------------------
   PRIVATE
   PUBLIC :: AppGWType                         , &
+            AppGW_SetModuleLogger             , &
             f_iSpFlowBCID                     , &
             f_iSpHeadBCID                     , &
             f_iGHBCID                         , &
@@ -376,14 +378,29 @@ MODULE Class_AppGW
   ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
+  ! -------------------------------------------------------------
+  ! --- MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
+
+
   INTEGER,PARAMETER                   :: ModNameLen = 13
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'Class_AppGW::'
 
 
   
 CONTAINS
-    
-    
+
+
+  ! -------------------------------------------------------------
+  ! --- SET MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  SUBROUTINE AppGW_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    ModuleLogger => Logger
+  END SUBROUTINE AppGW_SetModuleLogger
+
+
 
 ! ******************************************************************
 ! ******************************************************************
@@ -1623,13 +1640,21 @@ CONTAINS
             MessageArray(1) = 'File '//cFileName//' cannot be found for data retrieval!'
             MessageArray(2) = 'Groundwater heads at a layer will be retrieved from the text output file.'
             MessageArray(3) = 'This may take a substantially long time.'
-            CALL LogMessage(MessageArray(1:3),f_iWarn,ThisProcedure)
+            IF (ASSOCIATED(ModuleLogger)) THEN
+                CALL ModuleLogger%LogMessage(MessageArray(1:3),f_iWarn,ThisProcedure)
+            ELSE
+                CALL LogMessage(MessageArray(1:3),f_iWarn,ThisProcedure)
+            END IF
             CALL AppGW%GWHyd%ReadGWHeadsAll_ForALayer(iNNodes,iLayer,cOutputBeginDateAndTime,cOutputEndDateAndTime,AppGW%FactHead,rFact_LT,rOutputDates,rGWHeads,iStat)
         END IF
     ELSE
         MessageArray(1) = 'GW heads at all nodes for a layer cannot be retrieved '
         MessageArray(2) = 'this output file was not generated for the model!'
-        CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+        IF (ASSOCIATED(ModuleLogger)) THEN
+            CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+        ELSE
+            CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+        END IF
         iStat = -1
     END IF
         
@@ -2242,7 +2267,11 @@ CONTAINS
         
     !Return with error if filename is empty
     IF (LEN_TRIM(cFileName) .EQ. 0) THEN
-        CALL SetLastMessage('Requested hydrograph data is not part of the model output!',f_iFatal,ThisProcedure)
+        IF (ASSOCIATED(ModuleLogger)) THEN
+            CALL ModuleLogger%SetLastMessage('Requested hydrograph data is not part of the model output!',f_iFatal,ThisProcedure)
+        ELSE
+            CALL SetLastMessage('Requested hydrograph data is not part of the model output!',f_iFatal,ThisProcedure)
+        END IF
         iStat = -1
         RETURN
     END IF
@@ -3289,7 +3318,11 @@ CONTAINS
         CALL AppGW%AppPumping%GetPumpingPurpose(iPumpType,iPumps,iAgOrUrban,iStat)
     ELSE
         iStat = -1
-        CALL SetLastMessage('Pumping is not simulated so purposes for pumping cannot be retrieved!',f_iFatal,ThisProcedure)
+        IF (ASSOCIATED(ModuleLogger)) THEN
+            CALL ModuleLogger%SetLastMessage('Pumping is not simulated so purposes for pumping cannot be retrieved!',f_iFatal,ThisProcedure)
+        ELSE
+            CALL SetLastMessage('Pumping is not simulated so purposes for pumping cannot be retrieved!',f_iFatal,ThisProcedure)
+        END IF
     END IF
     
   END SUBROUTINE GetPumpPurpose
@@ -4860,7 +4893,11 @@ CONTAINS
     INTEGER,PARAMETER :: iCompIDs(1) = [f_iGWComp]
     
     !Inform user
-    CALL EchoProgress('Simulating groundwater flows...')
+    IF (ASSOCIATED(ModuleLogger)) THEN
+        CALL ModuleLogger%EchoProgress('Simulating groundwater flows...')
+    ELSE
+        CALL EchoProgress('Simulating groundwater flows...')
+    END IF
     
     !Initialize
     NNodes = AppGrid%NNodes

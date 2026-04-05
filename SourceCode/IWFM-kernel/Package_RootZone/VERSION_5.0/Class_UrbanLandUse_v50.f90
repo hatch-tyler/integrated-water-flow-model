@@ -23,7 +23,8 @@
 MODULE Class_UrbanLandUse_v50
   USE IOInterface             , ONLY: GenericFileType                         , &
                                       RealTSDataInFileType
-  USE MessageLogger           , ONLY: LogMessage                              , &
+  USE MessageLogger           , ONLY: MessageLoggerType                       , &
+                                      LogMessage                              , &
                                       SetLastMessage                          , &
                                       EchoProgress                            , &
                                       MessageArray                            , &
@@ -76,6 +77,7 @@ MODULE Class_UrbanLandUse_v50
   ! -------------------------------------------------------------
   PRIVATE
   PUBLIC :: UrbanDatabase_v50_Type
+  PUBLIC :: UrbanLandUsev50_SetModuleLogger
 
 
   ! -------------------------------------------------------------
@@ -134,6 +136,7 @@ MODULE Class_UrbanLandUse_v50
   ! -------------------------------------------------------------
   INTEGER,PARAMETER                   :: ModNameLen = 24
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'Class_UrbanLandUse_v50::'
+  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
   
   
   
@@ -141,6 +144,13 @@ MODULE Class_UrbanLandUse_v50
 CONTAINS
 
 
+  ! -------------------------------------------------------------
+  ! --- SET MODULE LOGGER
+  ! -------------------------------------------------------------
+  SUBROUTINE UrbanLandUsev50_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    ModuleLogger => Logger
+  END SUBROUTINE UrbanLandUsev50_SetModuleLogger
 
 
 ! ******************************************************************
@@ -690,7 +700,11 @@ CONTAINS
     iStat = 0
 
     !Echo progress
-    CALL EchoProgress('Reading time series data for urban lands')
+    IF (ASSOCIATED(ModuleLogger)) THEN
+        CALL ModuleLogger%EchoProgress('Reading time series data for urban lands')
+    ELSE
+        CALL EchoProgress('Reading time series data for urban lands')
+    END IF
     
     !Land use areas
     CALL UrbanLand%LandUseDataFile%ReadTSData('Urban areas',TimeStep,rRegionAreas,iSubregionIDs,iStat)  ;  IF (iStat .EQ. -1) RETURN
@@ -738,7 +752,11 @@ CONTAINS
             IF (UrbanLand%WaterUseSpecsFile%rValues(iCol).GT.1.0   .OR.  UrbanLand%WaterUseSpecsFile%rValues(iCol).LT.0.0) THEN
                 WRITE(MessageArray(1),'(A,F4.1,A)') 'Urban indoor water use fraction at subregion '//TRIM(IntToText(iSubregionIDs(indxRegion)))//' is specified as ',UrbanLand%WaterUseSpecsFile%rValues(iCol),'!'
                 MessageArray(2) = 'It must be between 0.0 and 1.0.'
-                CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                IF (ASSOCIATED(ModuleLogger)) THEN
+                    CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                ELSE
+                    CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                END IF
                 iStat = -1
                 RETURN
             END IF
@@ -747,14 +765,22 @@ CONTAINS
                 IF (UrbanLand%WaterUseSpecsFile%rValues(iCol) .NE. 1.0) THEN
                     MessageArray(1) = 'Urban outdoors applied water fraction in subregion '//TRIM(IntToText(iSubregionIDs(indxRegion)))//' is not zero'
                     MessageArray(2) = 'when the urban outdoors area is zero. Adjusting the water use fraction accordingly!'
-                    CALL LogMessage(MessageArray(1:2),f_iInfo,ThisProcedure)
+                    IF (ASSOCIATED(ModuleLogger)) THEN
+                        CALL ModuleLogger%LogMessage(MessageArray(1:2),f_iInfo,ThisProcedure)
+                    ELSE
+                        CALL LogMessage(MessageArray(1:2),f_iInfo,ThisProcedure)
+                    END IF
                     UrbanLand%WaterUseSpecsFile%rValues(iCol) = 1.0
                 END IF
             ELSEIF (UrbanLand%PerviousFrac(indxRegion) .EQ. 1.0) THEN
                 IF (UrbanLand%WaterUseSpecsFile%rValues(iCol) .NE. 0.0) THEN
                     MessageArray(1) = 'Urban indoors water fraction in subregion '//TRIM(IntToText(iSubregionIDs(indxRegion)))//' is not zero'
                     MessageArray(2) = 'when the urban indoors area is zero. Adjusting the water use fraction accordingly!'
-                    CALL LogMessage(MessageArray(1:2),f_iInfo,ThisProcedure)
+                    IF (ASSOCIATED(ModuleLogger)) THEN
+                        CALL ModuleLogger%LogMessage(MessageArray(1:2),f_iInfo,ThisProcedure)
+                    ELSE
+                        CALL LogMessage(MessageArray(1:2),f_iInfo,ThisProcedure)
+                    END IF
                     UrbanLand%WaterUseSpecsFile%rValues(iCol) = 0.0
                 END IF
             END IF
@@ -840,7 +866,11 @@ CONTAINS
         DO indxRegion=1,NRegions
             DO indxSoil=1,NSoils
                 IF ((pUrbData%SoilM_Precip(indxSoil,indxRegion) + pUrbData%SoilM_AW(indxSoil,indxRegion) + pUrbData%SoilM_Oth(indxSoil,indxRegion)) .GT. TotalPorosity(indxSoil,indxRegion)) THEN
-                    CALL SetLastMessage('Initial moisture content for urban land with soil type ' // TRIM(IntToText(indxSoil)) // ' at subregion ' // TRIM(IntToText(iSubregionIDs(indxRegion))) // ' is greater than total porosity!',f_iFatal,ThisProcedure)
+                    IF (ASSOCIATED(ModuleLogger)) THEN
+                        CALL ModuleLogger%SetLastMessage('Initial moisture content for urban land with soil type ' // TRIM(IntToText(indxSoil)) // ' at subregion ' // TRIM(IntToText(iSubregionIDs(indxRegion))) // ' is greater than total porosity!',f_iFatal,ThisProcedure)
+                    ELSE
+                        CALL SetLastMessage('Initial moisture content for urban land with soil type ' // TRIM(IntToText(indxSoil)) // ' at subregion ' // TRIM(IntToText(iSubregionIDs(indxRegion))) // ' is greater than total porosity!',f_iFatal,ThisProcedure)
+                    END IF
                     iStat = -1
                     RETURN
                 END IF
@@ -897,7 +927,11 @@ CONTAINS
     iNSubregions = SIZE(UrbanLand%UrbData%SMax , DIM=2)
     
     !Inform user
-    CALL EchoProgress('Simulating flows at urban lands')
+    IF (ASSOCIATED(ModuleLogger)) THEN
+        CALL ModuleLogger%EchoProgress('Simulating flows at urban lands')
+    ELSE
+        CALL EchoProgress('Simulating flows at urban lands')
+    END IF
     
     !Initialize
     RootDepth = UrbanLand%RootDepth   
@@ -990,7 +1024,11 @@ CONTAINS
                     MessageArray(3) =                   'Subregion            = '//TRIM(IntToText(iSubregionIDs(indxRegion)))
                     WRITE (MessageArray(4),'(A,F11.8)') 'Desired convergence  = ',SolverData%Tolerance*TotalPorosityUrban
                     WRITE (MessageArray(5),'(A,F11.8)') 'Achieved convergence = ',ABS(AchievedConv)
-                    CALL SetLastMessage(MessageArray(1:5),f_iFatal,ThisProcedure)
+                    IF (ASSOCIATED(ModuleLogger)) THEN
+                        CALL ModuleLogger%SetLastMessage(MessageArray(1:5),f_iFatal,ThisProcedure)
+                    ELSE
+                        CALL SetLastMessage(MessageArray(1:5),f_iFatal,ThisProcedure)
+                    END IF
                     iStat = -1
                     RETURN
                 END IF
@@ -1033,7 +1071,11 @@ CONTAINS
                     MessageArray(2) = 'This may be due to a too high convergence criteria set for the iterative solution.'
                     MessageArray(3) = 'Try using a smaller value for RZCONV and a higher value for RZITERMX parameters'
                     MessageArray(4) = 'in the Root Zone Main Input File.'
-                    CALL SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
+                    IF (ASSOCIATED(ModuleLogger)) THEN
+                        CALL ModuleLogger%SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
+                    ELSE
+                        CALL SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
+                    END IF
                     iStat = -1
                     RETURN
                 END IF

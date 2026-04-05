@@ -22,9 +22,10 @@
 !***********************************************************************
 MODULE Class_AppStream_v42_WSA
   USE IWFM_Kernel_Version           , ONLY: ReadVersion
-  USE MessageLogger                 , ONLY: SetLastMessage                  , & 
+  USE MessageLogger                 , ONLY: SetLastMessage                  , &
                                             EchoProgress                    , &
                                             MessageArray                    , &
+                                            MessageLoggerType               , &
                                             f_iFatal
   USE GeneralUtilities              , ONLY: LocateInList                    , &
                                             ShellSort                       , &
@@ -74,9 +75,10 @@ MODULE Class_AppStream_v42_WSA
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: AppStream_v42_WSA_Type   , &
-            ReadFractionsForGW       , &
-            CompileUpstrmNodes 
+  PUBLIC :: AppStream_v42_WSA_Type       , &
+            ReadFractionsForGW          , &
+            CompileUpstrmNodes          , &
+            AppStream_v42_WSA_SetModuleLogger
  
   
   ! -------------------------------------------------------------
@@ -125,6 +127,11 @@ MODULE Class_AppStream_v42_WSA
   ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
+  ! -------------------------------------------------------------
+  ! --- MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
+
   INTEGER,PARAMETER                   :: ModNameLen      = 25
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName         = 'Class_AppStream_v42_WSA::'
   
@@ -132,7 +139,15 @@ MODULE Class_AppStream_v42_WSA
   
 CONTAINS
 
-    
+
+  ! -------------------------------------------------------------
+  ! --- SET MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  SUBROUTINE AppStream_v42_WSA_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    ModuleLogger => Logger
+  END SUBROUTINE AppStream_v42_WSA_SetModuleLogger
+
 
 ! ******************************************************************
 ! ******************************************************************

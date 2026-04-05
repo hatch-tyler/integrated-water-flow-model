@@ -25,9 +25,10 @@ MODULE Class_AppDiverBypass
                                            SetLastMessage         , &
                                            EchoProgress           , &
                                            MessageArray           , &
+                                           MessageLoggerType      , &
                                            f_iFatal               , &
                                            f_iWarn                , &
-                                           f_iInfo                  
+                                           f_iInfo
   USE TimeSeriesUtilities          , ONLY: TimeStepType           , &
                                            IncrementTimeStamp     , &
                                            TimeIntervalConversion
@@ -82,11 +83,12 @@ MODULE Class_AppDiverBypass
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: AppDiverBypassType     , &
-            f_iNDiverDetailColumns , &
-            f_iDiverRecvLoss       , &
-            f_iBypassRecvLoss      , &
-            f_iAllRecvLoss
+  PUBLIC :: AppDiverBypassType          , &
+            f_iNDiverDetailColumns     , &
+            f_iDiverRecvLoss           , &
+            f_iBypassRecvLoss          , &
+            f_iAllRecvLoss             , &
+            AppDiverBypass_SetModuleLogger
      
 
 
@@ -171,6 +173,11 @@ MODULE Class_AppDiverBypass
   ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
+  ! -------------------------------------------------------------
+  ! --- MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
+
   INTEGER,PARAMETER                   :: ModNameLen        = 22
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName           = 'Class_AppDiverBypass::'
   INTEGER,PARAMETER                   :: f_iDiverRecvLoss  = 1 , &
@@ -191,6 +198,14 @@ MODULE Class_AppDiverBypass
 
 CONTAINS
 
+
+  ! -------------------------------------------------------------
+  ! --- SET MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  SUBROUTINE AppDiverBypass_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    ModuleLogger => Logger
+  END SUBROUTINE AppDiverBypass_SetModuleLogger
 
 
 
@@ -356,7 +371,11 @@ CONTAINS
     IF (FileName .EQ. '') RETURN
     
     !Print progress
-    CALL EchoProgress('Instantiating diversions data file')
+    IF (ASSOCIATED(ModuleLogger)) THEN
+        CALL ModuleLogger%EchoProgress('Instantiating diversions data file')
+    ELSE
+        CALL EchoProgress('Instantiating diversions data file')
+    END IF
 
     !Instantiate
     CALL DiverDataFile%Init(FileName,cWorkingDirectory,'diversions data file',TimeStep%TrackTime,1,.TRUE.,Factor,DummyArray,iStat=iStat)  ;  IF (iStat .EQ. -1) RETURN
@@ -854,7 +873,11 @@ CONTAINS
     
     !Make sure bypass ID is defined 
     IF (iBypass.LT.1  .OR.  iBypass.GT.AppDiverBypass%NBypass) THEN
-        CALL SetLastMessage('Bypass '//TRIM(IntToText(iBypass))//' is not simulated!',f_iFatal,ThisProcedure)
+        IF (ASSOCIATED(ModuleLogger)) THEN
+            CALL ModuleLogger%SetLastMessage('Bypass '//TRIM(IntToText(iBypass))//' is not simulated!',f_iFatal,ThisProcedure)
+        ELSE
+            CALL SetLastMessage('Bypass '//TRIM(IntToText(iBypass))//' is not simulated!',f_iFatal,ThisProcedure)
+        END IF
         iStat = -1
         RETURN
     END IF
@@ -1419,7 +1442,11 @@ CONTAINS
         ID = AppDiverBypass%Diver(iDiver)%Deli%ID
         MessageArray(1) = 'Diversion rate at diversion ID '//TRIM(IntToText(ID))//' is larger than the maximum diversion rate!'
         MessageArray(2) = 'Scaling down the diversion rate to match the maximum diversion.'
-        CALL LogMessage(MessageArray(1:2),f_iWarn,ThisProcedure) 
+        IF (ASSOCIATED(ModuleLogger)) THEN
+            CALL ModuleLogger%LogMessage(MessageArray(1:2),f_iWarn,ThisProcedure)
+        ELSE
+            CALL LogMessage(MessageArray(1:2),f_iWarn,ThisProcedure)
+        END IF
         Factor                                           = AppDiverBypass%Diver(iDiver)%MaxDiver / AppDiverBypass%Diver(iDiver)%DiverRead
         AppDiverBypass%Diver(iDiver)%Deli%SupplyRequired = AppDiverBypass%Diver(iDiver)%Deli%SupplyRequired * Factor
         AppDiverBypass%Diver(iDiver)%Deli%DeliRead       = AppDiverBypass%Diver(iDiver)%Deli%SupplyRequired
@@ -1562,7 +1589,11 @@ CONTAINS
         IF (ANY(AppDiverBypass%DiverFile%rValues .LT. 0.0)) THEN
             MessageArray(1) = 'One or more diversions are less than zero.'
             MessageArray(2) = 'Diversions cannot be less than zero!'
-            CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+            IF (ASSOCIATED(ModuleLogger)) THEN
+                CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+            ELSE
+                CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+            END IF
             iStat = -1
             RETURN
         END IF
@@ -2152,7 +2183,11 @@ CONTAINS
     !Check that bypass ID is not being used more than once
     IF (iNBypass .GT. 0) THEN
         IF (LocateInList(ID,AppDiverBypass%Bypasses%ID) .GT. 0) THEN
-            CALL SetLastMessage('ID number ('//TRIM(IntToText(ID))//') of the bypass being added has already been used!',f_iFatal,ThisProcedure)
+            IF (ASSOCIATED(ModuleLogger)) THEN
+                CALL ModuleLogger%SetLastMessage('ID number ('//TRIM(IntToText(ID))//') of the bypass being added has already been used!',f_iFatal,ThisProcedure)
+            ELSE
+                CALL SetLastMessage('ID number ('//TRIM(IntToText(ID))//') of the bypass being added has already been used!',f_iFatal,ThisProcedure)
+            END IF
             iStat = -1
             RETURN
         END IF
@@ -2179,7 +2214,11 @@ CONTAINS
     
     !Make sure destination type is recognized
     IF (.NOT. ANY(iDestType.EQ.f_iBypassDestTypes)) THEN
-        CALL SetLastMessage('Destination type for bypass number '//TRIM(IntToText(ID))//' is not recognized!',f_iFatal,ThisProcedure)
+        IF (ASSOCIATED(ModuleLogger)) THEN
+            CALL ModuleLogger%SetLastMessage('Destination type for bypass number '//TRIM(IntToText(ID))//' is not recognized!',f_iFatal,ThisProcedure)
+        ELSE
+            CALL SetLastMessage('Destination type for bypass number '//TRIM(IntToText(ID))//' is not recognized!',f_iFatal,ThisProcedure)
+        END IF
         iStat = -1
         RETURN
     END IF
