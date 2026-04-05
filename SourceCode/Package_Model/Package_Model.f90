@@ -599,6 +599,30 @@ CONTAINS
 
 
   ! -------------------------------------------------------------
+  ! --- LOG INITIALIZATION SECTION TIME (performance instrumentation)
+  ! -------------------------------------------------------------
+  SUBROUTINE LogInitTime(cSection, iStart, iEnd)
+    CHARACTER(LEN=*), INTENT(IN) :: cSection
+    INTEGER, INTENT(IN)          :: iStart(8), iEnd(8)
+
+    REAL(8) :: rStartSec, rEndSec, rElapsed
+    CHARACTER(LEN=100) :: cMsg
+
+    rStartSec = iStart(5)*3600.0d0 + iStart(6)*60.0d0 + iStart(7) + iStart(8)/1000.0d0
+    rEndSec   = iEnd(5)*3600.0d0   + iEnd(6)*60.0d0   + iEnd(7)   + iEnd(8)/1000.0d0
+    rElapsed  = rEndSec - rStartSec
+    IF (rElapsed < 0.0d0) rElapsed = rElapsed + 86400.0d0  ! Handle midnight rollover
+
+    WRITE(cMsg, '(A,A,A,F8.3,A)') '  [PERF] ', TRIM(cSection), ': ', rElapsed, ' sec'
+    IF (ASSOCIATED(ModuleLogger)) THEN
+      CALL ModuleLogger%LogMessage(TRIM(cMsg), f_iInfo, '')
+    ELSE
+      CALL LogMessage(TRIM(cMsg), f_iInfo, '')
+    END IF
+  END SUBROUTINE LogInitTime
+
+
+  ! -------------------------------------------------------------
   ! --- SET MODULE-LEVEL LOGGER
   ! -------------------------------------------------------------
   SUBROUTINE PackageModel_SetModuleLogger(Logger)
@@ -945,6 +969,9 @@ CONTAINS
     CHARACTER(:),ALLOCATABLE                         :: cZBudRawFileName
     TYPE(GenericFileType)                            :: PPBinaryFile
     COMPLEX,ALLOCATABLE                              :: StrmConnectivity(:)
+    ! Performance instrumentation
+    INTEGER :: iTimerValues(8), iTimerStart(8)
+    REAL(8) :: rSectionSec
     TYPE(FlowDestinationType),ALLOCATABLE            :: SupplyDest(:)
     
     !Initialize
@@ -1052,14 +1079,17 @@ CONTAINS
     IF (iStat .EQ. -1) RETURN
     
     !Grid data
+    CALL DATE_AND_TIME(VALUES=iTimerStart)
     CALL Model%AppGrid%New(PPBinaryFile,iStat)  ;  IF (iStat .EQ. -1) RETURN
     NNodes    = Model%AppGrid%NNodes
     NElements = Model%AppGrid%NElements
     NFaces    = Model%AppGrid%NFaces
- 
+
     !Stratigraphy data
     CALL Model%Stratigraphy%New(NNodes,PPBinaryFile,iStat)  ;  IF (iStat .EQ. -1) RETURN
     NLayers = Model%Stratigraphy%NLayers
+    CALL DATE_AND_TIME(VALUES=iTimerValues)
+    CALL LogInitTime('Grid+Stratigraphy', iTimerStart, iTimerValues)
 
     !Component connectors
     CALL Model%StrmLakeConnector%New(PPBinaryFile,iStat)  ;  IF (iStat .EQ. -1) RETURN
@@ -1067,13 +1097,16 @@ CONTAINS
     CALL Model%LakeGWConnector%New(PPBinaryFile,iStat)    ;  IF (iStat .EQ. -1) RETURN
   
     !Precipitation data
+    CALL DATE_AND_TIME(VALUES=iTimerStart)
     CALL Model%PrecipData%New(ProjectFileNames(SIM_PrecipDataFileID),Model%cSIMWorkingDirectory,'precipitation',Model%TimeStep,iStat)
     IF (iStat .EQ. -1) RETURN
 
     !ET data
     CALL Model%ETData%New(ProjectFileNames(SIM_ETDataFileID),Model%cSIMWorkingDirectory,'ET',Model%TimeStep,iStat,ProjectFileNames(SIM_CropCoeffFileID))
     IF (iStat .EQ. -1) RETURN
-  
+    CALL DATE_AND_TIME(VALUES=iTimerValues)
+    CALL LogInitTime('Precip+ET data', iTimerStart, iTimerValues)
+
     !Lakes
     !Make sure lake component is defined, if it is defined in Preprocessor
     IF (Model%LakeGWConnector%IsDefined()) THEN
@@ -1098,6 +1131,7 @@ CONTAINS
     Model%LakePondDrain  = 0.0
 
     !Streams
+    CALL DATE_AND_TIME(VALUES=iTimerStart)
     !Make sure stream component is defined if it is defined in Preprocessor
     IF (Model%StrmGWConnector%IsDefined()) THEN
         IF (LEN_TRIM(ProjectFileNames(SIM_StrmDataFileID)) .EQ. 0) THEN
@@ -1135,7 +1169,11 @@ CONTAINS
     Model%QRVET                     = 0.0
     Model%QRVETFRAC                 = 0.0
     
+    CALL DATE_AND_TIME(VALUES=iTimerValues)
+    CALL LogInitTime('AppStream', iTimerStart, iTimerValues)
+
     !Matrix
+    CALL DATE_AND_TIME(VALUES=iTimerStart)
     CALL Model%Matrix%SetLogger(DefaultLogger)
     CALL Model%Matrix%New(PPBinaryFile,iStat)
     IF (iStat .EQ. -1) RETURN
@@ -1153,8 +1191,11 @@ CONTAINS
     CALL Model%AppGW%GetElementDepthToGW(Model%AppGrid,Model%Stratigraphy,.TRUE.,Model%DepthToGW)
     CALL Model%AppGW%GetElementSy(Model%AppGrid,Model%Stratigraphy,iLayer=1,Sy=Model%SyElem)
     Model%cGWMainInputFileName = TRIM(ProjectFileNames(SIM_GWDataFileID))
+    CALL DATE_AND_TIME(VALUES=iTimerValues)
+    CALL LogInitTime('Matrix+AppGW', iTimerStart, iTimerValues)
 
     !Unsaturated zone
+    CALL DATE_AND_TIME(VALUES=iTimerStart)
     CALL Model%AppUnsatZone%New(lForInquiry,ProjectFileNames(SIM_UnsatZoneDataFileID),Model%cSIMWorkingDirectory,Model%AppGrid,Model%Stratigraphy,Model%TimeStep,Model%NTIME,Model%DepthToGW,iStat)
     IF (iStat .EQ. -1) RETURN
     Model%lAppUnsatZone_Defined = Model%AppUnsatZone%IsDefined()
@@ -1182,6 +1223,8 @@ CONTAINS
       
     END IF
     Model%lRootZone_Defined = Model%RootZone%IsDefined()
+    CALL DATE_AND_TIME(VALUES=iTimerValues)
+    CALL LogInitTime('UnsatZone+SWShed+RootZone', iTimerStart, iTimerValues)
 
     !Compile destination-supply connectors
     CALL Model%AppStream%GetDiversionDestination(SupplyDest)            ;  CALL Model%DiverDestinationConnector%New('Diversion',Model%iDemandCalcLocation,SupplyDest,Model%AppGrid,iStat)           ;  IF (iStat .EQ. -1) RETURN
