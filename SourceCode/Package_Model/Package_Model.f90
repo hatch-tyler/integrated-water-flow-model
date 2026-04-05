@@ -199,6 +199,7 @@ MODULE Package_Model
   USE Package_ZBudget             , ONLY: ZBudgetType                                 , &
                                           ZoneListType                                          
   USE Class_Model_ForInquiry      , ONLY: Model_ForInquiry_Type                       , &
+                                          ModelForInquiry_SetModuleLogger              , &
                                           f_iFilePathLen                              , &
                                           f_iDataDescriptionLen
   USE WSA_ANN                     , ONLY: WSA_ANN_Type
@@ -222,6 +223,7 @@ MODULE Package_Model
   ! -------------------------------------------------------------
   PRIVATE
   PUBLIC :: ModelType                    , &
+            PackageModel_SetModuleLogger , &
             nPP_InputFiles               , &
             PP_BinaryOutputFileID        , &    
             PP_ElementConfigFileID       , &    
@@ -587,10 +589,22 @@ MODULE Package_Model
   ! -------------------------------------------------------------
   INTEGER,PARAMETER                   :: ModNameLen = 15
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'Package_Model::'
-  
-  
-  
+
+  ! --- MODULE-LEVEL LOGGER (instance-based, replaces global wrapper calls post-construction)
+  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
+
+
+
 CONTAINS
+
+
+  ! -------------------------------------------------------------
+  ! --- SET MODULE-LEVEL LOGGER
+  ! -------------------------------------------------------------
+  SUBROUTINE PackageModel_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    ModuleLogger => Logger
+  END SUBROUTINE PackageModel_SetModuleLogger
 
 
 
@@ -865,6 +879,9 @@ CONTAINS
     CALL Model%AppStream%New(BinaryFile,lWSA,iStat)
     IF (iStat .EQ. -1) RETURN
     
+    !Set module-level loggers for Batch 5 packages (Package_Model and Model_ForInquiry)
+    CALL PackageModel_SetModuleLogger(DefaultLogger)
+    CALL ModelForInquiry_SetModuleLogger(DefaultLogger)
     !Set module-level loggers for Batch 2 packages
     CALL Grid_SetModuleLogger(DefaultLogger)
     CALL AppGrid_SetModuleLogger(DefaultLogger)
@@ -1006,6 +1023,9 @@ CONTAINS
         CALL LogMessage(f_cLineFeed//Text,f_iMessage,'',f_iFILE)
     END IF
 
+    !Set module-level loggers for Batch 5 packages (Package_Model and Model_ForInquiry)
+    CALL PackageModel_SetModuleLogger(DefaultLogger)
+    CALL ModelForInquiry_SetModuleLogger(DefaultLogger)
     !Set logger for components
     CALL Model%SupplyAdjust%SetLogger(DefaultLogger)
     CALL Model%IrigFracFile%SetLogger(DefaultLogger)
@@ -1367,6 +1387,9 @@ CONTAINS
         CALL LogMessage(f_cLineFeed//Text,f_iMessage,'',f_iFILE)
     END IF
     
+    !Set module-level loggers for Batch 5 packages (Package_Model and Model_ForInquiry)
+    CALL PackageModel_SetModuleLogger(DefaultLogger)
+    CALL ModelForInquiry_SetModuleLogger(DefaultLogger)
     !Set logger for components
     CALL Model%SupplyAdjust%SetLogger(DefaultLogger)
     CALL Model%IrigFracFile%SetLogger(DefaultLogger)
@@ -1733,6 +1756,9 @@ CONTAINS
         CALL LogMessage(f_cLineFeed//Text,f_iMessage,'',f_iFILE)
     END IF
     
+    !Set module-level loggers for Batch 5 packages (Package_Model and Model_ForInquiry)
+    CALL PackageModel_SetModuleLogger(DefaultLogger)
+    CALL ModelForInquiry_SetModuleLogger(DefaultLogger)
     !Set logger for components
     CALL Model%SupplyAdjust%SetLogger(DefaultLogger)
     CALL Model%IrigFracFile%SetLogger(DefaultLogger)
@@ -2131,7 +2157,11 @@ CONTAINS
     INTEGER,ALLOCATABLE                    :: iLayers(:)
     
     IF (Model%lModel_ForInquiry_Defined) THEN
-        CALL SetLastMessage('Model is instantiated only partially. Groundwater nodes for tile drains cannot be retrieved from a partially instantiated model.',f_iWarn,ThisProcedure)
+        IF (ASSOCIATED(ModuleLogger)) THEN
+            CALL ModuleLogger%SetLastMessage('Model is instantiated only partially. Groundwater nodes for tile drains cannot be retrieved from a partially instantiated model.',f_iWarn,ThisProcedure)
+        ELSE
+            CALL SetLastMessage('Model is instantiated only partially. Groundwater nodes for tile drains cannot be retrieved from a partially instantiated model.',f_iWarn,ThisProcedure)
+        END IF
         ALLOCATE (TDNodes(Model%GetNTileDrainNodes()))
         TDNodes = 0
         iStat   = -1
@@ -2352,7 +2382,11 @@ CONTAINS
     
     !Is this full model or model for inquiry
     IF (Model%lModel_ForInquiry_Defined) THEN
-        CALL SetLastMessage('Model is instantiated only partially. Hydrograph print-out coordinates cannot be retrieved from a partially instantiated model.',f_iWarn,ThisProcedure)
+        IF (ASSOCIATED(ModuleLogger)) THEN
+            CALL ModuleLogger%SetLastMessage('Model is instantiated only partially. Hydrograph print-out coordinates cannot be retrieved from a partially instantiated model.',f_iWarn,ThisProcedure)
+        ELSE
+            CALL SetLastMessage('Model is instantiated only partially. Hydrograph print-out coordinates cannot be retrieved from a partially instantiated model.',f_iWarn,ThisProcedure)
+        END IF
         X     = 0.0
         Y     = 0.0
         iStat = -1
@@ -2692,7 +2726,11 @@ CONTAINS
     !Make sure we have at least 1 year to process
     CALL CTimeStep_To_RTimeStep('1MON',rDummy,iDeltaT_InMinutes,iStat)
     IF (NPeriods(iDeltaT_InMinutes,cAdjustedBeginDate,cAdjustedEndDate) .LT. 12) THEN
-        CALL SetLastMessage('At least 1 year of simulation period must be selected to obtain monthly average Budget flows!',f_iFatal,ThisProcedure)
+        IF (ASSOCIATED(ModuleLogger)) THEN
+            CALL ModuleLogger%SetLastMessage('At least 1 year of simulation period must be selected to obtain monthly average Budget flows!',f_iFatal,ThisProcedure)
+        ELSE
+            CALL SetLastMessage('At least 1 year of simulation period must be selected to obtain monthly average Budget flows!',f_iFatal,ThisProcedure)
+        END IF
         iStat = -1
         RETURN
     END IF   
@@ -2848,9 +2886,17 @@ CONTAINS
     CALL CTimeStep_To_RTimeStep('1YEAR',rDummy,iDELTAT_InMinutes,iStat)
     IF (NPeriods(iDELTAT_InMinutes,cAdjustedBeginDate,cAdjustedEndDate) .LT. 1) THEN
         IF (lForCalendarYear) THEN
-            CALL SetLastMessage('At least 1 calendar year of simulation period must be selected to obtain annual ZBudget flows!',f_iFatal,ThisProcedure)
+            IF (ASSOCIATED(ModuleLogger)) THEN
+                CALL ModuleLogger%SetLastMessage('At least 1 calendar year of simulation period must be selected to obtain annual ZBudget flows!',f_iFatal,ThisProcedure)
+            ELSE
+                CALL SetLastMessage('At least 1 calendar year of simulation period must be selected to obtain annual ZBudget flows!',f_iFatal,ThisProcedure)
+            END IF
         ELSE
-            CALL SetLastMessage('At least 1 water year of simulation period must be selected to obtain annual ZBudget flows!',f_iFatal,ThisProcedure)
+            IF (ASSOCIATED(ModuleLogger)) THEN
+                CALL ModuleLogger%SetLastMessage('At least 1 water year of simulation period must be selected to obtain annual ZBudget flows!',f_iFatal,ThisProcedure)
+            ELSE
+                CALL SetLastMessage('At least 1 water year of simulation period must be selected to obtain annual ZBudget flows!',f_iFatal,ThisProcedure)
+            END IF
         END IF
         iStat = -1
         RETURN
@@ -3086,9 +3132,17 @@ CONTAINS
     CALL CTimeStep_To_RTimeStep('1YEAR',rDummy,iDELTAT_InMinutes,iStat)
     IF (NPeriods(iDELTAT_InMinutes,cAdjustedBeginDate,cAdjustedEndDate) .LT. 1) THEN
         IF (lForCalendarYear) THEN
-            CALL SetLastMessage('At least 1 calendar year of simulation period must be selected to obtain annual cumulative change in groundwater storage!',f_iFatal,ThisProcedure)
+            IF (ASSOCIATED(ModuleLogger)) THEN
+                CALL ModuleLogger%SetLastMessage('At least 1 calendar year of simulation period must be selected to obtain annual cumulative change in groundwater storage!',f_iFatal,ThisProcedure)
+            ELSE
+                CALL SetLastMessage('At least 1 calendar year of simulation period must be selected to obtain annual cumulative change in groundwater storage!',f_iFatal,ThisProcedure)
+            END IF
         ELSE
-            CALL SetLastMessage('At least 1 water year of simulation period must be selected to obtain annual cumulative change in groundwater storage!',f_iFatal,ThisProcedure)
+            IF (ASSOCIATED(ModuleLogger)) THEN
+                CALL ModuleLogger%SetLastMessage('At least 1 water year of simulation period must be selected to obtain annual cumulative change in groundwater storage!',f_iFatal,ThisProcedure)
+            ELSE
+                CALL SetLastMessage('At least 1 water year of simulation period must be selected to obtain annual cumulative change in groundwater storage!',f_iFatal,ThisProcedure)
+            END IF
         END IF      
         iStat = -1
         RETURN
@@ -3309,7 +3363,11 @@ CONTAINS
 
     !Make sure ZBudget data can be averaged monthly
     IF (TRIM(UpperCase(Model%TimeStep%Unit)) .EQ. '1YEAR') THEN
-        CALL SetLastMessage('ZBudget flow information cannot be averaged to monthly interval for a model with simulation timestep of 1YEAR!',f_iFatal,ThisProcedure)
+        IF (ASSOCIATED(ModuleLogger)) THEN
+            CALL ModuleLogger%SetLastMessage('ZBudget flow information cannot be averaged to monthly interval for a model with simulation timestep of 1YEAR!',f_iFatal,ThisProcedure)
+        ELSE
+            CALL SetLastMessage('ZBudget flow information cannot be averaged to monthly interval for a model with simulation timestep of 1YEAR!',f_iFatal,ThisProcedure)
+        END IF
         iStat = -1
         RETURN
     END IF
@@ -3356,7 +3414,11 @@ CONTAINS
     !Make sure we have at least 1 year to process
     CALL CTimeStep_To_RTimeStep('1MON',rDummy,iDELTAT_InMinutes,iStat)
     IF (NPeriods(iDELTAT_InMinutes,cAdjustedBeginDate,cAdjustedEndDate) .LT. 12) THEN
-        CALL SetLastMessage('At least 1 year of simulation period must be selected to obtain monthly average ZBudget flows!',f_iFatal,ThisProcedure)
+        IF (ASSOCIATED(ModuleLogger)) THEN
+            CALL ModuleLogger%SetLastMessage('At least 1 year of simulation period must be selected to obtain monthly average ZBudget flows!',f_iFatal,ThisProcedure)
+        ELSE
+            CALL SetLastMessage('At least 1 year of simulation period must be selected to obtain monthly average ZBudget flows!',f_iFatal,ThisProcedure)
+        END IF
         iStat = -1
         RETURN
     END IF   
@@ -3495,9 +3557,17 @@ CONTAINS
     CALL CTimeStep_To_RTimeStep('1YEAR',rDummy,iDELTAT_InMinutes,iStat)
     IF (NPeriods(iDELTAT_InMinutes,cAdjustedBeginDate,cAdjustedEndDate) .LT. 1) THEN
         IF (lForCalendarYear) THEN
-            CALL SetLastMessage('At least 1 calendar year of simulation period must be selected to obtain annual ZBudget flows!',f_iFatal,ThisProcedure)
+            IF (ASSOCIATED(ModuleLogger)) THEN
+                CALL ModuleLogger%SetLastMessage('At least 1 calendar year of simulation period must be selected to obtain annual ZBudget flows!',f_iFatal,ThisProcedure)
+            ELSE
+                CALL SetLastMessage('At least 1 calendar year of simulation period must be selected to obtain annual ZBudget flows!',f_iFatal,ThisProcedure)
+            END IF
         ELSE
-            CALL SetLastMessage('At least 1 water year of simulation period must be selected to obtain annual ZBudget flows!',f_iFatal,ThisProcedure)
+            IF (ASSOCIATED(ModuleLogger)) THEN
+                CALL ModuleLogger%SetLastMessage('At least 1 water year of simulation period must be selected to obtain annual ZBudget flows!',f_iFatal,ThisProcedure)
+            ELSE
+                CALL SetLastMessage('At least 1 water year of simulation period must be selected to obtain annual ZBudget flows!',f_iFatal,ThisProcedure)
+            END IF
         END IF
         iStat = -1
         RETURN
@@ -3706,9 +3776,17 @@ CONTAINS
     CALL CTimeStep_To_RTimeStep('1YEAR',rDummy,iDELTAT_InMinutes,iStat)
     IF (NPeriods(iDELTAT_InMinutes,cAdjustedBeginDate,cAdjustedEndDate) .LT. 1) THEN
         IF (lForCalendarYear) THEN
-            CALL SetLastMessage('At least 1 calendar year of simulation period must be selected to obtain annual cumulative change in groundwater storage!',f_iFatal,ThisProcedure)
+            IF (ASSOCIATED(ModuleLogger)) THEN
+                CALL ModuleLogger%SetLastMessage('At least 1 calendar year of simulation period must be selected to obtain annual cumulative change in groundwater storage!',f_iFatal,ThisProcedure)
+            ELSE
+                CALL SetLastMessage('At least 1 calendar year of simulation period must be selected to obtain annual cumulative change in groundwater storage!',f_iFatal,ThisProcedure)
+            END IF
         ELSE
-            CALL SetLastMessage('At least 1 water year of simulation period must be selected to obtain annual cumulative change in groundwater storage!',f_iFatal,ThisProcedure)
+            IF (ASSOCIATED(ModuleLogger)) THEN
+                CALL ModuleLogger%SetLastMessage('At least 1 water year of simulation period must be selected to obtain annual cumulative change in groundwater storage!',f_iFatal,ThisProcedure)
+            ELSE
+                CALL SetLastMessage('At least 1 water year of simulation period must be selected to obtain annual cumulative change in groundwater storage!',f_iFatal,ThisProcedure)
+            END IF
         END IF      
         iStat = -1
         RETURN
@@ -3815,7 +3893,11 @@ CONTAINS
    
     !Make sure that model is instantiated for inquiry
     IF (.NOT. Model%lIsForInquiry) THEN
-        CALL SetLastMessage('Model data can be queried only if the model is instantiated for inquiry!',f_iFatal,ThisProcedure)
+        IF (ASSOCIATED(ModuleLogger)) THEN
+            CALL ModuleLogger%SetLastMessage('Model data can be queried only if the model is instantiated for inquiry!',f_iFatal,ThisProcedure)
+        ELSE
+            CALL SetLastMessage('Model data can be queried only if the model is instantiated for inquiry!',f_iFatal,ThisProcedure)
+        END IF
         iStat = -1
         RETURN
     END IF
@@ -4858,7 +4940,11 @@ CONTAINS
     CHARACTER(LEN=ModNameLen+12),PARAMETER :: ThisProcedure = ModName // 'GetNBypasses'
     
     IF (Model%lModel_ForInquiry_Defined) THEN
-        CALL SetLastMessage('Model is instantiated only partially. Number of bypasses cannot be retrieved from a partially instantiated model.',f_iWarn,ThisProcedure)
+        IF (ASSOCIATED(ModuleLogger)) THEN
+            CALL ModuleLogger%SetLastMessage('Model is instantiated only partially. Number of bypasses cannot be retrieved from a partially instantiated model.',f_iWarn,ThisProcedure)
+        ELSE
+            CALL SetLastMessage('Model is instantiated only partially. Number of bypasses cannot be retrieved from a partially instantiated model.',f_iWarn,ThisProcedure)
+        END IF
         iNBypass = 0
         iStat    = -1
     ELSE
@@ -5127,7 +5213,11 @@ CONTAINS
     
     !Make sure it is not Model_ForInquiry
     IF (Model%lModel_ForInquiry_Defined) THEN
-        CALL SetLastMessage('Stream tributary inflows cannot be retrieved from the model when it is instantiated for inquiry!',f_iWarn,ThisProcedure)
+        IF (ASSOCIATED(ModuleLogger)) THEN
+            CALL ModuleLogger%SetLastMessage('Stream tributary inflows cannot be retrieved from the model when it is instantiated for inquiry!',f_iWarn,ThisProcedure)
+        ELSE
+            CALL SetLastMessage('Stream tributary inflows cannot be retrieved from the model when it is instantiated for inquiry!',f_iWarn,ThisProcedure)
+        END IF
         rQTRIB = 0.0
         iStat  = -1
         RETURN
@@ -5154,7 +5244,11 @@ CONTAINS
     
     !Make sure it is not Model_ForInquiry
     IF (Model%lModel_ForInquiry_Defined) THEN
-        CALL SetLastMessage('Rainfall runoff into stream nodes cannot be retrieved from the model when it is instantiated for inquiry!',f_iWarn,ThisProcedure)
+        IF (ASSOCIATED(ModuleLogger)) THEN
+            CALL ModuleLogger%SetLastMessage('Rainfall runoff into stream nodes cannot be retrieved from the model when it is instantiated for inquiry!',f_iWarn,ThisProcedure)
+        ELSE
+            CALL SetLastMessage('Rainfall runoff into stream nodes cannot be retrieved from the model when it is instantiated for inquiry!',f_iWarn,ThisProcedure)
+        END IF
         rQROFF = 0.0
         iStat  = -1
         RETURN
@@ -5181,7 +5275,11 @@ CONTAINS
     
     !Make sure it is not Model_ForInquiry
     IF (Model%lModel_ForInquiry_Defined) THEN
-        CALL SetLastMessage('Return flow into stream nodes cannot be retrieved from the model when it is instantiated for inquiry!',f_iWarn,ThisProcedure)
+        IF (ASSOCIATED(ModuleLogger)) THEN
+            CALL ModuleLogger%SetLastMessage('Return flow into stream nodes cannot be retrieved from the model when it is instantiated for inquiry!',f_iWarn,ThisProcedure)
+        ELSE
+            CALL SetLastMessage('Return flow into stream nodes cannot be retrieved from the model when it is instantiated for inquiry!',f_iWarn,ThisProcedure)
+        END IF
         rQRTRN = 0.0
         iStat  = -1
         RETURN
@@ -5208,7 +5306,11 @@ CONTAINS
     
     !Make sure it is not Model_ForInquiry
     IF (Model%lModel_ForInquiry_Defined) THEN
-        CALL SetLastMessage('Pond drains into stream nodes cannot be retrieved from the model when it is instantiated for inquiry!',f_iWarn,ThisProcedure)
+        IF (ASSOCIATED(ModuleLogger)) THEN
+            CALL ModuleLogger%SetLastMessage('Pond drains into stream nodes cannot be retrieved from the model when it is instantiated for inquiry!',f_iWarn,ThisProcedure)
+        ELSE
+            CALL SetLastMessage('Pond drains into stream nodes cannot be retrieved from the model when it is instantiated for inquiry!',f_iWarn,ThisProcedure)
+        END IF
         rQRPONDDRAIN = 0.0
         iStat        = -1
         RETURN
@@ -5235,7 +5337,11 @@ CONTAINS
     
     !Make sure it is not Model_ForInquiry
     IF (Model%lModel_ForInquiry_Defined) THEN
-        CALL SetLastMessage('Tile drains into stream nodes cannot be retrieved from the model when it is instantiated for inquiry!',f_iWarn,ThisProcedure)
+        IF (ASSOCIATED(ModuleLogger)) THEN
+            CALL ModuleLogger%SetLastMessage('Tile drains into stream nodes cannot be retrieved from the model when it is instantiated for inquiry!',f_iWarn,ThisProcedure)
+        ELSE
+            CALL SetLastMessage('Tile drains into stream nodes cannot be retrieved from the model when it is instantiated for inquiry!',f_iWarn,ThisProcedure)
+        END IF
         rQDRAIN = 0.0
         iStat   = -1
         RETURN
@@ -5262,7 +5368,11 @@ CONTAINS
     
     !Make sure it is not Model_ForInquiry
     IF (Model%lModel_ForInquiry_Defined) THEN
-        CALL SetLastMessage('Riparian ET from stream nodes cannot be retrieved from the model when it is instantiated for inquiry!',f_iWarn,ThisProcedure)
+        IF (ASSOCIATED(ModuleLogger)) THEN
+            CALL ModuleLogger%SetLastMessage('Riparian ET from stream nodes cannot be retrieved from the model when it is instantiated for inquiry!',f_iWarn,ThisProcedure)
+        ELSE
+            CALL SetLastMessage('Riparian ET from stream nodes cannot be retrieved from the model when it is instantiated for inquiry!',f_iWarn,ThisProcedure)
+        END IF
         rQRVET = 0.0
         iStat  = -1
         RETURN
@@ -5289,7 +5399,11 @@ CONTAINS
     
     !Make sure it is not Model_ForInquiry
     IF (Model%lModel_ForInquiry_Defined) THEN
-        CALL SetLastMessage('Stream surface evaporation cannot be retrieved from the model when it is instantiated for inquiry!',f_iWarn,ThisProcedure)
+        IF (ASSOCIATED(ModuleLogger)) THEN
+            CALL ModuleLogger%SetLastMessage('Stream surface evaporation cannot be retrieved from the model when it is instantiated for inquiry!',f_iWarn,ThisProcedure)
+        ELSE
+            CALL SetLastMessage('Stream surface evaporation cannot be retrieved from the model when it is instantiated for inquiry!',f_iWarn,ThisProcedure)
+        END IF
         rStrmEvap = 0.0
         iStat     = -1
         RETURN
@@ -5317,7 +5431,11 @@ CONTAINS
     
     !Make sure it is not Model_ForInquiry
     IF (Model%lModel_ForInquiry_Defined) THEN
-        CALL SetLastMessage('Gain from groundwater at stream nodes cannot be retrieved from the model when it is instantiated for inquiry!',f_iWarn,ThisProcedure)
+        IF (ASSOCIATED(ModuleLogger)) THEN
+            CALL ModuleLogger%SetLastMessage('Gain from groundwater at stream nodes cannot be retrieved from the model when it is instantiated for inquiry!',f_iWarn,ThisProcedure)
+        ELSE
+            CALL SetLastMessage('Gain from groundwater at stream nodes cannot be retrieved from the model when it is instantiated for inquiry!',f_iWarn,ThisProcedure)
+        END IF
         rGainFromGW = 0.0
         iStat       = -1
         RETURN
@@ -5350,7 +5468,11 @@ CONTAINS
     
     !Make sure it is not Model_ForInquiry
     IF (Model%lModel_ForInquiry_Defined) THEN
-        CALL SetLastMessage('Gain from lakes at stream nodes cannot be retrieved from the model when it is instantiated for inquiry!',f_iWarn,ThisProcedure)
+        IF (ASSOCIATED(ModuleLogger)) THEN
+            CALL ModuleLogger%SetLastMessage('Gain from lakes at stream nodes cannot be retrieved from the model when it is instantiated for inquiry!',f_iWarn,ThisProcedure)
+        ELSE
+            CALL SetLastMessage('Gain from lakes at stream nodes cannot be retrieved from the model when it is instantiated for inquiry!',f_iWarn,ThisProcedure)
+        END IF
         rGainFromLake = 0.0
         iStat         = -1
         RETURN
@@ -5380,7 +5502,11 @@ CONTAINS
     
     !Make sure it is not Model_ForInquiry
     IF (Model%lModel_ForInquiry_Defined) THEN
-        CALL SetLastMessage('Net bypass inflows at stream nodes cannot be retrieved from the model when it is instantiated for inquiry!',f_iWarn,ThisProcedure)
+        IF (ASSOCIATED(ModuleLogger)) THEN
+            CALL ModuleLogger%SetLastMessage('Net bypass inflows at stream nodes cannot be retrieved from the model when it is instantiated for inquiry!',f_iWarn,ThisProcedure)
+        ELSE
+            CALL SetLastMessage('Net bypass inflows at stream nodes cannot be retrieved from the model when it is instantiated for inquiry!',f_iWarn,ThisProcedure)
+        END IF
         rBPInflows = 0.0
         iStat      = -1
         RETURN
@@ -5408,7 +5534,11 @@ CONTAINS
     
     !Make sure it is not Model_ForInquiry
     IF (Model%lModel_ForInquiry_Defined) THEN
-        CALL SetLastMessage('Bypass inflows at stream nodes cannot be retrieved from the model when it is instantiated for inquiry!',f_iWarn,ThisProcedure)
+        IF (ASSOCIATED(ModuleLogger)) THEN
+            CALL ModuleLogger%SetLastMessage('Bypass inflows at stream nodes cannot be retrieved from the model when it is instantiated for inquiry!',f_iWarn,ThisProcedure)
+        ELSE
+            CALL SetLastMessage('Bypass inflows at stream nodes cannot be retrieved from the model when it is instantiated for inquiry!',f_iWarn,ThisProcedure)
+        END IF
         rBPInflows = 0.0
         iStat      = -1
         RETURN
@@ -5437,7 +5567,11 @@ CONTAINS
     
     !Make sure it is not Model_ForInquiry
     IF (Model%lModel_ForInquiry_Defined) THEN
-        CALL SetLastMessage('Required diversions cannot be retrieved from the model when it is instantiated for inquiry!',f_iWarn,ThisProcedure)
+        IF (ASSOCIATED(ModuleLogger)) THEN
+            CALL ModuleLogger%SetLastMessage('Required diversions cannot be retrieved from the model when it is instantiated for inquiry!',f_iWarn,ThisProcedure)
+        ELSE
+            CALL SetLastMessage('Required diversions cannot be retrieved from the model when it is instantiated for inquiry!',f_iWarn,ThisProcedure)
+        END IF
         rDivs = 0.0
         iStat = -1
         RETURN
@@ -5466,7 +5600,11 @@ CONTAINS
     
     !Make sure it is not Model_ForInquiry
     IF (Model%lModel_ForInquiry_Defined) THEN
-        CALL SetLastMessage('Actual diversions cannot be retrieved from the model when it is instantiated for inquiry!',f_iWarn,ThisProcedure)
+        IF (ASSOCIATED(ModuleLogger)) THEN
+            CALL ModuleLogger%SetLastMessage('Actual diversions cannot be retrieved from the model when it is instantiated for inquiry!',f_iWarn,ThisProcedure)
+        ELSE
+            CALL SetLastMessage('Actual diversions cannot be retrieved from the model when it is instantiated for inquiry!',f_iWarn,ThisProcedure)
+        END IF
         rDivs = 0.0
         iStat = -1
         RETURN
@@ -5568,7 +5706,11 @@ CONTAINS
     
     !If only partial model is instantiated for inquiry, return an error
     IF (Model%lModel_ForInquiry_Defined) THEN
-        CALL SetLastMessage('Model is instantiated only partially. Return flow destinations for diversions cannot be retrieved from a partially instantiated model.',f_iFatal,ThisProcedure)
+        IF (ASSOCIATED(ModuleLogger)) THEN
+            CALL ModuleLogger%SetLastMessage('Model is instantiated only partially. Return flow destinations for diversions cannot be retrieved from a partially instantiated model.',f_iFatal,ThisProcedure)
+        ELSE
+            CALL SetLastMessage('Model is instantiated only partially. Return flow destinations for diversions cannot be retrieved from a partially instantiated model.',f_iFatal,ThisProcedure)
+        END IF
         iStat = -1
         RETURN
     END IF
@@ -5786,7 +5928,11 @@ CONTAINS
     INTEGER,ALLOCATABLE                    :: iZoneList(:)
     
     IF (Model%lModel_ForInquiry_Defined) THEN
-        CALL SetLastMessage('Model is instantiated only partially. Average depth to groundwater cannot be retrieved from a partially instantiated model.',f_iWarn,ThisProcedure)
+        IF (ASSOCIATED(ModuleLogger)) THEN
+            CALL ModuleLogger%SetLastMessage('Model is instantiated only partially. Average depth to groundwater cannot be retrieved from a partially instantiated model.',f_iWarn,ThisProcedure)
+        ELSE
+            CALL SetLastMessage('Model is instantiated only partially. Average depth to groundwater cannot be retrieved from a partially instantiated model.',f_iWarn,ThisProcedure)
+        END IF
         rAveDepthToGW = 0.0
         iStat         = -1
         RETURN
@@ -5832,7 +5978,11 @@ CONTAINS
     REAL(8)                                :: ElemAgAreas(Model%AppGrid%NElements), RegionAgAreas(Model%AppGrid%NSubregions)
     
     IF (Model%lModel_ForInquiry_Defined) THEN
-        CALL SetLastMessage('Model is instantiated only partially. Average depth to groundwater cannot be retrieved from a partially instantiated model.',f_iWarn,ThisProcedure)
+        IF (ASSOCIATED(ModuleLogger)) THEN
+            CALL ModuleLogger%SetLastMessage('Model is instantiated only partially. Average depth to groundwater cannot be retrieved from a partially instantiated model.',f_iWarn,ThisProcedure)
+        ELSE
+            CALL SetLastMessage('Model is instantiated only partially. Average depth to groundwater cannot be retrieved from a partially instantiated model.',f_iWarn,ThisProcedure)
+        END IF
         AveDepthToGW = 0.0
         iStat        = -1
         RETURN
@@ -5862,7 +6012,11 @@ CONTAINS
     CHARACTER(LEN=ModNameLen+11),PARAMETER :: ThisProcedure = ModName // 'GetNAgCrops'
     
     IF (Model%lModel_ForInquiry_Defined) THEN
-        CALL SetLastMessage('Model is instantiated only partially. Number of ag. crops cannot be retrieved from a partially instantiated model.',f_iWarn,ThisProcedure)
+        IF (ASSOCIATED(ModuleLogger)) THEN
+            CALL ModuleLogger%SetLastMessage('Model is instantiated only partially. Number of ag. crops cannot be retrieved from a partially instantiated model.',f_iWarn,ThisProcedure)
+        ELSE
+            CALL SetLastMessage('Model is instantiated only partially. Number of ag. crops cannot be retrieved from a partially instantiated model.',f_iWarn,ThisProcedure)
+        END IF
         NCrops = 0
         iStat = -1
     ELSE
@@ -5885,7 +6039,11 @@ CONTAINS
     CHARACTER(LEN=ModNameLen+29),PARAMETER :: ThisProcedure = ModName // 'GetMaxAndMinNetReturnFlowFrac'
     
     IF (Model%lModel_ForInquiry_Defined) THEN
-        CALL SetLastMessage('Model is instantiated only partially. MAximum and minimum return flow fractions cannot be retrieved from a partially instantiated model.',f_iWarn,ThisProcedure)
+        IF (ASSOCIATED(ModuleLogger)) THEN
+            CALL ModuleLogger%SetLastMessage('Model is instantiated only partially. MAximum and minimum return flow fractions cannot be retrieved from a partially instantiated model.',f_iWarn,ThisProcedure)
+        ELSE
+            CALL SetLastMessage('Model is instantiated only partially. MAximum and minimum return flow fractions cannot be retrieved from a partially instantiated model.',f_iWarn,ThisProcedure)
+        END IF
         rMaxFrac = 1.0
         rMinFrac = 0.0
         iStat    = -1
@@ -5932,7 +6090,11 @@ CONTAINS
     CHARACTER(LEN=ModNameLen+20),PARAMETER :: ThisProcedure = ModName // 'GetSupplyRequirement'
     
     IF (Model%lModel_ForInquiry_Defined) THEN
-        CALL SetLastMessage('Model is instantiated only partially. Water supply requirement cannot be retrieved from a partially instantiated model.',f_iWarn,ThisProcedure)
+        IF (ASSOCIATED(ModuleLogger)) THEN
+            CALL ModuleLogger%SetLastMessage('Model is instantiated only partially. Water supply requirement cannot be retrieved from a partially instantiated model.',f_iWarn,ThisProcedure)
+        ELSE
+            CALL SetLastMessage('Model is instantiated only partially. Water supply requirement cannot be retrieved from a partially instantiated model.',f_iWarn,ThisProcedure)
+        END IF
         rSupplyReq = 0.0
         iStat      = -1
     ELSE
@@ -5959,7 +6121,11 @@ CONTAINS
     REAL(8)                                :: rSupplyShortAtDest(SIZE(iSupplyList))
     
     IF (Model%lModel_ForInquiry_Defined) THEN
-        CALL SetLastMessage('Model is instantiated only partially. Water supply shortage cannot be retrieved from a partially instantiated model.',f_iWarn,ThisProcedure)
+        IF (ASSOCIATED(ModuleLogger)) THEN
+            CALL ModuleLogger%SetLastMessage('Model is instantiated only partially. Water supply shortage cannot be retrieved from a partially instantiated model.',f_iWarn,ThisProcedure)
+        ELSE
+            CALL SetLastMessage('Model is instantiated only partially. Water supply shortage cannot be retrieved from a partially instantiated model.',f_iWarn,ThisProcedure)
+        END IF
         rSupplyShort = 0.0
         iStat        = -1
     ELSE
@@ -6200,7 +6366,11 @@ CONTAINS
         iDivID = iDivIDs(iDiversion)
         MessageArray(1) = 'Error in retrieving future demand for diversion '// TRIM(IntToText(iDivID)) // '!'
         MessageArray(2) = 'Future demands for '//TRIM(cDemandDate)//' have not been computed!'
-        CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+        IF (ASSOCIATED(ModuleLogger)) THEN
+            CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+        ELSE
+            CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+        END IF
         RETURN
     END IF
     
@@ -6771,7 +6941,11 @@ CONTAINS
     CALL EstablishAbsolutePathFileName('IW_Restart.bin',Model%cSIMWorkingDirectory,cAbsPathFileName)
     OPEN (FILE=cAbsPathFileName, UNIT=1111, STATUS='OLD' , IOSTAT=ErrorCode)
     IF (ErrorCode .NE. 0) THEN
-        CALL LogMessage('Cannot find the restart data file!'//f_cLineFeed//'Running the model from the beginning of simulation period.',f_iInfo,ThisProcedure)
+        IF (ASSOCIATED(ModuleLogger)) THEN
+            CALL ModuleLogger%LogMessage('Cannot find the restart data file!'//f_cLineFeed//'Running the model from the beginning of simulation period.',f_iInfo,ThisProcedure)
+        ELSE
+            CALL LogMessage('Cannot find the restart data file!'//f_cLineFeed//'Running the model from the beginning of simulation period.',f_iInfo,ThisProcedure)
+        END IF
         CLOSE (1111,IOSTAT=ErrorCode)
         RETURN
     ELSE
@@ -6793,13 +6967,21 @@ CONTAINS
     
     !Make sure that Restart file points to a date that is between the simulation period
     IF ((Model%TimeStep%CurrentDateAndTime .TSLT. BeginDateAndTime)   .OR.   (Model%TimeStep%CurrentDateAndTime .TSGE. EndDateAndTime)) THEN
-        CALL SetLastMessage('Restart file points to a date and time that is outside the simulation period (' // Model%TimeStep%CurrentDateAndTime // ')!',f_iFatal,ThisProcedure)
+        IF (ASSOCIATED(ModuleLogger)) THEN
+            CALL ModuleLogger%SetLastMessage('Restart file points to a date and time that is outside the simulation period (' // Model%TimeStep%CurrentDateAndTime // ')!',f_iFatal,ThisProcedure)
+        ELSE
+            CALL SetLastMessage('Restart file points to a date and time that is outside the simulation period (' // Model%TimeStep%CurrentDateAndTime // ')!',f_iFatal,ThisProcedure)
+        END IF
         iStat = -1
         RETURN
     END IF
     
     !Inform user
-    CALL LogMessage('Restarting model from '//TRIM(Model%TimeStep%CurrentDateAndTime)//'!',f_iMessage,'')
+    IF (ASSOCIATED(ModuleLogger)) THEN
+        CALL ModuleLogger%LogMessage('Restarting model from '//TRIM(Model%TimeStep%CurrentDateAndTime)//'!',f_iMessage,'')
+    ELSE
+        CALL LogMessage('Restarting model from '//TRIM(Model%TimeStep%CurrentDateAndTime)//'!',f_iMessage,'')
+    END IF
     
     !Groundwater 
     CALL Model%AppGW%ReadRestartData(InputFile,iStat)  ;  IF (iStat .EQ. -1) RETURN
@@ -7519,9 +7701,19 @@ CONTAINS
             Model%TimeStep%CurrentTime = Model%TimeStep%CurrentTime + Model%TimeStep%DeltaT
             WRITE (CharCurrentTime,'(F10.2)') Model%TimeStep%CurrentTime
             WRITE (MessageArray(1),'(4A,1X,A)') '*   TIME STEP ',TRIM(IntToText(Model%TimeStep%CurrentTimeStep)),' AT ',TRIM(ADJUSTL(CharCurrentTime)),TRIM(ADJUSTL(Model%TimeStep%Unit))
-            IF (Model%KDEB .NE. Sim_KDEB_NoPrintTimeStep) CALL LogMessage(MessageArray(1),f_iMessage,'',Destination=f_iSCREEN)
+            IF (Model%KDEB .NE. Sim_KDEB_NoPrintTimeStep) THEN
+                IF (ASSOCIATED(ModuleLogger)) THEN
+                    CALL ModuleLogger%LogMessage(MessageArray(1),f_iMessage,'',Destination=f_iSCREEN)
+                ELSE
+                    CALL LogMessage(MessageArray(1),f_iMessage,'',Destination=f_iSCREEN)
+                END IF
+            END IF
             MessageArray(1) = f_cLineFeed//REPEAT('-',50)//f_cLineFeed//TRIM(MessageArray(1))//f_cLineFeed//REPEAT('-',50)
-            CALL LogMessage(MessageArray(1),f_iMessage,'',Destination=f_iFILE)
+            IF (ASSOCIATED(ModuleLogger)) THEN
+                CALL ModuleLogger%LogMessage(MessageArray(1),f_iMessage,'',Destination=f_iFILE)
+            ELSE
+                CALL LogMessage(MessageArray(1),f_iMessage,'',Destination=f_iFILE)
+            END IF
             IF (Model%TimeStep%CurrentTime .EQ. Model%TimeStep%EndTime) Model%lEndOfSimulation = .TRUE.
         
         !Time is tracked
@@ -7529,9 +7721,19 @@ CONTAINS
             Model%TimeStep%CurrentDateAndTime = IncrementTimeStamp(Model%TimeStep%CurrentDateAndTime,Model%TimeStep%DELTAT_InMinutes)
             CALL TimeStampToJulianDateAndMinutes(Model%TimeStep%CurrentDateAndTime,Model%JulianDate,Model%MinutesAfterMidnight)
             WRITE (MessageArray(1),'(A)') '*   TIME STEP '//TRIM(IntToText(Model%TimeStep%CurrentTimeStep))//' AT '//TRIM(Model%TimeStep%CurrentDateAndTime)
-            IF (Model%KDEB .NE. Sim_KDEB_NoPrintTimeStep) CALL LogMessage(MessageArray(1),f_iMessage,'',Destination=f_iSCREEN)
+            IF (Model%KDEB .NE. Sim_KDEB_NoPrintTimeStep) THEN
+                IF (ASSOCIATED(ModuleLogger)) THEN
+                    CALL ModuleLogger%LogMessage(MessageArray(1),f_iMessage,'',Destination=f_iSCREEN)
+                ELSE
+                    CALL LogMessage(MessageArray(1),f_iMessage,'',Destination=f_iSCREEN)
+                END IF
+            END IF
             MessageArray(1) = f_cLineFeed//REPEAT('-',50)//f_cLineFeed//TRIM(MessageArray(1))//f_cLineFeed//REPEAT('-',50)
-            CALL LogMessage(MessageArray(1),f_iMessage,'',Destination=f_iFILE)
+            IF (ASSOCIATED(ModuleLogger)) THEN
+                CALL ModuleLogger%LogMessage(MessageArray(1),f_iMessage,'',Destination=f_iFILE)
+            ELSE
+                CALL LogMessage(MessageArray(1),f_iMessage,'',Destination=f_iFILE)
+            END IF
             IF (Model%TimeStep%CurrentDateAndTime .EQ. Model%TimeStep%EndDateAndTime) Model%lEndOfSimulation = .TRUE.
 
     END SELECT
@@ -7596,7 +7798,11 @@ CONTAINS
                 END IF
             END DO
             IF (TimeStepIndex .EQ. 0) THEN
-                CALL SetLastMessage('Time interval to simulate multiple timesteps is not a recognized time step',f_iFatal,ThisProcedure) 
+                IF (ASSOCIATED(ModuleLogger)) THEN
+                    CALL ModuleLogger%SetLastMessage('Time interval to simulate multiple timesteps is not a recognized time step',f_iFatal,ThisProcedure)
+                ELSE
+                    CALL SetLastMessage('Time interval to simulate multiple timesteps is not a recognized time step',f_iFatal,ThisProcedure)
+                END IF
                 iStat = -1
                 RETURN
             END IF
@@ -7607,7 +7813,11 @@ CONTAINS
                 MessageArray(1) = 'Time interval to simulate multiple timesteps must be greater than or equal to the model simulation timestep!'
                 MessageArray(2) = 'Time interval to simulate multiple timesteps = ' // ADJUSTL(TRIM(UpperCase(cPeriod)))
                 MessageArray(3) = 'Model simulation timestep                    = ' // ADJUSTL(TRIM(UpperCase(Model%TimeStep%Unit)))
-                CALL SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+                IF (ASSOCIATED(ModuleLogger)) THEN
+                    CALL ModuleLogger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+                ELSE
+                    CALL SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+                END IF
                 iStat = -1
                 RETURN
             END IF
@@ -7618,7 +7828,11 @@ CONTAINS
 
         !Simulation date and time is NOT tracked
         CASE (.FALSE.)
-            CALL SetLastMessage('SimulateForAPeriod method is only supported for time-tracking simulations!',f_iFatal,ThisProcedure)
+            IF (ASSOCIATED(ModuleLogger)) THEN
+                CALL ModuleLogger%SetLastMessage('SimulateForAPeriod method is only supported for time-tracking simulations!',f_iFatal,ThisProcedure)
+            ELSE
+                CALL SetLastMessage('SimulateForAPeriod method is only supported for time-tracking simulations!',f_iFatal,ThisProcedure)
+            END IF
             iStat = -1
             RETURN
     END SELECT
@@ -7711,7 +7925,11 @@ CONTAINS
         !For supply adjustment option, restore the groundwater and stream heads to those at the beginning of the time step
         IF (Model%SupplyAdjust%IsAdjust()) THEN
             WRITE (MessageArray(1),'(A,14X,A,1X,A,I6,1X,A)') f_cLineFeed,REPEAT('*',3),'SUPPLY ADJUSTMENT ITERATION:',Model%SupplyAdjust%GetAdjustIter(),REPEAT('*',3)
-            CALL LogMessage(MessageArray(1),f_iMessage,'',Destination=f_iFILE)
+            IF (ASSOCIATED(ModuleLogger)) THEN
+                CALL ModuleLogger%LogMessage(MessageArray(1),f_iMessage,'',Destination=f_iFILE)
+            ELSE
+                CALL LogMessage(MessageArray(1),f_iMessage,'',Destination=f_iFILE)
+            END IF
         END IF
 
         !Zero out WSAs
@@ -7723,7 +7941,11 @@ CONTAINS
         lBackTrack = .FALSE.
         WRITE (MessageArray(1),'(3X,A)')       '          HEAD                                               VOLUMETRIC'
         WRITE (MessageArray(2),'(3X,2A,3X,A)') 'ITER      CONVERGENCE      MAX.DIFF       VARIABLE           CONVERGENCE',f_cLineFeed,REPEAT('-',73)
-        CALL LogMessage(MessageArray(1:2),f_iMessage,'',iDestination=f_iFILE)
+        IF (ASSOCIATED(ModuleLogger)) THEN
+            CALL ModuleLogger%LogMessage(MessageArray(1:2),f_iMessage,'',iDestination=f_iFILE)
+        ELSE
+            CALL LogMessage(MessageArray(1:2),f_iMessage,'',iDestination=f_iFILE)
+        END IF
         Newton_Raphson_Loop:  &
         DO
             CALL Model%Matrix%ResetToZero()
@@ -7822,12 +8044,20 @@ CONTAINS
             !END IF
                      
 ! ***** SOLVE THE SET OF EQUATION
-            CALL EchoProgress('Solving set of equations')
+            IF (ASSOCIATED(ModuleLogger)) THEN
+                CALL ModuleLogger%EchoProgress('Solving set of equations')
+            ELSE
+                CALL EchoProgress('Solving set of equations')
+            END IF
             CALL Model%Matrix%Solve(ITERX,iStrmNodeIDs,iLakeIDs,iGWNodeIDs,iStat)
             IF (iStat .EQ. -1) RETURN
 
 ! ***** CHECK CONVERGENCE OF ITERATIVE SOLUTION METHODS
-            CALL EchoProgress('Checking convergence')
+            IF (ASSOCIATED(ModuleLogger)) THEN
+                CALL ModuleLogger%EchoProgress('Checking convergence')
+            ELSE
+                CALL EchoProgress('Checking convergence')
+            END IF
             CALL Convergence(ITERX,Model,lEndIteration,iStat)
             IF (iStat .EQ. -1) RETURN
             IF (lEndIteration) EXIT
@@ -8140,7 +8370,11 @@ CONTAINS
                     END DO
             END SELECT
             WRITE (MessageArray(3),'(A,G10.3)') 'Difference = ',-DIFFMAX
-            CALL SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+            IF (ASSOCIATED(ModuleLogger)) THEN
+                CALL ModuleLogger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+            ELSE
+                CALL SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+            END IF
             iStat = -1
             RETURN
         END IF
@@ -8168,7 +8402,11 @@ CONTAINS
         
         WRITE (MessageArray(1),'(1X,I6,4X,G13.6,4X,G13.6,4X,A15,2X,G13.6)') ITERX,DIFF_L2,-DIFFMAX,cNodeMax,pMatrix%RHSL2(ITERX)/pMatrix%RHSL2(1)
         !WRITE (MessageArray(1),'(1X,I6,4X,G13.6,4X,G13.6,4X,A15)') ITERX,DIFF_L2,-DIFFMAX,cNodeMax
-        CALL LogMessage(MessageArray(1),f_iMessage,'',Destination=f_iFILE)
+        IF (ASSOCIATED(ModuleLogger)) THEN
+            CALL ModuleLogger%LogMessage(MessageArray(1),f_iMessage,'',Destination=f_iFILE)
+        ELSE
+            CALL LogMessage(MessageArray(1),f_iMessage,'',Destination=f_iFILE)
+        END IF
     END ASSOCIATE
     
   END SUBROUTINE Convergence
@@ -8326,17 +8564,33 @@ CONTAINS
     !Diversions
     Model%lDiversionAdjusted = lDivAdjustOn
     IF (lDivAdjustOn) THEN
-        CALL LogMessage(f_cLineFeed//'ADJUSTMENT OF DIVERSIONS IS TURNED ON!',f_iMessage,'',f_iFILE)
+        IF (ASSOCIATED(ModuleLogger)) THEN
+            CALL ModuleLogger%LogMessage(f_cLineFeed//'ADJUSTMENT OF DIVERSIONS IS TURNED ON!',f_iMessage,'',f_iFILE)
+        ELSE
+            CALL LogMessage(f_cLineFeed//'ADJUSTMENT OF DIVERSIONS IS TURNED ON!',f_iMessage,'',f_iFILE)
+        END IF
     ELSE
-        CALL LogMessage(f_cLineFeed//'ADJUSTMENT OF DIVERSIONS IS TURNED OFF!',f_iMessage,'',f_iFILE)
+        IF (ASSOCIATED(ModuleLogger)) THEN
+            CALL ModuleLogger%LogMessage(f_cLineFeed//'ADJUSTMENT OF DIVERSIONS IS TURNED OFF!',f_iMessage,'',f_iFILE)
+        ELSE
+            CALL LogMessage(f_cLineFeed//'ADJUSTMENT OF DIVERSIONS IS TURNED OFF!',f_iMessage,'',f_iFILE)
+        END IF
     END IF
     
     !Pumping
     Model%lPumpingAdjusted = lPumpAdjustOn
     IF (lPumpAdjustOn) THEN
-        CALL LogMessage(f_cLineFeed//'ADJUSTMENT OF PUMPING IS TURNED ON!',f_iMessage,'',f_iFILE)
+        IF (ASSOCIATED(ModuleLogger)) THEN
+            CALL ModuleLogger%LogMessage(f_cLineFeed//'ADJUSTMENT OF PUMPING IS TURNED ON!',f_iMessage,'',f_iFILE)
+        ELSE
+            CALL LogMessage(f_cLineFeed//'ADJUSTMENT OF PUMPING IS TURNED ON!',f_iMessage,'',f_iFILE)
+        END IF
     ELSE
-        CALL LogMessage(f_cLineFeed//'ADJUSTMENT OF PUMPING IS TURNED OFF!',f_iMessage,'',f_iFILE)
+        IF (ASSOCIATED(ModuleLogger)) THEN
+            CALL ModuleLogger%LogMessage(f_cLineFeed//'ADJUSTMENT OF PUMPING IS TURNED OFF!',f_iMessage,'',f_iFILE)
+        ELSE
+            CALL LogMessage(f_cLineFeed//'ADJUSTMENT OF PUMPING IS TURNED OFF!',f_iMessage,'',f_iFILE)
+        END IF
     END IF
     
     !Also update SupplyAdjust object
