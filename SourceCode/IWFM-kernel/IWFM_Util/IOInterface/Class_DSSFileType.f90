@@ -217,6 +217,11 @@ CONTAINS
     iStat = 0
     IF (PRESENT(FileOpenCode)) FileOpenCode = 0
 
+    !NOTE: DSS file linked list is not thread-safe for concurrent opens.
+    !This is acceptable because DSS files are only opened during initialization,
+    !not during the simulation loop. Concurrent model creation should use
+    !the DLL's OMP CRITICAL(IWFM_MODEL_MGMT) to serialize initialization.
+
     !If there is no entry in the file list (i.e. first call to this method) set general properties for the DSS file handling methods
     IF (.NOT. ASSOCIATED(DSSFileListHead)) THEN
         !Set the message output unit

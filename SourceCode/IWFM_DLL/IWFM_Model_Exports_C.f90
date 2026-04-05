@@ -33,8 +33,6 @@ MODULE IWFM_Model_Exports
                                           String_Copy_F_C                          , &
                                           CString_Len                              , &
                                           ConvertID_To_Index                       , &
-                                          LocateInList                             , &
-                                          ShellSort                                , &
                                           IntToText
   USE TimeSeriesUtilities         , ONLY: TimeStepType                             , &
                                           IncrementTimeStamp                       , &
@@ -81,8 +79,6 @@ MODULE IWFM_Model_Exports
   END TYPE ModelSlotType
 
   TYPE(ModelSlotType),PRIVATE,SAVE   :: ModelSlots(MAX_MODEL_SLOTS)
-  INTEGER,PRIVATE,SAVE               :: iNActiveModels     = 0
-  INTEGER,ALLOCATABLE,SAVE           :: iActiveModelIndices(:)
   INTEGER,PRIVATE,SAVE               :: iCurrentModelIndex = 0
   TYPE(ModelType),POINTER,PRIVATE,SAVE :: pModel => NULL()            
   
@@ -123,7 +119,6 @@ CONTAINS
     INTEGER             :: indx
     CHARACTER           :: cPPFileName_F*LenPPFileName,cSimFileName_F*LenSimFileName,cWSAFileName_F*LenWSAFileName
     LOGICAL             :: lRoutedStreams,lForInquiry
-    INTEGER,ALLOCATABLE :: iTempList(:)
 
     !Set environment for parallel processing
     !$ CALL KMP_SET_BLOCKTIME(0)                                  !Let threads sleep right away
@@ -151,15 +146,17 @@ CONTAINS
     CALL String_Copy_C_F(cSimFileName,cSimFileName_F)
     CALL String_Copy_C_F(cWSAFileName,cWSAFileName_F)
 
-    !Find an available slot
+    !Find an available slot (O(1) direct scan of pointer association)
+    !$OMP CRITICAL(IWFM_MODEL_MGMT)
     iCurrentModelIndex = 0
     DO indx=1,MAX_MODEL_SLOTS
-        IF (LocateInList(indx,iActiveModelIndices) .EQ. 0) THEN
+        IF (.NOT. ASSOCIATED(ModelSlots(indx)%ptr)) THEN
             iCurrentModelIndex = indx
             EXIT
         END IF
     END DO
     IF (iCurrentModelIndex .EQ. 0) THEN
+        !$OMP END CRITICAL(IWFM_MODEL_MGMT)
         CALL SetLastMessage('Maximum number of concurrent models reached!',f_iWarn,cModName)
         iStat = -1
         RETURN
@@ -179,6 +176,7 @@ CONTAINS
     IF (iStat .NE. 0) THEN
         DEALLOCATE(ModelSlots(iCurrentModelIndex)%ptr)
         iCurrentModelIndex = 0
+        !$OMP END CRITICAL(IWFM_MODEL_MGMT)
         RETURN
     END IF
 
@@ -187,14 +185,7 @@ CONTAINS
 
     !New model index
     iModelIndex = iCurrentModelIndex
-
-    !Update list of active model indices
-    ALLOCATE (iTempList(iNActiveModels+1))
-    iTempList(1:iNActiveModels) = iActiveModelIndices
-    iTempList(iNActiveModels+1) = iCurrentModelIndex
-    CALL MOVE_ALLOC(iTempList , iActiveModelIndices)
-    CALL ShellSort(iActiveModelIndices)
-    iNActiveModels = iNActiveModels + 1
+    !$OMP END CRITICAL(IWFM_MODEL_MGMT)
 
   END SUBROUTINE IW_Model_WSA_New
 
@@ -212,7 +203,6 @@ CONTAINS
     INTEGER             :: indx
     CHARACTER           :: cPPFileName_F*LenPPFileName,cSimFileName_F*LenSimFileName
     LOGICAL             :: lRoutedStreams,lForInquiry
-    INTEGER,ALLOCATABLE :: iTempList(:)
 
     !Set environment for parallel processing
     !$ CALL KMP_SET_BLOCKTIME(0)                                  !Let threads sleep right away
@@ -239,15 +229,17 @@ CONTAINS
     CALL String_Copy_C_F(cPPFileName,cPPFileName_F)
     CALL String_Copy_C_F(cSimFileName,cSimFileName_F)
 
-    !Find an available slot
+    !Find an available slot (O(1) direct scan of pointer association)
+    !$OMP CRITICAL(IWFM_MODEL_MGMT)
     iCurrentModelIndex = 0
     DO indx=1,MAX_MODEL_SLOTS
-        IF (LocateInList(indx,iActiveModelIndices) .EQ. 0) THEN
+        IF (.NOT. ASSOCIATED(ModelSlots(indx)%ptr)) THEN
             iCurrentModelIndex = indx
             EXIT
         END IF
     END DO
     IF (iCurrentModelIndex .EQ. 0) THEN
+        !$OMP END CRITICAL(IWFM_MODEL_MGMT)
         CALL SetLastMessage('Maximum number of concurrent models reached!',f_iWarn,cModName)
         iStat = -1
         RETURN
@@ -267,6 +259,7 @@ CONTAINS
     IF (iStat .NE. 0) THEN
         DEALLOCATE(ModelSlots(iCurrentModelIndex)%ptr)
         iCurrentModelIndex = 0
+        !$OMP END CRITICAL(IWFM_MODEL_MGMT)
         RETURN
     END IF
 
@@ -275,14 +268,7 @@ CONTAINS
 
     !New model index
     iModelID = iCurrentModelIndex
-
-    !Update list of active model indices
-    ALLOCATE (iTempList(iNActiveModels+1))
-    iTempList(1:iNActiveModels) = iActiveModelIndices
-    iTempList(iNActiveModels+1) = iCurrentModelIndex
-    CALL MOVE_ALLOC(iTempList , iActiveModelIndices)
-    CALL ShellSort(iActiveModelIndices)
-    iNActiveModels = iNActiveModels + 1
+    !$OMP END CRITICAL(IWFM_MODEL_MGMT)
 
   END SUBROUTINE IW_Model_New
   
@@ -306,34 +292,22 @@ CONTAINS
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_Kill
     INTEGER(C_INT),INTENT(OUT) :: iStat
 
-    !Local variables
-    INTEGER             :: indx,iCount
-    INTEGER,ALLOCATABLE :: iTempList(:)
-
     !Initialize
     iStat = 0
 
-    !Return if there are no models instantiated
-    IF (iNActiveModels .EQ. 0) RETURN
+    !Return if no model is currently selected
+    IF (iCurrentModelIndex .EQ. 0) RETURN
+    IF (.NOT. ASSOCIATED(ModelSlots(iCurrentModelIndex)%ptr)) RETURN
 
-    !Kill model and deallocate heap memory
+    !Kill model and deallocate heap memory (thread-safe)
+    !$OMP CRITICAL(IWFM_MODEL_MGMT)
     CALL ModelSlots(iCurrentModelIndex)%ptr%Kill()
     DEALLOCATE(ModelSlots(iCurrentModelIndex)%ptr)
-
-    !Update the number and list of active models
-    ALLOCATE(iTempList(iNActiveModels-1))
-    iCount = 0
-    DO indx=1,iNActiveModels
-        IF (iActiveModelIndices(indx) .EQ. iCurrentModelIndex) CYCLE
-        iCount            = iCount + 1
-        iTempList(iCount) = iActiveModelIndices(indx)
-    END DO
-    CALL MOVE_ALLOC(iTempList , iActiveModelIndices)
 
     !Update the current model index and pointer
     iCurrentModelIndex =  0
     pModel             => NULL()
-    iNActiveModels     = iNActiveModels - 1
+    !$OMP END CRITICAL(IWFM_MODEL_MGMT)
 
   END SUBROUTINE IW_Model_Kill
   
@@ -4760,18 +4734,17 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iInstantiated,iStat
     
     iStat = 0
-    
-    IF (iNActiveModels .EQ. 0) THEN
-        iInstantiated = 0
-        RETURN
-    END IF
-    
-    IF (LocateInList(iModelIndex,iActiveModelIndices) .GT. 0) THEN
-        iInstantiated = 1
+
+    IF (iModelIndex .GE. 1 .AND. iModelIndex .LE. MAX_MODEL_SLOTS) THEN
+        IF (ASSOCIATED(ModelSlots(iModelIndex)%ptr)) THEN
+            iInstantiated = 1
+        ELSE
+            iInstantiated = 0
+        END IF
     ELSE
         iInstantiated = 0
     END IF
-    
+
   END SUBROUTINE IW_Model_IsModelInstantiated
   
   
@@ -4870,21 +4843,25 @@ CONTAINS
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_Switch
     INTEGER(C_INT),INTENT(IN)  :: iModelID
     INTEGER(C_INT),INTENT(OUT) :: iStat
-    
-    !Local variables
-    INTEGER :: indx
-    
-    !First make sure that the model index is occupied
-    indx = LocateInList(iModelID,iActiveModelIndices)
-    IF (indx .EQ. 0) THEN
-        CALL SetLastMessage('Model with identifier '//TRIM(IntToText(iModelID))//' is not instantiated!',f_iWarn,cModName)
+
+    !O(1) direct index validation (thread-safe)
+    !$OMP CRITICAL(IWFM_MODEL_MGMT)
+    IF (iModelID .LT. 1 .OR. iModelID .GT. MAX_MODEL_SLOTS) THEN
+        !$OMP END CRITICAL(IWFM_MODEL_MGMT)
+        CALL SetLastMessage('Model ID out of range',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
-    
+    IF (.NOT. ASSOCIATED(ModelSlots(iModelID)%ptr)) THEN
+        !$OMP END CRITICAL(IWFM_MODEL_MGMT)
+        CALL SetLastMessage('Model '//TRIM(IntToText(iModelID))//' not instantiated',f_iWarn,cModName)
+        iStat = -1
+        RETURN
+    END IF
+    iCurrentModelIndex = iModelID
+    pModel             => ModelSlots(iModelID)%ptr
     iStat              = 0
-    iCurrentModelIndex = indx
-    pModel             => ModelSlots(iCurrentModelIndex)%ptr
+    !$OMP END CRITICAL(IWFM_MODEL_MGMT)
 
   END SUBROUTINE IW_Model_Switch
   
@@ -4893,24 +4870,23 @@ CONTAINS
   ! --- PACK A CHARACTER ARRAY INTO A SINGLE CHARACTER VARIABLES
   ! -------------------------------------------------------------
   SUBROUTINE StringArray_To_StringScalar(cArray,cScalar,iLocArray)
-    CHARACTER(LEN=*),INTENT(IN) :: cArray(:)
-    CHARACTER(LEN=*)            :: cScalar
-    INTEGER,INTENT(OUT)         :: iLocArray(:)
-    
+    CHARACTER(LEN=*),INTENT(IN)  :: cArray(:)
+    CHARACTER(LEN=*),INTENT(OUT) :: cScalar
+    INTEGER,INTENT(OUT)          :: iLocArray(:)
+
     !Local variables
-    INTEGER :: indx
-    
-    !Initialize
+    INTEGER :: indx,iPos,iLen
+
+    !Single-pass O(n) direct substring assignment (replaces O(n^2) concatenation)
     cScalar = ''
-    
-    !Compile the array into a single string variable
-    DO indx=1,SIZE(cArray)  
-        IF (indx .EQ. 1) THEN
-            iLocArray(indx) = 1
-        ELSE
-            iLocArray(indx) = LEN_TRIM(cScalar) + 1
+    iPos = 1
+    DO indx=1,SIZE(cArray)
+        iLocArray(indx) = iPos
+        iLen = LEN_TRIM(cArray(indx))
+        IF (iLen .GT. 0) THEN
+            cScalar(iPos:iPos+iLen-1) = cArray(indx)(1:iLen)
+            iPos = iPos + iLen
         END IF
-        cScalar = TRIM(cScalar) // TRIM(cArray(indx))
     END DO
 
   END SUBROUTINE StringArray_To_StringScalar

@@ -82,19 +82,22 @@ CONTAINS
     
     CALL String_Copy_C_F(cFileName,cFileName_F)
     
-    !If a budget file is already open, close it
+    !If a budget file is already open, close it; then open new file (thread-safe)
+    !$OMP CRITICAL(IWFM_BUDGET_MGMT)
     IF (lBudget_Instantiated) THEN
       CALL Budget%Kill()
       lBudget_Instantiated = .FALSE.
     END IF
-    
+
     !Open file
     CALL Budget%New(cFileName_F,iStat)
     IF (iStat .EQ. -1) THEN
         CALL Budget%Kill()
+        !$OMP END CRITICAL(IWFM_BUDGET_MGMT)
         RETURN
     END IF
     lBudget_Instantiated = .TRUE.
+    !$OMP END CRITICAL(IWFM_BUDGET_MGMT)
     
   END SUBROUTINE IW_Budget_OpenFile
   
@@ -119,8 +122,11 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     iStat = 0
+    !$OMP CRITICAL(IWFM_BUDGET_MGMT)
     CALL Budget%Kill()
-    
+    lBudget_Instantiated = .FALSE.
+    !$OMP END CRITICAL(IWFM_BUDGET_MGMT)
+
   END SUBROUTINE IW_Budget_CloseFile
   
 

@@ -2015,6 +2015,9 @@ CONTAINS
     INTEGER(HID_T),ALLOCATABLE       :: iTempIDs(:)
     CHARACTER(LEN=1000),ALLOCATABLE  :: cTempNames(:)
 
+    !Thread-safe: protect shared file tracking arrays
+    !$OMP CRITICAL(IWFM_HDF5_TRACKING)
+
     !Grow arrays if needed
     IF (nOpenHDFFiles .GE. nHDFCapacity) THEN
         iNewCapacity = MAX(INIT_HDF_CAPACITY, nHDFCapacity * 2)
@@ -2033,6 +2036,8 @@ CONTAINS
     OpenFileNames(nOpenHDFFiles) = cFileName
     OpenFileIDs(nOpenHDFFiles)   = iFileID
 
+    !$OMP END CRITICAL(IWFM_HDF5_TRACKING)
+
   END SUBROUTINE AddOpenHDFFile
 
 
@@ -2045,15 +2050,20 @@ CONTAINS
     !Local variables
     INTEGER :: iIndex, indx
 
-    iIndex = GetOpenFileIndex(iFileID)
-    IF (iIndex .LE. 0) RETURN
+    !Thread-safe: protect shared file tracking arrays
+    !$OMP CRITICAL(IWFM_HDF5_TRACKING)
 
-    !Shift entries down (no reallocation needed)
-    DO indx = iIndex, nOpenHDFFiles - 1
-        OpenFileNames(indx) = OpenFileNames(indx+1)
-        OpenFileIDs(indx)   = OpenFileIDs(indx+1)
-    END DO
-    nOpenHDFFiles = nOpenHDFFiles - 1
+    iIndex = GetOpenFileIndex(iFileID)
+    IF (iIndex .GT. 0) THEN
+        !Shift entries down (no reallocation needed)
+        DO indx = iIndex, nOpenHDFFiles - 1
+            OpenFileNames(indx) = OpenFileNames(indx+1)
+            OpenFileIDs(indx)   = OpenFileIDs(indx+1)
+        END DO
+        nOpenHDFFiles = nOpenHDFFiles - 1
+    END IF
+
+    !$OMP END CRITICAL(IWFM_HDF5_TRACKING)
 
   END SUBROUTINE RemoveOpenHDFFile
 

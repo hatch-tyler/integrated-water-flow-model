@@ -92,19 +92,22 @@ CONTAINS
     
     CALL String_Copy_C_F(cFileName,cFileName_F)
     
-    !If a Z-Budget file is already open, close it
+    !If a Z-Budget file is already open, close it; then open new file (thread-safe)
+    !$OMP CRITICAL(IWFM_ZBUDGET_MGMT)
     IF (lZBudget_Instantiated) THEN
       CALL ZBudget%Kill()
       lZBudget_Instantiated = .FALSE.
     END IF
-    
+
     !Open file
     CALL ZBudget%New(cFileName_F,iStat)
     IF (iStat .EQ. -1) THEN
         CALL ZBudget%Kill()
+        !$OMP END CRITICAL(IWFM_ZBUDGET_MGMT)
         RETURN
     END IF
     lZBudget_Instantiated = .TRUE.
+    !$OMP END CRITICAL(IWFM_ZBUDGET_MGMT)
     
   END SUBROUTINE IW_ZBudget_OpenFile
   
@@ -186,9 +189,12 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iStat
 
     iStat = 0
-    
+
+    !$OMP CRITICAL(IWFM_ZBUDGET_MGMT)
     CALL ZBudget%Kill()
-    
+    lZBudget_Instantiated = .FALSE.
+    !$OMP END CRITICAL(IWFM_ZBUDGET_MGMT)
+
   END SUBROUTINE IW_ZBudget_CloseFile
   
 
