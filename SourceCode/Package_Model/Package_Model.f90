@@ -1172,11 +1172,13 @@ CONTAINS
     CALL DATE_AND_TIME(VALUES=iTimerValues)
     CALL LogInitTime('AppStream', iTimerStart, iTimerValues)
 
-    !Matrix
+    !Matrix (skip in inquiry mode — solver not needed for queries)
     CALL DATE_AND_TIME(VALUES=iTimerStart)
-    CALL Model%Matrix%SetLogger(DefaultLogger)
-    CALL Model%Matrix%New(PPBinaryFile,iStat)
-    IF (iStat .EQ. -1) RETURN
+    IF (.NOT. lForInquiry) THEN
+      CALL Model%Matrix%SetLogger(DefaultLogger)
+      CALL Model%Matrix%New(PPBinaryFile,iStat)
+      IF (iStat .EQ. -1) RETURN
+    END IF
 
     !Groundwater
     CALL Model%AppStream%GetStrmConnectivityInGWNodes(Model%StrmGWConnector,StrmConnectivity)
@@ -1194,15 +1196,19 @@ CONTAINS
     CALL DATE_AND_TIME(VALUES=iTimerValues)
     CALL LogInitTime('Matrix+AppGW', iTimerStart, iTimerValues)
 
-    !Unsaturated zone
+    !Unsaturated zone (skip in inquiry mode — simulation only)
     CALL DATE_AND_TIME(VALUES=iTimerStart)
-    CALL Model%AppUnsatZone%New(lForInquiry,ProjectFileNames(SIM_UnsatZoneDataFileID),Model%cSIMWorkingDirectory,Model%AppGrid,Model%Stratigraphy,Model%TimeStep,Model%NTIME,Model%DepthToGW,iStat)
-    IF (iStat .EQ. -1) RETURN
-    Model%lAppUnsatZone_Defined = Model%AppUnsatZone%IsDefined()
+    IF (.NOT. lForInquiry) THEN
+      CALL Model%AppUnsatZone%New(lForInquiry,ProjectFileNames(SIM_UnsatZoneDataFileID),Model%cSIMWorkingDirectory,Model%AppGrid,Model%Stratigraphy,Model%TimeStep,Model%NTIME,Model%DepthToGW,iStat)
+      IF (iStat .EQ. -1) RETURN
+      Model%lAppUnsatZone_Defined = Model%AppUnsatZone%IsDefined()
+    END IF
 
-    !Small watersheds
-    CALL Model%AppSWShed%New(lForInquiry,ProjectFileNames(SIM_SmallWatershedDataFileID),ProjectFileNames(SIM_CropCoeffFileID),Model%cSIMWorkingDirectory,Model%TimeStep,Model%NTIME,NStrmNodes,iStrmNodeIDs,Model%AppGrid,Model%Stratigraphy,Model%PrecipData,Model%ETData,iStat)
-    IF (iStat .EQ. -1) RETURN
+    !Small watersheds (skip in inquiry mode — simulation only)
+    IF (.NOT. lForInquiry) THEN
+      CALL Model%AppSWShed%New(lForInquiry,ProjectFileNames(SIM_SmallWatershedDataFileID),ProjectFileNames(SIM_CropCoeffFileID),Model%cSIMWorkingDirectory,Model%TimeStep,Model%NTIME,NStrmNodes,iStrmNodeIDs,Model%AppGrid,Model%Stratigraphy,Model%PrecipData,Model%ETData,iStat)
+      IF (iStat .EQ. -1) RETURN
+    END IF
 
     !Root zone component (must be instantiated after gw and streams)
     IF (ProjectFileNames(SIM_RootZoneDataFileID) .NE. '') THEN
