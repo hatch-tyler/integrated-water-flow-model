@@ -8087,20 +8087,17 @@ CONTAINS
             !END IF
                      
 ! ***** SOLVE THE SET OF EQUATION
-            IF (ASSOCIATED(ModuleLogger)) THEN
+            IF (ITERX .EQ. 1) THEN
+              IF (ASSOCIATED(ModuleLogger)) THEN
                 CALL ModuleLogger%EchoProgress('Solving set of equations')
-            ELSE
+              ELSE
                 CALL EchoProgress('Solving set of equations')
+              END IF
             END IF
             CALL Model%Matrix%Solve(ITERX,iStrmNodeIDs,iLakeIDs,iGWNodeIDs,iStat)
             IF (iStat .EQ. -1) RETURN
 
 ! ***** CHECK CONVERGENCE OF ITERATIVE SOLUTION METHODS
-            IF (ASSOCIATED(ModuleLogger)) THEN
-                CALL ModuleLogger%EchoProgress('Checking convergence')
-            ELSE
-                CALL EchoProgress('Checking convergence')
-            END IF
             CALL Convergence(ITERX,Model,lEndIteration,iStat)
             IF (iStat .EQ. -1) RETURN
             IF (lEndIteration) EXIT
