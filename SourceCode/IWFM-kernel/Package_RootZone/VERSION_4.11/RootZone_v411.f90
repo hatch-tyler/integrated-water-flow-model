@@ -24,9 +24,11 @@ MODULE RootZone_v411
   USE IWFM_Kernel_Version            , ONLY: IWFMKernelVersion
   USE MessageLogger                  , ONLY: MessageLoggerType                        , &
                                              SetLastMessage                           , &
+                                             LogMessage                              , &
                                              EchoProgress                             , &
                                              MessageArray                             , &
-                                             f_iFatal
+                                             f_iFatal                                 , &
+                                             f_iInfo
   USE GeneralUtilities               , ONLY: StripTextUntilCharacter                  , &
                                              IntToText                                , &
                                              CleanSpecialCharacters                   , &
@@ -326,13 +328,17 @@ CONTAINS
     TYPE(ElemSurfaceFlowToDestType),ALLOCATABLE :: ElemFlowToOutside(:),ElemFlowToGW(:)
     CHARACTER(:),ALLOCATABLE                    :: cAbsPathFileName
     CHARACTER(LEN=20),ALLOCATABLE               :: cEntryLines(:)
-    
+    ! Sub-profiling timers
+    INTEGER :: iPerfStart(8), iPerfEnd(8)
+    REAL(8) :: rPerfSec
+    CHARACTER(LEN=80) :: cPerfMsg
+
     !Initialize
     iStat = 0
-    
+
     !Return if no filename is given
     IF (cFileName .EQ. '') RETURN
-    
+
     !Print progress
     CALL EchoProgress('Instantiating root zone')
 
@@ -412,6 +418,7 @@ CONTAINS
     NonPondedCropFile = StripTextUntilCharacter(NonPondedCropFile,f_cInlineCommentChar) 
     CALL CleanSpecialCharacters(NonPondedCropFile)
     CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(NonPondedCropFile)),cWorkingDirectory,cAbsPathFileName)
+    CALL DATE_AND_TIME(VALUES=iPerfStart)
     CALL RootZone%NonPondedAgRootZone%New(IsForInquiry,cProjectNameForDSS,cAbsPathFileName,cWorkingDirectory,FactCN,AppGrid,iElemIDs,TimeStep,NTIME,TRIM(cVersionFull),iStat)
     IF (iStat .EQ. -1) RETURN
        
@@ -438,7 +445,11 @@ CONTAINS
     CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(NVRVFile)),cWorkingDirectory,cAbsPathFileName)
     CALL RootZone%NVRVRootZone%New(.FALSE.,cAbsPathFileName,cWorkingDirectory,FactCN,NElements,NRegion,iElemIDs,TrackTime,iStat,iStrmNodeIDs)
     IF (iStat .EQ. -1) RETURN
-    
+    CALL DATE_AND_TIME(VALUES=iPerfEnd)
+    rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
+    WRITE(cPerfMsg,'(A,F8.3,A)') '      [PERF] RZ LandUse: ', rPerfSec, ' sec'
+    CALL LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+
     !Check if at least one type of land use is specified
     IF ( NonPondedCropFile .EQ. ''   .AND.   &
          RiceRefugeFile    .EQ. ''   .AND.   &
@@ -540,6 +551,7 @@ CONTAINS
     CALL CleanSpecialCharacters(cALine)
     IF (cALine .NE. '') THEN
         CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(cALine)),cWorkingDirectory,cAbsPathFileName)
+        CALL DATE_AND_TIME(VALUES=iPerfStart)
         CALL LWUseBudRawFile_New(IsForInquiry,cProjectNameForDSS,cAbsPathFileName,TimeStep,NTIME,NRegion+1,RegionArea,RegionNames,'land and water use budget',TRIM(cVersionFull),RootZone%LWUseBudRawFile,iStat)
         IF (iStat .EQ. -1) RETURN
         RootZone%Flags%LWUseBudRawFile_Defined = .TRUE.      
@@ -585,7 +597,13 @@ CONTAINS
         RootZone%Flags%RootZoneZoneBudRawFile_Defined = .TRUE.
     END IF
        
+    CALL DATE_AND_TIME(VALUES=iPerfEnd)
+    rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
+    WRITE(cPerfMsg,'(A,F8.3,A)') '      [PERF] RZ Budget+ZBudget: ', rPerfSec, ' sec'
+    CALL LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+
     !Land use area scaling factor output file
+    CALL DATE_AND_TIME(VALUES=iPerfStart)
     IF (lLUAreaScaleOutFileDefined) THEN
         CALL RootZoneParamFile%ReadData(cALine,iStat)  ;  IF (iStat .EQ. -1) RETURN  
         cALine = StripTextUntilCharacter(cALine,f_cInlineCommentChar) 
@@ -836,7 +854,11 @@ CONTAINS
     
     !Close file
     CALL RootZoneParamFile%Kill()
-    
+    CALL DATE_AND_TIME(VALUES=iPerfEnd)
+    rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
+    WRITE(cPerfMsg,'(A,F8.3,A)') '      [PERF] RZ SoilParams+ElemConfig: ', rPerfSec, ' sec'
+    CALL LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+
     !Clear memory
     DEALLOCATE (ElemFlowToOutside , ElemFlowToGW , DummyRealArray , STAT=ErrorCode)
 

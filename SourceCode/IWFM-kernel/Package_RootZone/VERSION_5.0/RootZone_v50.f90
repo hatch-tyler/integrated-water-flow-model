@@ -24,9 +24,11 @@ MODULE RootZone_v50
   USE IWFM_Kernel_Version              , ONLY: IWFMKernelVersion
   USE MessageLogger                    , ONLY: MessageLoggerType                           , &
                                                SetLastMessage                              , &
+                                               LogMessage                                  , &
                                                EchoProgress                                , &
                                                MessageArray                                , &
-                                               f_iFatal
+                                               f_iFatal                                    , &
+                                               f_iInfo
   USE TimeSeriesUtilities              , ONLY: TimeStepType                                , &
                                                IncrementTimeStamp                          , &
                                                NPeriods                                    , &
@@ -363,7 +365,10 @@ CONTAINS
     CHARACTER(LEN=f_iMaxLocationNameLen)        :: RegionNames(AppGrid%NSubregions+1)
     TYPE(ElemSurfaceFlowToDestType),ALLOCATABLE :: ElemFlowToOutside(:),ElemFlowToGW(:)
     CHARACTER(:),ALLOCATABLE                    :: cAbsPathFileName
-    
+    INTEGER                                     :: iPerfStart(8), iPerfEnd(8)
+    REAL(8)                                     :: rPerfSec
+    CHARACTER(LEN=80)                           :: cPerfMsg
+
     !Initialize
     iStat = 0
     
@@ -422,8 +427,9 @@ CONTAINS
     !-------------------------
     
     !Agricultural data file
-    CALL RootZoneParamFile%ReadData(AgDataFile,iStat)  ;  IF (iStat .EQ. -1) RETURN 
-    AgDataFile = StripTextUntilCharacter(AgDataFile,f_cInlineCommentChar) 
+    CALL DATE_AND_TIME(VALUES=iPerfStart)
+    CALL RootZoneParamFile%ReadData(AgDataFile,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    AgDataFile = StripTextUntilCharacter(AgDataFile,f_cInlineCommentChar)
     CALL CleanSpecialCharacters(AgDataFile)
     CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(AgDataFile)),cWorkingDirectory,cAbsPathFileName)
     CALL RootZone%AgRootZone%New(IsForInquiry,cAbsPathFileName,cWorkingDirectory,AppGrid,FactCN,NSoils,iSubregionIDs,TimeStep,iStat)
@@ -456,7 +462,12 @@ CONTAINS
     CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(NVRVFile)),cWorkingDirectory,cAbsPathFileName)
     CALL RootZone%NVRVRootZone%New(cAbsPathFileName,cWorkingDirectory,FactCN,NSoils,NElements,NRegion,iSubregionIDs,TrackTime,iStat)
     IF (iStat .EQ. -1) RETURN
-    
+    CALL DATE_AND_TIME(VALUES=iPerfEnd)
+    rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) &
+             - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
+    WRITE(cPerfMsg,'(A,F8.3,A)') '    [PERF] RZ LandUse: ', rPerfSec, ' sec'
+    CALL LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+
     !Check if at least one type of land use is specified
     IF ( AgDataFile        .EQ. ''   .AND.   &
          UrbanDataFile     .EQ. ''   .AND.   &
@@ -476,8 +487,9 @@ CONTAINS
     END ASSOCIATE
     
     !Return flow data file
-    CALL RootZoneParamFile%ReadData(ALine,iStat)  ;  IF (iStat .EQ. -1) RETURN  
-    ALine = StripTextUntilCharacter(ALine,f_cInlineCommentChar) 
+    CALL DATE_AND_TIME(VALUES=iPerfStart)
+    CALL RootZoneParamFile%ReadData(ALine,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    ALine = StripTextUntilCharacter(ALine,f_cInlineCommentChar)
     CALL CleanSpecialCharacters(ALine)
     IF (ALine .EQ. '') THEN
         IF (RootZone%Flags%lAg_Defined  .OR.  RootZone%Flags%lUrban_Defined) THEN
@@ -517,9 +529,16 @@ CONTAINS
         RootZone%Flags%lGenericMoistureFile_Defined = .TRUE.
     END IF
     
+    CALL DATE_AND_TIME(VALUES=iPerfEnd)
+    rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) &
+             - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
+    WRITE(cPerfMsg,'(A,F8.3,A)') '    [PERF] RZ SoilParams: ', rPerfSec, ' sec'
+    CALL LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+
     !Land and water use budget HDF5 output file
-    CALL RootZoneParamFile%ReadData(ALine,iStat)  ;  IF (iStat .EQ. -1) RETURN 
-    ALine = StripTextUntilCharacter(ALine,f_cInlineCommentChar) 
+    CALL DATE_AND_TIME(VALUES=iPerfStart)
+    CALL RootZoneParamFile%ReadData(ALine,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    ALine = StripTextUntilCharacter(ALine,f_cInlineCommentChar)
     CALL CleanSpecialCharacters(ALine)
     IF (ALine .NE. '') THEN
         CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(ALine)),cWorkingDirectory,cAbsPathFileName)
@@ -567,8 +586,14 @@ CONTAINS
         IF (iStat .EQ. -1) RETURN
         RootZone%Flags%RootZoneZoneBudRawFile_Defined = .TRUE.
     END IF
-       
+    CALL DATE_AND_TIME(VALUES=iPerfEnd)
+    rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) &
+             - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
+    WRITE(cPerfMsg,'(A,F8.3,A)') '    [PERF] RZ Budget+ZBudget: ', rPerfSec, ' sec'
+    CALL LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+
     !End-of-simulation moisture results output
+    CALL DATE_AND_TIME(VALUES=iPerfStart)
     CALL RootZoneParamFile%ReadData(ALine,iStat)  ;  IF (iStat .EQ. -1) RETURN  
     ALine = StripTextUntilCharacter(ALine,f_cInlineCommentChar) 
     CALL CleanSpecialCharacters(ALine)
@@ -789,12 +814,18 @@ CONTAINS
     CALL CheckTSDataPointers(RootZone,iElemIDs,iSubregionIDs,Precip,ET,iStat)
     IF (iStat .EQ. -1) RETURN
 
+    CALL DATE_AND_TIME(VALUES=iPerfEnd)
+    rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) &
+             - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
+    WRITE(cPerfMsg,'(A,F8.3,A)') '    [PERF] RZ GenericMoisture+Rest: ', rPerfSec, ' sec'
+    CALL LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+
     !Close file
     CALL RootZoneParamFile%Kill()
 
     !Clear memory
     DEALLOCATE (DummyRealArray , iColGenericMoisture , ElemFlowToOutside , ElemFlowToGW , cAbsPathFileName , STAT=ErrorCode)
-    
+
   END SUBROUTINE RootZone_v50_New
   
   

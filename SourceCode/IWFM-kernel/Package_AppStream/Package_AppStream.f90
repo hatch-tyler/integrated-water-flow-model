@@ -24,10 +24,12 @@ MODULE Package_AppStream
   USE IWFM_Kernel_Version         , ONLY: ReadVersion                                      , &
                                           IWFMKernelVersion
   USE MessageLogger               , ONLY: SetLastMessage                                   , &
+                                          LogMessage                                       , &
                                           EchoProgress                                     , &
                                           MessageArray                                     , &
                                           MessageLoggerType                                , &
                                           f_iFatal                                         , &
+                                          f_iInfo                                          , &
                                           f_iWarn
   USE GeneralUtilities            , ONLY: IntToText                                        , &
                                           FindSubStringInString                            , &
@@ -331,7 +333,10 @@ CONTAINS
     CHARACTER(LEN=ModNameLen+18) :: ThisProcedure = ModName // 'SetStaticComponent'
     TYPE(GenericFileType)        :: AppStreamMainFile
     CHARACTER(:),ALLOCATABLE     :: cVersionLocal
-    
+    INTEGER                      :: iPerfStart(8), iPerfEnd(8)
+    REAL(8)                      :: rPerfSec
+    CHARACTER(LEN=80)            :: cPerfMsg
+
     !Initialize
     iStat = 0
 
@@ -342,11 +347,12 @@ CONTAINS
     CALL AppStreamMainFile%New(FileName=cFileName,InputFile=.TRUE.,IsTSFile=.FALSE.,iStat=iStat)  ;  IF (iStat .EQ. -1) RETURN
     CALL ReadVersion(AppStreamMainFile,'STREAM',cVersionLocal,iStat)
     IF (iStat .EQ. -1) RETURN
-    
+
     !Close file to reset it
     CALL AppStreamMainFile%Kill()
-    
+
     !Instantiate stream component based on version
+    CALL DATE_AND_TIME(VALUES=iPerfStart)
     SELECT CASE (TRIM(cVersionLocal))
         CASE ('4.0')
             ALLOCATE(AppStream_v40_Type :: AppStream%Me)
@@ -387,6 +393,11 @@ CONTAINS
             iStat = -1
             RETURN
     END SELECT
+    CALL DATE_AND_TIME(VALUES=iPerfEnd)
+    rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) &
+             - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
+    WRITE(cPerfMsg,'(A,F8.3,A)') '    [PERF] Stream Network: ', rPerfSec, ' sec'
+    CALL LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
 
   END SUBROUTINE SetStaticComponent
   
@@ -414,6 +425,9 @@ CONTAINS
     INTEGER                      :: ErrorCode
     CHARACTER                    :: cVersionPre*4
     CHARACTER(:),ALLOCATABLE     :: cVersionSim
+    INTEGER                      :: iPerfStart(8), iPerfEnd(8)
+    REAL(8)                      :: rPerfSec
+    CHARACTER(LEN=80)            :: cPerfMsg
     
     !Initailize
     iStat = 0
@@ -480,8 +494,14 @@ CONTAINS
     END IF
     
     !Instantiate the dynamic component
+    CALL DATE_AND_TIME(VALUES=iPerfStart)
     CALL AppStream%Me%New(IsForInquiry,cFileName,cWorkingDirectory,IWFMKernelVersion%GetVersion(),TimeStep,NTIME,iLakeIDs,AppGrid,Stratigraphy,ETData,StrmLakeConnector,StrmGWConnector,iStat)
-        
+    CALL DATE_AND_TIME(VALUES=iPerfEnd)
+    rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) &
+             - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
+    WRITE(cPerfMsg,'(A,F8.3,A)') '    [PERF] Stream DynInit: ', rPerfSec, ' sec'
+    CALL LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+
   END SUBROUTINE SetDynamicComponent
   
   
@@ -573,11 +593,14 @@ CONTAINS
     !Local variables
     CHARACTER(LEN=ModNameLen+16) :: ThisProcedure = ModName // 'SetAllComponents'
     INTEGER                      :: iVersion
-    
+    INTEGER                      :: iPerfStart(8), iPerfEnd(8)
+    REAL(8)                      :: rPerfSec
+    CHARACTER(LEN=80)            :: cPerfMsg
+
     !Initialize
     iStat = 0
-    
-    !If a binary file is supplied, read the flag to see if streams are simulated 
+
+    !If a binary file is supplied, read the flag to see if streams are simulated
     IF (BinFile%iGetFileType() .NE. f_iUNKNOWN) THEN
         CALL BinFile%ReadData(iVersion,iStat)  
         IF (iStat .EQ. -1) RETURN
@@ -591,6 +614,7 @@ CONTAINS
     IF (ALLOCATED(AppStream%Me)) CALL AppStream%Kill()
     
     !Instantiate stream component based on version
+    CALL DATE_AND_TIME(VALUES=iPerfStart)
     SELECT CASE (iVersion)
         CASE (40)
             ALLOCATE(AppStream_v40_Type :: AppStream%Me)
@@ -631,7 +655,12 @@ CONTAINS
             iStat = -1
             RETURN
     END SELECT
-    
+    CALL DATE_AND_TIME(VALUES=iPerfEnd)
+    rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) &
+             - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
+    WRITE(cPerfMsg,'(A,F8.3,A)') '    [PERF] Stream AllComponents: ', rPerfSec, ' sec'
+    CALL LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+
   END SUBROUTINE SetAllComponents
   
   
@@ -655,22 +684,26 @@ CONTAINS
     CHARACTER(LEN=ModNameLen+30) :: ThisProcedure = ModName // 'SetAllComponentsWithoutBinFile'
     TYPE(GenericFileType)        :: MainFile
     CHARACTER(:),ALLOCATABLE     :: cVersionPre
-    
+    INTEGER                      :: iPerfStart(8), iPerfEnd(8)
+    REAL(8)                      :: rPerfSec
+    CHARACTER(LEN=80)            :: cPerfMsg
+
     !Initialize
     iStat = 0
-    
+
     !Return if a Simulation filename is not specified
     IF (cSimFileName .EQ. ''  .OR.  cPPFileName .EQ. '') RETURN
-    
+
     !Open file and read the version number line to decide which component to instantiate
     CALL MainFile%New(FileName=cPPFileName,InputFile=.TRUE.,Descriptor='main stream data file',iStat=iStat)  ;  IF (iStat .EQ. -1) RETURN
     CALL ReadVersion(MainFile,'STREAM',cVersionPre,iStat)
     IF (iStat .EQ. -1) RETURN
-    
+
     !Close main input file to reset it
     CALL MainFile%Kill()
-    
+
     !Instantiate stream component based on version
+    CALL DATE_AND_TIME(VALUES=iPerfStart)
     SELECT CASE (TRIM(cVersionPre))
         CASE ('4.0')
             ALLOCATE(AppStream_v40_Type :: AppStream%Me)
@@ -711,7 +744,12 @@ CONTAINS
             iStat = -1
             RETURN
     END SELECT
-    
+    CALL DATE_AND_TIME(VALUES=iPerfEnd)
+    rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) &
+             - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
+    WRITE(cPerfMsg,'(A,F8.3,A)') '    [PERF] Stream AllComponents: ', rPerfSec, ' sec'
+    CALL LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+
   END SUBROUTINE SetAllComponentsWithoutBinFile
 
 
