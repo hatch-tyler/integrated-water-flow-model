@@ -445,8 +445,12 @@ CONTAINS
     CHARACTER,ALLOCATABLE       :: cCountLines(:)*50
     CHARACTER(:),ALLOCATABLE    :: cAbsPathFileName
     INTEGER,PARAMETER           :: f_iYesPrintAquiferParameters = 1 , &
-                                   f_iNotPrintAquiferParameters = 0 
-    
+                                   f_iNotPrintAquiferParameters = 0
+    ! Sub-profiling timers
+    INTEGER :: iPerfStart(8), iPerfEnd(8)
+    REAL(8) :: rPerfSec
+    CHARACTER(LEN=80) :: cPerfMsg
+
     !Initialize
     iStat      = 0
     iGWNodeIDs = AppGrid%AppNode%ID
@@ -526,6 +530,7 @@ CONTAINS
     cBCFileName = cAbsPathFileName
     
     !Tile drains/subsurface irrigation
+    CALL DATE_AND_TIME(VALUES=iPerfStart)
     CALL AppGWParamFile%ReadData(cALine,iStat)  ;  IF (iStat .EQ. -1) RETURN  
     cALine = StripTextUntilCharacter(cALine,f_cInlineCommentChar)  
     CALL CleanSpecialCharacters(cALine)
@@ -535,18 +540,28 @@ CONTAINS
     IF (AppGW%AppTileDrain%GetNDrain() .GT. 0   .OR.   AppGW%AppTileDrain%GetNSubIrig() .GT. 0)  &
         AppGW%lTileDrain_Defined = .TRUE.
     
+    CALL DATE_AND_TIME(VALUES=iPerfEnd)
+    rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
+    WRITE(cPerfMsg,'(A,F8.3,A)') '    [PERF] AppGW TileDrain: ', rPerfSec, ' sec'
+    CALL LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+
     !Pumping
-    CALL AppGWParamFile%ReadData(cALine,iStat)  ;  IF (iStat .EQ. -1) RETURN  
-    cALine = StripTextUntilCharacter(cALine,f_cInlineCommentChar)  
+    CALL DATE_AND_TIME(VALUES=iPerfStart)
+    CALL AppGWParamFile%ReadData(cALine,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    cALine = StripTextUntilCharacter(cALine,f_cInlineCommentChar)
     CALL CleanSpecialCharacters(cALine)
     CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(cALine)),cWorkingDirectory,cAbsPathFileName)
     CALL AppGW%AppPumping%New(lIsForInquiry,cAbsPathFileName,cWorkingDirectory,AppGrid,Stratigraphy,TimeStep,iStat)
     IF (iStat .EQ. -1) RETURN
     IF (AppGW%AppPumping%GetNWells() .GT. 0   .OR.   AppGW%AppPumping%GetNElemPumps() .GT. 0)   &
         AppGW%lPumping_Defined = .TRUE.
-    
+    CALL DATE_AND_TIME(VALUES=iPerfEnd)
+    rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
+    WRITE(cPerfMsg,'(A,F8.3,A)') '    [PERF] AppGW Pumping: ', rPerfSec, ' sec'
+    CALL LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+
     !Subsidence filename
-    CALL AppGWParamFile%ReadData(cSubsidenceFileName,iStat)  ;  IF (iStat .EQ. -1) RETURN  
+    CALL AppGWParamFile%ReadData(cSubsidenceFileName,iStat)  ;  IF (iStat .EQ. -1) RETURN
     cSubsidenceFileName = StripTextUntilCharacter(cSubsidenceFileName,f_cInlineCommentChar)  
     CALL CleanSpecialCharacters(cSubsidenceFileName)
     CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(cSubsidenceFileName)),cWorkingDirectory,cAbsPathFileName)
@@ -679,10 +694,17 @@ CONTAINS
     END IF
     
     !Groundwater hydrographs
+    CALL DATE_AND_TIME(VALUES=iPerfStart)
     CALL AppGW%GWHyd%New(lIsForInquiry,AppGrid,Stratigraphy,cWorkingDirectory,iGWNodeIDs,iTecPlotFlag,AppGW%FactHead,AppGW%UnitHead,AppGW%UnitFlow,AppGW%UnitVelocity,TRIM(cAllHeadOutFileName),TRIM(cCellVelocityFileName),TRIM(cHeadTecplotFileName),TRIM(cVelTecplotFileName),TimeStep,NTIME,AppGWParamFile,iStat)
     IF (iStat .EQ. -1) RETURN
     
+    CALL DATE_AND_TIME(VALUES=iPerfEnd)
+    rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
+    WRITE(cPerfMsg,'(A,F8.3,A)') '    [PERF] AppGW Hydro+Budget+Output: ', rPerfSec, ' sec'
+    CALL LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+
     !Aquifer parameters
+    CALL DATE_AND_TIME(VALUES=iPerfStart)
     CALL ReadAquiferParameters(NLayers,AppGrid,TimeStep,AppGWParamFile,AppGW%VarTimeUnit,AppGW%Nodes,iStat)
     IF (iStat .EQ. -1) RETURN
     
@@ -717,7 +739,13 @@ CONTAINS
     IF (iStat .EQ. -1) RETURN
     AppGW%State%Head = Head
     
+    CALL DATE_AND_TIME(VALUES=iPerfEnd)
+    rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
+    WRITE(cPerfMsg,'(A,F8.3,A)') '    [PERF] AppGW Params+IC: ', rPerfSec, ' sec'
+    CALL LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+
     !Instantiate the boundary conditions data and overwrite the initial conditions if necessary
+    CALL DATE_AND_TIME(VALUES=iPerfStart)
     CALL AppGW%AppBC%New(lIsForInquiry,ADJUSTL(cBCFileName),cWorkingDirectory,AppGrid,Stratigraphy,iGWNodeIDs,AppGW%UnitFlow,TimeStep,AppGW%State%Head,iStat)
     IF (iStat .EQ. -1) RETURN
     AppGW%lAppBC_Defined = AppGW%AppBC%IsDefined()
@@ -725,10 +753,20 @@ CONTAINS
     !Assign previous head as current head
     AppGW%State%Head_P = AppGW%State%Head
     
+    CALL DATE_AND_TIME(VALUES=iPerfEnd)
+    rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
+    WRITE(cPerfMsg,'(A,F8.3,A)') '    [PERF] AppGW BoundaryConditions: ', rPerfSec, ' sec'
+    CALL LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+
     !Instantiate subsidence; this has to be done after AppGW initial conditions are processed
+    CALL DATE_AND_TIME(VALUES=iPerfStart)
     CALL AppGW%AppSubsidence%New(lIsForInquiry,cSubsidenceFileName,cWorkingDirectory,iGWNodeIDs,AppGrid,Stratigraphy,StrmConnectivity,TimeStep,iStat,SubsICFile,NTIME)
     IF (iStat .EQ. -1) RETURN
     AppGW%lSubsidence_Defined = AppGW%AppSubsidence%IsDefined()
+    CALL DATE_AND_TIME(VALUES=iPerfEnd)
+    rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
+    WRITE(cPerfMsg,'(A,F8.3,A)') '    [PERF] AppGW Subsidence: ', rPerfSec, ' sec'
+    CALL LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
 
     !Aquifer overwrite parameters
     IF (cOverwriteFileName .NE. '') THEN
