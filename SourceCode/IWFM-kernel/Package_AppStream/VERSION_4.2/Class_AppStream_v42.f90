@@ -360,9 +360,9 @@ CONTAINS
         DiverDetailBudFileName = cAbsPathFileName
     END IF
     
-    !Diversions and bypasses
+    !Diversions and bypasses (skip entirely in inquiry mode — simulation routing only)
     CALL DATE_AND_TIME(VALUES=iPerfStart)
-    IF (lRoutedStreams) THEN
+    IF (lRoutedStreams .AND. .NOT. IsForInquiry) THEN
         CALL AppStream%AppDiverBypass%New(IsForInquiry,DiverSpecFileName,BypassSpecFileName,DiverFileName,DiverDetailBudFileName,cWorkingDirectory,TRIM(cVersionFull),NTIME,TimeStep,AppStream%NStrmNodes,iStrmNodeIDs,iLakeIDs,AppStream%Reaches,AppGrid,StrmLakeConnector,iStat)
         IF (iStat .EQ. -1) RETURN
     END IF

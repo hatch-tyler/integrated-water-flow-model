@@ -693,6 +693,11 @@ CONTAINS
         END IF
     END IF
     
+    CALL DATE_AND_TIME(VALUES=iPerfEnd)
+    rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
+    WRITE(cPerfMsg,'(A,F8.3,A)') '      [PERF] AppGW Budget+OutputFiles: ', rPerfSec, ' sec'
+    CALL LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+
     !Groundwater hydrographs
     CALL DATE_AND_TIME(VALUES=iPerfStart)
     CALL AppGW%GWHyd%New(lIsForInquiry,AppGrid,Stratigraphy,cWorkingDirectory,iGWNodeIDs,iTecPlotFlag,AppGW%FactHead,AppGW%UnitHead,AppGW%UnitFlow,AppGW%UnitVelocity,TRIM(cAllHeadOutFileName),TRIM(cCellVelocityFileName),TRIM(cHeadTecplotFileName),TRIM(cVelTecplotFileName),TimeStep,NTIME,AppGWParamFile,iStat)
@@ -700,7 +705,7 @@ CONTAINS
     
     CALL DATE_AND_TIME(VALUES=iPerfEnd)
     rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
-    WRITE(cPerfMsg,'(A,F8.3,A)') '    [PERF] AppGW Hydro+Budget+Output: ', rPerfSec, ' sec'
+    WRITE(cPerfMsg,'(A,F8.3,A)') '      [PERF] AppGW GWHyd(54K hydrographs): ', rPerfSec, ' sec'
     CALL LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
 
     !Aquifer parameters
