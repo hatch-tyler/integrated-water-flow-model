@@ -75,28 +75,44 @@ CONTAINS
       integer i,ii,idx,k,m,ptr,p2,hess,vc,vs,vrn
       real(8) alpha, c, s
       logical lp, rp
-      save
 !
-!     check the status of the call
-!
-      if (ipar(1).le.0) ipar(10) = 0
-      goto (10, 20, 30, 40, 50, 60, 70) ipar(10)
-!
-!     initialization
+!     Recompute workspace layout on every entry (deterministic from
+!     n and ipar(5); replaces the original SAVE statement so that
+!     multiple model instances can use the solver concurrently).
 !
       if (ipar(5).le.1) then
          m = 15
       else
          m = ipar(5)
       endif
-      idx = n * (m+1)
+      idx  = n * (m+1)
       hess = idx + n
-      vc = hess + (m+1) * m / 2 + 1
-      vs = vc + m
-      vrn = vs + m
+      vc   = hess + (m+1) * m / 2 + 1
+      vs   = vc + m
+      vrn  = vs + m
+!
+!     Recompute preconditioner flags (deterministic from ipar(2))
+!
+      lp = (ipar(2).eq.1 .or. ipar(2).gt.2)
+      rp = (ipar(2).ge.2)
+!
+!     Restore iteration counter from ipar(14)
+!
+      k = ipar(14)
+!
+!     check the status of the call
+!
+      if (ipar(1).le.0) ipar(10) = 0
+      goto (10, 20, 30, 40, 50, 60, 70) ipar(10)
+!
+!     initialization (first call only — ipar(10)=0, falls through)
+!
       i = vrn + m + 1
       call bisinit(ipar,fpar,i,1,lp,rp,w)
-      if (ipar(1).lt.0) return
+      if (ipar(1).lt.0) then
+         ipar(14) = k
+         return
+      endif
 !
 !     request for matrix vector multiplication A*x in the initialization
 !
@@ -108,6 +124,7 @@ CONTAINS
       do i = 1, n
          w(n+i) = sol(i)
       enddo
+      ipar(14) = k
       return
  10   ipar(7) = ipar(7) + 1
       ipar(13) = ipar(13) + 1
@@ -117,6 +134,7 @@ CONTAINS
          enddo
          ipar(1) = 3
          ipar(10) = 2
+         ipar(14) = k
          return
       else
          do i = 1, n
@@ -163,6 +181,7 @@ CONTAINS
             ipar(9) = idx + 1
          endif
          ipar(10) = 3
+         ipar(14) = k
          return
       endif
 !
@@ -178,6 +197,7 @@ CONTAINS
          ipar(9) = 1 + k*n
       endif
       ipar(10) = 4
+      ipar(14) = k
       return
 !
  40   if (lp) then
@@ -185,6 +205,7 @@ CONTAINS
          ipar(8) = ipar(9)
          ipar(9) = k*n + 1
          ipar(10) = 5
+         ipar(14) = k
          return
       endif
 !
@@ -276,6 +297,7 @@ CONTAINS
          ipar(8) = 1
          ipar(9) = idx + 1
          ipar(10) = 6
+         ipar(14) = k
          return
       endif
 !
@@ -297,6 +319,7 @@ CONTAINS
          ipar(8) = -1
          ipar(9) = idx + 1
          ipar(10) = 7
+         ipar(14) = k
          return
       else if (ipar(3).lt.0) then
          if (ipar(7).le.m+1) then
@@ -336,6 +359,7 @@ CONTAINS
       else
          fpar(7) = zero
       endif
+      ipar(14) = k
       return
       end
 !-----end-of-gmres
