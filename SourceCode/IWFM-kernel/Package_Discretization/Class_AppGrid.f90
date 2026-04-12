@@ -426,22 +426,25 @@ CONTAINS
     CLASS(AppGridType),INTENT(IN) :: AppGrid
     INTEGER,INTENT(IN)            :: iVertex
     INTEGER                       :: iElem
-    
-    !Local variables
-    INTEGER :: indxElem,iVertices(4)
-    
-    !Initialize
+
+    !Use the pre-built inverse node->element map (constructed once
+    !during AppGrid%New via ListSurroundingElems) instead of linearly
+    !scanning every element. SurroundingElement is built by walking
+    !elements 1..N in order, so SurroundingElement(1) is the same
+    !lowest-indexed element the old linear scan would have returned —
+    !byte-identical for all callers, but O(1) instead of O(NElements).
+    !Critical for callers that look up many vertices in a row, e.g.
+    !HydrographList_New parses 54K hydrograph specs and calls this
+    !once per AtNode hydrograph; the old O(54K x 32K) cost dominated
+    !slow inquiry-mode init on C2VSimFG.
     iElem = 0
-    
-    !Find element
-    DO indxElem=1,AppGrid%NElements
-      iVertices  = AppGrid%Vertex(:,indxElem)
-      IF (LocateInList(iVertex,iVertices) .GT. 0) THEN
-          iElem = indxElem
-          RETURN
-      END IF
-    END DO
-    
+    IF (iVertex .LT. 1) RETURN
+    IF (iVertex .GT. SIZE(AppGrid%AppNode)) RETURN
+    IF (.NOT. ALLOCATED(AppGrid%AppNode(iVertex)%SurroundingElement)) RETURN
+    IF (SIZE(AppGrid%AppNode(iVertex)%SurroundingElement) .EQ. 0) RETURN
+
+    iElem = AppGrid%AppNode(iVertex)%SurroundingElement(1)
+
   END FUNCTION GetElementGivenVertex
   
 

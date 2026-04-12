@@ -601,7 +601,7 @@ CONTAINS
     UrbanDataFile = StripTextUntilCharacter(UrbanDataFile,f_cInlineCommentChar) 
     CALL CleanSpecialCharacters(UrbanDataFile)
     CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(UrbanDataFile)),cWorkingDirectory,cAbsPathFileName)
-    CALL RootZone%UrbanRootZone%New(cAbsPathFileName,cWorkingDirectory,FactCN,NElements,NRegion,iElemIDs,TrackTime,iStat)
+    CALL RootZone%UrbanRootZone%New(cAbsPathFileName,cWorkingDirectory,FactCN,NElements,NRegion,iElemIDs,TrackTime,iStat,lIsForInquiry=IsForInquiry)
     IF (iStat .EQ. -1) RETURN
     
     !Native/riparian veg. data file
@@ -609,7 +609,7 @@ CONTAINS
     NVRVFile = StripTextUntilCharacter(NVRVFile,f_cInlineCommentChar) 
     CALL CleanSpecialCharacters(NVRVFile)
     CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(NVRVFile)),cWorkingDirectory,cAbsPathFileName)
-    CALL RootZone%NVRVRootZone%New(.FALSE.,cAbsPathFileName,cWorkingDirectory,FactCN,NElements,NRegion,iElemIDs,TrackTime,iStat,iStrmNodeIDs)
+    CALL RootZone%NVRVRootZone%New(.FALSE.,cAbsPathFileName,cWorkingDirectory,FactCN,NElements,NRegion,iElemIDs,TrackTime,iStat,iStrmNodeIDs,lIsForInquiry=IsForInquiry)
     IF (iStat .EQ. -1) RETURN
     
     !Check if at least one type of land use is specified
@@ -5953,10 +5953,6 @@ CONTAINS
         !Return if there was an error
         IF (iStat .EQ. -1) RETURN
           
-        !$OMP PARALLEL SECTIONS DEFAULT(PRIVATE) SHARED(RootZone,iNElements,AppGrid,rIrigSupply_Ag,ETData,rDeltaT,     &
-        !$OMP                                           rElemCropSupply,rElemPondSupply,rIrigSupply_Urb,iNoElemsToGW,  &
-        !$OMP                                           rZeroFlow,iStatArray)
-        !$OMP SECTION
         !Simulate non-ponded ag lands
         IF (RootZone%Flags%lNonPondedAg_Defined) THEN
             !$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE(indxElem)
@@ -5979,7 +5975,6 @@ CONTAINS
                                                        iStatArray(1)             )
         END IF
         
-        !$OMP SECTION
         !Simulate ponded ag lands
         IF (RootZone%Flags%lPondedAg_Defined) THEN  
             !$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE(indxElem) SCHEDULE(STATIC,160)
@@ -6001,7 +5996,6 @@ CONTAINS
                                                     iStatArray(2)             )
         END IF
         
-        !$OMP SECTION
         !Simulate urban lands
         IF (RootZone%Flags%lUrban_Defined) THEN 
             CALL RootZone%UrbanRootZone%Simulate(AppGrid                   , &
@@ -6019,7 +6013,6 @@ CONTAINS
                                                  iStatArray(3)             )
         END IF
         
-        !$OMP SECTION
         !Simulate native and riparian veg lands
         IF (RootZone%Flags%lNVRV_Defined) THEN
             CALL RootZone%NVRVRootZone%Simulate(AppGrid                        , &
@@ -6033,8 +6026,7 @@ CONTAINS
                                                 pSolverData                    , &
                                                 RootZone%Flags%lLakeElems      , &
                                                 iStatArray(4)                  )
-        END IF 
-        !$OMP END PARALLEL SECTIONS
+        END IF
     END ASSOCIATE
                
     !Check for error

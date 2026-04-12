@@ -264,8 +264,10 @@ CONTAINS
     END IF
     
     !Instantiate the diversions data file
-    CALL DiverFile_New(DiverFileName,cWorkingDirectory,TimeStep,AppDiverBypass%DiverFile,iStat)
-    IF (iStat .EQ. -1) RETURN
+    IF (.NOT. IsForInquiry) THEN
+        CALL DiverFile_New(DiverFileName,cWorkingDirectory,TimeStep,AppDiverBypass%DiverFile,iStat)
+        IF (iStat .EQ. -1) RETURN
+    END IF
     
     !Instantiate the diversions and delivery database
     CALL Diversion_New(DiverSpecFileName,AppGrid,iElemIDs,iStrmNodeIDs,iSubregionIDs,Reaches,AppDiverBypass%Diver,iStat)
@@ -315,13 +317,13 @@ CONTAINS
     END IF
     
     !Make sure that there are enough data columns in the diversions data file
-    IF (DiverFileName .NE. '') THEN
+    IF (DiverFileName .NE. '' .AND. .NOT. IsForInquiry) THEN
         !Check diversions
         CALL AppDiverBypass%DiverFile%CheckColNum('time-series diversions file',AppDiverBypass%Diver%iMaxDiverCol,.FALSE.,iStat)    ;  IF (iStat .EQ. -1) RETURN
         CALL AppDiverBypass%DiverFile%CheckColNum('time-series diversions file',AppDiverBypass%Diver%iColRecvLoss,.TRUE.,iStat)     ;  IF (iStat .EQ. -1) RETURN
         CALL AppDiverBypass%DiverFile%CheckColNum('time-series diversions file',AppDiverBypass%Diver%iColNonRecvLoss,.TRUE.,iStat)  ;  IF (iStat .EQ. -1) RETURN
         CALL AppDiverBypass%DiverFile%CheckColNum('time-series diversions file',AppDiverBypass%Diver%Deli%iColDeli,.TRUE.,iStat)    ;  IF (iStat .EQ. -1) RETURN
-        
+
         !Check bypasses
         CALL AppDiverBypass%DiverFile%CheckColNum('time-series diversions file',AppDiverBypass%Bypasses%iColBypass,.FALSE.,iStat)   ;  IF (iStat .EQ. -1) RETURN
 

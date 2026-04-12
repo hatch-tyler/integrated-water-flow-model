@@ -36,11 +36,10 @@ PROGRAM IWFM_F2
 
 
   !Local variables
-  TYPE(ModelType) :: Model
-  CHARACTER       :: cSimFileName*500,cWSAFileName*500
-  INTEGER         :: iStat
-  !$ INTEGER      :: iBlockTime
-
+  TYPE(ModelType)    :: Model
+  CHARACTER          :: cSimFileName*500,cWSAFileName*500
+  INTEGER            :: iStat
+  !$ INTEGER         :: iBlockTime
   !Set parallel thread environment
   !$ iBlockTime = KMP_GET_BLOCKTIME()
   !$ CALL KMP_SET_BLOCKTIME(0)                                !Let therads sleep right away

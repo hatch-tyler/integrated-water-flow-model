@@ -352,8 +352,10 @@ CONTAINS
     ALine = StripTextUntilCharacter(ALine,f_cInlineCommentChar) 
     CALL CleanSpecialCharacters(ALine)
     CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(ALine)),cWorkingDirectory,cAbsPathFileName)
-    CALL AgLand%LandUseDataFile%New(cAbsPathFileName,cWorkingDirectory,'Non-ponded ag. area file',NElements,NCrops,TrackTime,iStat)
-    IF (iStat .EQ. -1) RETURN
+    IF (.NOT. IsForInquiry) THEN
+        CALL AgLand%LandUseDataFile%New(cAbsPathFileName,cWorkingDirectory,'Non-ponded ag. area file',NElements,NCrops,TrackTime,iStat)
+        IF (iStat .EQ. -1) RETURN
+    END IF
     
     !Crops for budget output
     CALL CropDataFile%ReadData(NBudgetCrops,iStat)  ;  IF (iStat .EQ. -1) RETURN
@@ -438,16 +440,20 @@ CONTAINS
     !Rooting depths
     CALL CropDataFile%ReadData(ALine,iStat)  ;  IF (iStat .EQ. -1) RETURN  ;  ALine = StripTextUntilCharacter(ALine,f_cInlineCommentChar)  ;  CALL CleanSpecialCharacters(ALine)
     CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(ALine)),cWorkingDirectory,cAbsPathFileName)
-    CALL AgLand%RootDepthFracDataFile%New(cAbsPathFileName,cWorkingDirectory,TrackTime,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    IF (.NOT. IsForInquiry) THEN
+        CALL AgLand%RootDepthFracDataFile%New(cAbsPathFileName,cWorkingDirectory,TrackTime,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    END IF
     CALL CropDataFile%ReadData(FACT,iStat)  ;  IF (iStat .EQ. -1) RETURN
     CALL AllocArray(DummyRealArray,NCrops,3,ThisProcedure,iStat)  ;  IF (iStat .EQ. -1) RETURN
     CALL CropDataFile%ReadData(DummyRealArray,iStat)  ;  IF (iStat .EQ. -1) RETURN
     AgLand%MaxRootDepth      = DummyRealArray(:,2)*FACT
     AgLand%iColRootDepthFrac = INT(DummyRealArray(:,3))
-    
+
     !Make sure there are enough data columns in the root depth fractions data file
-    CALL AgLand%RootDepthFracDataFile%CheckColNum('root depth fractions data file',AgLand%iColRootDepthFrac,.TRUE.,iStat)
-    IF (iStat .EQ. -1) RETURN 
+    IF (.NOT. IsForInquiry) THEN
+        CALL AgLand%RootDepthFracDataFile%CheckColNum('root depth fractions data file',AgLand%iColRootDepthFrac,.TRUE.,iStat)
+        IF (iStat .EQ. -1) RETURN
+    END IF
 
     !Curve numbers
     CALL ReadRealData(CropDataFile,'curve numbers for non-ponded crops','elements',NElements,NCrops+1,iElemIDs,DummyRealArray,iStat)  ;  IF (iStat .EQ. -1) RETURN
@@ -528,7 +534,9 @@ CONTAINS
     ALine = StripTextUntilCharacter(ALine,f_cInlineCommentChar) 
     CALL CleanSpecialCharacters(ALine)
     CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(ALine)),cWorkingDirectory,cAbsPathFileName)
-    CALL AgLand%MinSoilMFile%Init(cAbsPathFileName,cWorkingDirectory,'Irrigation trigger soil moisture data file',TrackTime,1,.FALSE.,DummyFactor,iStat=iStat)  ;  IF (iStat .EQ. -1) RETURN
+    IF (.NOT. IsForInquiry) THEN
+        CALL AgLand%MinSoilMFile%Init(cAbsPathFileName,cWorkingDirectory,'Irrigation trigger soil moisture data file',TrackTime,1,.FALSE.,DummyFactor,iStat=iStat)  ;  IF (iStat .EQ. -1) RETURN
+    END IF
     CALL ReadPointerData(CropDataFile,'minimum soil moisture column pointers for non-ponded crops','elements',NElements,NCrops+1,iElemIDs,DummyIntArray,iStat)  ;  IF (iStat .EQ. -1) RETURN
     lProcessed = .FALSE.
     DO indxElem=1,NElements
@@ -540,18 +548,20 @@ CONTAINS
             RETURN
         END IF
         lProcessed(iElem)                  = .TRUE.
-        AgLand%Crops%iColMinSoilM(:,iElem) = DummyIntArray(indxElem,2:) 
+        AgLand%Crops%iColMinSoilM(:,iElem) = DummyIntArray(indxElem,2:)
     END DO
-    IF (MAXVAL(AgLand%Crops%iColMinSoilM) .GT. AgLand%MinSoilMFile%iSize) THEN
-        MessageArray(1) = 'Minimum soil moisture column number for a non-ponded crop is larger '
-        MessageArray(2) = 'than the available columns in the Minimum Soil Moisture Data File!' 
-        CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
-        iStat = -1
-        RETURN
-    END IF    
+    IF (.NOT. IsForInquiry) THEN
+        IF (MAXVAL(AgLand%Crops%iColMinSoilM) .GT. AgLand%MinSoilMFile%iSize) THEN
+            MessageArray(1) = 'Minimum soil moisture column number for a non-ponded crop is larger '
+            MessageArray(2) = 'than the available columns in the Minimum Soil Moisture Data File!'
+            CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+            iStat = -1
+            RETURN
+        END IF
+    END IF
     IF (MINVAL(AgLand%Crops%iColMinSoilM) .LT. 1) THEN
-        MessageArray(1) = 'Minimum soil moisture column number for non-ponded crops' 
-        MessageArray(2) = 'cannot be less than 1!' 
+        MessageArray(1) = 'Minimum soil moisture column number for non-ponded crops'
+        MessageArray(2) = 'cannot be less than 1!'
         CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
@@ -563,7 +573,9 @@ CONTAINS
     CALL CleanSpecialCharacters(ALine)
     IF (ALine .NE. '') THEN
         CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(ALine)),cWorkingDirectory,cAbsPathFileName)
-        CALL AgLand%TargetSoilMFile%Init(cAbsPathFileName,cWorkingDirectory,'irrigation target soil moisture file',TrackTime,1,.FALSE.,DummyFactor,iStat=iStat)  ;  IF (iStat .EQ. -1) RETURN
+        IF (.NOT. IsForInquiry) THEN
+            CALL AgLand%TargetSoilMFile%Init(cAbsPathFileName,cWorkingDirectory,'irrigation target soil moisture file',TrackTime,1,.FALSE.,DummyFactor,iStat=iStat)  ;  IF (iStat .EQ. -1) RETURN
+        END IF
         CALL ReadPointerData(CropDataFile,'irrigation target soil moisture column pointers for non-ponded crops','elements',NElements,NCrops+1,iElemIDs,DummyIntArray,iStat)  ;  IF (iStat .EQ. -1) RETURN
         lProcessed = .FALSE.
         DO indxElem=1,NElements
@@ -582,16 +594,18 @@ CONTAINS
         AgLand%TargetSoilMFile%rValues(1) = 1.0
         AgLand%TargetSoilMFile%iSize      = 1
     END IF 
-    IF (MAXVAL(AgLand%Crops%iColTargetSoilM) .GT. AgLand%TargetSoilMFile%iSize) THEN
-        MessageArray(1) = 'Irrigation target soil moisture column number for a non-ponded crop is'
-        MessageArray(2) = 'larger than the available columns in the target soil moisture file!' 
-        CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
-        iStat = -1
-        RETURN
-    END IF    
+    IF (.NOT. IsForInquiry) THEN
+        IF (MAXVAL(AgLand%Crops%iColTargetSoilM) .GT. AgLand%TargetSoilMFile%iSize) THEN
+            MessageArray(1) = 'Irrigation target soil moisture column number for a non-ponded crop is'
+            MessageArray(2) = 'larger than the available columns in the target soil moisture file!'
+            CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+            iStat = -1
+            RETURN
+        END IF
+    END IF
     IF (MINVAL(AgLand%Crops%iColTargetSoilM) .LT. 1) THEN
-        MessageArray(1) = 'Irrigation target soil moisture column number for non-ponded ' 
-        MessageArray(2) = 'crops cannot be less than 1!' 
+        MessageArray(1) = 'Irrigation target soil moisture column number for non-ponded '
+        MessageArray(2) = 'crops cannot be less than 1!'
         CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
@@ -633,7 +647,9 @@ CONTAINS
     CALL CleanSpecialCharacters(ALine)
     IF (ALine .NE. '') THEN
         CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(ALine)),cWorkingDirectory,cAbsPathFileName)
-        CALL AgLand%LeachFracFile%Init(cAbsPathFileName,cWorkingDirectory,'leaching factors file',TrackTime,1,.FALSE.,DummyFactor,iStat=iStat)  ;  IF (iStat .EQ. -1) RETURN
+        IF (.NOT. IsForInquiry) THEN
+            CALL AgLand%LeachFracFile%Init(cAbsPathFileName,cWorkingDirectory,'leaching factors file',TrackTime,1,.FALSE.,DummyFactor,iStat=iStat)  ;  IF (iStat .EQ. -1) RETURN
+        END IF
         CALL ReadPointerData(CropDataFile,'minimum percolation column pointers for non-ponded crops','elements',NElements,NCrops+1,iElemIDs,DummyIntArray,iStat)  ;  IF (iStat .EQ. -1) RETURN
         lProcessed = .FALSE.
         DO indxElem=1,NElements
@@ -652,13 +668,15 @@ CONTAINS
         AgLand%LeachFracFile%rValues(1) = 0.0
         AgLand%LeachFracFile%iSize      = 1
     END IF 
-    IF (MAXVAL(AgLand%Crops%iColLeachFrac) .GT. AgLand%LeachFracFile%iSize) THEN
-        MessageArray(1) = 'Minimum percolation column number for a non-ponded crop is larger'
-        MessageArray(2) = 'than the available columns in the minimum percolation file!' 
-        CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
-        iStat = -1
-        RETURN
-    END IF    
+    IF (.NOT. IsForInquiry) THEN
+        IF (MAXVAL(AgLand%Crops%iColLeachFrac) .GT. AgLand%LeachFracFile%iSize) THEN
+            MessageArray(1) = 'Minimum percolation column number for a non-ponded crop is larger'
+            MessageArray(2) = 'than the available columns in the minimum percolation file!'
+            CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+            iStat = -1
+            RETURN
+        END IF
+    END IF
     IF (MINVAL(AgLand%Crops%iColLeachFrac) .LT. 1) THEN
         MessageArray(1) = 'Minimum percolation column number for non-ponded crops' 
         MessageArray(2) = 'cannot be less than 1!' 

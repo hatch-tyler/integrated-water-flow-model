@@ -166,7 +166,7 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- NEW URBAN LAND USE DATA
   ! -------------------------------------------------------------
-  SUBROUTINE New(UrbLand,cFileName,cWorkingDirectory,FactCN,NElements,NSubregions,iElemIDs,TrackTime,iStat,iColUrbETCoeff)
+  SUBROUTINE New(UrbLand,cFileName,cWorkingDirectory,FactCN,NElements,NSubregions,iElemIDs,TrackTime,iStat,iColUrbETCoeff,lIsForInquiry)
     CLASS(UrbanLandUse_v41_Type) :: UrbLand
     CHARACTER(LEN=*),INTENT(IN)  :: cFileName,cWorkingDirectory
     REAL(8),INTENT(IN)           :: FACTCN
@@ -174,20 +174,23 @@ CONTAINS
     LOGICAL,INTENT(IN)           :: TrackTime
     INTEGER,INTENT(OUT)          :: iStat
     INTEGER,OPTIONAL,ALLOCATABLE :: iColUrbETCoeff(:)
-    
+    LOGICAL,OPTIONAL,INTENT(IN)  :: lIsForInquiry
+
     !Local variables
     CHARACTER(LEN=ModNameLen+3)  :: ThisProcedure = ModName // 'New'
     CHARACTER                    :: ALine*1000
     INTEGER                      :: ErrorCode,indxElem,iElem,ID,iTempArray(NElements)
     REAL(8)                      :: FACT,Factor(1)
-    LOGICAL                      :: lError,lProcessed(NElements)
+    LOGICAL                      :: lError,lProcessed(NElements),lForInquiry_Local
     REAL(8),ALLOCATABLE          :: DummyArray(:,:)
     TYPE(GenericFileType)        :: UrbanDataFile
     CHARACTER(:),ALLOCATABLE     :: cAbsPathFileName
     
     !Initialize
     iStat = 0
-   
+    lForInquiry_Local = .FALSE.
+    IF (PRESENT(lIsForInquiry)) lForInquiry_Local = lIsForInquiry
+
     !Return if no file name is specified
     IF (cFileName .EQ. '') RETURN
     
@@ -239,8 +242,10 @@ CONTAINS
     ALine = StripTextUntilCharacter(ALine,f_cInlineCommentChar) 
     CALL CleanSpecialCharacters(ALine)
     CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(ALine)),cWorkingDirectory,cAbsPathFileName)
-    CALL UrbLand%LandUseDataFile%New(cAbsPathFileName,cWorkingDirectory,'Urban area file',NElements,1,TrackTime,iStat)
-    IF (iStat .EQ. -1) RETURN
+    IF (.NOT. lForInquiry_Local) THEN
+        CALL UrbLand%LandUseDataFile%New(cAbsPathFileName,cWorkingDirectory,'Urban area file',NElements,1,TrackTime,iStat)
+        IF (iStat .EQ. -1) RETURN
+    END IF
     
     !Rooting depths
     CALL UrbanDataFile%ReadData(FACT,iStat)  ;  IF (iStat .EQ. -1) RETURN
@@ -252,24 +257,30 @@ CONTAINS
     ALine = StripTextUntilCharacter(ALine,f_cInlineCommentChar) 
     CALL CleanSpecialCharacters(ALine)
     CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(ALine)),cWorkingDirectory,cAbsPathFileName)
-    CALL UrbLand%PopulationFile%Init(cAbsPathFileName,cWorkingDirectory,'Population data file',TrackTime,1,iStat)
-    IF (iStat .EQ. -1) RETURN
+    IF (.NOT. lForInquiry_Local) THEN
+        CALL UrbLand%PopulationFile%Init(cAbsPathFileName,cWorkingDirectory,'Population data file',TrackTime,1,iStat)
+        IF (iStat .EQ. -1) RETURN
+    END IF
       
     !Urban per capita water use file
     CALL UrbanDataFile%ReadData(ALine,iStat)  ;  IF (iStat .EQ. -1) RETURN
     ALine = StripTextUntilCharacter(ALine,f_cInlineCommentChar) 
     CALL CleanSpecialCharacters(ALine)
     CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(ALine)),cWorkingDirectory,cAbsPathFileName)
-    CALL UrbLand%PerCapitawaterUseFile%Init(cAbsPathFileName,cWorkingDirectory,'Urban per capita water use data file',TrackTime,1,.TRUE.,Factor,(/.TRUE./),iStat=iStat)  ;  IF (iStat .EQ. -1) RETURN
-    UrbLand%PerCapitawaterUseFactor = Factor(1)
+    IF (.NOT. lForInquiry_Local) THEN
+        CALL UrbLand%PerCapitawaterUseFile%Init(cAbsPathFileName,cWorkingDirectory,'Urban per capita water use data file',TrackTime,1,.TRUE.,Factor,(/.TRUE./),iStat=iStat)  ;  IF (iStat .EQ. -1) RETURN
+        UrbLand%PerCapitawaterUseFactor = Factor(1)
+    END IF
       
     !Urban water use specifications data file
     CALL UrbanDataFile%ReadData(ALine,iStat)  ;  IF (iStat .EQ. -1) RETURN  
     ALine = StripTextUntilCharacter(ALine,f_cInlineCommentChar) 
     CALL CleanSpecialCharacters(ALine)
     CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(ALine)),cWorkingDirectory,cAbsPathFileName)
-    CALL UrbLand%WaterUseSpecsFile%Init(cAbsPathFileName,cWorkingDirectory,'Urban water use specifications',TrackTime,1,.FALSE.,Factor,iStat=iStat)  
-    IF (iStat .EQ. -1) RETURN
+    IF (.NOT. lForInquiry_Local) THEN
+        CALL UrbLand%WaterUseSpecsFile%Init(cAbsPathFileName,cWorkingDirectory,'Urban water use specifications',TrackTime,1,.FALSE.,Factor,iStat=iStat)
+        IF (iStat .EQ. -1) RETURN
+    END IF
 
     !Read other data
     IF (PRESENT(iColUrbETCoeff)) THEN
@@ -327,12 +338,14 @@ CONTAINS
             CALL CalculateUrbanFracDemand(NElements,pUrbData%iColPopulation,pUrbData%iColPerCapitaWaterUse,pUrbData%FracDemand)
         
         !Check for timeseries column pointer errors
-        DO indxElem=1,NElements
-            ID = iElemIDs(indxElem)
-            CALL UrbLand%PopulationFile%CheckColNum('Urban population file as referenced by element '//TRIM(IntToText(ID)),[pUrbData%iColPopulation(indxElem,1)],.TRUE.,iStat)                          ;  IF (iStat .EQ. -1) RETURN
-            CALL UrbLand%PerCapitaWaterUseFile%CheckColNum('Urban per capita water use file as referenced by element '//TRIM(IntToText(ID)),[pUrbData%iColPerCapitaWaterUse(indxElem,1)],.TRUE.,iStat)  ;  IF (iStat .EQ. -1) RETURN
-            CALL UrbLand%WaterUseSpecsFile%CheckColNum('Urban water use specifications file as referenced by element '//TRIM(IntToText(ID)),[pUrbData%iColWaterUseSpec(indxElem,1)],.TRUE.,iStat)       ;  IF (iStat .EQ. -1) RETURN
-        END DO
+        IF (.NOT. lForInquiry_Local) THEN
+            DO indxElem=1,NElements
+                ID = iElemIDs(indxElem)
+                CALL UrbLand%PopulationFile%CheckColNum('Urban population file as referenced by element '//TRIM(IntToText(ID)),[pUrbData%iColPopulation(indxElem,1)],.TRUE.,iStat)                          ;  IF (iStat .EQ. -1) RETURN
+                CALL UrbLand%PerCapitaWaterUseFile%CheckColNum('Urban per capita water use file as referenced by element '//TRIM(IntToText(ID)),[pUrbData%iColPerCapitaWaterUse(indxElem,1)],.TRUE.,iStat)  ;  IF (iStat .EQ. -1) RETURN
+                CALL UrbLand%WaterUseSpecsFile%CheckColNum('Urban water use specifications file as referenced by element '//TRIM(IntToText(ID)),[pUrbData%iColWaterUseSpec(indxElem,1)],.TRUE.,iStat)       ;  IF (iStat .EQ. -1) RETURN
+            END DO
+        END IF
 
     END ASSOCIATE
 

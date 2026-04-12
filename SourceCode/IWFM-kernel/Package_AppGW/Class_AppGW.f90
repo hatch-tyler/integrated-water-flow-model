@@ -57,7 +57,8 @@ MODULE Class_AppGW
                                           f_iMessage                                         , &
                                           f_iFatal                                           , &
                                           f_iWarn                                            , &
-                                          f_iInfo
+                                          f_iInfo                                            , &
+                                          f_lLogPerfMarkers
   USE Package_Budget              , ONLY: BudgetType                                         , &
                                           BudgetHeaderType                                   , &
                                           f_iColumnHeaderLen                                 , &
@@ -540,10 +541,12 @@ CONTAINS
     IF (AppGW%AppTileDrain%GetNDrain() .GT. 0   .OR.   AppGW%AppTileDrain%GetNSubIrig() .GT. 0)  &
         AppGW%lTileDrain_Defined = .TRUE.
     
-    CALL DATE_AND_TIME(VALUES=iPerfEnd)
-    rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
-    WRITE(cPerfMsg,'(A,F8.3,A)') '    [PERF] AppGW TileDrain: ', rPerfSec, ' sec'
-    CALL LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+    IF (f_lLogPerfMarkers) THEN
+        CALL DATE_AND_TIME(VALUES=iPerfEnd)
+        rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
+        WRITE(cPerfMsg,'(A,F8.3,A)') '    [PERF] AppGW TileDrain: ', rPerfSec, ' sec'
+        CALL LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+    END IF
 
     !Pumping
     CALL DATE_AND_TIME(VALUES=iPerfStart)
@@ -555,10 +558,12 @@ CONTAINS
     IF (iStat .EQ. -1) RETURN
     IF (AppGW%AppPumping%GetNWells() .GT. 0   .OR.   AppGW%AppPumping%GetNElemPumps() .GT. 0)   &
         AppGW%lPumping_Defined = .TRUE.
-    CALL DATE_AND_TIME(VALUES=iPerfEnd)
-    rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
-    WRITE(cPerfMsg,'(A,F8.3,A)') '    [PERF] AppGW Pumping: ', rPerfSec, ' sec'
-    CALL LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+    IF (f_lLogPerfMarkers) THEN
+        CALL DATE_AND_TIME(VALUES=iPerfEnd)
+        rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
+        WRITE(cPerfMsg,'(A,F8.3,A)') '    [PERF] AppGW Pumping: ', rPerfSec, ' sec'
+        CALL LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+    END IF
 
     !Subsidence filename
     CALL AppGWParamFile%ReadData(cSubsidenceFileName,iStat)  ;  IF (iStat .EQ. -1) RETURN
@@ -693,20 +698,24 @@ CONTAINS
         END IF
     END IF
     
-    CALL DATE_AND_TIME(VALUES=iPerfEnd)
-    rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
-    WRITE(cPerfMsg,'(A,F8.3,A)') '      [PERF] AppGW Budget+OutputFiles: ', rPerfSec, ' sec'
-    CALL LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+    IF (f_lLogPerfMarkers) THEN
+        CALL DATE_AND_TIME(VALUES=iPerfEnd)
+        rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
+        WRITE(cPerfMsg,'(A,F8.3,A)') '      [PERF] AppGW Budget+OutputFiles: ', rPerfSec, ' sec'
+        CALL LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+    END IF
 
     !Groundwater hydrographs
     CALL DATE_AND_TIME(VALUES=iPerfStart)
     CALL AppGW%GWHyd%New(lIsForInquiry,AppGrid,Stratigraphy,cWorkingDirectory,iGWNodeIDs,iTecPlotFlag,AppGW%FactHead,AppGW%UnitHead,AppGW%UnitFlow,AppGW%UnitVelocity,TRIM(cAllHeadOutFileName),TRIM(cCellVelocityFileName),TRIM(cHeadTecplotFileName),TRIM(cVelTecplotFileName),TimeStep,NTIME,AppGWParamFile,iStat)
     IF (iStat .EQ. -1) RETURN
     
-    CALL DATE_AND_TIME(VALUES=iPerfEnd)
-    rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
-    WRITE(cPerfMsg,'(A,F8.3,A)') '      [PERF] AppGW GWHyd(54K hydrographs): ', rPerfSec, ' sec'
-    CALL LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+    IF (f_lLogPerfMarkers) THEN
+        CALL DATE_AND_TIME(VALUES=iPerfEnd)
+        rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
+        WRITE(cPerfMsg,'(A,F8.3,A)') '      [PERF] AppGW GWHyd(54K hydrographs): ', rPerfSec, ' sec'
+        CALL LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+    END IF
 
     !Aquifer parameters
     CALL DATE_AND_TIME(VALUES=iPerfStart)
@@ -744,10 +753,12 @@ CONTAINS
     IF (iStat .EQ. -1) RETURN
     AppGW%State%Head = Head
     
-    CALL DATE_AND_TIME(VALUES=iPerfEnd)
-    rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
-    WRITE(cPerfMsg,'(A,F8.3,A)') '    [PERF] AppGW Params+IC: ', rPerfSec, ' sec'
-    CALL LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+    IF (f_lLogPerfMarkers) THEN
+        CALL DATE_AND_TIME(VALUES=iPerfEnd)
+        rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
+        WRITE(cPerfMsg,'(A,F8.3,A)') '    [PERF] AppGW Params+IC: ', rPerfSec, ' sec'
+        CALL LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+    END IF
 
     !Instantiate the boundary conditions data and overwrite the initial conditions if necessary
     CALL DATE_AND_TIME(VALUES=iPerfStart)
@@ -758,20 +769,24 @@ CONTAINS
     !Assign previous head as current head
     AppGW%State%Head_P = AppGW%State%Head
     
-    CALL DATE_AND_TIME(VALUES=iPerfEnd)
-    rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
-    WRITE(cPerfMsg,'(A,F8.3,A)') '    [PERF] AppGW BoundaryConditions: ', rPerfSec, ' sec'
-    CALL LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+    IF (f_lLogPerfMarkers) THEN
+        CALL DATE_AND_TIME(VALUES=iPerfEnd)
+        rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
+        WRITE(cPerfMsg,'(A,F8.3,A)') '    [PERF] AppGW BoundaryConditions: ', rPerfSec, ' sec'
+        CALL LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+    END IF
 
     !Instantiate subsidence; this has to be done after AppGW initial conditions are processed
     CALL DATE_AND_TIME(VALUES=iPerfStart)
     CALL AppGW%AppSubsidence%New(lIsForInquiry,cSubsidenceFileName,cWorkingDirectory,iGWNodeIDs,AppGrid,Stratigraphy,StrmConnectivity,TimeStep,iStat,SubsICFile,NTIME)
     IF (iStat .EQ. -1) RETURN
     AppGW%lSubsidence_Defined = AppGW%AppSubsidence%IsDefined()
-    CALL DATE_AND_TIME(VALUES=iPerfEnd)
-    rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
-    WRITE(cPerfMsg,'(A,F8.3,A)') '    [PERF] AppGW Subsidence: ', rPerfSec, ' sec'
-    CALL LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+    IF (f_lLogPerfMarkers) THEN
+        CALL DATE_AND_TIME(VALUES=iPerfEnd)
+        rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
+        WRITE(cPerfMsg,'(A,F8.3,A)') '    [PERF] AppGW Subsidence: ', rPerfSec, ' sec'
+        CALL LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+    END IF
 
     !Aquifer overwrite parameters
     IF (cOverwriteFileName .NE. '') THEN

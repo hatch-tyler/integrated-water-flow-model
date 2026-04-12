@@ -334,7 +334,8 @@ CONTAINS
                                     iElemIDs                                    , &
                                     lTrackTime                                  , &
                                     iStat                                       , &
-                                    iColUrbETCoeff = RootZone%iColCropCoeff_Urb )
+                                    iColUrbETCoeff = RootZone%iColCropCoeff_Urb , &
+                                    lIsForInquiry  = IsForInquiry              )
     IF (iStat .EQ. -1) RETURN
     
     !Native/riparian veg. data file
@@ -352,7 +353,8 @@ CONTAINS
                                    lTrackTime                                          , &
                                    iStat                                               , &
                                    iStrmNodeIDs          = iStrmNodeIDs                , &
-                                   iColHabitatCoeff_NVRV = RootZone%iColCropCoeff_NVRV )
+                                   iColHabitatCoeff_NVRV = RootZone%iColCropCoeff_NVRV , &
+                                   lIsForInquiry         = IsForInquiry               )
     IF (iStat .EQ. -1) RETURN
     
     !Check if at least one type of land use is specified
@@ -792,8 +794,6 @@ CONTAINS
     !Return if root zone is not simulated
     IF (RootZone%NLands .EQ. 0) RETURN
     
-    !$OMP PARALLEL SECTIONS DEFAULT(PRIVATE) SHARED(RootZone,AppGrid,iNElements,iElemIDs,ETData,TimeStep,iStatArray)
-    !$OMP SECTION
     !Riparian ET demand from streams
     IF (RootZone%Flags%lNVRV_Defined)  THEN
         IF (ASSOCIATED(ModuleLogger)) THEN
@@ -814,7 +814,6 @@ CONTAINS
                                                       iColCropCoeff_NVRV=RootZone%iColCropCoeff_NVRV)
     END IF
     
-    !$OMP SECTION
     !Echo progress
     IF (ASSOCIATED(ModuleLogger)) THEN
         CALL ModuleLogger%EchoProgress('Computing agricultural water demand...')
@@ -842,7 +841,6 @@ CONTAINS
                                                              iColCropCoeff=RootZone%iColCropCoeff_NonPondedAg)
     END IF
              
-    !$OMP SECTION
     !Ponded ag
     IF (RootZone%Flags%lPondedAg_Defined) THEN
         CALL RootZone%PondedAgRootZone%ComputeWaterDemand(AppGrid                                      , &
@@ -859,8 +857,7 @@ CONTAINS
                                                           iStatArray(3)                                , &
                                                           iColCropCoeff=RootZone%iColCropCoeff_PondedAg)
     END IF
-    !$OMP END PARALLEL SECTIONS
-    
+
     !Check for errors
     IF (SUM(iStatArray) .NE. 0) THEN
         iStat = -1
@@ -1095,10 +1092,6 @@ CONTAINS
         !Return if there was an error
         IF (iStat .EQ. -1) RETURN
           
-        !$OMP PARALLEL SECTIONS DEFAULT(PRIVATE) SHARED(RootZone,iNElements,AppGrid,rIrigSupply_Ag,ETData,rDeltaT,     &
-        !$OMP                                           rElemCropSupply,rElemPondSupply,rIrigSupply_Urb,iNoElemsToGW,  &
-        !$OMP                                           rZeroFlow,iStatArray)
-        !$OMP SECTION
         !Simulate non-ponded ag lands
         IF (RootZone%Flags%lNonPondedAg_Defined) THEN
             !$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE(indxElem)
@@ -1122,7 +1115,6 @@ CONTAINS
                                                        iColCropCoeff=RootZone%iColCropCoeff_NonPondedAg)
         END IF
         
-        !$OMP SECTION
         !Simulate ponded ag lands
         IF (RootZone%Flags%lPondedAg_Defined) THEN  
             !$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE(indxElem) SCHEDULE(STATIC,160)
@@ -1145,7 +1137,6 @@ CONTAINS
                                                     iColCropCoeff=RootZone%iColCropCoeff_PondedAg)
         END IF
         
-        !$OMP SECTION
         !Simulate urban lands
         IF (RootZone%Flags%lUrban_Defined) THEN 
             CALL RootZone%UrbanRootZone%Simulate(AppGrid                                       , &
@@ -1164,7 +1155,6 @@ CONTAINS
                                                  iColCropCoeff_Urban=RootZone%iColCropCoeff_Urb)
         END IF
         
-        !$OMP SECTION
         !Simulate native and riparian veg lands
         IF (RootZone%Flags%lNVRV_Defined) THEN
             CALL RootZone%NVRVRootZone%Simulate(AppGrid                                       , &
@@ -1179,8 +1169,7 @@ CONTAINS
                                                 RootZone%Flags%lLakeElems                     , &
                                                 iStatArray(4)                                 , &
                                                 iColCropCoeff_NVRV=RootZone%iColCropCoeff_NVRV)
-        END IF 
-        !$OMP END PARALLEL SECTIONS
+        END IF
     END ASSOCIATE
                
     !Check for error

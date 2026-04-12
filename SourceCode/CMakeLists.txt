@@ -204,6 +204,25 @@ if(IWFM_MONOLITHIC_BUILD AND IWFM_NEED_DEPENDENCIES)
         )
     endif()
 
+    # -----------------------------------------------------------------
+    # Inquiry-Mode Load Diagnostic Test (monolithic)
+    # -----------------------------------------------------------------
+    # Standalone driver that loads an existing IWFM model with
+    # lForInquiry=.TRUE. and exercises a representative set of Get*
+    # methods. Used for Phase 1 profiling of the slow inquiry path
+    # (when f_lLogPerfMarkers=.TRUE. in MessageLogger.f90) and as a
+    # verification harness for Phase 2/3 optimization work.
+    if(IWFM_BUILD_TESTS)
+        iwfm_add_monolithic_executable(test_inquiry_load
+            SCOPE FULL
+            SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_inquiry_load.f90
+        )
+        set_target_properties(test_inquiry_load PROPERTIES
+            OUTPUT_NAME "test_inquiry_load"
+            RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/Bin"
+        )
+    endif()
+
 else() # Original library-based build — entirely unchanged
 
 # =============================================================================

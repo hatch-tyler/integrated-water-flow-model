@@ -39,7 +39,8 @@ MODULE Package_Model
                                           f_iWarn                                     , &
                                           f_iInfo                                     , &
                                           f_iSCREEN                                   , &
-                                          f_iFILE                                        
+                                          f_iFILE                                     , &
+                                          f_lLogPerfMarkers
   USE GeneralUtilities            , ONLY: IntToText                                   , &
                                           StripTextUntilCharacter                     , &
                                           CleanSpecialCharacters                      , &
@@ -607,6 +608,9 @@ CONTAINS
 
     REAL(8) :: rStartSec, rEndSec, rElapsed
     CHARACTER(LEN=100) :: cMsg
+
+    !Diagnostic-only — gated behind compile-time flag in MessageLogger.
+    IF (.NOT. f_lLogPerfMarkers) RETURN
 
     rStartSec = iStart(5)*3600.0d0 + iStart(6)*60.0d0 + iStart(7) + iStart(8)/1000.0d0
     rEndSec   = iEnd(5)*3600.0d0   + iEnd(6)*60.0d0   + iEnd(7)   + iEnd(8)/1000.0d0
@@ -1196,19 +1200,15 @@ CONTAINS
     CALL DATE_AND_TIME(VALUES=iTimerValues)
     CALL LogInitTime('Matrix+AppGW', iTimerStart, iTimerValues)
 
-    !Unsaturated zone (skip in inquiry mode — simulation only)
+    !Unsaturated zone
     CALL DATE_AND_TIME(VALUES=iTimerStart)
-    IF (.NOT. lForInquiry) THEN
-      CALL Model%AppUnsatZone%New(lForInquiry,ProjectFileNames(SIM_UnsatZoneDataFileID),Model%cSIMWorkingDirectory,Model%AppGrid,Model%Stratigraphy,Model%TimeStep,Model%NTIME,Model%DepthToGW,iStat)
-      IF (iStat .EQ. -1) RETURN
-      Model%lAppUnsatZone_Defined = Model%AppUnsatZone%IsDefined()
-    END IF
+    CALL Model%AppUnsatZone%New(lForInquiry,ProjectFileNames(SIM_UnsatZoneDataFileID),Model%cSIMWorkingDirectory,Model%AppGrid,Model%Stratigraphy,Model%TimeStep,Model%NTIME,Model%DepthToGW,iStat)
+    IF (iStat .EQ. -1) RETURN
+    Model%lAppUnsatZone_Defined = Model%AppUnsatZone%IsDefined()
 
-    !Small watersheds (skip in inquiry mode — simulation only)
-    IF (.NOT. lForInquiry) THEN
-      CALL Model%AppSWShed%New(lForInquiry,ProjectFileNames(SIM_SmallWatershedDataFileID),ProjectFileNames(SIM_CropCoeffFileID),Model%cSIMWorkingDirectory,Model%TimeStep,Model%NTIME,NStrmNodes,iStrmNodeIDs,Model%AppGrid,Model%Stratigraphy,Model%PrecipData,Model%ETData,iStat)
-      IF (iStat .EQ. -1) RETURN
-    END IF
+    !Small watersheds
+    CALL Model%AppSWShed%New(lForInquiry,ProjectFileNames(SIM_SmallWatershedDataFileID),ProjectFileNames(SIM_CropCoeffFileID),Model%cSIMWorkingDirectory,Model%TimeStep,Model%NTIME,NStrmNodes,iStrmNodeIDs,Model%AppGrid,Model%Stratigraphy,Model%PrecipData,Model%ETData,iStat)
+    IF (iStat .EQ. -1) RETURN
 
     !Root zone component (must be instantiated after gw and streams)
     IF (ProjectFileNames(SIM_RootZoneDataFileID) .NE. '') THEN

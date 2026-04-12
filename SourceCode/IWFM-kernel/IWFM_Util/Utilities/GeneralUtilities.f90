@@ -74,11 +74,13 @@ MODULE GeneralUtilities
             EstablishAbsolutePathFileName , &
             GetFileDirectory                
                                             
-  !Public misc. utilities                   
+  !Public misc. utilities
   PUBLIC :: GetDate                       , &
             GetTime                       , &
             Tolerance                     , &
             ConvertID_To_Index            , &
+            PrepareIDIndex                , &
+            LookupIDInIndex               , &
             FEXP
 
 
@@ -2213,5 +2215,80 @@ CONTAINS
     
   END SUBROUTINE ConvertID_To_Index_Scalar
 
-  
+
+  ! -------------------------------------------------------------
+  ! --- BUILD A SORTED INDEX OVER AN ID ARRAY
+  ! ---
+  ! --- Given AllIDs(N), produces:
+  ! ---   iSortedIDs(N)    — copy of AllIDs sorted ascending
+  ! ---   iSortedToOrig(N) — permutation such that
+  ! ---                      AllIDs(iSortedToOrig(k)) == iSortedIDs(k)
+  ! ---
+  ! --- Use with LookupIDInIndex to replace per-call linear searches
+  ! --- through AllIDs with O(log N) binary searches. The cost of this
+  ! --- prep is O(N log N) (Shell sort). Worth it whenever a routine
+  ! --- needs to look up more than ~log(N) items in the same AllIDs
+  ! --- array.
+  ! ---
+  ! --- Both output arrays are allocated by this routine and must be
+  ! --- deallocated by the caller.
+  ! -------------------------------------------------------------
+  SUBROUTINE PrepareIDIndex(AllIDs, iSortedIDs, iSortedToOrig)
+    INTEGER,INTENT(IN)               :: AllIDs(:)
+    INTEGER,ALLOCATABLE,INTENT(OUT)  :: iSortedIDs(:), iSortedToOrig(:)
+
+    !Local variables
+    INTEGER :: i, N
+
+    N = SIZE(AllIDs)
+    ALLOCATE(iSortedIDs(N), iSortedToOrig(N))
+
+    !Initialize: copy values, identity permutation
+    iSortedIDs = AllIDs
+    DO i = 1, N
+        iSortedToOrig(i) = i
+    END DO
+
+    !Sort the copy ascending; ShellSort_IntSecondArray reorders
+    !iSortedToOrig in lockstep so the permutation tracks the move.
+    IF (N .GT. 1) CALL ShellSort(iSortedIDs, iSortedToOrig)
+
+  END SUBROUTINE PrepareIDIndex
+
+
+  ! -------------------------------------------------------------
+  ! --- BINARY-SEARCH AN ID IN A SORTED INDEX
+  ! ---
+  ! --- Given a sorted index built by PrepareIDIndex, finds the
+  ! --- original-array index of ID in O(log N), or 0 if ID is not
+  ! --- present. Returns 0 immediately for ID == 0 (the convention
+  ! --- ConvertID_To_Index_Scalar uses for "not specified").
+  ! -------------------------------------------------------------
+  SUBROUTINE LookupIDInIndex(ID, iSortedIDs, iSortedToOrig, Index)
+    INTEGER,INTENT(IN)  :: ID, iSortedIDs(:), iSortedToOrig(:)
+    INTEGER,INTENT(OUT) :: Index
+
+    !Local variables
+    INTEGER       :: lo, hi, mid
+
+    Index = 0
+    IF (ID .EQ. 0) RETURN
+
+    lo = 1
+    hi = SIZE(iSortedIDs)
+    DO WHILE (lo .LE. hi)
+        mid = (lo + hi) / 2
+        IF (iSortedIDs(mid) .EQ. ID) THEN
+            Index = iSortedToOrig(mid)
+            RETURN
+        ELSE IF (iSortedIDs(mid) .LT. ID) THEN
+            lo = mid + 1
+        ELSE
+            hi = mid - 1
+        END IF
+    END DO
+
+  END SUBROUTINE LookupIDInIndex
+
+
 END MODULE

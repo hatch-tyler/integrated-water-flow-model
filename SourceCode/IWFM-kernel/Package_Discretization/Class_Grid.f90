@@ -66,6 +66,14 @@ MODULE Class_Grid
 
 
   ! -------------------------------------------------------------
+  ! --- SPATIAL HASH CELL TYPE (used by GridType for point-in-element acceleration)
+  ! -------------------------------------------------------------
+  TYPE :: SpatialCellType
+      INTEGER,ALLOCATABLE :: iElems(:)
+  END TYPE SpatialCellType
+
+
+  ! -------------------------------------------------------------
   ! --- GRID DATA TYPE
   ! -------------------------------------------------------------
   TYPE GridType
@@ -73,6 +81,13 @@ MODULE Class_Grid
       REAL(8),ALLOCATABLE           :: Y(:)        !Nodal Y coordinates for each (node)
       INTEGER,ALLOCATABLE           :: NVertex(:)  !Number of vertices for each (element)
       INTEGER,ALLOCATABLE           :: Vertex(:,:) !Vertex numbers in counter-clockwise direction given as (4,element) combination
+      !Spatial hash index for ContainedInElement acceleration (lazy-built on first query)
+      TYPE(SpatialCellType),ALLOCATABLE :: SpatialGrid(:,:)
+      LOGICAL                           :: lSpatialBuilt = .FALSE.
+      INTEGER                           :: iSpNx = 0, iSpNy = 0
+      REAL(8)                           :: rSpXmin = 0d0, rSpXmax = 0d0
+      REAL(8)                           :: rSpYmin = 0d0, rSpYmax = 0d0
+      REAL(8)                           :: rSpDx = 0d0, rSpDy = 0d0
   CONTAINS
       PROCEDURE,PASS :: Init      => New
       PROCEDURE,PASS :: KillGrid
@@ -118,6 +133,7 @@ MODULE Class_Grid
   INTEGER,PARAMETER           :: f_iModNameLen = 12
   CHARACTER(LEN=12),PARAMETER :: f_cModName    = 'Class_Grid::'
   INTEGER,PARAMETER           :: f_iNPGauss    = 2
+
 
 
 
@@ -183,6 +199,9 @@ CONTAINS
     Grid%Y       = Y
     Grid%NVertex = NVertex
     Grid%Vertex  = Vertex
+
+    !Build spatial hash index for point-in-element acceleration
+    CALL BuildSpatialIndex(Grid)
 
   END SUBROUTINE New
 
@@ -1405,7 +1424,104 @@ CONTAINS
   
   
   ! -------------------------------------------------------------
-  ! --- FIND THE FIRST ELEMENT THAT A POINT (XP,YP) LIES IN - OPENMP VERSION
+  ! --- BUILD SPATIAL HASH INDEX for ContainedInElement
+  ! --- Divides the grid bounding box into Nx x Ny cells and
+  ! --- assigns each element to every cell its bounding box overlaps.
+  ! --- Cost: O(NElements). Called once, on first ContainedInElement call.
+  ! -------------------------------------------------------------
+  SUBROUTINE BuildSpatialIndex(Grid)
+    TYPE(GridType),INTENT(INOUT) :: Grid
+
+    !Local variables
+    INTEGER :: NElems, iE, NV, ix, iy, ix1, ix2, iy1, iy2
+    INTEGER :: Vtx(4)
+    REAL(8) :: eXmin, eXmax, eYmin, eYmax
+    INTEGER,ALLOCATABLE :: iCellCount(:,:)
+    INTEGER,ALLOCATABLE :: iCellPos(:,:)
+
+    NElems = SIZE(Grid%NVertex)
+    IF (NElems .EQ. 0) RETURN
+
+    !Global bounding box from node coordinates
+    Grid%rSpXmin = MINVAL(Grid%X)
+    Grid%rSpXmax = MAXVAL(Grid%X)
+    Grid%rSpYmin = MINVAL(Grid%Y)
+    Grid%rSpYmax = MAXVAL(Grid%Y)
+
+    !Grid resolution: ~sqrt(NElems) cells per side, clamped [10,500]
+    Grid%iSpNx = MIN(500, MAX(10, INT(SQRT(DBLE(NElems)))))
+    Grid%iSpNy = Grid%iSpNx
+
+    !Cell sizes (add tiny epsilon to avoid edge-case where max coord maps to Nx+1)
+    Grid%rSpDx = (Grid%rSpXmax - Grid%rSpXmin) * 1.000001d0 / DBLE(Grid%iSpNx)
+    Grid%rSpDy = (Grid%rSpYmax - Grid%rSpYmin) * 1.000001d0 / DBLE(Grid%iSpNy)
+    IF (Grid%rSpDx .LE. 0d0) Grid%rSpDx = 1d0
+    IF (Grid%rSpDy .LE. 0d0) Grid%rSpDy = 1d0
+
+    !Pass 1: count elements per cell
+    ALLOCATE(iCellCount(Grid%iSpNx, Grid%iSpNy))
+    iCellCount = 0
+    DO iE = 1, NElems
+        NV  = Grid%NVertex(iE)
+        Vtx = Grid%Vertex(:,iE)
+        eXmin = MINVAL(Grid%X(Vtx(1:NV)))
+        eXmax = MAXVAL(Grid%X(Vtx(1:NV)))
+        eYmin = MINVAL(Grid%Y(Vtx(1:NV)))
+        eYmax = MAXVAL(Grid%Y(Vtx(1:NV)))
+        ix1 = MAX(1, INT((eXmin - Grid%rSpXmin) / Grid%rSpDx) + 1)
+        ix2 = MIN(Grid%iSpNx, INT((eXmax - Grid%rSpXmin) / Grid%rSpDx) + 1)
+        iy1 = MAX(1, INT((eYmin - Grid%rSpYmin) / Grid%rSpDy) + 1)
+        iy2 = MIN(Grid%iSpNy, INT((eYmax - Grid%rSpYmin) / Grid%rSpDy) + 1)
+        DO iy = iy1, iy2
+            DO ix = ix1, ix2
+                iCellCount(ix, iy) = iCellCount(ix, iy) + 1
+            END DO
+        END DO
+    END DO
+
+    !Allocate spatial grid cells
+    IF (ALLOCATED(Grid%SpatialGrid)) DEALLOCATE(Grid%SpatialGrid)
+    ALLOCATE(Grid%SpatialGrid(Grid%iSpNx, Grid%iSpNy))
+    ALLOCATE(iCellPos(Grid%iSpNx, Grid%iSpNy))
+    DO iy = 1, Grid%iSpNy
+        DO ix = 1, Grid%iSpNx
+            IF (iCellCount(ix,iy) .GT. 0) THEN
+                ALLOCATE(Grid%SpatialGrid(ix,iy)%iElems(iCellCount(ix,iy)))
+            END IF
+        END DO
+    END DO
+    iCellPos = 0
+
+    !Pass 2: fill element lists
+    DO iE = 1, NElems
+        NV  = Grid%NVertex(iE)
+        Vtx = Grid%Vertex(:,iE)
+        eXmin = MINVAL(Grid%X(Vtx(1:NV)))
+        eXmax = MAXVAL(Grid%X(Vtx(1:NV)))
+        eYmin = MINVAL(Grid%Y(Vtx(1:NV)))
+        eYmax = MAXVAL(Grid%Y(Vtx(1:NV)))
+        ix1 = MAX(1, INT((eXmin - Grid%rSpXmin) / Grid%rSpDx) + 1)
+        ix2 = MIN(Grid%iSpNx, INT((eXmax - Grid%rSpXmin) / Grid%rSpDx) + 1)
+        iy1 = MAX(1, INT((eYmin - Grid%rSpYmin) / Grid%rSpDy) + 1)
+        iy2 = MIN(Grid%iSpNy, INT((eYmax - Grid%rSpYmin) / Grid%rSpDy) + 1)
+        DO iy = iy1, iy2
+            DO ix = ix1, ix2
+                iCellPos(ix,iy) = iCellPos(ix,iy) + 1
+                Grid%SpatialGrid(ix,iy)%iElems(iCellPos(ix,iy)) = iE
+            END DO
+        END DO
+    END DO
+
+    DEALLOCATE(iCellCount, iCellPos)
+    Grid%lSpatialBuilt = .TRUE.
+
+  END SUBROUTINE BuildSpatialIndex
+
+
+  ! -------------------------------------------------------------
+  ! --- FIND THE FIRST ELEMENT THAT A POINT (XP,YP) LIES IN
+  ! --- Uses spatial hash index for O(1) amortized lookups instead
+  ! --- of the original O(NElements) linear scan.
   ! -------------------------------------------------------------
   FUNCTION ContainedInElement(Grid,XP,YP) RESULT(iElem)
     TYPE(GridType),INTENT(IN) :: Grid
@@ -1413,19 +1529,25 @@ CONTAINS
     INTEGER                   :: iElem
 
     !Local variables
-    INTEGER :: NVertex,indxElem,indxVertex,Vertex(4)
+    INTEGER :: NVertex,indxElem,indxVertex,Vertex(4),ix,iy,k
     REAL(8) :: DotProduct,X1,Y1,X2,Y2,XX,YX,X(4),Y(4)
     LOGICAL :: lInThisElem
 
     !Initialize
     iElem = 0
 
-    !Iterate over elements
-    !$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE(indxElem,NVertex,Vertex,X,Y,lInThisElem,indxVertex,X1,Y1,X2,Y2,XX,YX,DotProduct) 
-    DO indxElem=1,SIZE(Grid%NVertex)
-!DIR$ IF (_OPENMP .NE. 0) 
-!$      IF (iElem .GT. 0) CYCLE
-!DIR$ END IF
+    !Spatial index must have been built during Grid%Init
+    IF (.NOT. Grid%lSpatialBuilt) RETURN
+
+    !Find the cell containing (XP,YP)
+    ix = INT((XP - Grid%rSpXmin) / Grid%rSpDx) + 1
+    iy = INT((YP - Grid%rSpYmin) / Grid%rSpDy) + 1
+    IF (ix .LT. 1 .OR. ix .GT. Grid%iSpNx .OR. iy .LT. 1 .OR. iy .GT. Grid%iSpNy) RETURN
+
+    !Check only elements in this cell
+    IF (.NOT. ALLOCATED(Grid%SpatialGrid(ix,iy)%iElems)) RETURN
+    DO k = 1, SIZE(Grid%SpatialGrid(ix,iy)%iElems)
+        indxElem     = Grid%SpatialGrid(ix,iy)%iElems(k)
         NVertex      = Grid%NVertex(indxElem)
         Vertex       = Grid%Vertex(:,indxElem)
         X(1:NVertex) = Grid%X(Vertex(1:NVertex))
@@ -1442,7 +1564,7 @@ CONTAINS
                 Y2 = Y(indxVertex+1)
                 IF (XP .EQ. X2) THEN
                     IF (YP .EQ. Y2) EXIT
-                END IF        
+                END IF
             ELSE
                 X2 = X(1)
                 Y2 = Y(1)
@@ -1456,12 +1578,9 @@ CONTAINS
         END DO
         IF (lInThisElem) THEN
             iElem = indxElem
-!DIR$ IF (_OPENMP .EQ. 0) 
             RETURN
-!DIR$ END IF
         END IF
     END DO
-    !$OMP END PARALLEL DO
 
   END FUNCTION ContainedInElement
 

@@ -30,7 +30,8 @@ MODULE Package_AppStream
                                           MessageLoggerType                                , &
                                           f_iFatal                                         , &
                                           f_iInfo                                          , &
-                                          f_iWarn
+                                          f_iWarn                                          , &
+                                          f_lLogPerfMarkers
   USE GeneralUtilities            , ONLY: IntToText                                        , &
                                           FindSubStringInString                            , &
                                           StripTextUntilCharacter 
@@ -393,11 +394,13 @@ CONTAINS
             iStat = -1
             RETURN
     END SELECT
-    CALL DATE_AND_TIME(VALUES=iPerfEnd)
-    rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) &
-             - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
-    WRITE(cPerfMsg,'(A,F8.3,A)') '    [PERF] Stream Network: ', rPerfSec, ' sec'
-    CALL LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+    IF (f_lLogPerfMarkers) THEN
+        CALL DATE_AND_TIME(VALUES=iPerfEnd)
+        rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) &
+                 - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
+        WRITE(cPerfMsg,'(A,F8.3,A)') '    [PERF] Stream Network: ', rPerfSec, ' sec'
+        CALL LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+    END IF
 
   END SUBROUTINE SetStaticComponent
   
@@ -496,11 +499,13 @@ CONTAINS
     !Instantiate the dynamic component
     CALL DATE_AND_TIME(VALUES=iPerfStart)
     CALL AppStream%Me%New(IsForInquiry,cFileName,cWorkingDirectory,IWFMKernelVersion%GetVersion(),TimeStep,NTIME,iLakeIDs,AppGrid,Stratigraphy,ETData,StrmLakeConnector,StrmGWConnector,iStat)
-    CALL DATE_AND_TIME(VALUES=iPerfEnd)
-    rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) &
-             - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
-    WRITE(cPerfMsg,'(A,F8.3,A)') '    [PERF] Stream DynInit: ', rPerfSec, ' sec'
-    CALL LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+    IF (f_lLogPerfMarkers) THEN
+        CALL DATE_AND_TIME(VALUES=iPerfEnd)
+        rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) &
+                 - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
+        WRITE(cPerfMsg,'(A,F8.3,A)') '    [PERF] Stream DynInit: ', rPerfSec, ' sec'
+        CALL LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+    END IF
 
   END SUBROUTINE SetDynamicComponent
   
@@ -655,11 +660,13 @@ CONTAINS
             iStat = -1
             RETURN
     END SELECT
-    CALL DATE_AND_TIME(VALUES=iPerfEnd)
-    rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) &
-             - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
-    WRITE(cPerfMsg,'(A,F8.3,A)') '    [PERF] Stream AllComponents: ', rPerfSec, ' sec'
-    CALL LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+    IF (f_lLogPerfMarkers) THEN
+        CALL DATE_AND_TIME(VALUES=iPerfEnd)
+        rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) &
+                 - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
+        WRITE(cPerfMsg,'(A,F8.3,A)') '    [PERF] Stream AllComponents: ', rPerfSec, ' sec'
+        CALL LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+    END IF
 
   END SUBROUTINE SetAllComponents
   
@@ -744,11 +751,13 @@ CONTAINS
             iStat = -1
             RETURN
     END SELECT
-    CALL DATE_AND_TIME(VALUES=iPerfEnd)
-    rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) &
-             - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
-    WRITE(cPerfMsg,'(A,F8.3,A)') '    [PERF] Stream AllComponents: ', rPerfSec, ' sec'
-    CALL LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+    IF (f_lLogPerfMarkers) THEN
+        CALL DATE_AND_TIME(VALUES=iPerfEnd)
+        rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) &
+                 - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
+        WRITE(cPerfMsg,'(A,F8.3,A)') '    [PERF] Stream AllComponents: ', rPerfSec, ' sec'
+        CALL LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+    END IF
 
   END SUBROUTINE SetAllComponentsWithoutBinFile
 

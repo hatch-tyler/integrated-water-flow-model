@@ -341,8 +341,10 @@ CONTAINS
     cALine = StripTextUntilCharacter(cALine,f_cInlineCommentChar) 
     CALL CleanSpecialCharacters(cALine)
     CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(cALine)),cWorkingDirectory,cAbsPathFileName)
-    CALL PondLand%LandUseDataFile%New(cAbsPathFileName,cWorkingDirectory,'Ponded ag. area file',NElements,iNCrops,TrackTime,iStat)
-    IF (iStat .EQ. -1) RETURN
+    IF (.NOT. lIsForInquiry) THEN
+        CALL PondLand%LandUseDataFile%New(cAbsPathFileName,cWorkingDirectory,'Ponded ag. area file',NElements,iNCrops,TrackTime,iStat)
+        IF (iStat .EQ. -1) RETURN
+    END IF
     
     !Crops for budget output
     CALL RiceRefugeDataFile%ReadData(NBudgetCrops,iStat)  ;  IF (iStat .EQ. -1) RETURN
@@ -515,16 +517,20 @@ CONTAINS
     cALine = StripTextUntilCharacter(cALine,f_cInlineCommentChar) 
     CALL CleanSpecialCharacters(cALine)
     CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(cALine)),cWorkingDirectory,cAbsPathFileName)
-    CALL PondLand%PondDepthFile%Init(cAbsPathFileName,cWorkingDirectory,'rice/refuge ponding depth data file',TrackTime,1,.TRUE.,Factor,[.FALSE.],iStat=iStat)  ;  IF (iStat .EQ. -1) RETURN
-    PondLand%rPondDepthFactor = Factor(1)
-    
+    IF (.NOT. lIsForInquiry) THEN
+        CALL PondLand%PondDepthFile%Init(cAbsPathFileName,cWorkingDirectory,'rice/refuge ponding depth data file',TrackTime,1,.TRUE.,Factor,[.FALSE.],iStat=iStat)  ;  IF (iStat .EQ. -1) RETURN
+        PondLand%rPondDepthFactor = Factor(1)
+    END IF
+
     !Operations flow data file
     CALL RiceRefugeDataFile%ReadData(cALine,iStat)  ;  IF (iStat .EQ. -1) RETURN
-    cALine = StripTextUntilCharacter(cALine,f_cInlineCommentChar) 
+    cALine = StripTextUntilCharacter(cALine,f_cInlineCommentChar)
     CALL CleanSpecialCharacters(cALine)
     CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(cALine)),cWorkingDirectory,cAbsPathFileName)
-    CALL PondLand%OperationFlowsFile%Init(cAbsPathFileName,cWorkingDirectory,'rice/refuge operations flow data file',TrackTime,1,.TRUE.,Factor,[.TRUE.],iStat=iStat)   ;  IF (iStat .EQ. -1) RETURN
-    PondLand%rOperationFlowsFactor = Factor(1)
+    IF (.NOT. lIsForInquiry) THEN
+        CALL PondLand%OperationFlowsFile%Init(cAbsPathFileName,cWorkingDirectory,'rice/refuge operations flow data file',TrackTime,1,.TRUE.,Factor,[.TRUE.],iStat=iStat)   ;  IF (iStat .EQ. -1) RETURN
+        PondLand%rOperationFlowsFactor = Factor(1)
+    END IF
     
     !Ponding depths
     CALL ReadPointerData(RiceRefugeDataFile,'ponding depth column pointers for ponded crops','elements',NElements,iNCrops+1,iElemIDs,DummyIntArray,iStat)  ;  IF (iStat .EQ. -1) RETURN
@@ -593,17 +599,19 @@ CONTAINS
     END DO
     
     !Check for time-series column pointer errors
-    DO indxElem=1,NElements
-        ID = iElemIDs(indxElem)
-        CALL PondLand%PondDepthFile%CheckColNum('Pond depth file as referenced by element '//TRIM(IntToText(ID)),PondLand%Crops%iColPondDepth(:,indxElem),.TRUE.,iStat)                                                                                                                     ;  IF (iStat .EQ. -1) RETURN
-        IF (lReadNCrops) THEN
-            CALL PondLand%OperationFlowsFile%CheckColNum('Rice/refuge pond operations flow file as referenced by element '//TRIM(IntToText(ID))//' for application depths',PondLand%iColApplicationH2O(:,indxElem),.FALSE.,iStat)  ;  IF (iStat .EQ. -1) RETURN
-        ELSE
-            CALL PondLand%OperationFlowsFile%CheckColNum('Rice/refuge pond operations flow file as referenced by element '//TRIM(IntToText(ID))//' for application depths for non-flooded rice decomposition',[PondLand%iColApplicationH2O(f_iindxRice_NonFloodDecomp,indxElem)],.TRUE.,iStat)  ;  IF (iStat .EQ. -1) RETURN
-        END IF
-        CALL PondLand%OperationFlowsFile%CheckColNum('Rice/refuge pond operations flow file as referenced by element '//TRIM(IntToText(ID))//' for return flow depths',PondLand%Crops%iColReturn(:,indxElem),.TRUE.,iStat)                                                                  ;  IF (iStat .EQ. -1) RETURN
-        CALL PondLand%OperationFlowsFile%CheckColNum('Rice/refuge pond operations flow file as referenced by element '//TRIM(IntToText(ID))//' for re-use flow depths',PondLand%Crops%iColReuse(:,indxElem),.TRUE.,iStat)                                                                   ;  IF (iStat .EQ. -1) RETURN
-    END DO
+    IF (.NOT. lIsForInquiry) THEN
+        DO indxElem=1,NElements
+            ID = iElemIDs(indxElem)
+            CALL PondLand%PondDepthFile%CheckColNum('Pond depth file as referenced by element '//TRIM(IntToText(ID)),PondLand%Crops%iColPondDepth(:,indxElem),.TRUE.,iStat)                                                                                                                     ;  IF (iStat .EQ. -1) RETURN
+            IF (lReadNCrops) THEN
+                CALL PondLand%OperationFlowsFile%CheckColNum('Rice/refuge pond operations flow file as referenced by element '//TRIM(IntToText(ID))//' for application depths',PondLand%iColApplicationH2O(:,indxElem),.FALSE.,iStat)  ;  IF (iStat .EQ. -1) RETURN
+            ELSE
+                CALL PondLand%OperationFlowsFile%CheckColNum('Rice/refuge pond operations flow file as referenced by element '//TRIM(IntToText(ID))//' for application depths for non-flooded rice decomposition',[PondLand%iColApplicationH2O(f_iindxRice_NonFloodDecomp,indxElem)],.TRUE.,iStat)  ;  IF (iStat .EQ. -1) RETURN
+            END IF
+            CALL PondLand%OperationFlowsFile%CheckColNum('Rice/refuge pond operations flow file as referenced by element '//TRIM(IntToText(ID))//' for return flow depths',PondLand%Crops%iColReturn(:,indxElem),.TRUE.,iStat)                                                                  ;  IF (iStat .EQ. -1) RETURN
+            CALL PondLand%OperationFlowsFile%CheckColNum('Rice/refuge pond operations flow file as referenced by element '//TRIM(IntToText(ID))//' for re-use flow depths',PondLand%Crops%iColReuse(:,indxElem),.TRUE.,iStat)                                                                   ;  IF (iStat .EQ. -1) RETURN
+        END DO
+    END IF
     
     !Initial conditions
     CALL ReadRealData(RiceRefugeDataFile,'initial conditions for ponded crops','elements',NElements,iNCrops+2,iElemIDs,DummyRealArray,iStat)  ;  IF (iStat .EQ. -1) RETURN

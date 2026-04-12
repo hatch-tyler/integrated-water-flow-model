@@ -34,7 +34,8 @@ MODULE Class_AppStream_v42
                                             f_iFatal                        , &
                                             f_iWarn                         , &
                                             f_iInfo                         , &
-                                            f_iMessage
+                                            f_iMessage                      , &
+                                            f_lLogPerfMarkers
   USE GeneralUtilities              , ONLY: StripTextUntilCharacter         , &
                                             IntToText                       , &
                                             FirstLocation                   , &
@@ -360,17 +361,19 @@ CONTAINS
         DiverDetailBudFileName = cAbsPathFileName
     END IF
     
-    !Diversions and bypasses (skip entirely in inquiry mode — simulation routing only)
+    !Diversions and bypasses
     CALL DATE_AND_TIME(VALUES=iPerfStart)
-    IF (lRoutedStreams .AND. .NOT. IsForInquiry) THEN
+    IF (lRoutedStreams) THEN
         CALL AppStream%AppDiverBypass%New(IsForInquiry,DiverSpecFileName,BypassSpecFileName,DiverFileName,DiverDetailBudFileName,cWorkingDirectory,TRIM(cVersionFull),NTIME,TimeStep,AppStream%NStrmNodes,iStrmNodeIDs,iLakeIDs,AppStream%Reaches,AppGrid,StrmLakeConnector,iStat)
         IF (iStat .EQ. -1) RETURN
     END IF
 
-    CALL DATE_AND_TIME(VALUES=iPerfEnd)
-    rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
-    WRITE(cPerfMsg,'(A,F8.3,A)') '      [PERF] Stream DivBypass: ', rPerfSec, ' sec'
-    CALL LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+    IF (f_lLogPerfMarkers) THEN
+        CALL DATE_AND_TIME(VALUES=iPerfEnd)
+        rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
+        WRITE(cPerfMsg,'(A,F8.3,A)') '      [PERF] Stream DivBypass: ', rPerfSec, ' sec'
+        CALL LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+    END IF
 
     !Reach IDs
     iReachIDs = AppStream%Reaches%ID
@@ -407,10 +410,12 @@ CONTAINS
     CALL AppStream%StrmNodeBudget%New(lRoutedStreams,IsForInquiry,cWorkingDirectory,iReachIDs,iStrmNodeIDs,NTIME,TimeStep,TRIM(cVersionFull),PrepareStreamBudgetHeader,MainFile,iStat)
     IF (iStat .EQ. -1) RETURN
     
-    CALL DATE_AND_TIME(VALUES=iPerfEnd)
-    rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
-    WRITE(cPerfMsg,'(A,F8.3,A)') '      [PERF] Stream Budget+Hyd: ', rPerfSec, ' sec'
-    CALL LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+    IF (f_lLogPerfMarkers) THEN
+        CALL DATE_AND_TIME(VALUES=iPerfEnd)
+        rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
+        WRITE(cPerfMsg,'(A,F8.3,A)') '      [PERF] Stream Budget+Hyd: ', rPerfSec, ' sec'
+        CALL LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+    END IF
 
     !Stream bed parameters for stream-gw connectivity, wetted perimeter and stream length for each node
     CALL DATE_AND_TIME(VALUES=iPerfStart)
@@ -418,10 +423,12 @@ CONTAINS
     CALL StrmGWConnector%CompileConductance(MainFile,AppGrid,Stratigraphy,iNStrmNodes,iStrmNodeIDs,AppStream%Nodes%BottomElev,AppStream%Nodes%rLength,iStat,AppStream%rWetPerimeter)
     IF (iStat .EQ. -1) RETURN
     
-    CALL DATE_AND_TIME(VALUES=iPerfEnd)
-    rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
-    WRITE(cPerfMsg,'(A,F8.3,A)') '      [PERF] Stream Conductance: ', rPerfSec, ' sec'
-    CALL LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+    IF (f_lLogPerfMarkers) THEN
+        CALL DATE_AND_TIME(VALUES=iPerfEnd)
+        rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
+        WRITE(cPerfMsg,'(A,F8.3,A)') '      [PERF] Stream Conductance: ', rPerfSec, ' sec'
+        CALL LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+    END IF
 
     !If non-routed streams, return at this point
     IF (.NOT. lRoutedStreams) THEN

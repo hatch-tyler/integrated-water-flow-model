@@ -28,7 +28,8 @@ MODULE RootZone_v50
                                                EchoProgress                                , &
                                                MessageArray                                , &
                                                f_iFatal                                    , &
-                                               f_iInfo
+                                               f_iInfo                                     , &
+                                               f_lLogPerfMarkers
   USE TimeSeriesUtilities              , ONLY: TimeStepType                                , &
                                                IncrementTimeStamp                          , &
                                                NPeriods                                    , &
@@ -462,11 +463,13 @@ CONTAINS
     CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(NVRVFile)),cWorkingDirectory,cAbsPathFileName)
     CALL RootZone%NVRVRootZone%New(cAbsPathFileName,cWorkingDirectory,FactCN,NSoils,NElements,NRegion,iSubregionIDs,TrackTime,iStat)
     IF (iStat .EQ. -1) RETURN
-    CALL DATE_AND_TIME(VALUES=iPerfEnd)
-    rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) &
-             - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
-    WRITE(cPerfMsg,'(A,F8.3,A)') '    [PERF] RZ LandUse: ', rPerfSec, ' sec'
-    CALL LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+    IF (f_lLogPerfMarkers) THEN
+        CALL DATE_AND_TIME(VALUES=iPerfEnd)
+        rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) &
+                 - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
+        WRITE(cPerfMsg,'(A,F8.3,A)') '    [PERF] RZ LandUse: ', rPerfSec, ' sec'
+        CALL LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+    END IF
 
     !Check if at least one type of land use is specified
     IF ( AgDataFile        .EQ. ''   .AND.   &
@@ -529,11 +532,13 @@ CONTAINS
         RootZone%Flags%lGenericMoistureFile_Defined = .TRUE.
     END IF
     
-    CALL DATE_AND_TIME(VALUES=iPerfEnd)
-    rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) &
-             - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
-    WRITE(cPerfMsg,'(A,F8.3,A)') '    [PERF] RZ SoilParams: ', rPerfSec, ' sec'
-    CALL LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+    IF (f_lLogPerfMarkers) THEN
+        CALL DATE_AND_TIME(VALUES=iPerfEnd)
+        rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) &
+                 - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
+        WRITE(cPerfMsg,'(A,F8.3,A)') '    [PERF] RZ SoilParams: ', rPerfSec, ' sec'
+        CALL LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+    END IF
 
     !Land and water use budget HDF5 output file
     CALL DATE_AND_TIME(VALUES=iPerfStart)
@@ -586,11 +591,13 @@ CONTAINS
         IF (iStat .EQ. -1) RETURN
         RootZone%Flags%RootZoneZoneBudRawFile_Defined = .TRUE.
     END IF
-    CALL DATE_AND_TIME(VALUES=iPerfEnd)
-    rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) &
-             - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
-    WRITE(cPerfMsg,'(A,F8.3,A)') '    [PERF] RZ Budget+ZBudget: ', rPerfSec, ' sec'
-    CALL LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+    IF (f_lLogPerfMarkers) THEN
+        CALL DATE_AND_TIME(VALUES=iPerfEnd)
+        rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) &
+                 - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
+        WRITE(cPerfMsg,'(A,F8.3,A)') '    [PERF] RZ Budget+ZBudget: ', rPerfSec, ' sec'
+        CALL LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+    END IF
 
     !End-of-simulation moisture results output
     CALL DATE_AND_TIME(VALUES=iPerfStart)
@@ -814,11 +821,13 @@ CONTAINS
     CALL CheckTSDataPointers(RootZone,iElemIDs,iSubregionIDs,Precip,ET,iStat)
     IF (iStat .EQ. -1) RETURN
 
-    CALL DATE_AND_TIME(VALUES=iPerfEnd)
-    rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) &
-             - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
-    WRITE(cPerfMsg,'(A,F8.3,A)') '    [PERF] RZ GenericMoisture+Rest: ', rPerfSec, ' sec'
-    CALL LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+    IF (f_lLogPerfMarkers) THEN
+        CALL DATE_AND_TIME(VALUES=iPerfEnd)
+        rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) &
+                 - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
+        WRITE(cPerfMsg,'(A,F8.3,A)') '    [PERF] RZ GenericMoisture+Rest: ', rPerfSec, ' sec'
+        CALL LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+    END IF
 
     !Close file
     CALL RootZoneParamFile%Kill()

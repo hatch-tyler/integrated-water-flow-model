@@ -233,6 +233,7 @@ CONTAINS
   FUNCTION GetAUnitNumber() RESULT(UnitNumber)
     INTEGER :: UnitNumber
 
+    !$OMP CRITICAL(IWFM_UNIT_ALLOC)
     DO UnitNumber=LastUnitConnected+1,f_iMaxUnitNumber
       IF (UnitNumber .EQ. ERROR_UNIT) CYCLE
       IF (UnitNumber .EQ. INPUT_UNIT) CYCLE
@@ -241,6 +242,7 @@ CONTAINS
     END DO
 
     LastUnitConnected = UnitNumber
+    !$OMP END CRITICAL(IWFM_UNIT_ALLOC)
 
   END FUNCTION GetAUnitNumber
 

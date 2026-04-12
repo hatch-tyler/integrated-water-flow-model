@@ -1706,17 +1706,14 @@ CONTAINS
     INTEGER                                :: indxElem,iElem,iElemWork(AppGrid%NElements),iDim,iSubregionID
     REAL(8)                                :: TotalArea,rAvailableArea,rAdjust
     INTEGER,POINTER                        :: pElems(:)
-    INTEGER,ALLOCATABLE,TARGET,SAVE        :: iModelElements(:)
-    
+    INTEGER,TARGET                         :: iModelElements(AppGrid%NElements)
+
     !Initialize
     iStat = 0
     IF (iMeasuredLUDataFlag .EQ. f_iMeasuredLUDataForSubregion) THEN
         pElems => AppGrid%AppSubregion(iRegion)%RegionElements
     ELSE
-        IF (.NOT. ALLOCATED(iModelElements)) THEN
-            ALLOCATE (iModelElements(AppGrid%NElements))
-            iModelElements = [(indxElem,indxElem=1,AppGrid%NElements)]
-        END IF
+        iModelElements = [(indxElem,indxElem=1,AppGrid%NElements)]
         pElems => iModelElements
     END IF
     iDim      = SIZE(pElems)
@@ -1811,17 +1808,14 @@ CONTAINS
     INTEGER                         :: indxElem,iElem,iDim
     REAL(8)                         :: NewArea,rAdjust,rFractions(AppGrid%NElements),DiffWork
     INTEGER,POINTER                 :: pElems(:)
-    INTEGER,ALLOCATABLE,TARGET,SAVE :: iModelElements(:)
-    
+    INTEGER,TARGET                  :: iModelElements(AppGrid%NElements)
+
     !Initialize
     iStat = 0
     IF (iMeasuredLUDataFlag .EQ. f_iMeasuredLUDataForSubregion) THEN
         pElems => AppGrid%AppSubregion(iRegion)%RegionElements
     ELSE
-        IF (.NOT. ALLOCATED(iModelElements)) THEN
-            ALLOCATE (iModelElements(AppGrid%NElements))
-            iModelElements = [(indxElem,indxElem=1,AppGrid%NElements)]
-        END IF
+        iModelElements = [(indxElem,indxElem=1,AppGrid%NElements)]
         pElems => iModelElements
     END IF
     iDim      = SIZE(pElems)

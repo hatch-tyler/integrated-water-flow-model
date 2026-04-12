@@ -164,7 +164,7 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- NEW NATIVE AND RIPARIAN LAND USE DATA
   ! -------------------------------------------------------------
-  SUBROUTINE New(NVRVLand,lReadNVeg,cFileName,cWorkingDirectory,FactCN,NElements,NSubregions,iElemIDs,TrackTime,iStat,iStrmNodeIDs,iColHabitatCoeff_NVRV)
+  SUBROUTINE New(NVRVLand,lReadNVeg,cFileName,cWorkingDirectory,FactCN,NElements,NSubregions,iElemIDs,TrackTime,iStat,iStrmNodeIDs,iColHabitatCoeff_NVRV,lIsForInquiry)
     CLASS(NativeRiparianLandUse_v41_Type) :: NVRVLand
     LOGICAL,INTENT(IN)                    :: lReadNVeg
     CHARACTER(LEN=*),INTENT(IN)           :: cFileName,cWorkingDirectory
@@ -174,6 +174,7 @@ CONTAINS
     INTEGER,INTENT(OUT)                   :: iStat
     INTEGER,OPTIONAL,INTENT(IN)           :: iStrmNodeIDs(:)
     INTEGER,OPTIONAL,ALLOCATABLE          :: iColHabitatCoeff_NVRV(:,:)
+    LOGICAL,OPTIONAL,INTENT(IN)           :: lIsForInquiry
     
     !Local variables
     CHARACTER(LEN=ModNameLen+3)               :: ThisProcedure = ModName // 'New'
@@ -184,13 +185,15 @@ CONTAINS
     REAL(8)                                   :: rFact
     INTEGER,ALLOCATABLE                       :: iTempArray_NVRV(:,:)
     REAL(8),ALLOCATABLE                       :: rDummyArray(:,:)
-    LOGICAL                                   :: lProcessed(NElements)
+    LOGICAL                                   :: lProcessed(NElements),lForInquiry_Local
     TYPE(GenericFileType)                     :: NVRVFile
     CHARACTER(LEN=f_iLenCropCode),ALLOCATABLE :: cVegCodes(:)
     CHARACTER(:),ALLOCATABLE                  :: cAbsPathFileName
-    
+
     !Initialzie
     iStat = 0
+    lForInquiry_Local = .FALSE.
+    IF (PRESENT(lIsForInquiry)) lForInquiry_Local = lIsForInquiry
     
     !Return if no file name is specified
     IF (cFileName .EQ. '') RETURN
@@ -250,8 +253,10 @@ CONTAINS
     cALine = StripTextUntilCharacter(cALine,f_cInlineCommentChar) 
     CALL CleanSpecialCharacters(cALine)
     CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(cALine)),cWorkingDirectory,cAbsPathFileName)
-    CALL NVRVLand%LandUseDataFile%New(cAbsPathFileName,cWorkingDirectory,'Native and riparian veg. area file',NElements,iNNVRV,TrackTime,iStat)
-    IF (iStat .EQ. -1) RETURN
+    IF (.NOT. lForInquiry_Local) THEN
+        CALL NVRVLand%LandUseDataFile%New(cAbsPathFileName,cWorkingDirectory,'Native and riparian veg. area file',NElements,iNNVRV,TrackTime,iStat)
+        IF (iStat .EQ. -1) RETURN
+    END IF
     
     !Rooting depths
     CALL NVRVFile%ReadData(rFact,iStat)  ;  IF (iStat .EQ. -1) RETURN

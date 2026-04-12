@@ -29,8 +29,17 @@ MODULE TimeSeriesUtilities
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'TimeSeriesUtilities::'
 
   INTEGER,PARAMETER :: f_iTimeStampLength=16
-  INTEGER,SAVE      :: CacheLimit=500 !Default
-  INTEGER,SAVE      :: SimulationTimeStep_InMinutes = 0 !Variable that stores the simulation time step length for the conversion of rate-type data read from ASCII file (default is zero)
+
+  ! --- MODULE-LEVEL CONFIGURATION (SAVE)
+  ! These are set once during model initialization via SetCacheLimit()
+  ! and SetSimulationTimeStep(), then read during simulation. They are
+  ! safe for single-instance use but represent global state that
+  ! prevents truly concurrent multi-instance DLL operation. For multi-
+  ! instance DLL use, the DLL's CRITICAL(IWFM_MODEL_MGMT) serializes
+  ! model creation and each model sets these before simulation starts.
+  ! Future: move to a per-model configuration type for full thread safety.
+  INTEGER,SAVE      :: CacheLimit=500
+  INTEGER,SAVE      :: SimulationTimeStep_InMinutes = 0
 
   PRIVATE
   PUBLIC::TimeStepType                                      , &

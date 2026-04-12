@@ -75,7 +75,8 @@ MODULE MessageLogger
             f_iMessage                   , &
             f_iInfo                      , &
             f_iWarn                      , &
-            f_iFatal
+            f_iFatal                     , &
+            f_lLogPerfMarkers
 
 
   ! -------------------------------------------------------------
@@ -100,6 +101,16 @@ MODULE MessageLogger
                        f_iInfo    = 1 , &
                        f_iWarn    = 2 , &
                        f_iFatal   = 3
+
+
+  ! -------------------------------------------------------------
+  ! --- PERFORMANCE PROFILING MARKERS
+  ! ---
+  ! --- Set to .TRUE. to enable [PERF] init-timing markers in the
+  ! --- simulation log. Off in production; flip to .TRUE. and
+  ! --- rebuild when profiling startup costs.
+  ! -------------------------------------------------------------
+  LOGICAL,PARAMETER :: f_lLogPerfMarkers = .FALSE.
 
 
   ! -------------------------------------------------------------
@@ -155,6 +166,17 @@ MODULE MessageLogger
 
   ! -------------------------------------------------------------
   ! --- DEFAULT INSTANCE (backward compatibility)
+  ! This singleton exists because 136+ source files call module-
+  ! level wrapper subroutines (SetLastMessage, LogMessage, etc.)
+  ! that delegate to DefaultLogger internally. New code should
+  ! use instance-based MessageLoggerType passed as an argument.
+  ! Thread safety: the DLL's CRITICAL(IWFM_MODEL_MGMT) serializes
+  ! model creation; each model's logger is set before simulation.
+  ! Future: eliminate this singleton by converting all log call
+  ! sites to type-bound self%Logger%SetLastMessage() style,
+  ! making each derived type carry its own logger reference.
+  ! The existing ModuleLogger pointer infrastructure (91 packages)
+  ! is a stepping stone toward that goal.
   ! -------------------------------------------------------------
   TYPE(MessageLoggerType),SAVE,TARGET :: DefaultLogger
 

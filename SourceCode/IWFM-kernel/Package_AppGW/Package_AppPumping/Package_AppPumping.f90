@@ -279,9 +279,11 @@ CONTAINS
     CALL CleanSpecialCharacters(ALine)
     IF (ALine .NE. '') THEN
         CALL EstablishAbsolutePathFileName(TRIM(ALine),cWorkingDirectory,cAbsPathFileName)
-        CALL AppPumping%TSPumpFile%Init(cAbsPathFileName,cWorkingDirectory,'Time series pumping data file',TimeStep%TrackTime,1,.TRUE.,Factor,DummyArray,iStat=iStat)
-        IF (iStat .EQ. -1) RETURN
-        AppPumping%rPumpFactor = Factor(1)
+        IF (.NOT. lIsForInquiry) THEN
+            CALL AppPumping%TSPumpFile%Init(cAbsPathFileName,cWorkingDirectory,'Time series pumping data file',TimeStep%TrackTime,1,.TRUE.,Factor,DummyArray,iStat=iStat)
+            IF (iStat .EQ. -1) RETURN
+            AppPumping%rPumpFactor = Factor(1)
+        END IF
         
         !Make sure that pumping factor is greater than or equal to zero
         IF (AppPumping%rPumpFactor .LT. 0.0) THEN
@@ -294,21 +296,23 @@ CONTAINS
     END IF
     
     !Make sure that time series pumping data is defined if any well or element pumping is pointing a column in it
-    IF (AppPumping%TSPumpFile%File%iGetFileType() .EQ. f_iUNKNOWN) THEN
-        !Check with element pumping
-        IF (AppPumping%NElemPumps .GT. 0) THEN
-            IF (ANY(AppPumping%ElemPumps%iColPump.GT.0)) THEN
-                CALL SetLastMessage('Time series pumping data must be specified when element pumping refers to a column in this file!',f_iFatal,ThisProcedure)
-                iStat = -1
-                RETURN
+    IF (.NOT. lIsForInquiry) THEN
+        IF (AppPumping%TSPumpFile%File%iGetFileType() .EQ. f_iUNKNOWN) THEN
+            !Check with element pumping
+            IF (AppPumping%NElemPumps .GT. 0) THEN
+                IF (ANY(AppPumping%ElemPumps%iColPump.GT.0)) THEN
+                    CALL SetLastMessage('Time series pumping data must be specified when element pumping refers to a column in this file!',f_iFatal,ThisProcedure)
+                    iStat = -1
+                    RETURN
+                END IF
             END IF
-        END IF
-        !Check with wells
-        IF (AppPumping%NWells .GT. 0) THEN
-            IF (ANY(AppPumping%Wells%iColPump.GT.0)) THEN
-                CALL SetLastMessage('Time series pumping data must be specified when well pumping refers to a column in this file!',f_iFatal,ThisProcedure)
-                iStat = -1
-                RETURN
+            !Check with wells
+            IF (AppPumping%NWells .GT. 0) THEN
+                IF (ANY(AppPumping%Wells%iColPump.GT.0)) THEN
+                    CALL SetLastMessage('Time series pumping data must be specified when well pumping refers to a column in this file!',f_iFatal,ThisProcedure)
+                    iStat = -1
+                    RETURN
+                END IF
             END IF
         END IF
     END IF
@@ -333,10 +337,12 @@ CONTAINS
     IF (AppPumping%NElemPumps .GT. 0) CALL PumpsAtElem_New(NElements,AppPumping%ElemPumps%Element,AppPumping%ElemPumpsAtElems)
     
     !Check if there are enough columns in the pumping data file
-    CALL AppPumping%TSPumpFile%CheckColNum('time series pumping data file',AppPumping%Wells%iColPump,lCheckMinColNum=.FALSE.,iStat=iStat)         ;  IF (iStat .EQ. -1) RETURN
-    CALL AppPumping%TSPumpFile%CheckColNum('time series pumping data file',AppPumping%Wells%iColPumpMax,lCheckMinColNum=.FALSE.,iStat=iStat)      ;  IF (iStat .EQ. -1) RETURN
-    CALL AppPumping%TSPumpFile%CheckColNum('time series pumping data file',AppPumping%ElemPumps%iColPump,lCheckMinColNum=.FALSE.,iStat=iStat)     ;  IF (iStat .EQ. -1) RETURN
-    CALL AppPumping%TSPumpFile%CheckColNum('time series pumping data file',AppPumping%ElemPumps%iColPumpMax,lCheckMinColNum=.FALSE.,iStat=iStat)  ;  IF (iStat .EQ. -1) RETURN
+    IF (.NOT. lIsForInquiry) THEN
+        CALL AppPumping%TSPumpFile%CheckColNum('time series pumping data file',AppPumping%Wells%iColPump,lCheckMinColNum=.FALSE.,iStat=iStat)         ;  IF (iStat .EQ. -1) RETURN
+        CALL AppPumping%TSPumpFile%CheckColNum('time series pumping data file',AppPumping%Wells%iColPumpMax,lCheckMinColNum=.FALSE.,iStat=iStat)      ;  IF (iStat .EQ. -1) RETURN
+        CALL AppPumping%TSPumpFile%CheckColNum('time series pumping data file',AppPumping%ElemPumps%iColPump,lCheckMinColNum=.FALSE.,iStat=iStat)     ;  IF (iStat .EQ. -1) RETURN
+        CALL AppPumping%TSPumpFile%CheckColNum('time series pumping data file',AppPumping%ElemPumps%iColPumpMax,lCheckMinColNum=.FALSE.,iStat=iStat)  ;  IF (iStat .EQ. -1) RETURN
+    END IF
     
     !Read pumping output file name (BACKWARD COMPATIBILITY: CHECK IF ENTRY IS PROVIDED)
     CALL PumpDataFile%ReadData(ALine,iStat)

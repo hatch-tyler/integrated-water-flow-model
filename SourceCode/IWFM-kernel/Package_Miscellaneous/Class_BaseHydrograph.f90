@@ -28,6 +28,8 @@ MODULE Class_BaseHydrograph
                                      f_iFatal                       , &
                                      f_iInfo
   USE GeneralUtilities       , ONLY: ConvertID_To_Index             , &
+                                     PrepareIDIndex                 , &
+                                     LookupIDInIndex                , &
                                      StripTextUntilCharacter        , &
                                      FirstLocation                  , &
                                      IntToText                      , &
@@ -270,11 +272,15 @@ CONTAINS
     CHARACTER                    :: ALine*1000,ALinePerm*1000,cErrorMsg*300,cHydDescriptor*11,cHydDescriptorCapital*11
     INTEGER,ALLOCATABLE          :: Nodes(:)
     REAL(8),ALLOCATABLE          :: Coeff(:)
+    !Sorted index over iGWNodeIDs (built once before the per-spec loop
+    !so that the per-spec ID-to-index lookup is O(log NNodes) instead
+    !of O(NNodes); see PrepareIDIndex/LookupIDInIndex in GeneralUtilities).
+    INTEGER,ALLOCATABLE          :: iSortedNodeIDs(:), iSortedNodeToOrig(:)
     TYPE(HydAtNodeType)          :: aNodeHyd
     TYPE(HydAtXYType)            :: aXYHyd
     TYPE(HydListType)            :: HydList
     CLASS(*),POINTER             :: pCurrent
-    
+
     !Initialize
     iStat = 0
     SELECT CASE (iHydFor)
@@ -285,7 +291,7 @@ CONTAINS
             cHydDescriptor        = 'subsidence'
             cHydDescriptorCapital = 'Subsidence'
     END SELECT
-        
+
     !Allocate hydrograph pointers
     ALLOCATE (OrderedHydList(NHyd) ,STAT=ErrorCode , ERRMSG=cErrorMsg)
     IF (ErrorCode .NE. 0) THEN
@@ -293,7 +299,14 @@ CONTAINS
         iStat = -1
         RETURN
     END IF
-    
+
+    !Build a sorted index over iGWNodeIDs once. The per-hydrograph
+    !ID-to-index lookup inside the loop below uses this index via
+    !LookupIDInIndex (binary search) instead of ConvertID_To_Index
+    !(linear search). On C2VSimFG this collapses an O(54K x 30K) cost
+    !(~47 s) into O((30K + 54K) log 30K) (~50 ms).
+    CALL PrepareIDIndex(iGWNodeIDs, iSortedNodeIDs, iSortedNodeToOrig)
+
     !Read the specific hydrograph information and process
     NHyd_AtXY   = 0
     NHyd_AtNode = 0
@@ -370,7 +383,7 @@ CONTAINS
                 iStat = -1
                 RETURN
             END IF
-            CALL ConvertID_To_Index(iHydNode,iGWNodeIDs,iNodeIndex)
+            CALL LookupIDInIndex(iHydNode,iSortedNodeIDs,iSortedNodeToOrig,iNodeIndex)
             IF (iNodeIndex .EQ. 0) THEN
                 CALL SetLastMessage('Node number listed for '//TRIM(cHydDescriptor)//' hydrograph specification ID '//TRIM(IntToText(ID))//' is not in the model!',f_iFatal,ThisProcedure)
                 iStat = -1
@@ -463,7 +476,8 @@ CONTAINS
     
     !Clear memory
     CALL HydList%Delete()
-  
+    DEALLOCATE(iSortedNodeIDs, iSortedNodeToOrig, STAT=ErrorCode)
+
   END SUBROUTINE HydrographList_New
   
   

@@ -106,6 +106,11 @@ MODULE Package_Matrix
       INTEGER,ALLOCATABLE                    :: JND_CRS(:)                             !Pre-allocated CRS column indices (reused across NR iterations)
       REAL(8),ALLOCATABLE                    :: COEFF_CRS(:)                           !Pre-allocated CRS coefficients (reused across NR iterations)
       INTEGER                                :: nCRS_NNZ = 0                           !Actual number of non-zeros in CRS arrays
+      !Per-thread reduction arrays for SOR_OMP (allocated once, reused across iterations)
+      REAL(8),ALLOCATABLE                    :: DIFF_L2_Thread(:)
+      REAL(8),ALLOCATABLE                    :: ADIFFMAX_Thread(:)
+      INTEGER,ALLOCATABLE                    :: NODEMAX_Thread(:)
+      INTEGER                                :: iSOR_ChunkSize = 0
   CONTAINS
       PROCEDURE,PASS         :: AddComponent
       PROCEDURE,PASS,PRIVATE :: AddConnectivity_ToOne
@@ -1225,7 +1230,8 @@ CONTAINS
     ASSOCIATE (pSolver => Matrix%Solver)
         SELECT CASE (pSolver%iSolver) 
             CASE (iSolver_SOR)
-                CALL SOR(NRow                , &
+                CALL SOR(Matrix              , &
+                         NRow                , &
                          pSolver%IterMax     , &
                          pSolver%Tolerance   , &
                          pSolver%Relax       , &
@@ -1349,21 +1355,22 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- SOLVE THE MATRIX EQUATION USING SUCCESSIVE OVER-RELAXATION METHOD
   ! -------------------------------------------------------------
-  SUBROUTINE SOR(NRow,MaxIter,Toler,Relax,NJD,JND,IndexDiag,RHS,COEFF,U,iStat)
+  SUBROUTINE SOR(Matrix,NRow,MaxIter,Toler,Relax,NJD,JND,IndexDiag,RHS,COEFF,U,iStat)
+    TYPE(MatrixType)    :: Matrix
     INTEGER,INTENT(IN)  :: NRow,MaxIter
-    REAL(8),INTENT(IN)  :: Toler,Relax  
-    INTEGER,INTENT(IN)  :: NJD(:),JND(:),IndexDiag(:)      
-    REAL(8),INTENT(IN)  :: COEFF(:),RHS(:)     
+    REAL(8),INTENT(IN)  :: Toler,Relax
+    INTEGER,INTENT(IN)  :: NJD(:),JND(:),IndexDiag(:)
+    REAL(8),INTENT(IN)  :: COEFF(:),RHS(:)
     REAL(8)             :: U(:)
     INTEGER,INTENT(OUT) :: iStat
 
-!DIR$ IF (_OPENMP .NE. 0) 
-    !$ CALL SOR_OMP(NRow,MaxIter,Toler,Relax,NJD,JND,IndexDiag,RHS,COEFF,U,iStat)
+!DIR$ IF (_OPENMP .NE. 0)
+    !$ CALL SOR_OMP(Matrix,NRow,MaxIter,Toler,Relax,NJD,JND,IndexDiag,RHS,COEFF,U,iStat)
 !DIR$ ELSE
-    CALL SOR_Sequential(NRow,MaxIter,Toler,Relax,NJD,JND,IndexDiag,RHS,COEFF,U,iStat) 
+    CALL SOR_Sequential(NRow,MaxIter,Toler,Relax,NJD,JND,IndexDiag,RHS,COEFF,U,iStat)
 !DIR$ END IF
 
-  END SUBROUTINE SOR 
+  END SUBROUTINE SOR
   
   
   ! -------------------------------------------------------------
@@ -1442,35 +1449,34 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- SOLVE THE MATRIX EQUATION USING SUCCESSIVE OVER-RELAXATION METHOD (PARALLELL)
   ! -------------------------------------------------------------
-  SUBROUTINE SOR_OMP(NRow,MaxIter,Toler,Relax,NJD,JND,IndexDiag,RHS,COEFF,U,iStat)
+  SUBROUTINE SOR_OMP(Matrix,NRow,MaxIter,Toler,Relax,NJD,JND,IndexDiag,RHS,COEFF,U,iStat)
+    !$ USE OMP_LIB
+    TYPE(MatrixType)    :: Matrix
     INTEGER,INTENT(IN)  :: NRow,MaxIter
-    REAL(8),INTENT(IN)  :: Toler,Relax  
-    INTEGER,INTENT(IN)  :: NJD(:),JND(:),IndexDiag(:)      
-    REAL(8),INTENT(IN)  :: COEFF(:),RHS(:)     
+    REAL(8),INTENT(IN)  :: Toler,Relax
+    INTEGER,INTENT(IN)  :: NJD(:),JND(:),IndexDiag(:)
+    REAL(8),INTENT(IN)  :: COEFF(:),RHS(:)
     REAL(8)             :: U(:)
     INTEGER,INTENT(OUT) :: iStat
-    
-    !Local variables    
+
+    !Local variables
     CHARACTER(LEN=ModNameLen+7) :: ThisProcedure = ModName // 'SOR_OMP'
     INTEGER                     :: IROW,INDX,INDX_S,INDX_L,NODEMAX,Iter,indxDiag,iNThreads,iThread
     REAL(8)                     :: DIFF_L2,ADIFFMAX,U_INT,ACCUM,DIFF
-    REAL(8),ALLOCATABLE,SAVE    :: DIFF_L2_Thread(:),ADIFFMAX_Thread(:)
-    INTEGER,ALLOCATABLE,SAVE    :: NODEMAX_Thread(:)
-    INTEGER,SAVE                :: iChunkSize
-    
+
     !Initialize
     iStat     = 0
     Iter      = 0
     iNThreads = 1
     !$ iNThreads = OMP_GET_NUM_THREADS()
-    IF (.NOT. ALLOCATED(DIFF_L2_Thread)) THEN
-        ALLOCATE(DIFF_L2_Thread(iNThreads) , ADIFFMAX_Thread(iNThreads) , NODEMAX_Thread(iNThreads))
-        iChunkSize = NRow / iNThreads
-        IF (iChunkSize * iNThreads .LT. NRow) THEN
+    IF (.NOT. ALLOCATED(Matrix%DIFF_L2_Thread)) THEN
+        ALLOCATE(Matrix%DIFF_L2_Thread(iNThreads) , Matrix%ADIFFMAX_Thread(iNThreads) , Matrix%NODEMAX_Thread(iNThreads))
+        Matrix%iSOR_ChunkSize = NRow / iNThreads
+        IF (Matrix%iSOR_ChunkSize * iNThreads .LT. NRow) THEN
             IF (iNThreads .GT. 1) THEN
-                iChunkSize = NRow / (iNThreads-1)
+                Matrix%iSOR_ChunkSize = NRow / (iNThreads-1)
             ELSE
-                iChunkSize = NRow
+                Matrix%iSOR_ChunkSize = NRow
             END IF
         END IF
     END IF
@@ -1478,11 +1484,11 @@ CONTAINS
 
     !Solve matrix equation using SOR iterative method
     DO
-        Iter            = Iter + 1
-        DIFF_L2_Thread  = 0.0
-        ADIFFMAX_Thread = 0.0
-        
-        !$OMP PARALLEL DO SCHEDULE(STATIC,iChunkSize) DEFAULT(SHARED) PRIVATE(IROW,indxDiag,INDX_S,INDX_L,U_INT,ACCUM,INDX,DIFF,iThread) 
+        Iter                      = Iter + 1
+        Matrix%DIFF_L2_Thread     = 0.0
+        Matrix%ADIFFMAX_Thread    = 0.0
+
+        !$OMP PARALLEL DO SCHEDULE(STATIC,Matrix%iSOR_ChunkSize) DEFAULT(SHARED) PRIVATE(IROW,indxDiag,INDX_S,INDX_L,U_INT,ACCUM,INDX,DIFF,iThread)
         DO IROW=1,NRow
             !$ iThread  = OMP_GET_THREAD_NUM() + 1
             indxDiag = IndexDiag(IROW)
@@ -1496,22 +1502,22 @@ CONTAINS
             DO INDX=indxDiag+1,INDX_L
                 ACCUM = ACCUM + COEFF(INDX) * U(JND(INDX))
             END DO
-            U(IROW)                 = (RHS(IROW)-ACCUM)/COEFF(indxDiag)
-            DIFF                    = U(IROW) - U_INT
-            DIFF_L2_Thread(iThread) = DIFF_L2_Thread(iThread) + (DIFF*DIFF)
-            U(IROW)                 = U_INT + (DIFF*Relax) 
-            IF (ABS(DIFF) .GT. ADIFFMAX_Thread(iThread)) THEN
-                ADIFFMAX_Thread(iThread) = ABS(DIFF)
-                NODEMAX_Thread(iThread)  = IROW
+            U(IROW)                        = (RHS(IROW)-ACCUM)/COEFF(indxDiag)
+            DIFF                           = U(IROW) - U_INT
+            Matrix%DIFF_L2_Thread(iThread) = Matrix%DIFF_L2_Thread(iThread) + (DIFF*DIFF)
+            U(IROW)                        = U_INT + (DIFF*Relax)
+            IF (ABS(DIFF) .GT. Matrix%ADIFFMAX_Thread(iThread)) THEN
+                Matrix%ADIFFMAX_Thread(iThread) = ABS(DIFF)
+                Matrix%NODEMAX_Thread(iThread)  = IROW
             END IF
         END DO
         !$OMP END PARALLEL DO
-        DIFF_L2  = SUM(DIFF_L2_Thread)
+        DIFF_L2  = SUM(Matrix%DIFF_L2_Thread)
         ADIFFMAX = 0.0
-        DO INDX=1,SIZE(ADIFFMAX_Thread)
-            IF (ADIFFMAX_Thread(INDX) .GT. ADIFFMAX) THEN
-                ADIFFMAX = ADIFFMAX_Thread(INDX)
-                NODEMAX  = NODEMAX_Thread(INDX)
+        DO INDX=1,SIZE(Matrix%ADIFFMAX_Thread)
+            IF (Matrix%ADIFFMAX_Thread(INDX) .GT. ADIFFMAX) THEN
+                ADIFFMAX = Matrix%ADIFFMAX_Thread(INDX)
+                NODEMAX  = Matrix%NODEMAX_Thread(INDX)
             END IF
         END DO
         

@@ -415,7 +415,7 @@ CONTAINS
     cUrbanDataFile = StripTextUntilCharacter(cUrbanDataFile,f_cInlineCommentChar) 
     CALL CleanSpecialCharacters(cUrbanDataFile)
     CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(cUrbanDataFile)),cWorkingDirectory,cAbsPathFileName)
-    CALL RootZone%UrbanRootZone%New(cAbsPathFileName,cWorkingDirectory,rFactCN,iNElements,iNRegion,iElemIDs,lTrackTime,iStat)
+    CALL RootZone%UrbanRootZone%New(cAbsPathFileName,cWorkingDirectory,rFactCN,iNElements,iNRegion,iElemIDs,lTrackTime,iStat,lIsForInquiry=IsForInquiry)
     IF (iStat .EQ. -1) RETURN
     
     !Native/riparian veg. data file
@@ -423,7 +423,7 @@ CONTAINS
     cNVRVFile = StripTextUntilCharacter(cNVRVFile,f_cInlineCommentChar) 
     CALL CleanSpecialCharacters(cNVRVFile)
     CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(cNVRVFile)),cWorkingDirectory,cAbsPathFileName)
-    CALL RootZone%NVRVRootZone%New(.FALSE.,cAbsPathFileName,cWorkingDirectory,rFactCN,iNElements,iNRegion,iElemIDs,lTrackTime,iStat,iStrmNodeIDs)
+    CALL RootZone%NVRVRootZone%New(.FALSE.,cAbsPathFileName,cWorkingDirectory,rFactCN,iNElements,iNRegion,iElemIDs,lTrackTime,iStat,iStrmNodeIDs,lIsForInquiry=IsForInquiry)
     IF (iStat .EQ. -1) RETURN
     
     !Check if at least one type of land use is specified
@@ -3063,50 +3063,39 @@ CONTAINS
     iElemIDs   = AppGrid%AppElement%ID
     rElemAreas = AppGrid%AppElement%Area
     
-    !$OMP PARALLEL SECTIONS DEFAULT(PRIVATE) SHARED(TimeStep,RootZone,lReturnFracUpdated,lReuseFracUpdated,lIrigPeriodUpdated, &
-    !$OMP                                           AppGrid,ETData,iElemIDs,rElemAreas,iStatArray,iColCropCoeff_PondedAg)
-    !$OMP SECTION
     !Read return flow fractions
     CALL ReadReturnFlowFractions(TimeStep,RootZone%ReturnFracFile,lReturnFracUpdated,iStatArray(5))
-    
-    !$OMP SECTION
+
     !Read re-use fractions
     CALL ReadReuseFractions(TimeStep,RootZone%ReuseFracFile,lReuseFracUpdated,iStatArray(6))
 
-    !$OMP SECTION
     !Read irrigation period data
     CALL ReadIrigPeriodData(TimeStep,RootZone%IrigPeriodFile,lIrigPeriodUpdated,iStatArray(7))
-    
-    !$OMP SECTION
+
     !Read generic moisture data
     IF (RootZone%Flags%lGenericMoistureFile_Defined) THEN
         CALL RootZone%GenericMoistureData%ReadTSData(TimeStep,iStatArray(8))
     END IF
-    
-    !$OMP SECTION
+
     !Non-ponded crops related data
     IF (RootZone%Flags%lNonPondedAg_Defined) THEN
         CALL RootZone%NonPondedAgRootZone%ReadTSData(TimeStep,AppGrid,RootZone%IrigPeriodFile,iElemIDS,rElemAreas,RootZone%ElemSoilsData%WiltingPoint,RootZone%ElemSoilsData%FieldCapacity,iStatArray(1))
     END IF
-    
-    !$OMP SECTION
+
     !Ponded ag related data
     IF (RootZone%Flags%lPondedAg_Defined) THEN
         CALL RootZone%PondedAgRootZone%ReadTSData(TimeStep,AppGrid,ETData,RootZone%IrigPeriodFile%iValues,iElemIDS,rElemAreas,iStatArray(2),iColCropCoeff_PondedAg)
     END IF
-    
-    !$OMP SECTION
+
     !Urban lands related data
     IF (RootZone%Flags%lUrban_Defined) THEN
         CALL RootZone%UrbanRootZone%ReadTSData(TimeStep,AppGrid,iElemIDS,rElemAreas,iStatArray(3))
     END IF
-    
-    !$OMP SECTION
+
     !Native and riparian veg data
     IF (RootZone%Flags%lNVRV_Defined) THEN
         CALL RootZone%NVRVRootZone%ReadTSData(TimeStep,AppGrid,iElemIDS,rElemAreas,iStatArray(4))
     END IF
-    !$OMP END PARALLEL SECTIONS
     
     !Check for error
     IF (SUM(iStatArray) .NE. 0) THEN
@@ -4021,8 +4010,6 @@ CONTAINS
     !Return if root zone is not simulated
     IF (RootZone%NLands .EQ. 0) RETURN
     
-    !$OMP PARALLEL SECTIONS DEFAULT(PRIVATE) SHARED(RootZone,AppGrid,iNElements,iElemIDs,ETData,TimeStep,iStatArray)
-    !$OMP SECTION
     !Riparian ET demand from streams
     IF (RootZone%Flags%lNVRV_Defined)  THEN
         IF (ASSOCIATED(ModuleLogger)) THEN
@@ -4041,8 +4028,7 @@ CONTAINS
                                                       RootZone%Flags%lLakeElems                    , &
                                                       iStatArray(1)                                )
     END IF
-    
-    !$OMP SECTION
+
     !Echo progress
     IF (ASSOCIATED(ModuleLogger)) THEN
         CALL ModuleLogger%EchoProgress('Computing agricultural water demand...')
@@ -4068,8 +4054,7 @@ CONTAINS
                                                              RootZone%Flags%lReadNonPondedAgWaterDemand   , &
                                                              iStatArray(2)                                )
     END IF
-             
-    !$OMP SECTION
+
     !Ponded ag
     IF (RootZone%Flags%lPondedAg_Defined) THEN
         CALL RootZone%PondedAgRootZone%ComputeWaterDemand(AppGrid                                      , &
@@ -4085,7 +4070,6 @@ CONTAINS
                                                           RootZone%Flags%lReadPondedAgWaterDemand      , &
                                                           iStatArray(3)                                )
     END IF
-    !$OMP END PARALLEL SECTIONS
     
     !Check for errors
     IF (SUM(iStatArray) .NE. 0) THEN
@@ -4318,12 +4302,6 @@ CONTAINS
             END IF
             pElemSupply%UpstrmRunoff = 0.0
             
-            !$OMP PARALLEL SECTIONS DEFAULT(PRIVATE) SHARED(RootZone,AppGrid,rUpstrmElemRunoff_P,rIrigSupply_Ag,ETData,rDeltaT,    &
-            !$OMP                                           rUpstrmRunoff_FromNP,rUpstrmRunoff_FromP,rUpstrmRunoff_FromUR,         &
-            !$OMP                                           rUpstrmRunoff_FromNVRV,rElemCropSupply,rElemPondSupply,rElemUrbSupply, & 
-            !$OMP                                           rInRunoffNP,rInRunoffP,rInRunoffUrb,rInRunoffNVRV,rIrigSupply_Urb,     &
-            !$OMP                                           iNElements,iStatArray)
-            !$OMP SECTION
             !Simulate non-ponded ag lands
             rUpstrmRunoff_FromNP = 0.0
             IF (RootZone%Flags%lNonPondedAg_Defined) THEN
@@ -4359,7 +4337,6 @@ CONTAINS
             END IF
             
             
-            !$OMP SECTION
             !Simulate ponded ag lands
             rUpstrmRunoff_FromP    = 0.0
             IF (RootZone%Flags%lPondedAg_Defined) THEN
@@ -4394,7 +4371,6 @@ CONTAINS
             END IF
             
             
-            !$OMP SECTION
             !Simulate urban lands
             rUpstrmRunoff_FromUR = 0.0
             IF (RootZone%Flags%lUrban_Defined) THEN 
@@ -4425,7 +4401,6 @@ CONTAINS
             END IF
             
             
-            !$OMP SECTION
             !Simulate native and riparian veg lands
             rUpstrmRunoff_FromNVRV = 0.0
             IF (RootZone%Flags%lNVRV_Defined) THEN
@@ -4451,8 +4426,7 @@ CONTAINS
                                     RootZone              , &
                                     f_iLandUse_NVRV       , &
                                     rUpstrmRunoff_FromNVRV)
-            END IF 
-            !$OMP END PARALLEL SECTIONS
+            END IF
             
             !Check for errors
             IF (SUM(iStatArray) .NE. 0) THEN

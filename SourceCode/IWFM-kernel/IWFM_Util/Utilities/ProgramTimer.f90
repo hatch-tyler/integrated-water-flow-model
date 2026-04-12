@@ -82,6 +82,12 @@ MODULE ProgramTimer
 
   ! -------------------------------------------------------------
   ! --- DEFAULT INSTANCE (backward compatibility)
+  ! This singleton exists because standalone executables
+  ! (Simulation, Budget, etc.) call module-level wrapper
+  ! subroutines (StartTimer, StopTimer, PrintRunTime) that
+  ! delegate to DefaultTimer. Program-wide timing is inherently
+  ! single-instance so this is safe for current use. Future:
+  ! eliminate by making each executable own its timer instance.
   ! -------------------------------------------------------------
   TYPE(ProgramTimerType),SAVE,TARGET :: DefaultTimer
 

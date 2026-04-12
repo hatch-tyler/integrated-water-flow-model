@@ -28,7 +28,8 @@ MODULE RootZone_v411
                                              EchoProgress                             , &
                                              MessageArray                             , &
                                              f_iFatal                                 , &
-                                             f_iInfo
+                                             f_iInfo                                  , &
+                                             f_lLogPerfMarkers
   USE GeneralUtilities               , ONLY: StripTextUntilCharacter                  , &
                                              IntToText                                , &
                                              CleanSpecialCharacters                   , &
@@ -419,44 +420,38 @@ CONTAINS
     CALL CleanSpecialCharacters(NonPondedCropFile)
     CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(NonPondedCropFile)),cWorkingDirectory,cAbsPathFileName)
     CALL DATE_AND_TIME(VALUES=iPerfStart)
-    IF (.NOT. IsForInquiry) THEN
-      CALL RootZone%NonPondedAgRootZone%New(IsForInquiry,cProjectNameForDSS,cAbsPathFileName,cWorkingDirectory,FactCN,AppGrid,iElemIDs,TimeStep,NTIME,TRIM(cVersionFull),iStat)
-      IF (iStat .EQ. -1) RETURN
-    END IF
+    CALL RootZone%NonPondedAgRootZone%New(IsForInquiry,cProjectNameForDSS,cAbsPathFileName,cWorkingDirectory,FactCN,AppGrid,iElemIDs,TimeStep,NTIME,TRIM(cVersionFull),iStat)
+    IF (iStat .EQ. -1) RETURN
 
     !Rice/refuge data file
     CALL RootZoneParamFile%ReadData(RiceRefugeFile,iStat)  ;  IF (iStat .EQ. -1) RETURN
     RiceRefugeFile = StripTextUntilCharacter(RiceRefugeFile,f_cInlineCommentChar)
     CALL CleanSpecialCharacters(RiceRefugeFile)
     CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(RiceRefugeFile)),cWorkingDirectory,cAbsPathFileName)
-    IF (.NOT. IsForInquiry) THEN
-      CALL RootZone%PondedAgRootZone%New(IsForInquiry,.FALSE.,cProjectNameForDSS,cAbsPathFileName,cWorkingDirectory,FactCN,AppGrid,iElemIDs,TimeStep,NTIME,TRIM(cVersionFull),iStat)
-      IF (iStat .EQ. -1) RETURN
-    END IF
+    CALL RootZone%PondedAgRootZone%New(IsForInquiry,.FALSE.,cProjectNameForDSS,cAbsPathFileName,cWorkingDirectory,FactCN,AppGrid,iElemIDs,TimeStep,NTIME,TRIM(cVersionFull),iStat)
+    IF (iStat .EQ. -1) RETURN
 
     !Urban data file
-    CALL RootZoneParamFile%ReadData(UrbanDataFile,iStat)  ;  IF (iStat .EQ. -1) RETURN  
-    UrbanDataFile = StripTextUntilCharacter(UrbanDataFile,f_cInlineCommentChar) 
+    CALL RootZoneParamFile%ReadData(UrbanDataFile,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    UrbanDataFile = StripTextUntilCharacter(UrbanDataFile,f_cInlineCommentChar)
     CALL CleanSpecialCharacters(UrbanDataFile)
     CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(UrbanDataFile)),cWorkingDirectory,cAbsPathFileName)
-    IF (.NOT. IsForInquiry) THEN
-      CALL RootZone%UrbanRootZone%New(cAbsPathFileName,cWorkingDirectory,FactCN,NElements,NRegion,iElemIDs,TrackTime,iStat)
-      IF (iStat .EQ. -1) RETURN
-    END IF
+    CALL RootZone%UrbanRootZone%New(cAbsPathFileName,cWorkingDirectory,FactCN,NElements,NRegion,iElemIDs,TrackTime,iStat,lIsForInquiry=IsForInquiry)
+    IF (iStat .EQ. -1) RETURN
 
     !Native/riparian veg. data file
     CALL RootZoneParamFile%ReadData(NVRVFile,iStat)  ;  IF (iStat .EQ. -1) RETURN
     NVRVFile = StripTextUntilCharacter(NVRVFile,f_cInlineCommentChar)
     CALL CleanSpecialCharacters(NVRVFile)
     CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(NVRVFile)),cWorkingDirectory,cAbsPathFileName)
-    IF (.NOT. IsForInquiry) THEN
-      CALL RootZone%NVRVRootZone%New(.FALSE.,cAbsPathFileName,cWorkingDirectory,FactCN,NElements,NRegion,iElemIDs,TrackTime,iStat,iStrmNodeIDs)
-      IF (iStat .EQ. -1) RETURN
+    CALL RootZone%NVRVRootZone%New(.FALSE.,cAbsPathFileName,cWorkingDirectory,FactCN,NElements,NRegion,iElemIDs,TrackTime,iStat,iStrmNodeIDs,lIsForInquiry=IsForInquiry)
+    IF (iStat .EQ. -1) RETURN
+    IF (f_lLogPerfMarkers) THEN
+        CALL DATE_AND_TIME(VALUES=iPerfEnd)
+        rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
+        WRITE(cPerfMsg,'(A,F8.3,A)') '      [PERF] RZ LandUse: ', rPerfSec, ' sec'
+        CALL LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
     END IF
-    CALL DATE_AND_TIME(VALUES=iPerfEnd)
-    rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
-    WRITE(cPerfMsg,'(A,F8.3,A)') '      [PERF] RZ LandUse: ', rPerfSec, ' sec'
-    CALL LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
 
     !Check if at least one type of land use is specified
     IF ( NonPondedCropFile .EQ. ''   .AND.   &
@@ -605,10 +600,12 @@ CONTAINS
         RootZone%Flags%RootZoneZoneBudRawFile_Defined = .TRUE.
     END IF
        
-    CALL DATE_AND_TIME(VALUES=iPerfEnd)
-    rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
-    WRITE(cPerfMsg,'(A,F8.3,A)') '      [PERF] RZ Budget+ZBudget: ', rPerfSec, ' sec'
-    CALL LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+    IF (f_lLogPerfMarkers) THEN
+        CALL DATE_AND_TIME(VALUES=iPerfEnd)
+        rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
+        WRITE(cPerfMsg,'(A,F8.3,A)') '      [PERF] RZ Budget+ZBudget: ', rPerfSec, ' sec'
+        CALL LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+    END IF
 
     !Land use area scaling factor output file
     CALL DATE_AND_TIME(VALUES=iPerfStart)
@@ -862,10 +859,12 @@ CONTAINS
     
     !Close file
     CALL RootZoneParamFile%Kill()
-    CALL DATE_AND_TIME(VALUES=iPerfEnd)
-    rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
-    WRITE(cPerfMsg,'(A,F8.3,A)') '      [PERF] RZ SoilParams+ElemConfig: ', rPerfSec, ' sec'
-    CALL LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+    IF (f_lLogPerfMarkers) THEN
+        CALL DATE_AND_TIME(VALUES=iPerfEnd)
+        rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
+        WRITE(cPerfMsg,'(A,F8.3,A)') '      [PERF] RZ SoilParams+ElemConfig: ', rPerfSec, ' sec'
+        CALL LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+    END IF
 
     !Clear memory
     DEALLOCATE (ElemFlowToOutside , ElemFlowToGW , DummyRealArray , STAT=ErrorCode)
