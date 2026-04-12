@@ -31,7 +31,7 @@ PROGRAM test_inquiry_load
   IMPLICIT NONE
 
   ! Local variables
-  TYPE(ModelType)    :: Model
+  TYPE(ModelType),TARGET :: Model
   CHARACTER(LEN=500) :: cSimFileName
   INTEGER            :: iStat, iArg, iAnyGetterFailed
   REAL               :: t_start, t_end

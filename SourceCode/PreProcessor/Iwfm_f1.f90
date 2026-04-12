@@ -35,7 +35,7 @@ PROGRAM IWFM_F1
   IMPLICIT NONE
 
   !Local variables
-  TYPE(ModelType) :: Model
+  TYPE(ModelType),TARGET :: Model
   INTEGER         :: iStat
   CHARACTER       :: cPPFileName*500
 

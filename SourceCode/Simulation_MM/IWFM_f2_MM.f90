@@ -406,7 +406,7 @@ CONTAINS
     INTEGER                                   :: indx,iLoc
     CHARACTER                                 :: cMainFileName*500,ALine*1000
     TYPE(GenericFileType)                     :: MainControlFile
-    TYPE(ModelType)                           :: aModel
+    TYPE(ModelType),TARGET                     :: aModel
     
     !Initialize
     iStat     = 0

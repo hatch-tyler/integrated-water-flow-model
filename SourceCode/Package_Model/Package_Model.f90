@@ -980,7 +980,7 @@ CONTAINS
     
     !Initialize
     iStat = 0
-    
+
     !Are WSAs simulated
     IF (LEN_TRIM(cWSAFileName) .EQ. 0) THEN
         lWSA = .FALSE.
@@ -1025,7 +1025,7 @@ CONTAINS
     END IF
     
     !Output option
-    IF (Model%KDEB .EQ. Sim_KDEB_PrintMessages) THEN 
+    IF (Model%KDEB .EQ. Sim_KDEB_PrintMessages) THEN
         CALL SetFlagToEchoProgress(f_iYesEchoProgress,iStat)
         IF (iStat .EQ. -1) RETURN
     END IF
@@ -1360,10 +1360,10 @@ CONTAINS
     
     !Initialize
     iStat = 0
-    
+
     !Set the flag to check if this is for model inquiry or not
     Model%lIsForInquiry = lForInquiry
-    
+
     !Directory for the Pre-processor main file
     CALL GetFileDirectory(cPPFileName,cPPWorkingDirectory)
     
@@ -1405,7 +1405,7 @@ CONTAINS
     IF (iStat .EQ. -1) RETURN
     
     !Output option
-    IF (Model%KDEB .EQ. Sim_KDEB_PrintMessages) THEN 
+    IF (Model%KDEB .EQ. Sim_KDEB_PrintMessages) THEN
         CALL SetFlagToEchoProgress(f_iYesEchoProgress,iStat)
     ELSE
         CALL SetFlagToEchoProgress(f_iNoEchoProgress,iStat)

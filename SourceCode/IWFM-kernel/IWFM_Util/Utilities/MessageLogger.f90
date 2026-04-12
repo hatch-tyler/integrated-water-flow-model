@@ -120,6 +120,7 @@ MODULE MessageLogger
   CHARACTER(LEN=11),PARAMETER :: f_cDefaultLogFileName     = 'Message.log'
   INTEGER,PARAMETER           :: f_iLogFile_NOT_Defined    = -999
   CHARACTER(LEN=1000)         :: MessageArray(200)
+  !$OMP THREADPRIVATE(MessageArray)
 
 
   ! -------------------------------------------------------------

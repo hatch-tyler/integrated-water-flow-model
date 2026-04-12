@@ -36,7 +36,7 @@ PROGRAM IWFM_F2
 
 
   !Local variables
-  TYPE(ModelType)    :: Model
+  TYPE(ModelType),TARGET :: Model
   CHARACTER          :: cSimFileName*500,cWSAFileName*500
   INTEGER            :: iStat
   !$ INTEGER         :: iBlockTime

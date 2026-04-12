@@ -159,7 +159,7 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT)         :: iStat
     
     !Local variables
-    TYPE(ModelType)          :: DummyModel
+    TYPE(ModelType),TARGET   :: DummyModel
     CHARACTER                :: cVer_F*iLen
     CHARACTER(:),ALLOCATABLE :: cVersion
     
