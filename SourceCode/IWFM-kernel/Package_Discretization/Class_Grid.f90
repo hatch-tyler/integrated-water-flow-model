@@ -23,7 +23,6 @@
 MODULE Class_Grid
   !$ USE OMP_LIB
   USE MessageLogger      , ONLY: MessageLoggerType        , &
-                                 SetLastMessage           , &
                                  MessageArray             , &
                                  f_iFatal
   USE GeneralUtilities   , ONLY: GetUniqueArrayComponents , &
@@ -181,7 +180,7 @@ CONTAINS
     !Allocate memory for nodes
     ALLOCATE(Grid%X(SIZE(X)) , Grid%Y(SIZE(Y)) , STAT=ErrorCode)
     IF (ErrorCode .NE. 0) THEN
-        CALL SetLastMessage('Error in allocating memory for nodal coordinates of a grid!',f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage('Error in allocating memory for nodal coordinates of a grid!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -189,7 +188,7 @@ CONTAINS
     !Allocate memory for elements
     ALLOCATE(Grid%NVertex(SIZE(NVertex)) , Grid%Vertex(4,SIZE(NVertex)) , STAT=ErrorCode)
     IF (ErrorCode .NE. 0) THEN
-        CALL SetLastMessage('Error in allocating memory for elements of a grid!',f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage('Error in allocating memory for elements of a grid!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -266,7 +265,7 @@ CONTAINS
         NodeNumber = NodeList(indx)
         IF (Area(indx) .LE. 0.0) THEN
             ID = iNodeIDs(NodeNumber)
-            CALL SetLastMessage('Nodal area at node '//TRIM(IntToText(ID))//' is zero!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Nodal area at node '//TRIM(IntToText(ID))//' is zero!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -311,7 +310,7 @@ CONTAINS
         NodeNumber = iBeginIndex + indx - 1
         IF (Area(indx) .LE. 0.0) THEN
             ID = iNodeIDs(NodeNumber)
-            CALL SetLastMessage('Nodal area at node '//TRIM(IntToText(ID))//' is zero!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Nodal area at node '//TRIM(IntToText(ID))//' is zero!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -447,7 +446,7 @@ CONTAINS
           ID = iElemIDs(ElemNo)
           MessageArray(1) = 'The area for element '//TRIM(IntToText(ID))//' is less than or equal to zero!'
           MessageArray(2) = 'Check the nodal coordinates for this element.'
-          CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+          CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
           iStat = -1
           RETURN
       END IF
@@ -501,7 +500,7 @@ CONTAINS
           ID = iElemIDs(ElemNo)
           MessageArray(1)='The area for element '//TRIM(IntToText(ID))//' is less than or equal to zero!'
           MessageArray(2)='Check the nodal coordinates for this element.'
-          CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+          CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
           iStat = -1
           RETURN
       END IF
@@ -540,7 +539,7 @@ CONTAINS
       IF (Area(1) .LE. 0.0) THEN  !Problem with node coordinates
         MessageArray(1)='The area for element '//TRIM(IntToText(indxElem))//' at node '//TRIM(IntToText(Vertex(1)))//' is less than or equal to zero!'
         MessageArray(2)='Check the nodal coordinates for this element.'
-        CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
       END IF
@@ -552,7 +551,7 @@ CONTAINS
         IF (Area(indxVertex) .LE. 0.0) THEN  !Problem with node coordinates
           MessageArray(1)='The area for element '//TRIM(IntToText(indxElem))//' at node '//TRIM(IntToText(Vertex(indxVertex)))//' is less than or equal to zero!'
           MessageArray(2)='Check the nodal coordinates for this element.'
-          CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+          CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
           iStat = -1
           RETURN
         END IF
@@ -932,7 +931,7 @@ CONTAINS
 
     !Check I and J are not equal
     IF (I .EQ. J) THEN
-        CALL SetLastMessage('Node I and Node J are equal in integration of diffusion term!',f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage('Node I and Node J are equal in integration of diffusion term!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -967,7 +966,7 @@ CONTAINS
 
     !Check I and J are not equal
     IF (I .EQ. J) THEN
-        CALL SetLastMessage('Node I and Node J are equal in integration of rotation term!',f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage('Node I and Node J are equal in integration of rotation term!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF

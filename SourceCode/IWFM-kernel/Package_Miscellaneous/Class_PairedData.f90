@@ -22,7 +22,6 @@
 !***********************************************************************
 MODULE Class_PairedData
   USE MessageLogger     , ONLY: MessageLoggerType     , &
-                                SetLastMessage        , &
                                 f_iFatal
   USE IOInterface
   USE AbstractFunction  , ONLY: AbstractFunctionType
@@ -135,7 +134,7 @@ CONTAINS
     
     ALLOCATE (PairedData%XPoint(NPoints) , PairedData%YPoint(NPoints) , STAT=ErrorCode , ERRMSG=cErrMessage)
     IF (ErrorCode .NE. 0) THEN
-        CALL SetLastMessage('Error in allocating memory for paired data!'//NEW_LINE('x')//TRIM(cErrMessage),f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage('Error in allocating memory for paired data!'//NEW_LINE('x')//TRIM(cErrMessage),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF

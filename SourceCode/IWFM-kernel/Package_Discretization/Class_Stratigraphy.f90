@@ -22,8 +22,6 @@
 !***********************************************************************
 MODULE Class_Stratigraphy
   USE MessageLogger    , ONLY: MessageLoggerType   , &
-                               SetLastMessage      , &
-                               EchoProgress        , &
                                MessageArray        , &
                                f_iFatal
   USE IOInterface
@@ -153,7 +151,7 @@ CONTAINS
               Stratigraphy%BottomElev(NNodes,NLayers) , &
               STAT = ErrorCode                        )
     IF (ErrorCode .NE. 0) THEN
-        CALL SetLastMessage('Error in allocating memory for stratigraphy data!',f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage('Error in allocating memory for stratigraphy data!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -236,13 +234,13 @@ CONTAINS
 
     !Make sure number of nodes is non-zero
     IF (NNodes .LE. 0) THEN
-        CALL SetLastMessage('Application grid needs to be defined before reading stratigraphy data!',f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage('Application grid needs to be defined before reading stratigraphy data!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
 
     !Print progress
-    CALL EchoProgress('Instantiating stratigraphy')
+    CALL ModuleLogger%EchoProgress('Instantiating stratigraphy')
 
     !Open file
     CALL StratigraphyFile%New(FileName=FileName,InputFile=.TRUE.,IsTSFile=.FALSE.,Descriptor='stratigraphy data file',iStat=iStat)
@@ -260,7 +258,7 @@ CONTAINS
               W(2*NLayers)               , &
               STAT=ErrorCode             )
     IF (ErrorCode .NE. 0) THEN
-        CALL SetLastMessage('Error in allocating memory to read stratigraphy data!',f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage('Error in allocating memory to read stratigraphy data!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -276,14 +274,14 @@ CONTAINS
         ID = INT(rDummyArray(1)) 
         CALL ConvertID_To_Index(ID,NodeIDs,index)
         IF (index .EQ. 0) THEN
-            CALL SetLastMessage('Node ID '//TRIM(IntToText(ID))//' listed for stratigraphy data is not in the model!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Node ID '//TRIM(IntToText(ID))//' listed for stratigraphy data is not in the model!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
         
         !Make sure same node is not listed more than once
         IF (lProcessed(index)) THEN
-            CALL SetLastMessage('Node ID '//TRIM(IntToText(ID))//' is listed more than once for stratigraphy data!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Node ID '//TRIM(IntToText(ID))//' is listed more than once for stratigraphy data!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -305,7 +303,7 @@ CONTAINS
                 MessageArray(1) ='Aquifer thickness cannot be less than zero!'
                 MessageArray(2) =                   'Node               = '//TRIM(IntToText(ID))
                 WRITE (MessageArray(3),'(A,F10.2)') 'Specified thickness= ',W((indxLayer-1)*2+2)
-                CALL SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -320,7 +318,7 @@ CONTAINS
     !Make sure all nodes are processed
     DO indxNode=1,NNodes
         IF (.NOT. lProcessed(indxNode)) THEN
-            CALL SetLastMessage('Stratigraphy is not defined at node '//TRIM(IntToText(NodeIDs(indxNode)))//'!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Stratigraphy is not defined at node '//TRIM(IntToText(NodeIDs(indxNode)))//'!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -360,7 +358,7 @@ CONTAINS
 
     !Check if number of nodes in the application grid is specified
     IF (NNodes .LE. 0) THEN
-        CALL SetLastMessage('Application grid needs to be set before reading stratigraphy data!',f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage('Application grid needs to be set before reading stratigraphy data!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -375,7 +373,7 @@ CONTAINS
               BottomElev(NNodes,NLayers)    , &
               STAT=ErrorCode                )
     IF (ErrorCode .NE. 0) THEN
-        CALL SetLastMessage('Error in allocating memory for stratigraphy data when reading from pre-processor binary file!',f_iFatal,ThisProcedure)  
+        CALL ModuleLogger%SetLastMessage('Error in allocating memory for stratigraphy data when reading from pre-processor binary file!',f_iFatal,ThisProcedure)  
         iStat = -1
         RETURN
     END IF
@@ -715,11 +713,7 @@ CONTAINS
     IF (iElem .EQ. 0) THEN
         MessageArray(1) = 'Location described by a coordinate cannot be located in the model area!'
         WRITE (MessageArray(2),'(A,F11.2,A,F11.2,A)') 'X-Y coordinate: (' , rX , ',' , rY , ')'
-        IF (ASSOCIATED(ModuleLogger)) THEN
-            CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
-        ELSE
-            CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
-        END IF
+        CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF

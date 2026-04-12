@@ -24,7 +24,6 @@ MODULE Class_AppFace
   !$ USE OMP_LIB
   USE GenericLinkedList  , ONLY: GenericLinkedListType
   USE MessageLogger      , ONLY: MessageLoggerType         , &
-                                 SetLastMessage            , &
                                  f_iFatal
   USE GeneralUtilities   , ONLY: LocateInList
   USE IOInterface        , ONLY: GenericFileType
@@ -131,7 +130,7 @@ CONTAINS
               AppFace%BoundaryFace(NFace)      , &
               STAT=ErrorCode , ERRMSG=cErrorMsg)
     IF (ErrorCode .NE. 0) THEN
-        CALL SetLastMessage('Error in allocating memory for element faces!'//NEW_LINE('x')//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage('Error in allocating memory for element faces!'//NEW_LINE('x')//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -246,7 +245,7 @@ CONTAINS
              AppFace%BoundaryFace(NFace)      , &
              STAT=ErrorCode , ERRMSG=cErrorMsg)
     IF (ErrorCode .NE. 0) THEN
-        CALL SetLastMessage('Error in allocating memory for element faces!'//NEW_LINE('x')//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage('Error in allocating memory for element faces!'//NEW_LINE('x')//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF

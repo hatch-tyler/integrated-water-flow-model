@@ -21,8 +21,7 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 MODULE Class_TecplotOutput
-  USE MessageLogger           , ONLY: MessageLoggerType  , &
-                                      EchoProgress
+  USE MessageLogger           , ONLY: MessageLoggerType
   USE TimeSeriesUtilities     , ONLY: TimeStepType       , &
                                       f_iTimeStampLength
   USE GeneralUtilities        , ONLY: IntToText
@@ -107,7 +106,7 @@ CONTAINS
     iStat = 0
     
     !Inform user
-    CALL EchoProgress('   Instantiating '//TRIM(cDescriptor))
+    CALL ModuleLogger%EchoProgress('   Instantiating '//TRIM(cDescriptor))
     
     !Open file
     IF (IsForInquiry) THEN
