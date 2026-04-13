@@ -22,9 +22,7 @@
 !***********************************************************************
 MODULE Package_AppTileDrain
   USE Class_Version           , ONLY: ReadVersion 
-  USE MessageLogger           , ONLY: SetLastMessage            , &
-                                      EchoProgress              , &
-                                      MessageArray              , &
+  USE MessageLogger           , ONLY: MessageArray              , &
                                       MessageLoggerType         , &
                                       f_iFatal
   USE GeneralUtilities        , ONLY: ConvertID_To_Index        , &
@@ -283,7 +281,7 @@ CONTAINS
         iGWNodeID = INT(DummyArray(2))
         CALL ConvertID_To_Index(iGWNodeID,NodeIDs,iGWNode)
         IF (iGWNode .EQ. 0) THEN
-            CALL SetLastMessage('Groundwater node '//TRIM(IntTotext(iGWNodeID))//' listed for tile drain ID '//TRIM(IntToText(ID))//' is not in the model!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Groundwater node '//TRIM(IntTotext(iGWNodeID))//' listed for tile drain ID '//TRIM(IntToText(ID))//' is not in the model!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -299,14 +297,14 @@ CONTAINS
         IF (TileDrains(indx)%iGWNodeLayer.LT.1  .OR.  TileDrains(indx)%iGWNodeLayer.GT.iNLayers) THEN
             MessageArray(1) = 'Tile drain '//TRIM(IntToText(ID))//' cannot be assigned a valid aquifer layer!'
             MessageArray(2) = 'Check its elevation.'
-            CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
         
         !Make sure that destination type is exceptible
         IF (TileDrains(indx)%iDestType.NE.f_iFlowDest_Outside .AND. TileDrains(indx)%iDestType.NE.f_iFlowDest_StrmNode) THEN
-            CALL SetLastMessage('Flow destination type for tile drain '//TRIM(IntToText(ID))//' is not recognized!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Flow destination type for tile drain '//TRIM(IntToText(ID))//' is not recognized!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -315,7 +313,7 @@ CONTAINS
         IF (TileDrains(indx)%iDestType .EQ. f_iFlowDest_StrmNode) THEN
             iStrmNode = LocateInList(TileDrains(indx)%iDest , iStrmNodeIDs)
             IF (iStrmNode .LT. 1) THEN
-                CALL SetLastMessage('Stream node '//TRIM(IntToText(TileDrains(indx)%iDest))//' for tile drain '//TRIM(IntToText(ID))//' is not modeled!',f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage('Stream node '//TRIM(IntToText(TileDrains(indx)%iDest))//' for tile drain '//TRIM(IntToText(ID))//' is not modeled!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -325,7 +323,7 @@ CONTAINS
         !Make sure tile drain IDs are not repeated
         DO indx1=1,indx-1
             IF (TileDrains(indx)%ID .EQ. TileDrains(indx1)%ID) THEN
-                CALL SetLastMessage('Tile drain ID number '//TRIM(IntToText(ID))//' is used more than once!',f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage('Tile drain ID number '//TRIM(IntToText(ID))//' is used more than once!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -380,7 +378,7 @@ CONTAINS
         iGWNodeID = INT(DummyArray(2))
         CALL ConvertID_To_Index(iGWNodeID,NodeIDS,iGWNode)
         IF (iGWNode .EQ. 0) THEN
-            CALL SetLastMessage('Groundwater node '//TRIM(IntTotext(iGWNodeID))//' listed for subsurface irrigation ID '//TRIM(IntToText(ID))//' is not in the model!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Groundwater node '//TRIM(IntTotext(iGWNodeID))//' listed for subsurface irrigation ID '//TRIM(IntToText(ID))//' is not in the model!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -392,7 +390,7 @@ CONTAINS
         !Make sure subsurface irrigation IDs are not repeated
         DO indx1=1,indx-1
             IF (SubIrigs(indx)%ID .EQ. SubIrigs(indx1)%ID) THEN
-                CALL SetLastMessage('Subsurface irrigation ID number '//TRIM(IntToText(ID))//' is used more than once!',f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage('Subsurface irrigation ID number '//TRIM(IntToText(ID))//' is used more than once!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -851,7 +849,7 @@ CONTAINS
     IF (ASSOCIATED(ModuleLogger)) THEN
         CALL ModuleLogger%EchoProgress('Simulating tile drain/subsurface irrigation flows')
     ELSE
-        CALL EchoProgress('Simulating tile drain/subsurface irrigation flows')
+        CALL ModuleLogger%EchoProgress('Simulating tile drain/subsurface irrigation flows')
     END IF
 
     !Tile drains

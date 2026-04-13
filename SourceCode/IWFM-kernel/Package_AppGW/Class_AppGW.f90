@@ -47,10 +47,7 @@ MODULE Class_AppGW
   USE IOInterface                 , ONLY: GenericFileType                                    , &
                                           DoesFileExist                                      , &
                                           f_iTXT                                                
-  USE MessageLogger               , ONLY: LogMessage                                         , &
-                                          SetLastMessage                                     , &
-                                          EchoProgress                                       , &
-                                          IsLogFileDefined                                   , &
+  USE MessageLogger               , ONLY: IsLogFileDefined                                   , &
                                           MessageArray                                       , &
                                           MessageLoggerType                                  , &
                                           f_iFILE                                            , &
@@ -460,7 +457,7 @@ CONTAINS
     IF (cFileName .EQ. '') RETURN
     
     !Print progress
-    CALL EchoProgress('Instantiating groundwater component')
+    CALL ModuleLogger%EchoProgress('Instantiating groundwater component')
     
     !Initialize
     NNodes    = AppGrid%GetNNodes()
@@ -485,7 +482,7 @@ CONTAINS
     IF (iErrorCode1 .NE. 0) THEN
         MessageArray(1) = 'Error in allocating memory for the groundwater component.'
         MessageArray(2) = cErrorMsg
-        CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -545,7 +542,7 @@ CONTAINS
         CALL DATE_AND_TIME(VALUES=iPerfEnd)
         rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
         WRITE(cPerfMsg,'(A,F8.3,A)') '    [PERF] AppGW TileDrain: ', rPerfSec, ' sec'
-        CALL LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+        CALL ModuleLogger%LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
     END IF
 
     !Pumping
@@ -562,7 +559,7 @@ CONTAINS
         CALL DATE_AND_TIME(VALUES=iPerfEnd)
         rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
         WRITE(cPerfMsg,'(A,F8.3,A)') '    [PERF] AppGW Pumping: ', rPerfSec, ' sec'
-        CALL LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+        CALL ModuleLogger%LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
     END IF
 
     !Subsidence filename
@@ -645,7 +642,7 @@ CONTAINS
             IF (iErrorCode1 .NE. 0) THEN 
                 MessageArray(1) = 'Error in allocating memory for the regional storage values for groundwater budget.'
                 MessageArray(2) = cErrorMsg
-                CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -673,7 +670,7 @@ CONTAINS
         END IF
         IF (iStat .EQ. -1) RETURN
         IF (AppGW%FinalHeadsFile%iGetFileType() .NE. f_iTXT) THEN
-            CALL SetLastMessage('End-of-simulation groundwater heads output file must be a text file!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('End-of-simulation groundwater heads output file must be a text file!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -702,7 +699,7 @@ CONTAINS
         CALL DATE_AND_TIME(VALUES=iPerfEnd)
         rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
         WRITE(cPerfMsg,'(A,F8.3,A)') '      [PERF] AppGW Budget+OutputFiles: ', rPerfSec, ' sec'
-        CALL LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+        CALL ModuleLogger%LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
     END IF
 
     !Groundwater hydrographs
@@ -714,7 +711,7 @@ CONTAINS
         CALL DATE_AND_TIME(VALUES=iPerfEnd)
         rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
         WRITE(cPerfMsg,'(A,F8.3,A)') '      [PERF] AppGW GWHyd(54K hydrographs): ', rPerfSec, ' sec'
-        CALL LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+        CALL ModuleLogger%LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
     END IF
 
     !Aquifer parameters
@@ -757,7 +754,7 @@ CONTAINS
         CALL DATE_AND_TIME(VALUES=iPerfEnd)
         rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
         WRITE(cPerfMsg,'(A,F8.3,A)') '    [PERF] AppGW Params+IC: ', rPerfSec, ' sec'
-        CALL LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+        CALL ModuleLogger%LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
     END IF
 
     !Instantiate the boundary conditions data and overwrite the initial conditions if necessary
@@ -773,7 +770,7 @@ CONTAINS
         CALL DATE_AND_TIME(VALUES=iPerfEnd)
         rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
         WRITE(cPerfMsg,'(A,F8.3,A)') '    [PERF] AppGW BoundaryConditions: ', rPerfSec, ' sec'
-        CALL LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+        CALL ModuleLogger%LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
     END IF
 
     !Instantiate subsidence; this has to be done after AppGW initial conditions are processed
@@ -785,7 +782,7 @@ CONTAINS
         CALL DATE_AND_TIME(VALUES=iPerfEnd)
         rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
         WRITE(cPerfMsg,'(A,F8.3,A)') '    [PERF] AppGW Subsidence: ', rPerfSec, ' sec'
-        CALL LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+        CALL ModuleLogger%LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
     END IF
 
     !Aquifer overwrite parameters
@@ -1701,7 +1698,7 @@ CONTAINS
             IF (ASSOCIATED(ModuleLogger)) THEN
                 CALL ModuleLogger%LogMessage(MessageArray(1:3),f_iWarn,ThisProcedure)
             ELSE
-                CALL LogMessage(MessageArray(1:3),f_iWarn,ThisProcedure)
+                CALL ModuleLogger%LogMessage(MessageArray(1:3),f_iWarn,ThisProcedure)
             END IF
             CALL AppGW%GWHyd%ReadGWHeadsAll_ForALayer(iNNodes,iLayer,cOutputBeginDateAndTime,cOutputEndDateAndTime,AppGW%FactHead,rFact_LT,rOutputDates,rGWHeads,iStat)
         END IF
@@ -1711,7 +1708,7 @@ CONTAINS
         IF (ASSOCIATED(ModuleLogger)) THEN
             CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
         ELSE
-            CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
         END IF
         iStat = -1
     END IF
@@ -2328,7 +2325,7 @@ CONTAINS
         IF (ASSOCIATED(ModuleLogger)) THEN
             CALL ModuleLogger%SetLastMessage('Requested hydrograph data is not part of the model output!',f_iFatal,ThisProcedure)
         ELSE
-            CALL SetLastMessage('Requested hydrograph data is not part of the model output!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Requested hydrograph data is not part of the model output!',f_iFatal,ThisProcedure)
         END IF
         iStat = -1
         RETURN
@@ -3379,7 +3376,7 @@ CONTAINS
         IF (ASSOCIATED(ModuleLogger)) THEN
             CALL ModuleLogger%SetLastMessage('Pumping is not simulated so purposes for pumping cannot be retrieved!',f_iFatal,ThisProcedure)
         ELSE
-            CALL SetLastMessage('Pumping is not simulated so purposes for pumping cannot be retrieved!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Pumping is not simulated so purposes for pumping cannot be retrieved!',f_iFatal,ThisProcedure)
         END IF
     END IF
     
@@ -4072,18 +4069,18 @@ CONTAINS
     NLayers = SIZE(GWNodes%Kh , DIM=2)
     
     !Print parameters
-    CALL LogMessage('',f_iMessage,'',f_iFILE)
-    CALL LogMessage(REPEAT('-',100),f_iMessage,'',f_iFILE)
-    CALL LogMessage(REPEAT(' ',30)//'AQUIFER PARAMETER VALUES FOR EACH NODE',f_iMessage,'',f_iFILE)
-    CALL LogMessage(REPEAT(' ',12)//'*** Note: Values Below are After '//'Multiplication by Conversion Factors ***',f_iMessage,'',f_iFILE)
-    CALL LogMessage(REPEAT('-',100),f_iMessage,'',f_iFILE)
+    CALL ModuleLogger%LogMessage('',f_iMessage,'',f_iFILE)
+    CALL ModuleLogger%LogMessage(REPEAT('-',100),f_iMessage,'',f_iFILE)
+    CALL ModuleLogger%LogMessage(REPEAT(' ',30)//'AQUIFER PARAMETER VALUES FOR EACH NODE',f_iMessage,'',f_iFILE)
+    CALL ModuleLogger%LogMessage(REPEAT(' ',12)//'*** Note: Values Below are After '//'Multiplication by Conversion Factors ***',f_iMessage,'',f_iFILE)
+    CALL ModuleLogger%LogMessage(REPEAT('-',100),f_iMessage,'',f_iFILE)
     WRITE (Text,'(A,2X,5(A,2X))')             &
         '   NODE','        PKH             '   &
                  ,'        PS              '   &
                  ,'        PN              '   &
                  ,'        PV              '   &
                  ,'        PL              '   
-    CALL LogMessage(TRIM(Text),f_iMessage,'',f_iFILE)
+    CALL ModuleLogger%LogMessage(TRIM(Text),f_iMessage,'',f_iFILE)
     
     DO indxNode=1,NNodes
       DO indxLayer=1,NLayers                                                                                          
@@ -4094,11 +4091,11 @@ CONTAINS
           WRITE (Text,'(9X,5(1PG24.15E3,2X))')                                                                  &                                                                                          
                          GWNodes%Kh(indxNode,indxLayer)   ,GWNodes%Ss(indxNode,indxLayer) ,GWNodes%Sy(indxNode,indxLayer) ,GWNodes%AquitardKv(indxNode,indxLayer)   ,GWNodes%Kv(indxNode,indxLayer)                                                                                              
         END IF                                                                                          
-        CALL LogMessage(TRIM(Text),f_iMessage,'',f_iFILE)                                                                                          
+        CALL ModuleLogger%LogMessage(TRIM(Text),f_iMessage,'',f_iFILE)                                                                                          
       END DO                                                                                          
     END DO  
         
-    CALL LogMessage('',f_iMessage,'',f_iFILE)
+    CALL ModuleLogger%LogMessage('',f_iMessage,'',f_iFILE)
 
   END SUBROUTINE PrintAquiferParameters
   
@@ -4205,14 +4202,14 @@ CONTAINS
         iNodeID = iDummyArray(1)
         iNode   = LocateInList(iNodeID,iGWNodeIDs)
         IF (iNode .EQ. 0) THEN
-            CALL SetLastMessage('Node ID '//TRIM(IntToText(iNodeID))//' listed for groundwater return flow destination data is not modeled!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Node ID '//TRIM(IntToText(iNodeID))//' listed for groundwater return flow destination data is not modeled!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
         
         !Check if elemenet was listed before
         IF (lProcessed(iNode)) THEN
-            CALL SetLastMessage('Node '//TRIM(IntToText(iNodeID))//' is listed more than once for groundwater return flow destination data!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Node '//TRIM(IntToText(iNodeID))//' is listed more than once for groundwater return flow destination data!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -4221,7 +4218,7 @@ CONTAINS
         !Check that destination type is legit
         iDestinationType = iDummyArray(2)
         IF (LocateInList(iDestinationType,f_iDestinationTypeList) .EQ. 0) THEN
-            CALL SetLastMessage ('Groundwater flow destination type for node ' // TRIM(IntToText(iNodeID)) // ' is not accepted!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Groundwater flow destination type for node ' // TRIM(IntToText(iNodeID)) // ' is not accepted!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -4238,7 +4235,7 @@ CONTAINS
                 IF (iStrmNode .EQ. 0) THEN
                     MessageArray(1) = 'Stream node number ' // TRIM(IntToText(iStrmNodeID)) // ' listed for groundwater node ' // TRIM(IntToText(iNodeID)) 
                     MessageArray(2) = ' as groundwater return flow destination is not in the model!'
-                    CALL SetLastMessage (MessageArray(1:2),f_iFatal,ThisProcedure)
+                    CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                     iStat = -1
                     RETURN
                 END IF
@@ -4250,7 +4247,7 @@ CONTAINS
                 IF (iLake .EQ. 0) THEN
                     MessageArray(1) = 'Lake number ' // TRIM(IntToText(iLakeID)) // ' listed for groundwater node ' // TRIM(IntToText(iNodeID)) 
                     MessageArray(2) = ' as groundwater return flow destination is not in the model!'
-                    CALL SetLastMessage (MessageArray(1:2),f_iFatal,ThisProcedure)
+                    CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                     iStat = -1
                     RETURN
                 END IF
@@ -4316,14 +4313,14 @@ CONTAINS
         ID = INT(rDummyArray(1))
         CALL ConvertID_To_Index(ID,NodeIDs,index)
         IF (index .EQ. 0) THEN
-            CALL SetLastMessage('Node ID '//TRIM(IntToText(ID))//' listed for initial groundwater heads is not in the model!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Node ID '//TRIM(IntToText(ID))//' listed for initial groundwater heads is not in the model!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
         
         !Make sure same node is not listed more than once
         IF (lProcessed(index)) THEN
-            CALL SetLastMessage('Node ID '//TRIM(IntToText(ID))//' is listed more than once for initial groundwater heads!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Node ID '//TRIM(IntToText(ID))//' is listed more than once for initial groundwater heads!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -4357,7 +4354,7 @@ CONTAINS
     !Make sure all nodes are processed
     DO indxNode=1,NNodes
         IF (.NOT. lProcessed(indxNode)) THEN
-            CALL SetLastMessage('Initial groundwater heads at node '//TRIM(IntToText(NodeIDs(indxNode)))//' are not defined!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Initial groundwater heads at node '//TRIM(IntToText(NodeIDs(indxNode)))//' are not defined!',f_iFatal,ThisProcedure)
             iStat = -1
             EXIT
         END IF
@@ -4392,7 +4389,7 @@ CONTAINS
     iStat   = 0
     
     !Inform user
-    CALL EchoProgress('   Reading aquifer parameters...')
+    CALL ModuleLogger%EchoProgress('   Reading aquifer parameters...')
     
     !Initialize
     NNodes     = AppGrid%NNodes
@@ -4416,17 +4413,17 @@ CONTAINS
     !Make sure time units are valid if time tracking simulation
     IF (TimeStep%TrackTime) THEN
         IF (IsTimeIntervalValid(cTimeUnit_Kh) .EQ. 0) THEN
-            CALL SetLastMessage('Time unit for aquifer horizontal hydraulic conductivity is not valid!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Time unit for aquifer horizontal hydraulic conductivity is not valid!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
         IF (IsTimeIntervalValid(cTimeUnit_AquitardV) .EQ. 0) THEN
-            CALL SetLastMessage('Time unit for aquitard vertical conductivity is not valid!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Time unit for aquitard vertical conductivity is not valid!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
         IF (IsTimeIntervalValid(cTimeUnit_Kv) .EQ. 0) THEN
-            CALL SetLastMessage('Time unit for aquifer vertical hydraulic conductivity is not valid!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Time unit for aquifer vertical hydraulic conductivity is not valid!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -4457,14 +4454,14 @@ CONTAINS
                 ID = INT(rDummyArray(1))  
                 CALL ConvertID_To_Index(ID,NodeIDs,index)
                 IF (index .EQ. 0) THEN
-                    CALL SetLastMessage('Groundwater node ID '//TRIM(IntToText(ID))//' listed for aquifer parameters is not in the model!',f_iFatal,ThisProcedure)
+                    CALL ModuleLogger%SetLastMessage('Groundwater node ID '//TRIM(IntToText(ID))//' listed for aquifer parameters is not in the model!',f_iFatal,ThisProcedure)
                     iStat = -1
                     RETURN
                 END IF
                 
                 !Check that node is not listed more than once
                 IF (lProcessed(index)) THEN
-                    CALL SetLastMessage('Groundwater node ID '//TRIM(IntToText(ID))//' is listed more than once for aquifer parameter entry!',f_iFatal,ThisProcedure)
+                    CALL ModuleLogger%SetLastMessage('Groundwater node ID '//TRIM(IntToText(ID))//' is listed more than once for aquifer parameter entry!',f_iFatal,ThisProcedure)
                     iStat = -1
                     RETURN
                 END IF
@@ -4485,7 +4482,7 @@ CONTAINS
         !Check all nodes are processed
         DO indxNode=1,NNodes
             IF (.NOT. lProcessed(indxNode)) THEN
-                CALL SetLastMessage('Aquifer parameters are not defined at node '//TRIM(IntToText(NodeIDs(indxNode)))//'!',f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage('Aquifer parameters are not defined at node '//TRIM(IntToText(NodeIDs(indxNode)))//'!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -4523,7 +4520,7 @@ CONTAINS
         IEBK = rDummyArray1(2)
         CALL ConvertID_To_Index(IEBK,ElementIDs,index)
         IF (index .EQ. 0) THEN
-            CALL LogMessage('Element '//TRIM(IntToText(IEBK))//' listed for anomaly hydraulic conductivity is not in the model! Skipping...',f_iInfo,ThisProcedure)
+            CALL ModuleLogger%LogMessage('Element '//TRIM(IntToText(IEBK))//' listed for anomaly hydraulic conductivity is not in the model! Skipping...',f_iInfo,ThisProcedure)
             CYCLE
         END IF
         BK = rDummyArray1(3:) * Fact
@@ -4650,7 +4647,7 @@ CONTAINS
                         MessageArray(1) = 'Aquifer thickness at node '//TRIM(IntToText(ID))//' and layer '//TRIM(IntToText(indxLayer))//' is less than interbed thickness!'
                         WRITE(MessageArray(2),'(A,F12.6)') 'Aquifer thickness  = ',rAquiferThickness
                         WRITE(MessageArray(3),'(A,F12.6)') 'Interbed thickness = ',rInterbedThick(indxNode,indxLayer)
-                        CALL SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+                        CALL ModuleLogger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
                         iStat = -1
                         RETURN
                     END IF
@@ -4709,7 +4706,7 @@ CONTAINS
                 IF (GWNodes%Kh(indxNode,indxLayer) .LT. 0.0) THEN
                     MessageArray(1) = 'Hydraulic conductivity is less than zero '
                     WRITE (MessageArray(2),'(5A,F9.3,A)') 'at node ',TRIM(IntToText(ID)),', layer ',TRIM(IntToText(indxLayer)),' (',GWNodes%Kh(indxNode,indxLayer),')'
-                    CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                    CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                     iStat = -1
                     RETURN
                 END IF
@@ -4718,7 +4715,7 @@ CONTAINS
                 IF (GWNodes%Ss(indxNode,indxLayer) .LT. 0.0) THEN
                     MessageArray(1) = 'Specific storage is less than zero '
                     WRITE (MessageArray(2),'(5A,F9.3,A)') 'at node ',TRIM(IntToText(ID)),', layer ',TRIM(IntToText(indxLayer)),' (',GWNodes%Ss(indxNode,indxLayer),')'
-                    CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                    CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                     iStat = -1
                     RETURN
                 END IF
@@ -4727,7 +4724,7 @@ CONTAINS
                 IF (GWNodes%Sy(indxNode,indxLayer) .LT. 0.0) THEN
                     MessageArray(1) = 'Specific yield is less than zero '
                     WRITE (MessageArray(2),'(5A,F9.3,A)') 'at node ',TRIM(IntToText(ID)),', layer ',TRIM(IntToText(indxLayer)),' (',GWNodes%Sy(indxNode,indxLayer),')'
-                    CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                    CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                     iStat = -1
                     RETURN
                 END IF
@@ -4736,7 +4733,7 @@ CONTAINS
                 IF (GWNodes%LeakageV(indxNode,indxLayer) .LT. 0.0) THEN
                     MessageArray(1) = 'Vertical leakage is less than zero '
                     WRITE (MessageArray(2),'(5A,F9.3,A)') 'at node ',TRIM(IntToText(ID)),', layer ',TRIM(IntToText(indxLayer)),' (',GWNodes%LeakageV(indxNode,indxLayer),')'
-                    CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                    CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                     iStat = -1
                     RETURN
                 END IF
@@ -4796,17 +4793,17 @@ CONTAINS
     !Make sure time units are valid if time tracking simulation
     IF (TrackTime) THEN
         IF (IsTimeIntervalValid(cTimeUnit_Kh) .EQ. 0) THEN
-            CALL SetLastMessage('Time unit for aquifer horizontal hydraulic conductivity in over-write file is not valid!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Time unit for aquifer horizontal hydraulic conductivity in over-write file is not valid!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
         IF (IsTimeIntervalValid(cTimeUnit_AquitardV) .EQ. 0) THEN
-            CALL SetLastMessage('Time unit for aquitard vertical conductivity in over-write file is not valid!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Time unit for aquitard vertical conductivity in over-write file is not valid!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
         IF (IsTimeIntervalValid(cTimeUnit_Kv) .EQ. 0) THEN
-            CALL SetLastMessage('Time unit for aquifer vertical hydraulic conductivity in over-write file is not valid!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Time unit for aquifer vertical hydraulic conductivity in over-write file is not valid!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -4827,7 +4824,7 @@ CONTAINS
           iNode  = INT(rDummyArraySubs(1))
           CALL ConvertID_To_Index(iNode,NodeIDs,index)
           IF (index .EQ. 0) THEN
-              CALL LogMessage('Node number '//TRIM(IntTotext(iNode))//' listed for aquifer parameter overwrite is not part of the model! Skipping...',f_iInfo,ThisProcedure)
+              CALL ModuleLogger%LogMessage('Node number '//TRIM(IntTotext(iNode))//' listed for aquifer parameter overwrite is not part of the model! Skipping...',f_iInfo,ThisProcedure)
               CYCLE
           END IF
           iLayer = INT(rDummyArraySubs(2))
@@ -4846,7 +4843,7 @@ CONTAINS
           iNode = INT(rDummyArrayNoSubs(1))
           CALL ConvertID_To_Index(iNode,NodeIDs,index)
           IF (index .EQ. 0) THEN
-              CALL LogMessage('Node number '//TRIM(IntTotext(iNode))//' listed for aquifer parameter overwrite is not part of the model! Skipping...',f_iInfo,ThisProcedure)
+              CALL ModuleLogger%LogMessage('Node number '//TRIM(IntTotext(iNode))//' listed for aquifer parameter overwrite is not part of the model! Skipping...',f_iInfo,ThisProcedure)
               CYCLE
           END IF
           iLayer = INT(rDummyArrayNoSubs(2))
@@ -4954,7 +4951,7 @@ CONTAINS
     IF (ASSOCIATED(ModuleLogger)) THEN
         CALL ModuleLogger%EchoProgress('Simulating groundwater flows...')
     ELSE
-        CALL EchoProgress('Simulating groundwater flows...')
+        CALL ModuleLogger%EchoProgress('Simulating groundwater flows...')
     END IF
     
     !Initialize
@@ -6001,7 +5998,7 @@ CONTAINS
     iStat = 0
     
     !Inform user
-    CALL EchoProgress('Registering groundwater component with matrix...')
+    CALL ModuleLogger%EchoProgress('Registering groundwater component with matrix...')
     
     !Initialize grid related variables
     NNodes  = AppGrid%NNodes

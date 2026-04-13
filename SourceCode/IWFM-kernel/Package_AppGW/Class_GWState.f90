@@ -21,8 +21,7 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 MODULE Class_GWState
-  USE MessageLogger , ONLY: SetLastMessage    , &
-                            MessageArray      , &
+  USE MessageLogger , ONLY: MessageArray      , &
                             MessageLoggerType , &
                             f_iFatal
   IMPLICIT NONE
@@ -126,7 +125,7 @@ CONTAINS
     IF (ErrorCode .NE. 0) THEN
         MessageArray(1) = 'Error in allocating memory for the groundwater component.'
         MessageArray(2) = cErrorMsg
-        CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
         iStat = -1
     ELSE
         iStat = 0

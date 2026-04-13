@@ -21,9 +21,7 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 MODULE GWHydrograph
-  USE MessageLogger          , ONLY: SetLastMessage            , &
-                                     EchoProgress              , &
-                                     MessageArray              , &
+  USE MessageLogger          , ONLY: MessageArray              , &
                                      MessageLoggerType         , &
                                      f_iFatal
   USE IOInterface            , ONLY: GenericFileType           , &
@@ -208,7 +206,7 @@ CONTAINS
     iStat = 0
     
     !Inform user
-    CALL EchoProgress('   Instantiating groundwater hydrograph print-out data...')
+    CALL ModuleLogger%EchoProgress('   Instantiating groundwater hydrograph print-out data...')
     
     !Initialize
     iNLayers   = Stratigraphy%NLayers
@@ -232,7 +230,7 @@ CONTAINS
                   GWHydData%ElemCentroid_Y(iNElements)  , &
                   STAT=iErrorCode ,ERRMSG=cErrorMsg     )
         IF (iErrorCode .NE. 0) THEN
-            CALL SetLastMessage('Error in allocating memory for the print-out of groundwater velocities at cell centroids!'//NEW_LINE('')//TRIM(cErrorMsg),f_iFatal,cThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Error in allocating memory for the print-out of groundwater velocities at cell centroids!'//NEW_LINE('')//TRIM(cErrorMsg),f_iFatal,cThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -245,7 +243,7 @@ CONTAINS
     IF (cHeadTecplotFileName .NE. '') THEN
         ALLOCATE (GWHydData%HeadTecplotFile , STAT=iErrorCode ,ERRMSG=cErrorMsg)
         IF (iErrorCode .NE. 0) THEN
-            CALL SetLastMessage('Error in allocating memory for groundwater head print-out for TecPlot!'//NEW_LINE('')//TRIM(cErrorMsg),f_iFatal,cThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Error in allocating memory for groundwater head print-out for TecPlot!'//NEW_LINE('')//TRIM(cErrorMsg),f_iFatal,cThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -266,7 +264,7 @@ CONTAINS
     IF (cVelTecplotFileName .NE. '') THEN
         ALLOCATE (GWHydData%VelocityTecplotFile , STAT=iErrorCode ,ERRMSG=cErrorMsg)
         IF (iErrorCode .NE. 0) THEN
-            CALL SetLastMessage('Error in allocating memory for groundwater velocities print-out for TecPlot!'//NEW_LINE('')//TRIM(cErrorMsg),f_iFatal,cThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Error in allocating memory for groundwater velocities print-out for TecPlot!'//NEW_LINE('')//TRIM(cErrorMsg),f_iFatal,cThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -278,7 +276,7 @@ CONTAINS
     !Instantiate the user-specified hydrographs output data
     ALLOCATE (GWHydData%GWHydOutput , STAT=iErrorCode ,ERRMSG=cErrorMsg)
     IF (iErrorCode .NE. 0) THEN
-        CALL SetLastMessage('Error in allocating memory for groundwater hydrograph printing at user-specified locations!'//NEW_LINE('')//TRIM(cErrorMsg),f_iFatal,cThisProcedure)
+        CALL ModuleLogger%SetLastMessage('Error in allocating memory for groundwater hydrograph printing at user-specified locations!'//NEW_LINE('')//TRIM(cErrorMsg),f_iFatal,cThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -290,7 +288,7 @@ CONTAINS
     !Instantiate face flow hydrographs output data
     ALLOCATE (GWHydData%FaceFlowOutput , STAT=iErrorCode ,ERRMSG=cErrorMsg)
     IF (iErrorCode .NE. 0) THEN
-        CALL SetLastMessage('Error in allocating memory for face flow hydrograph printing!'//NEW_LINE('')//TRIM(cErrorMsg),f_iFatal,cThisProcedure)
+        CALL ModuleLogger%SetLastMessage('Error in allocating memory for face flow hydrograph printing!'//NEW_LINE('')//TRIM(cErrorMsg),f_iFatal,cThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -339,7 +337,7 @@ CONTAINS
 
     !Make sure that the file is a text file
     IF (CellVelocityFile%iGetFileType() .NE. f_iTXT) THEN
-        CALL SetLastMessage('Output file ('//TRIM(cFileName)//') for cell groundwater velocities must be a text file!',f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage('Output file ('//TRIM(cFileName)//') for cell groundwater velocities must be a text file!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -413,7 +411,7 @@ CONTAINS
     !Allocate memory
     ALLOCATE (FaceFlowOutput%HydList(NOUTF) ,STAT=ErrorCode , ERRMSG=cErrorMsg)
     IF (ErrorCode .NE. 0) THEN
-        CALL SetLastMessage('Error in allocating memory for face flow hydrograph list!'//NEW_LINE(' ')//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage('Error in allocating memory for face flow hydrograph list!'//NEW_LINE(' ')//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -426,7 +424,7 @@ CONTAINS
             READ (ALine,*) iDummyArray(indx1)
             iLoc = FirstLocation(' ',ALine)
             IF (iLoc .EQ. 0) THEN
-                CALL SetLastMessage('Error in data entry for face flow hydrograph specification '//TRIM(IntToText(indx))//'!',f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage('Error in data entry for face flow hydrograph specification '//TRIM(IntToText(indx))//'!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -442,14 +440,14 @@ CONTAINS
             MessageArray(1) = 'Face flow hydrograph print-out specifications must be entered sequentially.'
             MessageArray(2) = 'Expected hydrograph ID = ' // TRIM(IntToText(indx))
             MessageArray(3) = 'Entered hydrograph ID  = ' // TRIM(IntToText(ID))
-            CALL SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
         
         !Make sure layer is modeled
         IF (iHydLayer .LT. 1   .OR.   iHydLayer .GT. NLayers) THEN
-            CALL SetLastMessage('Face flow hydrograph layer listed for hydrograph ID '//TRIM(IntToText(ID))//' is outside model bounds!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Face flow hydrograph layer listed for hydrograph ID '//TRIM(IntToText(ID))//' is outside model bounds!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -460,7 +458,7 @@ CONTAINS
         IF (iFace .EQ. 0) THEN
             MessageArray(1) = 'Groundwater nodes '//TRIM(IntToText(iNodes(1)))//' and '//TRIM(IntToText(iNodes(2)))//' do not define a face'
             MessageArray(2) = 'for element face flow printing!'
-            CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)            
+            CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)            
             iStat = -1
             RETURN
         END IF 
@@ -499,7 +497,7 @@ CONTAINS
     iStat = 0
     
     !Inform user
-    CALL EchoProgress('   Instantiating output file for groundwater heads at all nodes...') 
+    CALL ModuleLogger%EchoProgress('   Instantiating output file for groundwater heads at all nodes...') 
     
     !Initialize
     Header     = ''
@@ -508,7 +506,7 @@ CONTAINS
     !Allocate memory for the file
     ALLOCATE (OutFile , STAT=ErrorCode ,ERRMSG=cErrorMsg)
     IF (ErrorCode .NE. 0) THEN
-        CALL SetLastMessage('Error in allocating memory for groundwater head print-out at all nodes!'//NEW_LINE('')//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage('Error in allocating memory for groundwater head print-out at all nodes!'//NEW_LINE('')//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -520,7 +518,7 @@ CONTAINS
     !Make sure DSS file is used only if it is a time-tracking simulation
     IF (OutFile%iGetFileType() .EQ. f_iDSS) THEN
         IF (.NOT. TimeStep%TrackTime) THEN
-            CALL SetLastMessage('DSS files for groundwater head printing at all nodes can only be used for time-tracking simulations.',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('DSS files for groundwater head printing at all nodes can only be used for time-tracking simulations.',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -610,7 +608,7 @@ CONTAINS
     !Allocate memory for the file
     ALLOCATE (InFile , STAT=ErrorCode , ERRMSG=cErrorMsg)
     IF (ErrorCode .NE. 0) THEN
-        CALL SetLastMessage('Error in allocating memory for groundwater head print-out at all nodes!'//NEW_LINE('')//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage('Error in allocating memory for groundwater head print-out at all nodes!'//NEW_LINE('')//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -1353,7 +1351,7 @@ CONTAINS
     !Make sure that DSS file is used only if it is a time tracking simulation
     IF (OutFile%iGetFileType() .EQ. f_iDSS) THEN
         IF (.NOT. TimeStep%TrackTime) THEN
-            CALL SetLastMessage('DSS files for face flow hydrograph printing can only be used for time-tracking simulations.',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('DSS files for face flow hydrograph printing can only be used for time-tracking simulations.',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF

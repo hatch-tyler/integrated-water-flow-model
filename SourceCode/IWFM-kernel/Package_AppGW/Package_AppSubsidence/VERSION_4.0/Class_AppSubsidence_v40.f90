@@ -21,10 +21,7 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 MODULE Class_AppSubsidence_v40
-  USE MessageLogger           , ONLY: SetLastMessage                , &
-                                      EchoProgress                  , &
-                                      LogMessage                    , &
-                                      MessageLoggerType             , &
+  USE MessageLogger           , ONLY: MessageLoggerType             , &
                                       f_iMessage                    , &
                                       f_iFatal                      , &
                                       f_iFILE
@@ -162,7 +159,7 @@ CONTAINS
     IF (cFileName .EQ. '') RETURN
     
     !Inform user
-    CALL EchoProgress('   Instantiating subsidence component ...')
+    CALL ModuleLogger%EchoProgress('   Instantiating subsidence component ...')
     
     !Initialize
     NNodes  = AppGrid%NNodes
@@ -187,7 +184,7 @@ CONTAINS
               AppSubsidence%RegionalCumSubsidence_P(NRegn)   ,  &
               STAT=ErrorCode , ERRMSG=cErrorMsg              )
     IF (ErrorCode .NE. 0) THEN
-        CALL SetLastMessage('Error allocating memory for subsidence parameters!'//NEW_LINE('x')//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage('Error allocating memory for subsidence parameters!'//NEW_LINE('x')//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -259,7 +256,7 @@ CONTAINS
     IF (ALine .NE. '') THEN
         ALLOCATE (AppSubsidence%TecplotFile , STAT=ErrorCode , ERRMSG=cErrorMsg)
         IF (ErrorCode .NE. 0) THEN
-            CALL SetLastMessage('Error allocating memory for subsidence Tecplot file output.'//f_cLineFeed//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Error allocating memory for subsidence Tecplot file output.'//f_cLineFeed//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -280,7 +277,7 @@ CONTAINS
     IF (ALine .NE. '') THEN
         ALLOCATE (AppSubsidence%FinalSubsFile , STAT=ErrorCode , ERRMSG=cErrorMsg)
         IF (ErrorCode .NE. 0) THEN
-            CALL SetLastMessage('Error allocating memory for end-of-simulation subsidence output file.'//f_cLineFeed//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Error allocating memory for end-of-simulation subsidence output file.'//f_cLineFeed//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -292,7 +289,7 @@ CONTAINS
         END IF
         IF (iStat .EQ. -1) RETURN
         IF (AppSubsidence%FinalSubsFile%iGetFileType() .NE. f_iTXT) THEN
-            CALL SetLastMessage('End-of-simulation subsidence output file must be a text file!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('End-of-simulation subsidence output file must be a text file!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -307,7 +304,7 @@ CONTAINS
     !Subsidence hydrograph output data
     ALLOCATE (AppSubsidence%SubsHydOutput ,STAT=ErrorCode , ERRMSG=cErrorMsg)
     IF (ErrorCode .NE. 0) THEN
-        CALL SetLastMessage('Error in allocating memory for subsidence printing at user-specified locations!'//f_cLineFeed//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage('Error in allocating memory for subsidence printing at user-specified locations!'//f_cLineFeed//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -436,12 +433,12 @@ CONTAINS
         ID = rDummyArray(1)
         CALL ConvertID_To_Index(ID,iGWNodeIDs,iNode)
         IF (iNode .EQ. 0) THEN
-            CALL SetLastMessage('Groundwater node ID '//TRIM(IntToText(ID))//' listed for subsidence initial conditions is not in the model!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Groundwater node ID '//TRIM(IntToText(ID))//' listed for subsidence initial conditions is not in the model!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
         IF (lProcessed(iNode)) THEN
-            CALL SetLastMessage('Groundwater node ID '//TRIM(IntToText(ID))//' is listed more than once for subsidence initial conditions definitions!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Groundwater node ID '//TRIM(IntToText(ID))//' is listed more than once for subsidence initial conditions definitions!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -496,12 +493,12 @@ CONTAINS
         ID = rDummyArray(1)
         CALL ConvertID_To_Index(ID,iGWNodeIDs,iNode)
         IF (iNode .EQ. 0) THEN
-            CALL SetLastMessage('Groundwater node ID '//TRIM(IntToText(ID))//' listed for subsidence initial conditions is not in the model!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Groundwater node ID '//TRIM(IntToText(ID))//' listed for subsidence initial conditions is not in the model!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
         IF (lProcessed(iNode)) THEN
-            CALL SetLastMessage('Groundwater node ID '//TRIM(IntToText(ID))//' is listed more than once for subsidence initial conditions definitions!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Groundwater node ID '//TRIM(IntToText(ID))//' is listed more than once for subsidence initial conditions definitions!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -540,7 +537,7 @@ CONTAINS
     lProcessed = .FALSE.
     
     !Inform user
-    CALL EchoProgress('   Reading subsidence parameters...')
+    CALL ModuleLogger%EchoProgress('   Reading subsidence parameters...')
     
     !Initialize
     NNodes = AppGrid%NNodes
@@ -566,13 +563,13 @@ CONTAINS
                     ID = INT(rDummyArray(1))
                     CALL ConvertID_To_Index(ID,iGWNodeIDs,iNode)
                     IF (iNode .EQ. 0) THEN 
-                        CALL SetLastMessage('Groundwater node ID '//TRIM(IntToText(ID))//' listed for subsidence parameters is not in the model!',f_iFatal,ThisProcedure)
+                        CALL ModuleLogger%SetLastMessage('Groundwater node ID '//TRIM(IntToText(ID))//' listed for subsidence parameters is not in the model!',f_iFatal,ThisProcedure)
                         iStat = -1
                         RETURN
                     END IF
                     !Make sure node is not entered more than once
                     IF (lProcessed(iNode)) THEN
-                        CALL SetLastMessage('Groundwater node ID '//TRIM(IntToText(ID))//' is listed more than once for subsidence parameter definition!',f_iFatal,ThisProcedure)
+                        CALL ModuleLogger%SetLastMessage('Groundwater node ID '//TRIM(IntToText(ID))//' is listed more than once for subsidence parameter definition!',f_iFatal,ThisProcedure)
                         iStat = -1
                         RETURN
                     END IF
@@ -660,11 +657,11 @@ CONTAINS
         CALL ModuleLogger%LogMessage(REPEAT(' ',12)//'*** Note: Values Below are After Multiplication by Conversion Factors ***',f_iMessage,'',f_iFILE)
         CALL ModuleLogger%LogMessage(REPEAT('-',100),f_iMessage,'',f_iFILE)
     ELSE
-        CALL LogMessage('',f_iMessage,'',f_iFILE)
-        CALL LogMessage(REPEAT('-',100),f_iMessage,'',f_iFILE)
-        CALL LogMessage(REPEAT(' ',30)//'SUBSIDENCE PARAMETER VALUES FOR EACH NODE',f_iMessage,'',f_iFILE)
-        CALL LogMessage(REPEAT(' ',12)//'*** Note: Values Below are After Multiplication by Conversion Factors ***',f_iMessage,'',f_iFILE)
-        CALL LogMessage(REPEAT('-',100),f_iMessage,'',f_iFILE)
+        CALL ModuleLogger%LogMessage('',f_iMessage,'',f_iFILE)
+        CALL ModuleLogger%LogMessage(REPEAT('-',100),f_iMessage,'',f_iFILE)
+        CALL ModuleLogger%LogMessage(REPEAT(' ',30)//'SUBSIDENCE PARAMETER VALUES FOR EACH NODE',f_iMessage,'',f_iFILE)
+        CALL ModuleLogger%LogMessage(REPEAT(' ',12)//'*** Note: Values Below are After Multiplication by Conversion Factors ***',f_iMessage,'',f_iFILE)
+        CALL ModuleLogger%LogMessage(REPEAT('-',100),f_iMessage,'',f_iFILE)
     END IF
     WRITE (Text,'(A,2X,5(A,2X))')            &
       '   NODE','        SCE             '   &
@@ -675,7 +672,7 @@ CONTAINS
     IF (ASSOCIATED(ModuleLogger)) THEN
         CALL ModuleLogger%LogMessage(TRIM(Text),f_iMessage,'',f_iFILE)
     ELSE
-        CALL LogMessage(TRIM(Text),f_iMessage,'',f_iFILE)
+        CALL ModuleLogger%LogMessage(TRIM(Text),f_iMessage,'',f_iFILE)
     END IF
 
     DO indxNode=1,NNodes
@@ -694,14 +691,14 @@ CONTAINS
         IF (ASSOCIATED(ModuleLogger)) THEN
             CALL ModuleLogger%LogMessage(TRIM(Text),f_iMessage,'',f_iFILE)
         ELSE
-            CALL LogMessage(TRIM(Text),f_iMessage,'',f_iFILE)
+            CALL ModuleLogger%LogMessage(TRIM(Text),f_iMessage,'',f_iFILE)
         END IF
       END DO
     END DO
     IF (ASSOCIATED(ModuleLogger)) THEN
         CALL ModuleLogger%LogMessage('',f_iMessage,'',f_iFILE)
     ELSE
-        CALL LogMessage('',f_iMessage,'',f_iFILE)
+        CALL ModuleLogger%LogMessage('',f_iMessage,'',f_iFILE)
     END IF
 
   END SUBROUTINE AppSubsidence_v40_PrintParameters

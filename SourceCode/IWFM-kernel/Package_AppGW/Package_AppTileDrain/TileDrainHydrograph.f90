@@ -21,9 +21,7 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 MODULE TileDrainHydrograph
-  USE MessageLogger           , ONLY: SetLastMessage                , &
-                                      LogMessage                    , &
-                                      MessageLoggerType             , &
+  USE MessageLogger           , ONLY: MessageLoggerType             , &
                                       f_iFatal                      , &
                                       f_iWarn
   USE GeneralUtilities        , ONLY: ConvertID_To_Index            , &
@@ -165,7 +163,7 @@ CONTAINS
     !Output file name
     CALL InFile%ReadData(cTDOutFile,iStat)  ;  IF (iStat .EQ. -1) RETURN ; cTDOutFile = StripTextUntilCharacter(cTDOutFile,f_cInlineCommentChar) ; CALL CleanSpecialCharacters(cTDOutFile)
     IF (cTDOutFile .EQ. '') THEN
-        CALL LogMessage('Tile drain hydrograph printing is suppressed because an output file name is not specified!',f_iWarn,ThisProcedure)
+        CALL ModuleLogger%LogMessage('Tile drain hydrograph printing is suppressed because an output file name is not specified!',f_iWarn,ThisProcedure)
         TDHyd%NHyd = 0
         RETURN
     END IF
@@ -179,14 +177,14 @@ CONTAINS
         CALL InFile%ReadData(ALine,iStat)  ;  IF (iStat .EQ. -1) RETURN  ;  CALL CleanSpecialCharacters(ALine)  ;  ALine = StripTextUntilCharacter(ALine,f_cInlineCommentChar)  ;  ALine = ADJUSTL(ALine)
         READ (ALine,*,IOSTAT=ErrorCode) ID , TDHyd%iHydTypes(indx) , TDHyd%cHydNames(indx)
         IF (ErrorCode .NE. 0) THEN
-            CALL SetLastMessage('Error in reading tile drain/subsurface irrigation hydrograph data for hydrograph ID '//TRIM(IntToText(indx))//'!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Error in reading tile drain/subsurface irrigation hydrograph data for hydrograph ID '//TRIM(IntToText(indx))//'!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
         
         !Make sure hydrograph type is recognized
         IF (TDHyd%iHydTypes(indx).NE.f_iTileDrain  .AND.  TDHyd%iHydTypes(indx).NE.f_iSubIrig) THEN
-            CALL SetLastMessage('Hydrograph type for tile drain/subsurface irrigation hydrograph printing is not recognized!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Hydrograph type for tile drain/subsurface irrigation hydrograph printing is not recognized!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -195,14 +193,14 @@ CONTAINS
         IF (TDHyd%iHydTypes(indx) .EQ. f_iTileDrain) THEN
             CALL ConvertID_To_Index(ID,DrainIDs,TDHyd%iHydIndices(indx))
             IF (TDHyd%iHydIndices(indx) .EQ. 0) THEN
-                CALL SetLastMessage('Tile drain ID '//TRIM(IntToText(ID))//' listed for hydrograph printing is not simulated!',f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage('Tile drain ID '//TRIM(IntToText(ID))//' listed for hydrograph printing is not simulated!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
         ELSE
             CALL ConvertID_To_Index(ID,SubIrigIDs,TDHyd%iHydIndices(indx))
             IF (TDHyd%iHydIndices(indx) .EQ. 0) THEN
-                CALL SetLastMessage('Subsurface irrigation ID '//TRIM(IntToText(ID))//' listed for hydrograph printing is not simulated!',f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage('Subsurface irrigation ID '//TRIM(IntToText(ID))//' listed for hydrograph printing is not simulated!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -426,7 +424,7 @@ CONTAINS
         IF (ASSOCIATED(ModuleLogger)) THEN
             CALL ModuleLogger%SetLastMessage('Tile drain/subsurface irrigation hydrograph ID '//TRIM(IntToText(iHydID))//' for results retrieval is not in the model!',f_iFatal,ThisProcedure)
         ELSE
-            CALL SetLastMessage('Tile drain/subsurface irrigation hydrograph ID '//TRIM(IntToText(iHydID))//' for results retrieval is not in the model!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Tile drain/subsurface irrigation hydrograph ID '//TRIM(IntToText(iHydID))//' for results retrieval is not in the model!',f_iFatal,ThisProcedure)
         END IF
         iStat = -1
         RETURN

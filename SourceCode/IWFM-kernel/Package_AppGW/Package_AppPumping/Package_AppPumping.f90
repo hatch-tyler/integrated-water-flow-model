@@ -23,10 +23,7 @@
 MODULE Package_AppPumping
   !$ USE OMP_LIB
   USE Class_Version               , ONLY: ReadVersion 
-  USE MessageLogger               , ONLY: SetLastMessage                           , &
-                                          LogMessage                               , &
-                                          EchoProgress                             , &
-                                          MessageArray                             , &
+  USE MessageLogger               , ONLY: MessageArray                             , &
                                           MessageLoggerType                        , &
                                           f_iFatal                                 , &
                                           f_iMessage
@@ -230,7 +227,7 @@ CONTAINS
     IF (cFileName .EQ. '') RETURN
     
     !Inform user
-    CALL EchoProgress('   Instantiating pumping data...')
+    CALL ModuleLogger%EchoProgress('   Instantiating pumping data...')
     
     !Initialize
     NElements = AppGrid%NElements
@@ -289,7 +286,7 @@ CONTAINS
         IF (AppPumping%rPumpFactor .LT. 0.0) THEN
             MessageArray(1) = 'To avoid confusion, conversion factor in the timeseries pumping rate file cannot be less than zero!'
             MessageArray(2) = 'Pumping must be specified as a negative value in the data columns, and recharge as a positive value.'
-            CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -301,7 +298,7 @@ CONTAINS
             !Check with element pumping
             IF (AppPumping%NElemPumps .GT. 0) THEN
                 IF (ANY(AppPumping%ElemPumps%iColPump.GT.0)) THEN
-                    CALL SetLastMessage('Time series pumping data must be specified when element pumping refers to a column in this file!',f_iFatal,ThisProcedure)
+                    CALL ModuleLogger%SetLastMessage('Time series pumping data must be specified when element pumping refers to a column in this file!',f_iFatal,ThisProcedure)
                     iStat = -1
                     RETURN
                 END IF
@@ -309,7 +306,7 @@ CONTAINS
             !Check with wells
             IF (AppPumping%NWells .GT. 0) THEN
                 IF (ANY(AppPumping%Wells%iColPump.GT.0)) THEN
-                    CALL SetLastMessage('Time series pumping data must be specified when well pumping refers to a column in this file!',f_iFatal,ThisProcedure)
+                    CALL ModuleLogger%SetLastMessage('Time series pumping data must be specified when well pumping refers to a column in this file!',f_iFatal,ThisProcedure)
                     iStat = -1
                     RETURN
                 END IF
@@ -326,7 +323,7 @@ CONTAINS
               AppPumping%NodalPumpActual(NNodes,NLayers)   , &
               STAT=ErrorCode                               )
     IF (ErrorCode .NE. 0) THEN
-        CALL SetLastMessage('Error in allocating memory for nodal pumping!',f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage('Error in allocating memory for nodal pumping!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -391,7 +388,7 @@ CONTAINS
     
     !Make sure that file is either text or DSS file
     IF (iGetFileType_FromName(cFileName) .NE. f_iTXT) THEN
-        CALL SetLastMessage('Element/well pumping output file must be a text file!',f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage('Element/well pumping output file must be a text file!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -1421,7 +1418,7 @@ CONTAINS
             iWellID = AppPumping%Wells(indx)%ID
             iElemID = AppGrid%AppElement(indxElem)%ID
             WRITE (MessageArray(1),'(A10,i6,A12,i8)') 'Well ID = ',iWellID,' at element ',iElemID
-            CALL LogMessage(MessageArray(1),f_iMessage,ThisProcedure)
+            CALL ModuleLogger%LogMessage(MessageArray(1),f_iMessage,ThisProcedure)
             ErrorCode = 1
         END IF
     END DO
@@ -1434,7 +1431,7 @@ CONTAINS
         IF (ALL(Stratigraphy%ActiveNode(Vertex(1:NVertex),:) .EQ. .FALSE.)) THEN
             iElemID = AppGrid%AppElement(indxElem)%ID
             WRITE (MessageArray(1),'(A28,i8)') 'Elem. Pump at element ',iElemID
-            CALL LogMessage(MessageArray(1),f_iMessage,ThisProcedure)
+            CALL ModuleLogger%LogMessage(MessageArray(1),f_iMessage,ThisProcedure)
             ErrorCode = 1
         END IF
     END DO
@@ -1443,7 +1440,7 @@ CONTAINS
     IF (ErrorCode .GT. 0) THEN
         MessageArray(1) = 'Above elements for pumping have all their surrounding nodes inactive!'
         MessageArray(2) = 'Pumping at these elements are redundent.'
-        CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF

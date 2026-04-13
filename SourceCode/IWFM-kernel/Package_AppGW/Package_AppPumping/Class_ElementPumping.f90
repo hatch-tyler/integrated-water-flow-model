@@ -21,8 +21,7 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 MODULE Class_ElementPumping
-  USE MessageLogger               , ONLY: SetLastMessage           , &
-                                          MessageArray             , &
+  USE MessageLogger               , ONLY: MessageArray             , &
                                           MessageLoggerType        , &
                                           f_iFatal
   USE GeneralUtilities            , ONLY: ConvertID_To_Index       , &
@@ -159,7 +158,7 @@ CONTAINS
     !Allocate memory
     ALLOCATE (ElemPump(NSink) , ElemPumpDest(NSink) , iColIrigFrac(NSink) , iColAdjust(NSink) , STAT=ErrorCode)
     IF (ErrorCode .NE. 0) THEN
-        CALL SetLastMessage('Error in allocating memory for element pumping specifications!',f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage('Error in allocating memory for element pumping specifications!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -175,7 +174,7 @@ CONTAINS
         !Make sure element is legit
         CALL ConvertID_To_Index(iElemID,iElemIDS,iElem)
         IF (iElem .EQ. 0) THEN
-            CALL SetLastMessage('Element '//TRIM(IntToText(iElemID))//' listed for element pumping is not in the model!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Element '//TRIM(IntToText(iElemID))//' listed for element pumping is not in the model!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -187,7 +186,7 @@ CONTAINS
         !Allocate memory for vertical and to-individual-node distribution fractions
         ALLOCATE (ElemPump(indxSink)%rLayerFactor(NLayers) , ElemPump(indxSink)%rNodePumpRequired(NVertex,NLayers) , ElemPump(indxSink)%rNodePumpActual(NVertex,NLayers) , STAT=ErrorCode)
         IF (ErrorCode .NE. 0) THEN
-            CALL SetLastMessage('Error in allocating memory for the vertical distribution fractions for pumping at element ' // TRIM(IntToText(iElemID)) // '!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Error in allocating memory for the vertical distribution fractions for pumping at element ' // TRIM(IntToText(iElemID)) // '!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -215,7 +214,7 @@ CONTAINS
                 MessageArray(1) = 'Irrigation fraction column number for element pumping at element '//TRIM(IntTotext(iElemID))
                 MessageArray(2) = 'must be larger than zero when pumping is delivered within the model domain!'
                 MessageArray(3) = 'Alternatively, pumping can be delivered outside the model domain.'
-                CALL SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -223,14 +222,14 @@ CONTAINS
         
         !Make sure that iDistMethod is an acceptable value
         IF (.NOT. ANY(ElemPump(indxSink)%iDistMethod .EQ. f_iDistTypeArray)) THEN
-            CALL SetLastMessage('Pumping distribution option (IOPTSK) for element ' // TRIM(IntToText(iElemID)) // ' is not recognized!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Pumping distribution option (IOPTSK) for element ' // TRIM(IntToText(iElemID)) // ' is not recognized!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
         
         !Make sure that destination type is recognized
         IF (.NOT. ANY(ElemPumpDest(indxSink)%iDestType .EQ. f_iDestTypeArray)) THEN
-            CALL SetLastMessage('Destination type for element '//TRIM(IntToText(iElemID))//' is not recognized!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Destination type for element '//TRIM(IntToText(iElemID))//' is not recognized!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -251,7 +250,7 @@ CONTAINS
                     iDestID = ElemPumpDest(indxSink)%iDest
                     CALL ConvertID_To_Index(iDestID,iElemIDs,iDest)
                     IF (iDest .EQ. 0) THEN
-                        CALL SetLastMessage('Destination element '//TRIM(IntToText(iDestID))//' listed for pumping at element '//TRIM(IntToText(iElemID))//' is not in the model!',f_iFatal,ThisProcedure)
+                        CALL ModuleLogger%SetLastMessage('Destination element '//TRIM(IntToText(iDestID))//' listed for pumping at element '//TRIM(IntToText(iElemID))//' is not in the model!',f_iFatal,ThisProcedure)
                         iStat = -1
                         RETURN
                     END IF
@@ -261,7 +260,7 @@ CONTAINS
                     iDestID = ElemPumpDest(indxSink)%iDest
                     CALL ConvertID_To_Index(iDestID,iSubregionIDs,iDest)
                     IF (iDest .EQ. 0) THEN
-                        CALL SetLastMessage('Subregion '//TRIM(IntToText(iDestID))//' listed as the destination for pumping from element '//TRIM(IntToText(iElemID))//' is not in the model!',f_iFatal,ThisProcedure)
+                        CALL ModuleLogger%SetLastMessage('Subregion '//TRIM(IntToText(iDestID))//' listed as the destination for pumping from element '//TRIM(IntToText(iElemID))//' is not in the model!',f_iFatal,ThisProcedure)
                         iStat = -1
                         RETURN
                     END IF
@@ -292,7 +291,7 @@ CONTAINS
         !Make sure same element group ID is not used more than once
         DO indxGroup1=1,indxGroup-1
             IF (ID .EQ. ElemGroups(indxGroup1)%ID) THEN
-                CALL SetLastMessage('Element group ID '//TRIM(IntToText(ID))//' for element pumping destinations is specified more than once!',f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage('Element group ID '//TRIM(IntToText(ID))//' for element pumping destinations is specified more than once!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -319,7 +318,7 @@ CONTAINS
         !Make sure elements are in the model
         CALL ConvertID_To_Index(ElemGroups(indxGroup)%iElems,iElemIDs,Indices)
         IF (ANY(Indices.EQ.0)) THEN
-            CALL SetLastMessage('One or more elements listed in element group ID '//TRIM(IntToText(ID))//' listed for element pumping destination are not in the model!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('One or more elements listed in element group ID '//TRIM(IntToText(ID))//' listed for element pumping destination are not in the model!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -343,7 +342,7 @@ CONTAINS
            iDest = LocateInList(iDestID,ElemGroups%ID)
            IF (iDest .EQ. 0) THEN
                ID = ElemPump(indxSink)%ID
-               CALL SetLastMessage('Element group number '//TRIM(IntToText(iDestID))//' to which pumping from element '//TRIM(IntToText(ID))//' is delivered is not defined!',f_iFatal,ThisProcedure)  
+               CALL ModuleLogger%SetLastMessage('Element group number '//TRIM(IntToText(iDestID))//' to which pumping from element '//TRIM(IntToText(ID))//' is delivered is not defined!',f_iFatal,ThisProcedure)  
                iStat = -1
                RETURN
            END IF
@@ -352,7 +351,7 @@ CONTAINS
            !Make sure there is at least one element in the group
            IF (ElemGroups(iDest)%NElems .EQ. 0) THEN
                ID = ElemPump(indxSink)%ID
-               CALL SetLastMessage('Element group '//TRIM(IntToText(iDestID))//' as destination for pumping from element '//TRIM(IntToText(ID))//' has no elements listed!',f_iFatal,ThisProcedure)
+               CALL ModuleLogger%SetLastMessage('Element group '//TRIM(IntToText(iDestID))//' as destination for pumping from element '//TRIM(IntToText(ID))//' has no elements listed!',f_iFatal,ThisProcedure)
                iStat = -1
                RETURN
            END IF

@@ -23,8 +23,7 @@
 MODULE VerticalFlow
   USE IOInterface              , ONLY: GenericFileType      , &  
                                        PrepareTSDOutputFile
-  USE MessageLogger            , ONLY: LogMessage           , &
-                                       MessageArray         , &
+  USE MessageLogger            , ONLY: MessageArray         , &
                                        MessageLoggerType    , &
                                        f_iWarn
   USe GeneralUtilities         , ONLY: FEXP                 , &
@@ -143,7 +142,7 @@ CONTAINS
     IF (NLayers .EQ. 1) THEN
         MessageArray(1) = 'Only one aquifer layer is modeled!'
         MessageArray(2) = 'Generation of vertical flow output file is supressed.'
-        CALL LogMessage(MessageArray(1:2),f_iWarn,ThisProcedure)
+        CALL ModuleLogger%LogMessage(MessageArray(1:2),f_iWarn,ThisProcedure)
         RETURN
     END IF
     

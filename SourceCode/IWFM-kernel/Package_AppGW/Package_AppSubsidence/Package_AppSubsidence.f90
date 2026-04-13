@@ -22,8 +22,7 @@
 !***********************************************************************
 MODULE Package_AppSubsidence
   USE IWFM_Kernel_Version     , ONLY: ReadVersion                        
-  USE MessageLogger           , ONLY: SetLastMessage         , &
-                                      MessageLoggerType      , &
+  USE MessageLogger           , ONLY: MessageLoggerType      , &
                                       f_iFatal
   USE IOInterface             , ONLY: GenericFileType
   USE TimeSeriesUtilities     , ONLY: TimeStepType
@@ -196,7 +195,7 @@ CONTAINS
             ALLOCATE(AppSubsidence_v51_Type :: AppSubsidence%Me)
             AppSubsidence%iComponentVersion = 51
         CASE DEFAULT
-            CALL SetLastMessage('Subsidence Component version number is not recognized ('//TRIM(cVersion)//')!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Subsidence Component version number is not recognized ('//TRIM(cVersion)//')!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
     END SELECT

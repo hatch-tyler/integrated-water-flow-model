@@ -37,9 +37,7 @@ MODULE Class_AppBC
                                       PrepareTSDOutputFile          , &
                                       f_iDSS                        , &
                                       f_iUNKNOWN                    
-  USE MessageLogger           , ONLY: SetLastMessage                , &
-                                      EchoProgress                  , &
-                                      MessageArray                  , &
+  USE MessageLogger           , ONLY: MessageArray                  , &
                                       MessageLoggerType             , &
                                       f_iFatal
   USE Package_Discretization  , ONLY: AppGridType                   , &
@@ -188,7 +186,7 @@ CONTAINS
     !Allocate memory
     ALLOCATE (AppBC%LayerBC(NLayers) ,STAT=ErrorCode , ERRMSG=cErrorMsg)
     IF (ErrorCode .NE. 0) THEN
-        CALL SetLastMessage('Error in allocating memory for groundwater boundary conditions for each layer.'//NEW_LINE('')//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage('Error in allocating memory for groundwater boundary conditions for each layer.'//NEW_LINE('')//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -197,7 +195,7 @@ CONTAINS
     IF (cFileName .EQ. '') RETURN
     
     !Inform user
-    CALL EchoProgress('   Instantiating groundwater boundary conditions...')
+    CALL ModuleLogger%EchoProgress('   Instantiating groundwater boundary conditions...')
     
     !Open file
     CALL BCFile%New(FileName=TRIM(cFileName),InputFile=.TRUE.,IsTSFile=.FALSE.,Descriptor='main groundwater boundary conditions data',iStat=iStat)
@@ -261,7 +259,7 @@ CONTAINS
         ELSE
             MessageArray(1) = 'Time Series Boundary Conditions Data File must be specified when'
             MessageArray(2) = 'one or more time series boundary condition data columns are referred!'
-            CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -278,7 +276,7 @@ CONTAINS
     !Instantiate boundary node flow hydrograph output data
     ALLOCATE (AppBC%BCFlowOutput , STAT=ErrorCode ,ERRMSG=cErrorMsg)
     IF (ErrorCode .NE. 0) THEN
-        CALL SetLastMessage('Error in allocating memory for boundary node flow hydrograph printing!'//NEW_LINE('')//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage('Error in allocating memory for boundary node flow hydrograph printing!'//NEW_LINE('')//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -343,7 +341,7 @@ CONTAINS
     !Allocate memory
     ALLOCATE (BCFlowOutput%iBCNodes(NOUTB) , BCFlowOutput%iLayers(NOUTB) , STAT=ErrorCode , ERRMSG=cErrorMsg)
     IF (ErrorCode .NE. 0) THEN
-        CALL SetLastMessage('Error in allocating memory for boundary node flow hydrograph list!'//NEW_LINE(' ')//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage('Error in allocating memory for boundary node flow hydrograph list!'//NEW_LINE(' ')//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -356,7 +354,7 @@ CONTAINS
             READ (ALine,*) iDummyArray(indx1)
             iLoc = FirstLocation(' ',ALine)
             IF (iLoc .EQ. 0) THEN
-                CALL SetLastMessage('Error in data entry for boundary node flow hydrograph specification '//TRIM(IntToText(indx))//'!',f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage('Error in data entry for boundary node flow hydrograph specification '//TRIM(IntToText(indx))//'!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -367,14 +365,14 @@ CONTAINS
         IDNode    = iDummyArray(3)
         CALL ConvertID_To_Index(IDNode,NodeIDs,iHydNode)
         IF (iHydNode .EQ. 0) THEN
-            CALL SetLastMessage('Node '//TRIM(IntToText(IDNode))//' listed for boundary node hydrograph printing is not in the model!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Node '//TRIM(IntToText(IDNode))//' listed for boundary node hydrograph printing is not in the model!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
 
         !Make sure layer is modeled
         IF (iHydLayer .LT. 1   .OR.   iHydLayer .GT. NLayers) THEN
-            CALL SetLastMessage('Boundary node flow hydrograph layer listed for hydrograph ID '//TRIM(IntToText(ID))//' is outside model bounds!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Boundary node flow hydrograph layer listed for hydrograph ID '//TRIM(IntToText(ID))//' is outside model bounds!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -386,7 +384,7 @@ CONTAINS
         ELSE
             MessageArray(1) = 'Node '//TRIM(IntToText(IDNode))//' in layer '//TRIM(IntToText(iHydLayer))//' for boundary flow printing'
             MessageArray(2) = 'is not specified as a boundary node.'
-            CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure) 
+            CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure) 
             iStat = -1
             RETURN
         END IF           
@@ -1078,7 +1076,7 @@ CONTAINS
     !Make sure that DSS file is used only if it is a time tracking simulation
     IF (OutFile%iGetFileType() .EQ. f_iDSS) THEN
         IF (.NOT. TimeStep%TrackTime) THEN
-            CALL SetLastMessage('DSS files for boundary node flow hydrograph printing can only be used for time-tracking simulations.',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('DSS files for boundary node flow hydrograph printing can only be used for time-tracking simulations.',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF

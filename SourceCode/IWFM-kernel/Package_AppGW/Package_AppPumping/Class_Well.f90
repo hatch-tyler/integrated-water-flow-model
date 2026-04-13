@@ -21,8 +21,7 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 MODULE Class_Well
-  USE MessageLogger               , ONLY: SetLastMessage           , &
-                                          MessageArray             , &
+  USE MessageLogger               , ONLY: MessageArray             , &
                                           MessageLoggerType        , &
                                           f_iFatal
   USE GeneralUtilities            , ONLY: ConvertID_To_Index       , &
@@ -170,7 +169,7 @@ CONTAINS
     !Allocate memory
     ALLOCATE (Wells(NWell) , WellDest(NWell) , iColIrigFrac(NWell) , iColAdjust(NWell) , lProcessed(NWell) , iWellIDs(NWell) , STAT=ErrorCode)
     IF (ErrorCode .NE. 0) THEN
-        CALL SetLastMessage('Error in allocating memory for the wells!',f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage('Error in allocating memory for the wells!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -188,7 +187,7 @@ CONTAINS
         !Make sure well ID is not used more than once
         DO indxWell1=1,indxWell-1
             IF (iWellIDs(indxWell) .EQ. iWellIDs(indxWell1)) THEN
-                CALL SetLastMessage('Well ID '//TRIM(IntToText(iWellIDs(indxWell)))//' is assigned to more than one well!',f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage('Well ID '//TRIM(IntToText(iWellIDs(indxWell)))//' is assigned to more than one well!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -197,7 +196,7 @@ CONTAINS
         !Find the element number that the well belongs to
         CALL AppGrid%FEInterpolate(X,Y,Element,Nodes,rFactor)
         IF (Element .LT. 1) THEN
-            CALL SetLastMessage('Well '// TRIM(IntToText(iWellIDs(indxWell))) // ' is outside the model domain!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Well '// TRIM(IntToText(iWellIDs(indxWell))) // ' is outside the model domain!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -217,14 +216,14 @@ CONTAINS
         !Make sure well ID is recognized
         CALL ConvertID_To_Index(ID,iWellIDs,iWell)
         IF (iWell .EQ. 0) THEN
-            CALL SetLastMessage('Well ID '//TRIM(IntToText(ID))//' listed for well pumping characteristics is not recognized!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Well ID '//TRIM(IntToText(ID))//' listed for well pumping characteristics is not recognized!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
         
         !Make sure same well is not entered more than once
         IF (lProcessed(iWell)) THEN
-            CALL SetLastMessage('Well ID '//TRIM(IntToText(ID))//' specified for well pumping characteristics is listed more than once!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Well ID '//TRIM(IntToText(ID))//' specified for well pumping characteristics is listed more than once!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -247,7 +246,7 @@ CONTAINS
                 MessageArray(1) = 'Irrigation fraction column number for well ID '//TRIM(IntTotext(ID))
                 MessageArray(2) = 'must be larger than zero when pumping is delivered within the model domain!'
                 MessageArray(3) = 'Alternatively, pumping can be delivered outside the model domain.'
-                CALL SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -255,14 +254,14 @@ CONTAINS
         
         !Make sure that iDistMethod is an acceptable value
         IF (.NOT. ANY(Wells(iWell)%iDistMethod .EQ. f_iDistTypeArray)) THEN
-            CALL SetLastMessage('Pumping distribution option (IOPTWL) for well ID ' // TRIM(IntToText(ID)) // ' is not recognized!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Pumping distribution option (IOPTWL) for well ID ' // TRIM(IntToText(ID)) // ' is not recognized!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
         
         !Make sure that destination type is recognized
         IF (.NOT. ANY(WellDest(iWell)%iDestType .EQ. f_iDestTypeArray)) THEN
-            CALL SetLastMessage('Destination type for well ID '//TRIM(IntToText(ID))//' is not recognized!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Destination type for well ID '//TRIM(IntToText(ID))//' is not recognized!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -285,7 +284,7 @@ CONTAINS
                     iElemID = WellDest(iWell)%iDest
                     CALL ConvertID_To_Index(iElemID,iElemIDs,iElem)
                     IF (iElem .EQ. 0) THEN
-                        CALL SetLastMessage('Destination element '//TRIM(IntToText(iElemID))//' listed for well '//TRIM(IntToText(ID))//' is not in the model!',f_iFatal,ThisProcedure)
+                        CALL ModuleLogger%SetLastMessage('Destination element '//TRIM(IntToText(iElemID))//' listed for well '//TRIM(IntToText(ID))//' is not in the model!',f_iFatal,ThisProcedure)
                         iStat = -1
                         RETURN
                     END IF
@@ -296,7 +295,7 @@ CONTAINS
                     iRegionID = WellDest(iWell)%iDest
                     CALL ConvertID_To_Index(iRegionID,iSubregionIDs,iRegion)
                     IF (iRegion.EQ. 0) THEN
-                        CALL SetLastMessage('Destination subregion '//TRIM(IntToText(iRegionID))//' listed for well '//TRIM(IntToText(ID))//' is not in the model!',f_iFatal,ThisProcedure)
+                        CALL ModuleLogger%SetLastMessage('Destination subregion '//TRIM(IntToText(iRegionID))//' listed for well '//TRIM(IntToText(ID))//' is not in the model!',f_iFatal,ThisProcedure)
                         iStat = -1
                         RETURN
                     END IF
@@ -320,7 +319,7 @@ CONTAINS
         !Make sure same element group ID is not used more than once
         DO indxGroup1=1,indxGroup-1
             IF (ID .EQ. ElemGroups(indxGroup1)%ID) THEN
-                CALL SetLastMessage('Element group ID '//TRIM(IntToText(ID))//' for well pumping destinations is specified more than once!',f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage('Element group ID '//TRIM(IntToText(ID))//' for well pumping destinations is specified more than once!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -347,7 +346,7 @@ CONTAINS
         !Make sure elements are in the model
         CALL ConvertID_To_Index(ElemGroups(indxGroup)%iElems,iElemIDs,Indices)
         IF (ANY(Indices.EQ.0)) THEN
-            CALL SetLastMessage('One or more elements listed in element group ID '//TRIM(IntToText(ID))//' listed for well pumping destination are not in the model!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('One or more elements listed in element group ID '//TRIM(IntToText(ID))//' listed for well pumping destination are not in the model!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -372,7 +371,7 @@ CONTAINS
            iDest = LocateInList(iDestID,ElemGroups%ID)
            IF (iDest .EQ. 0) THEN
                ID = Wells(indxWell)%ID
-               CALL SetLastMessage('Element group number '//TRIM(IntToText(iDestID))//' to which well ID '//TRIM(IntToText(ID))//' is delivered is not defined!',f_iFatal,ThisProcedure) 
+               CALL ModuleLogger%SetLastMessage('Element group number '//TRIM(IntToText(iDestID))//' to which well ID '//TRIM(IntToText(ID))//' is delivered is not defined!',f_iFatal,ThisProcedure) 
                iStat = -1
                RETURN
            END IF
@@ -381,7 +380,7 @@ CONTAINS
            !Make sure there is at least one element in the group
            IF (ElemGroups(iDest)%NElems .EQ. 0) THEN
                ID = Wells(indxWell)%ID
-               CALL SetLastMessage('Element group '//TRIM(IntToText(iDest))//' as destination for well pumping '//TRIM(IntToText(ID))//' has no elements listed!',f_iFatal,ThisProcedure)
+               CALL ModuleLogger%SetLastMessage('Element group '//TRIM(IntToText(iDest))//' as destination for well pumping '//TRIM(IntToText(ID))//' has no elements listed!',f_iFatal,ThisProcedure)
                iStat = -1
                RETURN
            END IF
@@ -457,7 +456,7 @@ CONTAINS
         WRITE (MessageArray(2),'(A,F10.4)') 'Top elevation of well screen = ',PerfTopWork
         WRITE (MessageArray(3),'(A,F10.4)') 'Ground surface elevation     = ',GSElev       
         WRITE (MessageArray(4),'(A,F10.4)') 'Elevation of aquifer bottom  = ',BottomMax
-        CALL SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -466,7 +465,7 @@ CONTAINS
         WRITE (MessageArray(2),'(A,F10.4)') 'Bottom elevation of well screen = ',PerfBottomWork
         WRITE (MessageArray(3),'(A,F10.4)') 'Ground surface elevation        = ',GSElev       
         WRITE (MessageArray(4),'(A,F10.4)') 'Elevation of aquifer bottom     = ',BottomMax
-        CALL SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF

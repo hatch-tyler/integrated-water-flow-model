@@ -24,8 +24,7 @@ MODULE Class_TSBCDataFile
   USE GeneralUtilities    , ONLY: AllocArray
   USE TimeSeriesUtilities , ONLY: TimeStepType          , &
                                   IncrementTimeStamp
-  USE MessageLogger       , ONLY: SetLastMessage        , &
-                                  MessageLoggerType     , &
+  USE MessageLogger       , ONLY: MessageLoggerType     , &
                                   f_iFatal
   USE IOInterface         , ONLY: RealTSDataInFileType 
   IMPLICIT NONE
@@ -136,7 +135,7 @@ CONTAINS
         TSBCDataFile%NTSFlowBCColumns = SIZE(iTSFlowBCColumns)
         ALLOCATE (TSBCDataFile%iTSFlowBCColumns(SIZE(iTSFlowBCColumns)) , STAT=ErrorCode , ERRMSG=cErrorMsg)
         IF (ErrorCode .NE. 0) THEN
-            CALL SetLastMessage('Error in allocating memory for the time series flow boundary conditions.'//NEW_LINE('')//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Error in allocating memory for the time series flow boundary conditions.'//NEW_LINE('')//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
