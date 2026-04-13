@@ -23,7 +23,6 @@
 MODULE Package_Matrix
   !$ USE OMP_LIB
   USE MessageLogger    , ONLY: MessageLoggerType        , &
-                               SetLastMessage           , &
                                MessageArray             , &
                                f_iFatal
   USE GeneralUtilities , ONLY: LocateInList             , &
@@ -60,7 +59,8 @@ MODULE Package_Matrix
   ! -------------------------------------------------------------
   PRIVATE
   PUBLIC :: MatrixType           , &
-            ConnectivityListType
+            ConnectivityListType , &
+            Matrix_SetModuleLogger
   
   
   ! -------------------------------------------------------------
@@ -186,13 +186,25 @@ MODULE Package_Matrix
   ! -------------------------------------------------------------
   INTEGER,PARAMETER                   :: ModNameLen = 16
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'Package_Matrix::'
+  TYPE(MessageLoggerType),POINTER,PRIVATE :: ModuleLogger => NULL()
   
   
   
 CONTAINS
-    
-    
-    
+
+
+  ! -------------------------------------------------------------
+  ! --- SET MODULE LOGGER
+  ! -------------------------------------------------------------
+  SUBROUTINE Matrix_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType),TARGET,INTENT(IN) :: Logger
+
+    ModuleLogger => Logger
+
+  END SUBROUTINE Matrix_SetModuleLogger
+
+
+
 ! ******************************************************************
 ! ******************************************************************
 ! ******************************************************************
@@ -1437,7 +1449,7 @@ CONTAINS
             WRITE (MessageArray(3), '(A,I8)')   'Iteration =', Iter
             WRITE (MessageArray(4), '(A,I8)')   'Variable  =', NODEMAX
             WRITE (MessageArray(5),'(A,E12.3)') 'Difference=', ADIFFMAX
-            CALL SetLastMessage(MessageArray(1:5),f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage(MessageArray(1:5),f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -1537,7 +1549,7 @@ CONTAINS
             WRITE (MessageArray(3), '(A,I8)')   'Iteration =', Iter
             WRITE (MessageArray(4), '(A,I8)')   'Variable  =', NODEMAX
             WRITE (MessageArray(5),'(A,E12.3)') 'Difference=', ADIFFMAX
-            CALL SetLastMessage(MessageArray(1:5),f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage(MessageArray(1:5),f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF

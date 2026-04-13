@@ -23,7 +23,7 @@
 MODULE ParametricGrid
   USE Class_Grid        , ONLY: GridType               , &
                                 CheckElementConvexity
-  USE MessageLogger     , ONLY: SetLastMessage         , &
+  USE MessageLogger     , ONLY: MessageLoggerType      , &
                                 MessageArray           , &
                                 f_iFatal
   USE IOInterface       , ONLY: GenericFileType
@@ -50,7 +50,8 @@ MODULE ParametricGrid
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: GetValuesFromParametricGrid
+  PUBLIC :: GetValuesFromParametricGrid , &
+            ParametricGrid_SetModuleLogger
 
 
   ! -------------------------------------------------------------
@@ -87,12 +88,23 @@ MODULE ParametricGrid
   ! -------------------------------------------------------------
   CHARACTER(LEN=16),PARAMETER :: ModName='ParametricGrid::'
   INTEGER,PARAMETER           :: ModNameLen = 16
+  TYPE(MessageLoggerType),POINTER,PRIVATE :: ModuleLogger => NULL()
 
 
 
 
 CONTAINS
 
+
+  ! -------------------------------------------------------------
+  ! --- SET MODULE LOGGER
+  ! -------------------------------------------------------------
+  SUBROUTINE ParametricGrid_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType),TARGET,INTENT(IN) :: Logger
+
+    ModuleLogger => Logger
+
+  END SUBROUTINE ParametricGrid_SetModuleLogger
 
 
 
@@ -224,14 +236,14 @@ CONTAINS
         CALL DataFile%ReadData(NDP,iStat)  ;  IF (iStat .EQ. -1) RETURN      !Number of parametric nodes in the group
         CALL DataFile%ReadData(NEP,iStat)  ;  IF (iStat .EQ. -1) RETURN      !Number of parametric elements in the group
         IF (NDP.GT.1 .AND. NEP.EQ.0) THEN 
-            CALL SetLastMessage('NDP in parameteric group '//TRIM(IntToText(indxGrid))//' should be zero!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('NDP in parameteric group '//TRIM(IntToText(indxGrid))//' should be zero!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
         indxNodeEnd = indxNodeStart+NDP-1
         ALLOCATE (ParamNode_X(indxNodeStart:indxNodeEnd) , ParamNode_Y(indxNodeStart:indxNodeEnd) , Param_NVertex(NEP) , Param_Vertex(4,NEP) , STAT=ErrorCode)
         IF (ErrorCode .NE. 0) THEN
-            CALL SetLastMessage('Error in allocating memory for the nodes and/or elements of parametric grid '//TRIM(IntToText(indxGrid))//' for aquifer parameters!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Error in allocating memory for the nodes and/or elements of parametric grid '//TRIM(IntToText(indxGrid))//' for aquifer parameters!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -247,7 +259,7 @@ CONTAINS
                 MessageArray(1) = 'Parametric elements should be entered sequentially!'
                 MessageArray(2) = 'Expected element number = '//TRIM(IntToText(indxParamElem))
                 MessageArray(3) = 'Entered element number  = '//TRIM(IntToText(DummyIntArray(1)))
-                CALL SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -265,7 +277,7 @@ CONTAINS
                 MessageArray(2) = 'Parametric grid      = '//TRIM(IntToText(indxGrid))
                 MessageArray(3) = 'Expected node number = '//TRIM(IntToText(indxParamNode))
                 MessageArray(4) = 'Entered node number  = '//TRIM(IntToText(INT(DummyRealArray(1))))
-                CALL SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -295,7 +307,7 @@ CONTAINS
             IF (ConvexNode .NE. 0) THEN
                 MessageArray(1) = 'Parametric element '//TRIM(IntToText(indxParamElem))//' in parametric grid '//TRIM(IntToText(indxGrid))
                 MessageArray(2) = 'is not convex (has an angle greater than 180 degrees) at node '//TRIM(IntToText(ConvexNode+indxNodeStart-1))//'!'
-                CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -313,7 +325,7 @@ CONTAINS
             CALL InterpolateParametricGrid( XP , YP , ParamValues(iNode,:,:) , Stat)
             IF (Stat .EQ. .FALSE.) THEN
                 ID = FeatureIDs(iNode)
-                CALL SetLastMessage('FE node/element ' // TRIM(IntTotext(ID)) // ' cannot be located in parametric grid number ' // TRIM(IntToText(indxGrid)) // ' for ' // TRIM(cDescription) // '!',f_iFatal,Thisprocedure)
+                CALL ModuleLogger%SetLastMessage('FE node/element ' // TRIM(IntTotext(ID)) // ' cannot be located in parametric grid number ' // TRIM(IntToText(indxGrid)) // ' for ' // TRIM(cDescription) // '!',f_iFatal,Thisprocedure)
                 iStat = -1
                 RETURN
             END IF
@@ -485,7 +497,7 @@ CONTAINS
                 IF (ID .NE. 0) THEN
                     iLoc = LocateInList(ID,iFeatureIDs)
                     IF (iLoc .EQ. 0) THEN
-                        CALL SetLastMessage(cNodeOrElem // ' ID number ' // TRIM(IntToText(ID)) // ', listed in parametric grid number '// TRIM(IntToText(iParamGridNo)) // ' for ' // TRIM(cDescriptor) // ', is not in the model!',f_iFatal,ThisProcedure)
+                        CALL ModuleLogger%SetLastMessage(cNodeOrElem // ' ID number ' // TRIM(IntToText(ID)) // ', listed in parametric grid number '// TRIM(IntToText(iParamGridNo)) // ' for ' // TRIM(cDescriptor) // ', is not in the model!',f_iFatal,ThisProcedure)
                         iStat = -1
                         RETURN
                     END IF
@@ -500,7 +512,7 @@ CONTAINS
                     IF (iLoc .EQ. 0) THEN
                         !Allow the user to use dash even when location IDs are skipping numbers, as long as ID number is in-between the smallest and largest ID number
                         IF (ID.LT.iFeatureIDs_Min  .OR.  ID.GT.iFeatureIDs_Max) THEN
-                            CALL SetLastMessage(cNodeOrElem // ' ID number ' // TRIM(IntToText(ID)) // ', listed in parametric grid number '// TRIM(IntToText(iParamGridNo)) // ' for ' // TRIM(cDescriptor) // ', is not in the model!',f_iFatal,ThisProcedure)
+                            CALL ModuleLogger%SetLastMessage(cNodeOrElem // ' ID number ' // TRIM(IntToText(ID)) // ', listed in parametric grid number '// TRIM(IntToText(iParamGridNo)) // ' for ' // TRIM(cDescriptor) // ', is not in the model!',f_iFatal,ThisProcedure)
                             iStat = -1
                             RETURN
                         END IF

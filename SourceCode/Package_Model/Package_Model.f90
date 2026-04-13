@@ -96,6 +96,10 @@ MODULE Package_Model
   USE Class_ZBudgetHeader         , ONLY: ZBudgetHeader_SetModuleLogger
   USE Class_ZoneList              , ONLY: ZoneList_SetModuleLogger
   USE Package_Supply              , ONLY: Supply_SetModuleLogger
+  USE Package_AppUnsatZone        , ONLY: AppUnsatZone_SetModuleLogger
+  USE ParametricGrid              , ONLY: ParametricGrid_SetModuleLogger
+  USE Opening_screen              , ONLY: OpeningScreen_SetModuleLogger
+  USE Package_Matrix              , ONLY: Matrix_SetModuleLogger
   USE Class_GWZBudget             , ONLY: GWZBudget_SetModuleLogger
   USE WSA_ANN                     , ONLY: WSA_ANN_SetModuleLogger
   USE Package_Misc                , ONLY: FlowDestinationType                         , &
@@ -979,6 +983,10 @@ CONTAINS
     CALL Supply_SetModuleLogger(DefaultLogger)
     CALL GWZBudget_SetModuleLogger(DefaultLogger)
     CALL WSA_ANN_SetModuleLogger(DefaultLogger)
+    CALL AppUnsatZone_SetModuleLogger(DefaultLogger)
+    CALL ParametricGrid_SetModuleLogger(DefaultLogger)
+    CALL OpeningScreen_SetModuleLogger(DefaultLogger)
+    CALL Matrix_SetModuleLogger(DefaultLogger)
 
     !Matrix data
     CALL Model%Matrix%SetLogger(DefaultLogger)
@@ -1129,6 +1137,10 @@ CONTAINS
     CALL Supply_SetModuleLogger(DefaultLogger)
     CALL GWZBudget_SetModuleLogger(DefaultLogger)
     CALL WSA_ANN_SetModuleLogger(DefaultLogger)
+    CALL AppUnsatZone_SetModuleLogger(DefaultLogger)
+    CALL ParametricGrid_SetModuleLogger(DefaultLogger)
+    CALL OpeningScreen_SetModuleLogger(DefaultLogger)
+    CALL Matrix_SetModuleLogger(DefaultLogger)
 
     !Solution scheme control data
     CALL Model%Matrix%SetSolver(MSOLVE,0.01d0*Model%Convergence%Tolerance,Model%Convergence%IterMax,RELAX,iStat)  ;  iF (iStat .EQ. -1) RETURN
@@ -1531,6 +1543,10 @@ CONTAINS
     CALL Supply_SetModuleLogger(DefaultLogger)
     CALL GWZBudget_SetModuleLogger(DefaultLogger)
     CALL WSA_ANN_SetModuleLogger(DefaultLogger)
+    CALL AppUnsatZone_SetModuleLogger(DefaultLogger)
+    CALL ParametricGrid_SetModuleLogger(DefaultLogger)
+    CALL OpeningScreen_SetModuleLogger(DefaultLogger)
+    CALL Matrix_SetModuleLogger(DefaultLogger)
 
     !Solution scheme control data
     CALL Model%Matrix%SetSolver(MSOLVE,0.01d0*Model%Convergence%Tolerance,Model%Convergence%IterMax,RELAX,iStat)  ;  IF (iStat .EQ. -1) RETURN
@@ -1920,6 +1936,10 @@ CONTAINS
     CALL Supply_SetModuleLogger(DefaultLogger)
     CALL GWZBudget_SetModuleLogger(DefaultLogger)
     CALL WSA_ANN_SetModuleLogger(DefaultLogger)
+    CALL AppUnsatZone_SetModuleLogger(DefaultLogger)
+    CALL ParametricGrid_SetModuleLogger(DefaultLogger)
+    CALL OpeningScreen_SetModuleLogger(DefaultLogger)
+    CALL Matrix_SetModuleLogger(DefaultLogger)
 
     !Solution scheme control data
     Model%Convergence%Tolerance = Toler

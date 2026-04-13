@@ -23,10 +23,9 @@
 MODULE Package_AppUnsatZone
   !$ USE OMP_LIB
   USE IWFM_Kernel_Version    , ONLY: IWFMKernelVersion
-  USE MessageLogger          , ONLY: SetLastMessage                , &
-                                     EchoProgress                  , &
+  USE MessageLogger          , ONLY: MessageLoggerType             , &
                                      MessageArray                  , &
-                                     f_iFatal                        
+                                     f_iFatal
   USE GeneralUtilities       , ONLY: StripTextUntilCharacter       , &
                                      IntToText                     , &
                                      ArrangeText                   , &
@@ -89,7 +88,8 @@ MODULE Package_AppUnsatZone
   PRIVATE
   PUBLIC :: AppUnsatZoneType          , &
             f_iBudgetType_UnsatZone   , &
-            f_iZBudgetType_UnsatZone
+            f_iZBudgetType_UnsatZone  , &
+            AppUnsatZone_SetModuleLogger
   
   
   ! -------------------------------------------------------------
@@ -185,13 +185,24 @@ MODULE Package_AppUnsatZone
   ! -------------------------------------------------------------
   INTEGER,PARAMETER                   :: ModNameLen  = 22
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName     = 'Package_AppUnsatZone::'
+  TYPE(MessageLoggerType),POINTER,PRIVATE :: ModuleLogger => NULL()
 
 
   
 CONTAINS
-    
-    
-    
+
+
+  ! -------------------------------------------------------------
+  ! --- SET MODULE LOGGER
+  ! -------------------------------------------------------------
+  SUBROUTINE AppUnsatZone_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType),TARGET,INTENT(IN) :: Logger
+
+    ModuleLogger => Logger
+
+  END SUBROUTINE AppUnsatZone_SetModuleLogger
+
+
 
 ! ******************************************************************
 ! ******************************************************************
@@ -233,7 +244,7 @@ CONTAINS
     IF (cFileName .EQ. '') RETURN
     
     !Inform user
-    CALL EchoProgress('Instantiating unsaturated zone component...')
+    CALL ModuleLogger%EchoProgress('Instantiating unsaturated zone component...')
     
     !Initialize
     NElements   = AppGrid%NElements
@@ -295,7 +306,7 @@ CONTAINS
         END IF
         IF (iStat .EQ. -1) RETURN
         IF (AppUnsatZone%FinSimResultsFile%iGetFileType() .NE. f_iTXT) THEN
-            CALL SetLastMessage('End-of-simulation unsaturated zone moisture output file must be a text file!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('End-of-simulation unsaturated zone moisture output file must be a text file!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -308,7 +319,7 @@ CONTAINS
               AppUnsatZone%RegionalStorage_P(NSubregions+1),  &
               STAT=ErrorCode ,ERRMSG=cErrorMsg             )
     IF (ErrorCode .NE. 0) THEN
-        CALL SetLastMessage('Error allocating memory for unsaturated zone component!'//NEW_LINE('x')//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage('Error allocating memory for unsaturated zone component!'//NEW_LINE('x')//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -432,7 +443,7 @@ CONTAINS
               Header%ASCIIOutput%cColumnTitles(3)                                  , &
               STAT = ErrorCode                                                     )
     IF (ErrorCode .NE. 0) THEN
-        CALL SetLastMessage('Error allocating memory for unsaturated zone Z-Budget file!',f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage('Error allocating memory for unsaturated zone Z-Budget file!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -735,14 +746,14 @@ CONTAINS
             
             !Make sure element is modeled
             IF (iElem .EQ. 0) THEN
-                CALL SetLastMessage('Element '//TRIM(IntToText(ID))//' listed for unsaturated zone initial conditions is not in the model!',f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage('Element '//TRIM(IntToText(ID))//' listed for unsaturated zone initial conditions is not in the model!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
             
             !Make sure same element is not listed more than once
             IF (lProcessed(iElem)) THEN
-                CALL SetLastMessage('Element '//TRIM(IntToText(ID))//' specified for unsaturated zone initail conditions is listed more than once!',f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage('Element '//TRIM(IntToText(ID))//' specified for unsaturated zone initail conditions is listed more than once!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -762,7 +773,7 @@ CONTAINS
                 MessageArray(2) = ' is larger than the total porosity!'
                 WRITE(MessageArray(3),'(A27,F8.6)') 'Total porosity           = ',UnsatElems(indxLayer,indxElem)%TotalPorosity
                 WRITE(MessageArray(4),'(A27,F8.6)') 'Initial moisture content = ',UnsatElems(indxLayer,indxElem)%SoilM
-                CALL SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -813,7 +824,7 @@ CONTAINS
     !Make sure time units are valid if time tracking simulation
     IF (TimeStep%TrackTime) THEN
         IF (IsTimeIntervalValid(VarTimeUnit) .EQ. 0) THEN
-            CALL SetLastMessage('Time unit for unsaturated zone hydraulic conductivity is not valid!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Time unit for unsaturated zone hydraulic conductivity is not valid!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -829,14 +840,14 @@ CONTAINS
             ID = INT(rDummyArray(1))
             CALL ConvertID_To_Index(ID,iElemIDs,iElem)
             IF (iElem .EQ. 0) THEN 
-                CALL SetLastMessage('Element '//TRIM(IntToText(ID))//' listed for unsaturated zone parameters is not in the model!',f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage('Element '//TRIM(IntToText(ID))//' listed for unsaturated zone parameters is not in the model!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
             
             !Make sure same element is not specified more than once
             IF (lProcessed(iElem)) THEN
-                CALL SetLastMessage('Element '//TRIM(IntToText(ID))//' specified for unsatuarted zone parameters is listed more than once!',f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage('Element '//TRIM(IntToText(ID))//' specified for unsatuarted zone parameters is listed more than once!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -891,7 +902,7 @@ CONTAINS
             IF (UnsatElems(indxLayer,indxElem)%TotalPorosity .LE. 0.0) THEN
                 MessageArray(1) = 'Unsaturated zone porosity becomes less than zero'
                 WRITE (MessageArray(2),'(A,F9.3,A)') 'at element '//TRIM(IntToText(iElemIDs(indxElem)))//', layer '//TRIM(IntToText(indxLayer))//' (',UnsatElems(indxLayer,indxElem)%TotalPorosity,')'
-                CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -900,7 +911,7 @@ CONTAINS
             IF (.NOT. ANY(UnsatElems(indxLayer,indxElem)%KunsatMethod.EQ.f_iKunsatMethodList)) THEN
                 MessageArray(1) = 'Method to compute unsaturated hydraulic conductivity for unsaturated'
                 MessageArray(2) = 'zone at element '//TRIM(IntToText(iElemIDs(indxElem)))//' and layer '//TRIM(IntToText(indxLayer))//' is not recognized!'
-                CALL SetLastMessage(MessageArray(1:2) ,f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage(MessageArray(1:2) ,f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -1365,7 +1376,7 @@ CONTAINS
     IF (.NOT. AppUnsatZone%lDefined) RETURN
     
     !Inform user
-    CALL EchoProgress('Simulating unsaturated zone...')
+    CALL ModuleLogger%EchoProgress('Simulating unsaturated zone...')
     
     !Initailize
     NUZLayers = AppUnsatZone%NUnsatLayers
@@ -1413,7 +1424,7 @@ CONTAINS
                         MessageArray(1) = 'Convergence error in routing moisture through unsaturated zone at element '//TRIM(IntToText(iElemID))//', layer '//TRIM(IntToText(indxLayer))//'!'
                         WRITE (MessageArray(2),'(A,F11.8)') 'Desired convergence  = ',Toler
                         WRITE (MessageArray(3),'(A,F11.8)') 'Achieved convergence = ',ABS(AchievedConv)
-                        CALL SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+                        CALL ModuleLogger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
                         iStat = -1
                     END IF
                     pUnsatElems(indxLayer,indxElem)%SoilM   = pUnsatElems(indxLayer,indxElem)%SoilM / D  !Convert moisture depth back to moisture content
@@ -1767,7 +1778,7 @@ CONTAINS
     TYPE(ZoneListType)           :: ZoneList
 
     IF (.NOT. ALLOCATED(AppUnsatZone%ZBudgetRawFile)) THEN
-        CALL SetLastMessage('Unsaturated zone zone budget is not part of the model output to retrieve data!',f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage('Unsaturated zone zone budget is not part of the model output to retrieve data!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
