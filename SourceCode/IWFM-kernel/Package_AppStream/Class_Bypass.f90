@@ -21,9 +21,7 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 MODULE Class_Bypass
-  USE MessageLogger                , ONLY: SetLastMessage                          , &
-                                           EchoProgress                            , &
-                                           MessageArray                            , &
+  USE MessageLogger                , ONLY: MessageArray                            , &
                                            MessageLoggerType                       , &
                                            f_iFatal
   USE GeneralUtilities             , ONLY: StripTextUntilCharacter                 , &
@@ -165,7 +163,7 @@ CONTAINS
     IF (ASSOCIATED(ModuleLogger)) THEN
         CALL ModuleLogger%EchoProgress('Instantiating bypasses')
     ELSE
-        CALL EchoProgress('Instantiating bypasses')
+        CALL ModuleLogger%EchoProgress('Instantiating bypasses')
     END IF
 
     !Open file
@@ -179,7 +177,7 @@ CONTAINS
         IF (ASSOCIATED(ModuleLogger)) THEN
             CALL ModuleLogger%SetLastMessage('Error in allocating memory for bypasses!',f_iFatal,ThisProcedure)
         ELSE
-            CALL SetLastMessage('Error in allocating memory for bypasses!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Error in allocating memory for bypasses!',f_iFatal,ThisProcedure)
         END IF
         iStat = -1
         RETURN
@@ -227,7 +225,7 @@ CONTAINS
                 IF (ASSOCIATED(ModuleLogger)) THEN
                     CALL ModuleLogger%SetLastMessage('Bypass ID '//TRIM(IntToText(ID))//' is used more than once!',f_iFatal,ThisProcedure)
                 ELSE
-                    CALL SetLastMessage('Bypass ID '//TRIM(IntToText(ID))//' is used more than once!',f_iFatal,ThisProcedure)
+                    CALL ModuleLogger%SetLastMessage('Bypass ID '//TRIM(IntToText(ID))//' is used more than once!',f_iFatal,ThisProcedure)
                 END IF
                 iStat = -1
                 RETURN
@@ -243,7 +241,7 @@ CONTAINS
                 IF (ASSOCIATED(ModuleLogger)) THEN
                     CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                 ELSE
-                    CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                    CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                 END IF
                 iStat = -1
                 RETURN
@@ -260,7 +258,7 @@ CONTAINS
                 IF (ASSOCIATED(ModuleLogger)) THEN
                     CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                 ELSE
-                    CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                    CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                 END IF
                 iStat = -1
                 RETURN
@@ -272,7 +270,7 @@ CONTAINS
             IF (ASSOCIATED(ModuleLogger)) THEN
                 CALL ModuleLogger%SetLastMessage('Destination type for bypass number '//TRIM(IntToText(ID))//' is not recognized!',f_iFatal,ThisProcedure)
             ELSE
-                CALL SetLastMessage('Destination type for bypass number '//TRIM(IntToText(ID))//' is not recognized!',f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage('Destination type for bypass number '//TRIM(IntToText(ID))//' is not recognized!',f_iFatal,ThisProcedure)
             END IF
             iStat = -1
             RETURN
@@ -286,7 +284,7 @@ CONTAINS
                     IF (ASSOCIATED(ModuleLogger)) THEN
                         CALL ModuleLogger%SetLastMessage('Stream node '//TRIM(IntToText(iDest_ID))//' that receives water from bypass '//TRIM(IntToText(ID))//' is not in the model!',f_iFatal,ThisProcedure)
                     ELSE
-                        CALL SetLastMessage('Stream node '//TRIM(IntToText(iDest_ID))//' that receives water from bypass '//TRIM(IntToText(ID))//' is not in the model!',f_iFatal,ThisProcedure)
+                        CALL ModuleLogger%SetLastMessage('Stream node '//TRIM(IntToText(iDest_ID))//' that receives water from bypass '//TRIM(IntToText(ID))//' is not in the model!',f_iFatal,ThisProcedure)
                     END IF
                     iStat = -1
                     RETURN
@@ -297,7 +295,7 @@ CONTAINS
                     IF (ASSOCIATED(ModuleLogger)) THEN
                         CALL ModuleLogger%SetLastMessage('Lake '//TRIM(IntToText(iDest_ID))//' that receives water from bypass '//TRIM(IntToText(ID))//' is not in the model!',f_iFatal,ThisProcedure)
                     ELSE
-                        CALL SetLastMessage('Lake '//TRIM(IntToText(iDest_ID))//' that receives water from bypass '//TRIM(IntToText(ID))//' is not in the model!',f_iFatal,ThisProcedure)
+                        CALL ModuleLogger%SetLastMessage('Lake '//TRIM(IntToText(iDest_ID))//' that receives water from bypass '//TRIM(IntToText(ID))//' is not in the model!',f_iFatal,ThisProcedure)
                     END IF
                     iStat = -1
                     RETURN
@@ -316,7 +314,7 @@ CONTAINS
                         IF (ASSOCIATED(ModuleLogger)) THEN
                             CALL ModuleLogger%SetLastMessage('Exporting stream node for by-pass '//TRIM(IntToText(ID))//' must be upstream from the receiving node!',f_iFatal,ThisProcedure)
                         ELSE
-                            CALL SetLastMessage('Exporting stream node for by-pass '//TRIM(IntToText(ID))//' must be upstream from the receiving node!',f_iFatal,ThisProcedure)
+                            CALL ModuleLogger%SetLastMessage('Exporting stream node for by-pass '//TRIM(IntToText(ID))//' must be upstream from the receiving node!',f_iFatal,ThisProcedure)
                         END IF
                         iStat = -1
                         RETURN
@@ -330,7 +328,7 @@ CONTAINS
                         IF (ASSOCIATED(ModuleLogger)) THEN
                             CALL ModuleLogger%SetLastMessage('Exporting stream node for by-pass '//TRIM(IntToText(ID))//' must be upstream from the receiving node!',f_iFatal,ThisProcedure)
                         ELSE
-                            CALL SetLastMessage('Exporting stream node for by-pass '//TRIM(IntToText(ID))//' must be upstream from the receiving node!',f_iFatal,ThisProcedure)
+                            CALL ModuleLogger%SetLastMessage('Exporting stream node for by-pass '//TRIM(IntToText(ID))//' must be upstream from the receiving node!',f_iFatal,ThisProcedure)
                         END IF
                         iStat = -1
                         RETURN
@@ -348,7 +346,7 @@ CONTAINS
                     IF (ASSOCIATED(ModuleLogger)) THEN
                         CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                     ELSE
-                        CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                        CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                     END IF
                     iStat = -1
                     RETURN
@@ -362,7 +360,7 @@ CONTAINS
                 IF (ASSOCIATED(ModuleLogger)) THEN
                     CALL ModuleLogger%SetLastMessage('There should be at least 2 rating table points for bypass '//TRIM(IntToText(ID))//'!',f_iFatal,ThisProcedure)
                 ELSE
-                    CALL SetLastMessage('There should be at least 2 rating table points for bypass '//TRIM(IntToText(ID))//'!',f_iFatal,ThisProcedure)
+                    CALL ModuleLogger%SetLastMessage('There should be at least 2 rating table points for bypass '//TRIM(IntToText(ID))//'!',f_iFatal,ThisProcedure)
                 END IF
                 iStat = -1
                 RETURN

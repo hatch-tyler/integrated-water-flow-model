@@ -22,8 +22,6 @@
 !***********************************************************************
 MODULE Class_NativeRiparianLandUse_v50
   USE MessageLogger           , ONLY: MessageLoggerType             , &
-                                      SetLastMessage                , &
-                                      EchoProgress                  , &
                                       MessageArray                  , &
                                       f_iFatal
   USE IOInterface
@@ -185,7 +183,7 @@ CONTAINS
               NVRVLand%RegionETPot_RV(NSubregions)     , &
               STAT=ErrorCode                           )
     IF (ErrorCode+iStat1+iStat .NE. 0) THEN
-        CALL SetLastMessage('Error in allocating memory for native/riparian vegetation data!',f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage('Error in allocating memory for native/riparian vegetation data!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -223,7 +221,7 @@ CONTAINS
             iRegion = INT(DummyArray(indxRegion,1))
             IF (lProcessed(iRegion)) THEN
                 ID = iSubregionIDs(iRegion)
-                CALL SetLastMessage('curve numbers for native and riparian vegetation at subregion '//TRIM(IntToText(ID))//' are defined more than once!',f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage('curve numbers for native and riparian vegetation at subregion '//TRIM(IntToText(ID))//' are defined more than once!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -239,7 +237,7 @@ CONTAINS
             iRegion = IntDummyArray(indxRegion,1)
             IF (lProcessed(iRegion)) THEN
                 ID = iSubregionIDs(iRegion)
-                CALL SetLastMessage('evapotranspiration column pointers for native and riparian vegetation at subregion '//TRIM(IntToText(ID))//' are defined more than once!',f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage('evapotranspiration column pointers for native and riparian vegetation at subregion '//TRIM(IntToText(ID))//' are defined more than once!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -254,7 +252,7 @@ CONTAINS
             MAXVAL(DummyArray(:,2:)) .GT. 1.0         ) THEN
           MessageArray(1) = 'Some or all initial root zone moisture contents are less than'
           MessageArray(2) = '0.0 or greater than 1.0 for native and riparian vegetation areas!'
-          CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)  
+          CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)  
           iStat = -1
           RETURN
         END IF
@@ -263,7 +261,7 @@ CONTAINS
             iRegion = INT(DummyArray(indxRegion,1))
             IF (lProcessed(iRegion)) THEN
                 ID = iSubregionIDs(iRegion)
-                CALL SetLastMessage('initial conditions for native and riparian vegetation at subregion '//TRIM(IntToText(ID))//' are defined more than once!',f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage('initial conditions for native and riparian vegetation at subregion '//TRIM(IntToText(ID))//' are defined more than once!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -510,7 +508,7 @@ CONTAINS
     IF (ASSOCIATED(ModuleLogger)) THEN
         CALL ModuleLogger%EchoProgress('Reading time series data for native and riparian vegitation lands')
     ELSE
-        CALL EchoProgress('Reading time series data for native and riparian vegitation lands')
+        CALL ModuleLogger%EchoProgress('Reading time series data for native and riparian vegitation lands')
     END IF
     
     !Land use areas
@@ -631,7 +629,7 @@ CONTAINS
     IF (ASSOCIATED(ModuleLogger)) THEN
         CALL ModuleLogger%EchoProgress('Simulating flows at native and riparian vegetation lands')
     ELSE
-        CALL EchoProgress('Simulating flows at native and riparian vegetation lands')
+        CALL ModuleLogger%EchoProgress('Simulating flows at native and riparian vegetation lands')
     END IF
     
     ASSOCIATE (pNV => NVRVLand%NativeVeg      , &
@@ -720,7 +718,7 @@ CONTAINS
                       IF (ASSOCIATED(ModuleLogger)) THEN
                           CALL ModuleLogger%SetLastMessage(MessageArray(1:5),f_iFatal,ThisProcedure)
                       ELSE
-                          CALL SetLastMessage(MessageArray(1:5),f_iFatal,ThisProcedure)
+                          CALL ModuleLogger%SetLastMessage(MessageArray(1:5),f_iFatal,ThisProcedure)
                       END IF
                       iStat = -1
                       RETURN
@@ -762,7 +760,7 @@ CONTAINS
                       IF (ASSOCIATED(ModuleLogger)) THEN
                           CALL ModuleLogger%SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
                       ELSE
-                          CALL SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
+                          CALL ModuleLogger%SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
                       END IF
                       iStat = -1
                       RETURN
@@ -811,7 +809,7 @@ CONTAINS
                       IF (ASSOCIATED(ModuleLogger)) THEN
                           CALL ModuleLogger%SetLastMessage(MessageArray(1:5),f_iFatal,ThisProcedure)
                       ELSE
-                          CALL SetLastMessage(MessageArray(1:5),f_iFatal,ThisProcedure)
+                          CALL ModuleLogger%SetLastMessage(MessageArray(1:5),f_iFatal,ThisProcedure)
                       END IF
                       iStat = -1
                       RETURN
@@ -853,7 +851,7 @@ CONTAINS
                       IF (ASSOCIATED(ModuleLogger)) THEN
                           CALL ModuleLogger%SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
                       ELSE
-                          CALL SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
+                          CALL ModuleLogger%SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
                       END IF
                       iStat = -1
                       RETURN
@@ -914,7 +912,7 @@ CONTAINS
                     IF (ASSOCIATED(ModuleLogger)) THEN
                         CALL ModuleLogger%SetLastMessage('Initial moisture content for native vegetation with soil type ' // TRIM(IntToText(indxSoil)) // ' at subregion ' // TRIM(IntToText(iSubregionIDs(indxRegion))) // ' is greater than total porosity!',f_iFatal,ThisProcedure)
                     ELSE
-                        CALL SetLastMessage('Initial moisture content for native vegetation with soil type ' // TRIM(IntToText(indxSoil)) // ' at subregion ' // TRIM(IntToText(iSubregionIDs(indxRegion))) // ' is greater than total porosity!',f_iFatal,ThisProcedure)
+                        CALL ModuleLogger%SetLastMessage('Initial moisture content for native vegetation with soil type ' // TRIM(IntToText(indxSoil)) // ' at subregion ' // TRIM(IntToText(iSubregionIDs(indxRegion))) // ' is greater than total porosity!',f_iFatal,ThisProcedure)
                     END IF
                     iStat = -1
                     RETURN
@@ -923,7 +921,7 @@ CONTAINS
                     IF (ASSOCIATED(ModuleLogger)) THEN
                         CALL ModuleLogger%SetLastMessage('Initial moisture content for riparian vegetation with soil type ' // TRIM(IntToText(indxSoil)) // ' at subregion ' // TRIM(IntToText(iSubregionIDs(indxRegion))) // ' is greater than total porosity!',f_iFatal,ThisProcedure)
                     ELSE
-                        CALL SetLastMessage('Initial moisture content for riparian vegetation with soil type ' // TRIM(IntToText(indxSoil)) // ' at subregion ' // TRIM(IntToText(iSubregionIDs(indxRegion))) // ' is greater than total porosity!',f_iFatal,ThisProcedure)
+                        CALL ModuleLogger%SetLastMessage('Initial moisture content for riparian vegetation with soil type ' // TRIM(IntToText(indxSoil)) // ' at subregion ' // TRIM(IntToText(iSubregionIDs(indxRegion))) // ' is greater than total porosity!',f_iFatal,ThisProcedure)
                     END IF
                     iStat = -1
                     RETURN

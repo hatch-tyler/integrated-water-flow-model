@@ -21,8 +21,7 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 MODULE Class_LossDestination
-  USE MessageLogger     , ONLY: SetLastMessage     , &
-                                MessageArray       , &
+  USE MessageLogger     , ONLY: MessageArray       , &
                                 MessageLoggerType  , &
                                 f_iFatal
   USE GeneralUtilities
@@ -132,7 +131,7 @@ CONTAINS
             IF (ASSOCIATED(ModuleLogger)) THEN
                 CALL ModuleLogger%SetLastMessage(TRIM(cBypassOrDiver)//' ID '//TRIM(IntToText(ID))//' listed for '//TRIM(cDestDescription)//' is not in the model!',f_iFatal,ThisProcedure)
             ELSE
-                CALL SetLastMessage(TRIM(cBypassOrDiver)//' ID '//TRIM(IntToText(ID))//' listed for '//TRIM(cDestDescription)//' is not in the model!',f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage(TRIM(cBypassOrDiver)//' ID '//TRIM(IntToText(ID))//' listed for '//TRIM(cDestDescription)//' is not in the model!',f_iFatal,ThisProcedure)
             END IF
             iStat = -1
             RETURN
@@ -143,7 +142,7 @@ CONTAINS
             IF (ASSOCIATED(ModuleLogger)) THEN
                 CALL ModuleLogger%SetLastMessage(TRIM(cBypassOrDiver)//' ID '//TRIM(IntToText(ID))//' is used more than once for '//TRIM(cDestDescription)//' description!',f_iFatal,ThisProcedure)
             ELSE
-                CALL SetLastMessage(TRIM(cBypassOrDiver)//' ID '//TRIM(IntToText(ID))//' is used more than once for '//TRIM(cDestDescription)//' description!',f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage(TRIM(cBypassOrDiver)//' ID '//TRIM(IntToText(ID))//' is used more than once for '//TRIM(cDestDescription)//' description!',f_iFatal,ThisProcedure)
             END IF
             iStat = -1
             RETURN
@@ -164,7 +163,7 @@ CONTAINS
             IF (ASSOCIATED(ModuleLogger)) THEN
                 CALL ModuleLogger%SetLastMessage('Error allocating memory for '//TRIM(cDestDescription)//' for '//TRIM(LowerCase(cBypassOrDiver))//' '//TRIM(IntToText(ID))//'!',f_iFatal,ThisProcedure)
             ELSE
-                CALL SetLastMessage('Error allocating memory for '//TRIM(cDestDescription)//' for '//TRIM(LowerCase(cBypassOrDiver))//' '//TRIM(IntToText(ID))//'!',f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage('Error allocating memory for '//TRIM(cDestDescription)//' for '//TRIM(LowerCase(cBypassOrDiver))//' '//TRIM(IntToText(ID))//'!',f_iFatal,ThisProcedure)
             END IF
             iStat = -1
             RETURN
@@ -190,7 +189,7 @@ CONTAINS
                 IF (ASSOCIATED(ModuleLogger)) THEN
                     CALL ModuleLogger%SetLastMessage('Destination '//TRIM(IntToText(iDestList(indxDest)))//' for '//TRIM(cDestDescription)//' listed for '//TRIM(LowerCase(cBypassOrDiver))//' ID '//TRIM(IntToText(ID))//' is not in the model!',f_iFatal,ThisProcedure)
                 ELSE
-                    CALL SetLastMessage('Destination '//TRIM(IntToText(iDestList(indxDest)))//' for '//TRIM(cDestDescription)//' listed for '//TRIM(LowerCase(cBypassOrDiver))//' ID '//TRIM(IntToText(ID))//' is not in the model!',f_iFatal,ThisProcedure)
+                    CALL ModuleLogger%SetLastMessage('Destination '//TRIM(IntToText(iDestList(indxDest)))//' for '//TRIM(cDestDescription)//' listed for '//TRIM(LowerCase(cBypassOrDiver))//' ID '//TRIM(IntToText(ID))//' is not in the model!',f_iFatal,ThisProcedure)
                 END IF
                 iStat = -1
                 RETURN

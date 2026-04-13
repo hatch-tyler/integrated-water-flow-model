@@ -23,10 +23,7 @@
 MODULE Package_AppStream
   USE IWFM_Kernel_Version         , ONLY: ReadVersion                                      , &
                                           IWFMKernelVersion
-  USE MessageLogger               , ONLY: SetLastMessage                                   , &
-                                          LogMessage                                       , &
-                                          EchoProgress                                     , &
-                                          MessageArray                                     , &
+  USE MessageLogger               , ONLY: MessageArray                                     , &
                                           MessageLoggerType                                , &
                                           f_iFatal                                         , &
                                           f_iInfo                                          , &
@@ -390,7 +387,7 @@ CONTAINS
             AppStream%iComponentVersion = 50
             AppStream%lDefined          = .TRUE.
         CASE DEFAULT
-            CALL SetLastMessage('Stream Component version number is not recognized ('//TRIM(cVersionLocal)//')!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Stream Component version number is not recognized ('//TRIM(cVersionLocal)//')!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
     END SELECT
@@ -399,7 +396,7 @@ CONTAINS
         rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) &
                  - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
         WRITE(cPerfMsg,'(A,F8.3,A)') '    [PERF] Stream Network: ', rPerfSec, ' sec'
-        CALL LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+        CALL ModuleLogger%LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
     END IF
 
   END SUBROUTINE SetStaticComponent
@@ -441,7 +438,7 @@ CONTAINS
         IF (AppStream%lDefined) THEN
             MessageArray(1) = 'For proper simulation of streams, relevant stream data files must'
             MessageArray(2) = 'be specified when stream nodes are defined in Pre-Processor.'
-            CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         ELSE
@@ -471,7 +468,7 @@ CONTAINS
         CASE ('5.0')
             IF (AppStream%iComponentVersion .NE. 50) ErrorCode = 1
         CASE DEFAULT
-            CALL SetLastMessage('Stream Component version number is not recognized ('//TRIM(cVersionSim)//')!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Stream Component version number is not recognized ('//TRIM(cVersionSim)//')!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
     END SELECT
@@ -491,7 +488,7 @@ CONTAINS
         MessageArray(1) = 'Stream Component versions used in Pre-Processor and Simulation must match!'
         MessageArray(2) = 'Version number in Pre-Processor = ' // TRIM(cVersionPre)
         MessageArray(3) = 'Version number in Simulation    = ' // TRIM(cVersionSim)
-        CALL SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -504,7 +501,7 @@ CONTAINS
         rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) &
                  - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
         WRITE(cPerfMsg,'(A,F8.3,A)') '    [PERF] Stream DynInit: ', rPerfSec, ' sec'
-        CALL LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+        CALL ModuleLogger%LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
     END IF
 
   END SUBROUTINE SetDynamicComponent
@@ -570,7 +567,7 @@ CONTAINS
             AppStream%iComponentVersion = 50
             AppStream%lDefined          = .TRUE.
         CASE DEFAULT
-            CALL SetLastMessage('Stream Component version number is not recognized ('//TRIM(IntToText(iVersion))//')!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Stream Component version number is not recognized ('//TRIM(IntToText(iVersion))//')!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
     END SELECT
@@ -656,7 +653,7 @@ CONTAINS
             AppStream%iComponentVersion = 50
             AppStream%lDefined          = .TRUE.
         CASE DEFAULT
-            CALL SetLastMessage('Stream Component version number is not recognized ('//TRIM(IntToText(iVersion))//')!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Stream Component version number is not recognized ('//TRIM(IntToText(iVersion))//')!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
     END SELECT
@@ -665,7 +662,7 @@ CONTAINS
         rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) &
                  - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
         WRITE(cPerfMsg,'(A,F8.3,A)') '    [PERF] Stream AllComponents: ', rPerfSec, ' sec'
-        CALL LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+        CALL ModuleLogger%LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
     END IF
 
   END SUBROUTINE SetAllComponents
@@ -747,7 +744,7 @@ CONTAINS
             AppStream%iComponentVersion = 50
             AppStream%lDefined          = .TRUE.
         CASE DEFAULT
-            CALL SetLastMessage('Stream Component version number is not recognized ('//TRIM(cVersionPre)//')!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Stream Component version number is not recognized ('//TRIM(cVersionPre)//')!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
     END SELECT
@@ -756,7 +753,7 @@ CONTAINS
         rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) &
                  - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
         WRITE(cPerfMsg,'(A,F8.3,A)') '    [PERF] Stream AllComponents: ', rPerfSec, ' sec'
-        CALL LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+        CALL ModuleLogger%LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
     END IF
 
   END SUBROUTINE SetAllComponentsWithoutBinFile
@@ -1036,7 +1033,7 @@ CONTAINS
         IF (ASSOCIATED(ModuleLogger)) THEN
             CALL ModuleLogger%SetLastMessage('Stream hydrographs are not part of model output!',f_iFatal,ThisProcedure)
         ELSE
-            CALL SetLastMessage('Stream hydrographs are not part of model output!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Stream hydrographs are not part of model output!',f_iFatal,ThisProcedure)
         END IF
         iStat = -1
         RETURN
@@ -1240,7 +1237,7 @@ CONTAINS
             IF (ASSOCIATED(ModuleLogger)) THEN
                 CALL ModuleLogger%SetLastMessage('Stream Component version number is not recognized ('//TRIM(cVersion)//')!',f_iFatal,ThisProcedure)
             ELSE
-                CALL SetLastMessage('Stream Component version number is not recognized ('//TRIM(cVersion)//')!',f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage('Stream Component version number is not recognized ('//TRIM(cVersion)//')!',f_iFatal,ThisProcedure)
             END IF
             iStat = -1
             RETURN
@@ -1680,7 +1677,7 @@ CONTAINS
         IF (ASSOCIATED(ModuleLogger)) THEN
             CALL ModuleLogger%SetLastMessage('Streams are not defined to retrieve stream node IDs for a given reach!',f_iFatal,ThisProcedure)
         ELSE
-            CALL SetLastMessage('Streams are not defined to retrieve stream node IDs for a given reach!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Streams are not defined to retrieve stream node IDs for a given reach!',f_iFatal,ThisProcedure)
         END IF
         iStat = -1
     END IF
@@ -1945,7 +1942,7 @@ CONTAINS
                     IF (ASSOCIATED(ModuleLogger)) THEN
                         CALL ModuleLogger%SetLastMessage('Model is instantiated only partially. Stream bottom elevations for Stream Package Component v5.0 cannot be retrieved from a partially instantiated model.',f_iWarn,ThisProcedure)
                     ELSE
-                        CALL SetLastMessage('Model is instantiated only partially. Stream bottom elevations for Stream Package Component v5.0 cannot be retrieved from a partially instantiated model.',f_iWarn,ThisProcedure)
+                        CALL ModuleLogger%SetLastMessage('Model is instantiated only partially. Stream bottom elevations for Stream Package Component v5.0 cannot be retrieved from a partially instantiated model.',f_iWarn,ThisProcedure)
                     END IF
                     BottomElev = 0.0
                     iStat      = -1
@@ -2123,7 +2120,7 @@ CONTAINS
                     IF (ASSOCIATED(ModuleLogger)) THEN
                         CALL ModuleLogger%SetLastMessage('Model is instantiated only partially. Stream stages for Stream Package Component v5.0 cannot be retrieved from a partially instantiated model.',f_iWarn,ThisProcedure)
                     ELSE
-                        CALL SetLastMessage('Model is instantiated only partially. Stream stages for Stream Package Component v5.0 cannot be retrieved from a partially instantiated model.',f_iWarn,ThisProcedure)
+                        CALL ModuleLogger%SetLastMessage('Model is instantiated only partially. Stream stages for Stream Package Component v5.0 cannot be retrieved from a partially instantiated model.',f_iWarn,ThisProcedure)
                     END IF
                     Stages = 0.0
                     iStat  = -1
@@ -2552,7 +2549,7 @@ CONTAINS
             IF (ASSOCIATED(ModuleLogger)) THEN
                 CALL ModuleLogger%SetLastMessage('Stream flows can only be assigned when streams are simulated as non-routed streams!',f_iFatal,ThisProcedure)
             ELSE
-                CALL SetLastMessage('Stream flows can only be assigned when streams are simulated as non-routed streams!',f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage('Stream flows can only be assigned when streams are simulated as non-routed streams!',f_iFatal,ThisProcedure)
             END IF
             iStat = -1
             RETURN
@@ -3000,7 +2997,7 @@ CONTAINS
             IF (ASSOCIATED(ModuleLogger)) THEN
                 CALL ModuleLogger%EchoProgress('Registering stream component with matrix...')
             ELSE
-                CALL EchoProgress('Registering stream component with matrix...')
+                CALL ModuleLogger%EchoProgress('Registering stream component with matrix...')
             END IF
             CALL AppStream%Me%RegisterWithMatrix(Matrix,iStat)
         END IF
@@ -3067,7 +3064,7 @@ CONTAINS
         IF (ASSOCIATED(ModuleLogger)) THEN
             CALL ModuleLogger%SetLastMessage('Streams not not defined to add bypass!',f_iFatal,ThisProcedure)
         ELSE
-            CALL SetLastMessage('Streams not not defined to add bypass!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Streams not not defined to add bypass!',f_iFatal,ThisProcedure)
         END IF
         iStat = -1
     END IF

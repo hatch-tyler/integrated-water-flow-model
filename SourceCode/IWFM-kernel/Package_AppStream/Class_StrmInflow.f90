@@ -27,8 +27,7 @@ MODULE Class_StrmInflow
                                    StripTextUntilCharacter , &
                                    CleanSpecialCharacters
   USE TimeSeriesUtilities  , ONLY: TimeStepType
-  USE MessageLogger        , ONLY: SetLastMessage          , &
-                                   MessageArray            , &
+  USE MessageLogger        , ONLY: MessageArray            , &
                                    MessageLoggerType       , &
                                    f_iFatal
   USE IOInterface          , ONLY: RealTSDataInFileType   
@@ -152,7 +151,7 @@ CONTAINS
               StrmInflow%Inflows(NStrmNodes)           , &
               STAT=ErrorCode                           )
     IF (ErrorCode .NE. 0) THEN
-        CALL SetLastMessage('Error in allocating memory for time series stream inflows!',f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage('Error in allocating memory for time series stream inflows!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -184,7 +183,7 @@ CONTAINS
         END IF
         CALL ConvertID_To_Index(iStrmNodeID,iStrmNodeIDs,StrmInflow%InflowNodes(indx))
         IF (StrmInflow%InflowNodes(indx) .EQ. 0) THEN
-            CALL SetLastMessage('Stream node ID '//TRIM(IntToText(iStrmNodeID))//' listed as receiving stream inflow is not in the model!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Stream node ID '//TRIM(IntToText(iStrmNodeID))//' listed as receiving stream inflow is not in the model!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -456,7 +455,7 @@ CONTAINS
                     IF (ASSOCIATED(ModuleLogger)) THEN
                         CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                     ELSE
-                        CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                        CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                     END IF
                     iStat = -1
                     RETURN

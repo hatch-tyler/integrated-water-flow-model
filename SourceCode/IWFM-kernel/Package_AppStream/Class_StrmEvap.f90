@@ -21,8 +21,7 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 MODULE Class_StrmEvap
-  USE MessageLogger           , ONLY: SetLastMessage                , &
-                                      MessageArray                  , &
+  USE MessageLogger           , ONLY: MessageArray                  , &
                                       MessageLoggerType             , &
                                       f_iFatal
   USE GeneralUtilities        , ONLY: StripTextUntilCharacter       , &
@@ -187,7 +186,7 @@ CONTAINS
             IF (ASSOCIATED(ModuleLogger)) THEN
                 CALL ModuleLogger%SetLastMessage('Stream node ID '//TRIM(IntToText(ID))//' listed for stream surface evaporation data is not in the model!',f_iFatal,ThisProcedure)
             ELSE
-                CALL SetLastMessage('Stream node ID '//TRIM(IntToText(ID))//' listed for stream surface evaporation data is not in the model!',f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage('Stream node ID '//TRIM(IntToText(ID))//' listed for stream surface evaporation data is not in the model!',f_iFatal,ThisProcedure)
             END IF
             iStat = -1
             RETURN
@@ -198,7 +197,7 @@ CONTAINS
             IF (ASSOCIATED(ModuleLogger)) THEN
                 CALL ModuleLogger%SetLastMessage('Stream node ID '//TRIM(IntToText(ID))//' for stream surface evaporation data is listed more than once!',f_iFatal,ThisProcedure)
             ELSE
-                CALL SetLastMessage('Stream node ID '//TRIM(IntToText(ID))//' for stream surface evaporation data is listed more than once!',f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage('Stream node ID '//TRIM(IntToText(ID))//' for stream surface evaporation data is listed more than once!',f_iFatal,ThisProcedure)
             END IF
             iStat = -1
             RETURN
@@ -224,7 +223,7 @@ CONTAINS
         IF (ASSOCIATED(ModuleLogger)) THEN
             CALL ModuleLogger%SetLastMessage('Evapotranspiration rate input data file must be defined to simulate stream evaporation!',f_iFatal,ThisProcedure)
         ELSE
-            CALL SetLastMessage('Evapotranspiration rate input data file must be defined to simulate stream evaporation!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Evapotranspiration rate input data file must be defined to simulate stream evaporation!',f_iFatal,ThisProcedure)
         END IF
         iStat = -1
         RETURN
@@ -241,7 +240,7 @@ CONTAINS
         IF (ASSOCIATED(ModuleLogger)) THEN
             CALL ModuleLogger%SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
         ELSE
-            CALL SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
         END IF
         iStat = -1
         RETURN
@@ -255,7 +254,7 @@ CONTAINS
             IF (ASSOCIATED(ModuleLogger)) THEN
                 CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
             ELSE
-                CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
             END IF
             iStat = -1
             RETURN
@@ -274,7 +273,7 @@ CONTAINS
             IF (ASSOCIATED(ModuleLogger)) THEN
                 CALL ModuleLogger%SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
             ELSE
-                CALL SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
             END IF
             iStat = -1
             RETURN

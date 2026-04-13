@@ -24,8 +24,6 @@ MODULE RootZone_v41
   !$ USE OMP_LIB
   USE IWFM_Kernel_Version             , ONLY: IWFMKernelVersion
   USE MessageLogger                   , ONLY: MessageLoggerType                             , &
-                                              SetLastMessage                                , &
-                                              EchoProgress                                  , &
                                               MessageArray                                  , &
                                               f_iFatal
   USE GeneralUtilities                , ONLY: StripTextUntilCharacter                       , &
@@ -322,7 +320,7 @@ CONTAINS
     IF (cFileName .EQ. '') RETURN
     
     !Print progress
-    CALL EchoProgress('Instantiating root zone')
+    CALL ModuleLogger%EchoProgress('Instantiating root zone')
 
     !Initialize
     cVersionFull             = 'v4.1' // TRIM(IWFMKernelVersion%GetVersion())
@@ -349,7 +347,7 @@ CONTAINS
               RootZone%Flags%lLakeElems(iNElements)                   , &
               STAT=iErrorCode                                         )
     IF (iErrorCode .NE. 0) THEN
-        CALL SetLastMessage('Error in allocating memory for root zone soils data!',f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage('Error in allocating memory for root zone soils data!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -386,7 +384,7 @@ CONTAINS
         CASE (1)
             RootZone%Flags%lComputeETFromGW = .TRUE.
         CASE DEFAULT
-            CALL SetLastMessage('Flag to simulate root water uptake from groundwater is not recognized!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Flag to simulate root water uptake from groundwater is not recognized!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
     END SELECT
@@ -433,7 +431,7 @@ CONTAINS
          cNVRVFile          .EQ. ''           )  THEN
       MessageArray(1) = 'At least one type of land use and related data should '
       MessageArray(2) = 'be specified for the simulation of root zone processes!' 
-      CALL SetLAstMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+      CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
       iStat = -1
       RETURN
     END IF
@@ -459,7 +457,7 @@ CONTAINS
     CALL CleanSpecialCharacters(cALine)
     IF (cALine .EQ. '') THEN
         IF (RootZone%Flags%lNonpondedAg_Defined  .OR.  RootZone%Flags%lPondedAg_Defined  .OR.  RootZone%Flags%lUrban_Defined) THEN
-            CALL SetLastMessage('Missing return flow fractions data file!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Missing return flow fractions data file!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -475,7 +473,7 @@ CONTAINS
     CALL CleanSpecialCharacters(cALine)
     IF (cALine .EQ. '') THEN
         IF (RootZone%Flags%lNonpondedAg_Defined  .OR.  RootZone%Flags%lPondedAg_Defined  .OR.  RootZone%Flags%lUrban_Defined) THEN
-            CALL SetLastMessage('Missing irrigation water re-use factors data file!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Missing irrigation water re-use factors data file!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -491,7 +489,7 @@ CONTAINS
     CALL CleanSpecialCharacters(cALine)
     IF (cALine .EQ. '') THEN
         IF (RootZone%Flags%lNonpondedAg_Defined  .OR.  RootZone%Flags%lPondedAg_Defined) THEN
-            CALL SetLastMessage('Missing irrigation period data file!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Missing irrigation period data file!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -600,14 +598,14 @@ CONTAINS
             !Check if element is in the model
             CALL ConvertID_To_Index(iElemID,iElemIDs,iElem)
             IF (iElem .EQ. 0) THEN
-                CALL SetLastMessage('Element '//TRIM(IntToText(iElemID))//' listed for root zone parameter definitions is not in the model!',f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage('Element '//TRIM(IntToText(iElemID))//' listed for root zone parameter definitions is not in the model!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
             
             !Check if it was defined before
             IF (lProcessed(iElem)) THEN
-                CALL SetLastMessage('Element '//TRIM(IntToText(iElemID))//' is listed more than once for root zone parameter definitions!',f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage('Element '//TRIM(IntToText(iElemID))//' is listed more than once for root zone parameter definitions!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -643,7 +641,7 @@ CONTAINS
                     pDestType .NE. f_iFlowDest_StrmNode   .AND.   &
                     pDestType .NE. f_iFlowDest_Lake       .AND.   &
                     pDestType .NE. f_iFlowDest_GWElement       )  THEN
-                    CALL SetLastMessage ('Surface flow destination type for element ' // TRIM(IntToText(iElemID)) // ' is not recognized!',f_iFatal,ThisProcedure)
+                    CALL ModuleLogger%SetLastMessage('Surface flow destination type for element ' // TRIM(IntToText(iElemID)) // ' is not recognized!',f_iFatal,ThisProcedure)
                     iStat = -1
                     RETURN
                 END IF
@@ -654,7 +652,7 @@ CONTAINS
                         IF (PRESENT(iStrmNodeIDs)) THEN
                             CALL ConvertID_To_Index(iSurfaceFlowDest(iElem),iStrmNodeIDs,iFeatureIndex)
                             IF (iFeatureIndex .EQ. 0) THEN
-                                CALL SetLastMessage('Surface flow from element '//TRIM(IntToText(iElemID))//' flows into a stream node ('//TRIM(IntToText(iSurfaceFlowDest(iElem)))//') that is not in the model!',f_iFatal,ThisProcedure)
+                                CALL ModuleLogger%SetLastMessage('Surface flow from element '//TRIM(IntToText(iElemID))//' flows into a stream node ('//TRIM(IntToText(iSurfaceFlowDest(iElem)))//') that is not in the model!',f_iFatal,ThisProcedure)
                                 iStat = -1
                                 RETURN
                             END IF
@@ -666,7 +664,7 @@ CONTAINS
                     CASE (f_iFlowDest_Element)
                         CALL ConvertID_To_Index(iSurfaceFlowDest(iElem),iElemIDs,iFeatureIndex)
                         IF (iFeatureIndex .EQ. 0) THEN
-                            CALL SetLastMessage('Surface flow from element '//TRIM(IntToText(iElemID))//' goes to an element ('//TRIM(IntToText(iSurfaceFlowDest(iElem)))//') that is not in the model!',f_iFatal,ThisProcedure)
+                            CALL ModuleLogger%SetLastMessage('Surface flow from element '//TRIM(IntToText(iElemID))//' goes to an element ('//TRIM(IntToText(iSurfaceFlowDest(iElem)))//') that is not in the model!',f_iFatal,ThisProcedure)
                             iStat = -1
                             RETURN
                         END IF
@@ -676,7 +674,7 @@ CONTAINS
                         IF (PRESENT(iLakeIDs)) THEN
                             CALL ConvertID_To_Index(iSurfaceFlowDest(iElem),iLakeIDs,iFeatureIndex)
                             IF (iFeatureIndex .EQ. 0) THEN
-                                CALL SetLastMessage('Surface flow from element '//TRIM(IntToText(iElemID))//' flows into a lake ('//TRIM(IntToText(iSurfaceFlowDest(iElem)))//') that is not in the model!',f_iFatal,ThisProcedure)
+                                CALL ModuleLogger%SetLastMessage('Surface flow from element '//TRIM(IntToText(iElemID))//' flows into a lake ('//TRIM(IntToText(iSurfaceFlowDest(iElem)))//') that is not in the model!',f_iFatal,ThisProcedure)
                                 iStat = -1
                                 RETURN
                             END IF
@@ -686,7 +684,7 @@ CONTAINS
                     CASE (f_iFlowDest_Subregion)
                         CALL ConvertID_To_Index(iSurfaceFlowDest(iElem),iSubregionIDs,iFeatureIndex)
                         IF (iFeatureIndex .EQ. 0) THEN
-                            CALL SetLastMessage('Surface flow from element '//TRIM(IntToText(iElemID))//' goes to a subregion ('//TRIM(IntToText(iSurfaceFlowDest(iElem)))//') that is not in the model!',f_iFatal,ThisProcedure)
+                            CALL ModuleLogger%SetLastMessage('Surface flow from element '//TRIM(IntToText(iElemID))//' goes to a subregion ('//TRIM(IntToText(iSurfaceFlowDest(iElem)))//') that is not in the model!',f_iFatal,ThisProcedure)
                             iStat = -1
                             RETURN
                         END IF
@@ -702,33 +700,33 @@ CONTAINS
 
             !Make sure hydraulic conductivity is greater than zero
             IF (pSoilsData(iElem)%HydCond .LT. 0.0) THEN
-                CALL SetLastMessage('Root zone hydraulic conductivity at element '//TRIM(IntToText(iElemID))//' is less than zero!',f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage('Root zone hydraulic conductivity at element '//TRIM(IntToText(iElemID))//' is less than zero!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
             IF (RootZone%HydCondPonded(iElem) .LT. 0.0) THEN
-                CALL SetLastMessage('Root zone hydraulic conductivity for ponded crops at element '//TRIM(IntToText(iElemID))//' is less than zero!',f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage('Root zone hydraulic conductivity for ponded crops at element '//TRIM(IntToText(iElemID))//' is less than zero!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
             
             !Method to compute Kunsat must be recognized
             IF (LocateInList(pSoilsData(iElem)%KunsatMethod,f_iKunsatMethodList) .LT. 1) THEN
-                CALL SetLastMessage('Method to compute unsaturated hydraulic conductivity at element '//TRIM(IntToText(iElemID))//' is not recognized!',f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage('Method to compute unsaturated hydraulic conductivity at element '//TRIM(IntToText(iElemID))//' is not recognized!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
 
             !Wilting point should be less than field capacity
             IF (pSoilsData(iElem)%WiltingPoint .GE. pSoilsData(iElem)%FieldCapacity) THEN
-                CALL SetLastMessage('At element ' // TRIM(IntToText(iElemID)) // ' wilting point is greater than or equal to field capacity!',f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage('At element ' // TRIM(IntToText(iElemID)) // ' wilting point is greater than or equal to field capacity!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
         
             !Field capacity should be less than or equal to total porosity
             IF (pSoilsData(iElem)%FieldCapacity .GT. pSoilsData(iElem)%TotalPorosity) THEN
-                CALL SetLastMessage('At element ' // TRIM(IntToText(iElemID)) // ' field capacity is greater than total porosity!',f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage('At element ' // TRIM(IntToText(iElemID)) // ' field capacity is greater than total porosity!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -781,7 +779,7 @@ CONTAINS
         !Are pointers defined without a defined ag water demand file?
         IF (cAgWaterDemandFile .EQ. '' ) THEN
             IF (RootZone%Flags%lReadNonPondedAgWaterDemand  .OR. RootZone%Flags%lReadPondedAgWaterDemand) THEN 
-                CALL SetLastMessage('Data columns from agricultural water supply requirement file is referenced but this file is not specified!',f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage('Data columns from agricultural water supply requirement file is referenced but this file is not specified!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -1167,7 +1165,7 @@ CONTAINS
                 IF (ASSOCIATED(ModuleLogger)) THEN
                     CALL ModuleLogger%SetLastMessage('Non-ponded-crop-specific Land & Water Use Budget cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
                 ELSE
-                    CALL SetLastMessage('Non-ponded-crop-specific Land & Water Use Budget cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
+                    CALL ModuleLogger%SetLastMessage('Non-ponded-crop-specific Land & Water Use Budget cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
                 END IF
                 iStat = -1
                 RETURN
@@ -1175,7 +1173,7 @@ CONTAINS
                 IF (ASSOCIATED(ModuleLogger)) THEN
                     CALL ModuleLogger%SetLastMessage('Land & Water Use Budget for rice cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
                 ELSE
-                    CALL SetLastMessage('Land & Water Use Budget for rice cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
+                    CALL ModuleLogger%SetLastMessage('Land & Water Use Budget for rice cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
                 END IF
                 iStat = -1
                 RETURN
@@ -1183,7 +1181,7 @@ CONTAINS
                 IF (ASSOCIATED(ModuleLogger)) THEN
                     CALL ModuleLogger%SetLastMessage('Land & Water Use Budget for refuges cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
                 ELSE
-                    CALL SetLastMessage('Land & Water Use Budget for refuges cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
+                    CALL ModuleLogger%SetLastMessage('Land & Water Use Budget for refuges cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
                 END IF
                 iStat = -1
                 RETURN
@@ -1191,7 +1189,7 @@ CONTAINS
                 IF (ASSOCIATED(ModuleLogger)) THEN
                     CALL ModuleLogger%SetLastMessage('Land & Water Use Budget does not exist for native and riparian vegetation!',f_iFatal,ThisProcedure)
                 ELSE
-                    CALL SetLastMessage('Land & Water Use Budget does not exist for native and riparian vegetation!',f_iFatal,ThisProcedure)
+                    CALL ModuleLogger%SetLastMessage('Land & Water Use Budget does not exist for native and riparian vegetation!',f_iFatal,ThisProcedure)
                 END IF
                 iStat = -1
                 RETURN
@@ -1299,7 +1297,7 @@ CONTAINS
                 IF (ASSOCIATED(ModuleLogger)) THEN
                     CALL ModuleLogger%SetLastMessage('Non-ponded-crop-specific Root Zone Budget cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
                 ELSE
-                    CALL SetLastMessage('Non-ponded-crop-specific Root Zone Budget cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
+                    CALL ModuleLogger%SetLastMessage('Non-ponded-crop-specific Root Zone Budget cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
                 END IF
                 iStat = -1
                 RETURN
@@ -1307,7 +1305,7 @@ CONTAINS
                 IF (ASSOCIATED(ModuleLogger)) THEN
                     CALL ModuleLogger%SetLastMessage('Root Zone Budget for rice cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
                 ELSE
-                    CALL SetLastMessage('Root Zone Budget for rice cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
+                    CALL ModuleLogger%SetLastMessage('Root Zone Budget for rice cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
                 END IF
                 iStat = -1
                 RETURN
@@ -1315,7 +1313,7 @@ CONTAINS
                 IF (ASSOCIATED(ModuleLogger)) THEN
                     CALL ModuleLogger%SetLastMessage('Root Zone Budget for refuges cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
                 ELSE
-                    CALL SetLastMessage('Root Zone Budget for refuges cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
+                    CALL ModuleLogger%SetLastMessage('Root Zone Budget for refuges cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
                 END IF
                 iStat = -1
                 RETURN
@@ -1416,7 +1414,7 @@ CONTAINS
                 IF (ASSOCIATED(ModuleLogger)) THEN
                     CALL ModuleLogger%SetLastMessage('Non-ponded-crop-specific Land & Water Use Budget cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
                 ELSE
-                    CALL SetLastMessage('Non-ponded-crop-specific Land & Water Use Budget cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
+                    CALL ModuleLogger%SetLastMessage('Non-ponded-crop-specific Land & Water Use Budget cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
                 END IF
                 iStat = -1
                 RETURN
@@ -1424,7 +1422,7 @@ CONTAINS
                 IF (ASSOCIATED(ModuleLogger)) THEN
                     CALL ModuleLogger%SetLastMessage('Land & Water Use Budget for rice cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
                 ELSE
-                    CALL SetLastMessage('Land & Water Use Budget for rice cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
+                    CALL ModuleLogger%SetLastMessage('Land & Water Use Budget for rice cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
                 END IF
                 iStat = -1
                 RETURN
@@ -1432,7 +1430,7 @@ CONTAINS
                 IF (ASSOCIATED(ModuleLogger)) THEN
                     CALL ModuleLogger%SetLastMessage('Land & Water Use Budget for refuges cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
                 ELSE
-                    CALL SetLastMessage('Land & Water Use Budget for refuges cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
+                    CALL ModuleLogger%SetLastMessage('Land & Water Use Budget for refuges cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
                 END IF
                 iStat = -1
                 RETURN
@@ -1440,7 +1438,7 @@ CONTAINS
                 IF (ASSOCIATED(ModuleLogger)) THEN
                     CALL ModuleLogger%SetLastMessage('Land & Water Use Budget does not exist for native and riparian vegetation!',f_iFatal,ThisProcedure)
                 ELSE
-                    CALL SetLastMessage('Land & Water Use Budget does not exist for native and riparian vegetation!',f_iFatal,ThisProcedure)
+                    CALL ModuleLogger%SetLastMessage('Land & Water Use Budget does not exist for native and riparian vegetation!',f_iFatal,ThisProcedure)
                 END IF
                 iStat = -1
                 RETURN
@@ -1548,7 +1546,7 @@ CONTAINS
                 IF (ASSOCIATED(ModuleLogger)) THEN
                     CALL ModuleLogger%SetLastMessage('Non-ponded-crop-specific Root Zone Budget cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
                 ELSE
-                    CALL SetLastMessage('Non-ponded-crop-specific Root Zone Budget cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
+                    CALL ModuleLogger%SetLastMessage('Non-ponded-crop-specific Root Zone Budget cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
                 END IF
                 iStat = -1
                 RETURN
@@ -1556,7 +1554,7 @@ CONTAINS
                 IF (ASSOCIATED(ModuleLogger)) THEN
                     CALL ModuleLogger%SetLastMessage('Root Zone Budget for rice cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
                 ELSE
-                    CALL SetLastMessage('Root Zone Budget for rice cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
+                    CALL ModuleLogger%SetLastMessage('Root Zone Budget for rice cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
                 END IF
                 iStat = -1
                 RETURN
@@ -1564,7 +1562,7 @@ CONTAINS
                 IF (ASSOCIATED(ModuleLogger)) THEN
                     CALL ModuleLogger%SetLastMessage('Root Zone Budget for refuges cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
                 ELSE
-                    CALL SetLastMessage('Root Zone Budget for refuges cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
+                    CALL ModuleLogger%SetLastMessage('Root Zone Budget for refuges cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
                 END IF
                 iStat = -1
                 RETURN
@@ -2236,7 +2234,7 @@ CONTAINS
         IF (ASSOCIATED(ModuleLogger)) THEN
             CALL ModuleLogger%EchoProgress('Retrieving elemental agricultural water demand')
         ELSE
-            CALL EchoProgress('Retrieving elemental agricultural water demand')
+            CALL ModuleLogger%EchoProgress('Retrieving elemental agricultural water demand')
         END IF
         rDemand = 0.0
         IF (RootZone%Flags%lNonPondedAg_Defined) rDemand = SUM(RootZone%NonPondedAgRootZone%Crops%Demand , DIM=1)
@@ -2245,7 +2243,7 @@ CONTAINS
         IF (ASSOCIATED(ModuleLogger)) THEN
             CALL ModuleLogger%EchoProgress('Retrieving elemental urban water demand')
         ELSE
-            CALL EchoProgress('Retrieving elemental urban water demand')
+            CALL ModuleLogger%EchoProgress('Retrieving elemental urban water demand')
         END IF
         IF (RootZone%Flags%lUrban_Defined) THEN
             rDemand = RootZone%UrbanRootZone%UrbData%Demand(:,1)
@@ -2280,7 +2278,7 @@ CONTAINS
         IF (ASSOCIATED(ModuleLogger)) THEN
             CALL ModuleLogger%EchoProgress('Retrieving agricultural water demand at specified locations...')
         ELSE
-            CALL EchoProgress('Retrieving agricultural water demand at specified locations...')
+            CALL ModuleLogger%EchoProgress('Retrieving agricultural water demand at specified locations...')
         END IF
         !Initialize
         rDemand = 0.0
@@ -2307,7 +2305,7 @@ CONTAINS
                 IF (ASSOCIATED(ModuleLogger)) THEN
                     CALL ModuleLogger%SetLastMessage('Agricultural water demand cannot be retrieved at the specified location type.',f_iFatal,ThisProcedure)
                 ELSE
-                    CALL SetLastMessage('Agricultural water demand cannot be retrieved at the specified location type.',f_iFatal,ThisProcedure)
+                    CALL ModuleLogger%SetLastMessage('Agricultural water demand cannot be retrieved at the specified location type.',f_iFatal,ThisProcedure)
                 END IF
                 iStat = -1
                 RETURN
@@ -2319,7 +2317,7 @@ CONTAINS
         IF (ASSOCIATED(ModuleLogger)) THEN
             CALL ModuleLogger%EchoProgress('Retrieving urban water demand at specified locations...')
         ELSE
-            CALL EchoProgress('Retrieving urban water demand at specified locations...')
+            CALL ModuleLogger%EchoProgress('Retrieving urban water demand at specified locations...')
         END IF
         !Return if no urban area is simulated
         IF (.NOT. RootZone%Flags%lUrban_Defined) THEN
@@ -2342,7 +2340,7 @@ CONTAINS
                 IF (ASSOCIATED(ModuleLogger)) THEN
                     CALL ModuleLogger%SetLastMessage('Urban water demand cannot be retrieved at the specified location type.',f_iFatal,ThisProcedure)
                 ELSE
-                    CALL SetLastMessage('Urban water demand cannot be retrieved at the specified location type.',f_iFatal,ThisProcedure)
+                    CALL ModuleLogger%SetLastMessage('Urban water demand cannot be retrieved at the specified location type.',f_iFatal,ThisProcedure)
                 END IF
                 iStat = -1
                 RETURN
@@ -2428,7 +2426,7 @@ CONTAINS
             IF (ASSOCIATED(ModuleLogger)) THEN
                 CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
             ELSE
-                CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
             END IF
             iStat = -1
     END SELECT
@@ -2918,7 +2916,7 @@ CONTAINS
     IF (ASSOCIATED(ModuleLogger)) THEN
         CALL ModuleLogger%EchoProgress('Setting supply to elements ... ',lAdvance=.FALSE.)
     ELSE
-        CALL EchoProgress('Setting supply to elements ... ',lAdvance=.FALSE.)
+        CALL ModuleLogger%EchoProgress('Setting supply to elements ... ',lAdvance=.FALSE.)
     END IF
 
     !Set supply
@@ -2945,7 +2943,7 @@ CONTAINS
     IF (ASSOCIATED(ModuleLogger)) THEN
         CALL ModuleLogger%EchoProgress('DONE')
     ELSE
-        CALL EchoProgress('DONE')
+        CALL ModuleLogger%EchoProgress('DONE')
     END IF
 
   END SUBROUTINE RootZone_v41_SetSupplyToElem
@@ -3205,7 +3203,7 @@ CONTAINS
                             IF (ASSOCIATED(ModuleLogger)) THEN
                                 CALL ModuleLogger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
                             ELSE
-                                CALL SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+                                CALL ModuleLogger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
                             END IF
                             iStat = -1
                             RETURN
@@ -3224,7 +3222,7 @@ CONTAINS
                         IF (ASSOCIATED(ModuleLogger)) THEN
                             CALL ModuleLogger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
                         ELSE
-                            CALL SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+                            CALL ModuleLogger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
                         END IF
                         iStat = -1
                         RETURN
@@ -3248,7 +3246,7 @@ CONTAINS
                         IF (ASSOCIATED(ModuleLogger)) THEN
                             CALL ModuleLogger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
                         ELSE
-                            CALL SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+                            CALL ModuleLogger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
                         END IF
                         iStat = -1
                         RETURN
@@ -3358,7 +3356,7 @@ CONTAINS
     IF (ASSOCIATED(ModuleLogger)) THEN
         CALL ModuleLogger%EchoProgress('Reading return flow fractions time series data')
     ELSE
-        CALL EchoProgress('Reading return flow fractions time series data')
+        CALL ModuleLogger%EchoProgress('Reading return flow fractions time series data')
     END IF
     
     !Read data
@@ -3389,7 +3387,7 @@ CONTAINS
     IF (ASSOCIATED(ModuleLogger)) THEN
         CALL ModuleLogger%EchoProgress('Reading re-use fractions time series data')
     ELSE
-        CALL EchoProgress('Reading re-use fractions time series data')
+        CALL ModuleLogger%EchoProgress('Reading re-use fractions time series data')
     END IF
     
     !Read data
@@ -3508,7 +3506,7 @@ CONTAINS
     IF (ASSOCIATED(ModuleLogger)) THEN
         CALL ModuleLogger%EchoProgress('Printing results of root zone simulation')
     ELSE
-        CALL EchoProgress('Printing results of root zone simulation')
+        CALL ModuleLogger%EchoProgress('Printing results of root zone simulation')
     END IF
     
     !Initialize
@@ -4015,7 +4013,7 @@ CONTAINS
         IF (ASSOCIATED(ModuleLogger)) THEN
             CALL ModuleLogger%EchoProgress('Computing riparian ET demand from streams...')
         ELSE
-            CALL EchoProgress('Computing riparian ET demand from streams...')
+            CALL ModuleLogger%EchoProgress('Computing riparian ET demand from streams...')
         END IF
         CALL RootZone%NVRVRootZone%ComputeWaterDemand(iNElements                                   , &
                                                       iElemIDs                                     , &
@@ -4033,7 +4031,7 @@ CONTAINS
     IF (ASSOCIATED(ModuleLogger)) THEN
         CALL ModuleLogger%EchoProgress('Computing agricultural water demand...')
     ELSE
-        CALL EchoProgress('Computing agricultural water demand...')
+        CALL ModuleLogger%EchoProgress('Computing agricultural water demand...')
     END IF
 
     !Compute ag water demand (urban water demands are read in as input)
@@ -4118,7 +4116,7 @@ CONTAINS
     IF (ASSOCIATED(ModuleLogger)) THEN
         CALL ModuleLogger%EchoProgress('Computing future water demand')
     ELSE
-        CALL EchoProgress('Computing future water demand')
+        CALL ModuleLogger%EchoProgress('Computing future water demand')
     END IF
     
     !Initialize the working RootZone and TimeStep objects
@@ -4237,7 +4235,7 @@ CONTAINS
                     IF (ASSOCIATED(ModuleLogger)) THEN
                         CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                     ELSE
-                        CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                        CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                     END IF
                     iStat = -1
                     !$OMP END CRITICAL (CRIT_RZ_LAKE)
@@ -4257,7 +4255,7 @@ CONTAINS
                     IF (ASSOCIATED(ModuleLogger)) THEN
                         CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                     ELSE
-                        CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                        CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                     END IF
                     iStat = -1
                     !$OMP END CRITICAL (CRIT_RZ_AGAREA)
@@ -4279,7 +4277,7 @@ CONTAINS
                     IF (ASSOCIATED(ModuleLogger)) THEN
                         CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                     ELSE
-                        CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                        CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                     END IF
                     iStat = -1
                     !$OMP END CRITICAL (CRIT_RZ_URBAREA)
@@ -5948,7 +5946,7 @@ CONTAINS
     IF (ASSOCIATED(ModuleLogger)) THEN
         CALL ModuleLogger%EchoProgress('Resetting water supply to elements')
     ELSE
-        CALL EchoProgress('Resetting water supply to elements')
+        CALL ModuleLogger%EchoProgress('Resetting water supply to elements')
     END IF
     
     ASSOCIATE (pElemSupply => RootZone%ElemSupply)
@@ -5972,7 +5970,7 @@ CONTAINS
     IF (ASSOCIATED(ModuleLogger)) THEN
         CALL ModuleLogger%EchoProgress('Resetting rainfall runoff, return flow and pond drainage from elements')
     ELSE
-        CALL EchoProgress('Resetting rainfall runoff, return flow and pond drainage from elements')
+        CALL ModuleLogger%EchoProgress('Resetting rainfall runoff, return flow and pond drainage from elements')
     END IF
     
     !Zero out surface flows from non-ponded ag
@@ -6502,7 +6500,7 @@ CONTAINS
             IF (ASSOCIATED(ModuleLogger)) THEN
                 CALL ModuleLogger%SetLastMessage('Total land use area is zero at element ' // TRIM(IntToText(ID)) // '!',f_iFatal,ThisProcedure)
             ELSE
-                CALL SetLastMessage('Total land use area is zero at element ' // TRIM(IntToText(ID)) // '!',f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage('Total land use area is zero at element ' // TRIM(IntToText(ID)) // '!',f_iFatal,ThisProcedure)
             END IF
             iStat = -1
             !$OMP END CRITICAL (CRIT_RZ_LUAREA)
@@ -6616,7 +6614,7 @@ CONTAINS
             IF (ASSOCIATED(ModuleLogger)) THEN
                 CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
             ELSE
-                CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
             END IF
             iStat = -1
             RETURN
@@ -6634,7 +6632,7 @@ CONTAINS
                   IF (ASSOCIATED(ModuleLogger)) THEN
                       CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                   ELSE
-                      CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                      CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                   END IF
                   iStat = -1
                   RETURN
@@ -6654,7 +6652,7 @@ CONTAINS
                   IF (ASSOCIATED(ModuleLogger)) THEN
                       CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                   ELSE
-                      CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                      CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                   END IF
                   iStat = -1
                   RETURN
@@ -6671,7 +6669,7 @@ CONTAINS
                   IF (ASSOCIATED(ModuleLogger)) THEN
                       CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                   ELSE
-                      CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                      CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                   END IF
                   iStat = -1
                   RETURN
@@ -6690,7 +6688,7 @@ CONTAINS
                   IF (ASSOCIATED(ModuleLogger)) THEN
                       CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                   ELSE
-                      CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                      CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                   END IF
                   iStat = -1
                   RETURN

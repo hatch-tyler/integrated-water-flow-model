@@ -24,8 +24,6 @@ MODULE Package_RootZone
   USE IWFM_Kernel_Version        , ONLY : ReadVersion                        , &
                                           IWFMKernelVersion
   USE MessageLogger              , ONLY : MessageLoggerType                  , &
-                                          SetLastMessage                     , &
-                                          EchoProgress                       , &
                                           MessageArray                       , &
                                           f_iFatal
   USE TimeSeriesUtilities        , ONLY : TimeStepType                       
@@ -370,7 +368,7 @@ CONTAINS
             IF (ASSOCIATED(ModuleLogger)) THEN
                 CALL ModuleLogger%SetLastMessage('Root Zone Component version number is not recognized ('//TRIM(cVersion)//')!',f_iFatal,ThisProcedure)
             ELSE
-                CALL SetLastMessage('Root Zone Component version number is not recognized ('//TRIM(cVersion)//')!',f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage('Root Zone Component version number is not recognized ('//TRIM(cVersion)//')!',f_iFatal,ThisProcedure)
             END IF
             iStat = -1
             RETURN
@@ -586,7 +584,7 @@ CONTAINS
             IF (ASSOCIATED(ModuleLogger)) THEN
                 CALL ModuleLogger%SetLastMessage('Root Zone Component version number is not recognized ('//TRIM(cVersion)//')!',f_iFatal,ThisProcedure)
             ELSE
-                CALL SetLastMessage('Root Zone Component version number is not recognized ('//TRIM(cVersion)//')!',f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage('Root Zone Component version number is not recognized ('//TRIM(cVersion)//')!',f_iFatal,ThisProcedure)
             END IF
             iStat = -1
             RETURN
@@ -760,7 +758,7 @@ CONTAINS
             IF (ASSOCIATED(ModuleLogger)) THEN
                 CALL ModuleLogger%SetLastMessage('Root Zone Component version number is not recognized ('//TRIM(cVersion)//')!',f_iFatal,ThisProcedure)
             ELSE
-                CALL SetLastMessage('Root Zone Component version number is not recognized ('//TRIM(cVersion)//')!',f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage('Root Zone Component version number is not recognized ('//TRIM(cVersion)//')!',f_iFatal,ThisProcedure)
             END IF
             iStat = -1
             RETURN
@@ -1636,7 +1634,7 @@ CONTAINS
             IF (ASSOCIATED(ModuleLogger)) THEN
                 CALL ModuleLogger%SetLastMessage('Root Zone Component version number is not recognized ('//TRIM(cVersion)//')!',f_iFatal,ThisProcedure)
             ELSE
-                CALL SetLastMessage('Root Zone Component version number is not recognized ('//TRIM(cVersion)//')!',f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage('Root Zone Component version number is not recognized ('//TRIM(cVersion)//')!',f_iFatal,ThisProcedure)
             END IF
             iStat = -1
             RETURN
@@ -1824,7 +1822,7 @@ CONTAINS
     IF (ASSOCIATED(ModuleLogger)) THEN
         CALL ModuleLogger%EchoProgress('Retrieving percolation at all elements')
     ELSE
-        CALL EchoProgress('Retrieving percolation at all elements')
+        CALL ModuleLogger%EchoProgress('Retrieving percolation at all elements')
     END IF
         
     CALL RootZone%Me%GetElementPerc(iElemRegions,rPerc)
@@ -1847,7 +1845,7 @@ CONTAINS
     IF (ASSOCIATED(ModuleLogger)) THEN
         CALL ModuleLogger%EchoProgress('Retrieving percolation at a specified element')
     ELSE
-        CALL EchoProgress('Retrieving percolation at a specified element')
+        CALL ModuleLogger%EchoProgress('Retrieving percolation at a specified element')
     END IF
     
     Perc = RootZone%Me%GetPercElement(iLocation)

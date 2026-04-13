@@ -22,9 +22,7 @@
 !***********************************************************************
 MODULE Class_AppStream_v42_WSA
   USE IWFM_Kernel_Version           , ONLY: ReadVersion
-  USE MessageLogger                 , ONLY: SetLastMessage                  , &
-                                            EchoProgress                    , &
-                                            MessageArray                    , &
+  USE MessageLogger                 , ONLY: MessageArray                    , &
                                             MessageLoggerType               , &
                                             f_iFatal
   USE GeneralUtilities              , ONLY: LocateInList                    , &
@@ -183,7 +181,7 @@ CONTAINS
     iStat = 0
     
     !Echo progress
-    CALL EchoProgress('Instantiating streams')
+    CALL ModuleLogger%EchoProgress('Instantiating streams')
     
     !Read the preprocessed data for streams
     CALL AppStream%SetStaticComponentFromBinFile(BinFile,iStat)
@@ -199,7 +197,7 @@ CONTAINS
             IF (SIZE(AppStream%State) .EQ. 0) THEN
                 MessageArray(1) = 'For proper simulation of streams, relevant stream data files must'
                 MessageArray(2) = 'be specified when stream nodes are defined in Pre-Processor.'
-                CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -252,7 +250,7 @@ CONTAINS
         MessageArray(1) = 'Stream Component versions used in Pre-Processor and Simulation must match!'
         MessageArray(2) = 'Version number in Pre-Processor = 4.2' 
         MessageArray(3) = 'Version number in Simulation    = ' // TRIM(cVersionSim)
-        CALL SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -470,7 +468,7 @@ CONTAINS
     TYPE(StrmLakeConnectorType),INTENT(IN) :: StrmLakeConnector
      
     !Echo progress
-    CALL EchoProgress('Printing results of stream simulation')
+    CALL ModuleLogger%EchoProgress('Printing results of stream simulation')
     
     !Print stream flow hydrographs
     IF (AppStream%StrmHyd%IsOutFileDefined()) &
@@ -793,7 +791,7 @@ CONTAINS
     INTEGER,PARAMETER                       :: iCompIDs_Connect(1) = [f_iStrmComp]
     
     !Inform user about simulation progress
-    CALL EchoProgress('Simulating stream flows')
+    CALL ModuleLogger%EchoProgress('Simulating stream flows')
     
     !Initialize
     NNodes  = SIZE(GWHeads , DIM=1)
@@ -1125,7 +1123,7 @@ CONTAINS
     INTEGER,PARAMETER                       :: iCompIDs_Connect(1) = [f_iStrmComp]
     
     !Inform user about simulation progress
-    CALL EchoProgress('Simulating stream flows')
+    CALL ModuleLogger%EchoProgress('Simulating stream flows')
     
     !Initialize
     NNodes  = SIZE(GWHeads , DIM=1)
@@ -1302,7 +1300,7 @@ CONTAINS
     INTEGER,ALLOCATABLE                     :: iStrmIDs(:),iLakeIDs(:)
     
     !Inform user about simulation progress
-    CALL EchoProgress('Simulating stream flows')
+    CALL ModuleLogger%EchoProgress('Simulating stream flows')
     
     !Initialize
     NNodes  = SIZE(GWHeads , DIM=1)

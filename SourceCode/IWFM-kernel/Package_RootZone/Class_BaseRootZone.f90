@@ -23,7 +23,6 @@
 MODULE Class_BaseRootZone
   !$ USE OMP_LIB
   USE MessageLogger               , ONLY: MessageLoggerType                    , &
-                                          SetLastMessage                       , &
                                           f_iFatal
   USE IOInterface                 , ONLY: GenericFileType                      , &
                                           RealTSDataInFileType
@@ -1284,7 +1283,7 @@ CONTAINS
                 IF (ASSOCIATED(ModuleLogger)) THEN
                     CALL ModuleLogger%SetLastMessage('Future demands for '//TRIM(cFutureDemandDate)//' have not been computed!',f_iFatal,ThisProcedure)
                 ELSE
-                    CALL SetLastMessage('Future demands for '//TRIM(cFutureDemandDate)//' have not been computed!',f_iFatal,ThisProcedure)
+                    CALL ModuleLogger%SetLastMessage('Future demands for '//TRIM(cFutureDemandDate)//' have not been computed!',f_iFatal,ThisProcedure)
                 END IF
             END IF
             RETURN
@@ -1298,7 +1297,7 @@ CONTAINS
     IF (ASSOCIATED(ModuleLogger)) THEN
         CALL ModuleLogger%SetLastMessage('Future demands for '//TRIM(cFutureDemandDate)//' have not been computed!',f_iFatal,ThisProcedure)
     ELSE
-        CALL SetLastMessage('Future demands for '//TRIM(cFutureDemandDate)//' have not been computed!',f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage('Future demands for '//TRIM(cFutureDemandDate)//' have not been computed!',f_iFatal,ThisProcedure)
     END IF
 
   END SUBROUTINE GetFutureDemands
@@ -1734,7 +1733,7 @@ CONTAINS
             CALL ModuleLogger%SetLastMessage('There are no elements where land use can be adjusted for subregion '//TRIM(IntToText(iSubregionID))//  &
                             ' and land use type '//TRIM(cLUCode)//'!',f_iFatal,ThisProcedure)
         ELSE
-            CALL SetLastMessage('There are no elements where land use can be adjusted for subregion '//TRIM(IntToText(iSubregionID))//  &
+            CALL ModuleLogger%SetLastMessage('There are no elements where land use can be adjusted for subregion '//TRIM(IntToText(iSubregionID))//  &
                             ' and land use type '//TRIM(cLUCode)//'!',f_iFatal,ThisProcedure)
         END IF
         iStat = -1
@@ -1785,7 +1784,7 @@ CONTAINS
             CALL ModuleLogger%SetLastMessage('Total land use area for land use type '//TRIM(cLUCode)//  &
                                 ' at subregion '//TRIM(IntToText(iSubregionID))//' is less than zero!',f_iFatal,ThisProcedure)
         ELSE
-            CALL SetLastMessage('Total land use area for land use type '//TRIM(cLUCode)//  &
+            CALL ModuleLogger%SetLastMessage('Total land use area for land use type '//TRIM(cLUCode)//  &
                                 ' at subregion '//TRIM(IntToText(iSubregionID))//' is less than zero!',f_iFatal,ThisProcedure)
         END IF
         iStat = -1

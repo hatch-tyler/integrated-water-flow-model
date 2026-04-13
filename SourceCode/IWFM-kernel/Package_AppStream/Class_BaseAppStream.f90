@@ -21,9 +21,7 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 MODULE Class_BaseAppStream
-  USE MessageLogger               , ONLY: EchoProgress                           , &
-                                          SetLastMessage                         , &
-                                          MessageLoggerType                      , &
+  USE MessageLogger               , ONLY: MessageLoggerType                      , &
                                           f_iWarn                                , &
                                           f_iFatal
   USE IOInterface                 , ONLY: GenericFileType                        
@@ -773,7 +771,7 @@ CONTAINS
                 IF (ASSOCIATED(ModuleLogger)) THEN
                     CALL ModuleLogger%SetLastMessage('Stream reach budget is not defined to retrieve budget column titles!',f_iFatal,ThisProcedure)
                 ELSE
-                    CALL SetLastMessage('Stream reach budget is not defined to retrieve budget column titles!',f_iFatal,ThisProcedure)
+                    CALL ModuleLogger%SetLastMessage('Stream reach budget is not defined to retrieve budget column titles!',f_iFatal,ThisProcedure)
                 END IF
                 iStat = -1
             END IF    
@@ -816,7 +814,7 @@ CONTAINS
                 IF (ASSOCIATED(ModuleLogger)) THEN
                     CALL ModuleLogger%SetLastMessage('Stream reach budget is not defined to retrieve monthly budget flows!',f_iFatal,ThisProcedure)
                 ELSE
-                    CALL SetLastMessage('Stream reach budget is not defined to retrieve monthly budget flows!',f_iFatal,ThisProcedure)
+                    CALL ModuleLogger%SetLastMessage('Stream reach budget is not defined to retrieve monthly budget flows!',f_iFatal,ThisProcedure)
                 END IF
                 ALLOCATE (rFlows(0,0) , cFlowNames(0))
                 iStat = -1
@@ -826,7 +824,7 @@ CONTAINS
             IF (ASSOCIATED(ModuleLogger)) THEN
                 CALL ModuleLogger%SetLastMessage('Monthly budget values cannot be retrieved from Diversion Details file!',f_iWarn,ThisProcedure)
             ELSE
-                CALL SetLastMessage('Monthly budget values cannot be retrieved from Diversion Details file!',f_iWarn,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage('Monthly budget values cannot be retrieved from Diversion Details file!',f_iWarn,ThisProcedure)
             END IF
             ALLOCATE (rFlows(0,0) , cFlowNames(0))
             iStat = -1
@@ -864,7 +862,7 @@ CONTAINS
             IF (ASSOCIATED(ModuleLogger)) THEN
                 CALL ModuleLogger%SetLastMessage('Monthly budget values cannot be retrieved from Diversion Details file!',f_iWarn,ThisProcedure)
             ELSE
-                CALL SetLastMessage('Monthly budget values cannot be retrieved from Diversion Details file!',f_iWarn,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage('Monthly budget values cannot be retrieved from Diversion Details file!',f_iWarn,ThisProcedure)
             END IF
             ALLOCATE (rFlows(0,0) , cFlowNames(0))
             iStat = -1
@@ -2066,7 +2064,7 @@ CONTAINS
             IF (ASSOCIATED(ModuleLogger)) THEN
                 CALL ModuleLogger%SetLastMessage('Stream node ID '//TRIM(IntToText(iStrmNode))//' listed for partal stream-aquifer interaction is not in the model!',f_iFatal,ThisProcedure)
             ELSE
-                CALL SetLastMessage('Stream node ID '//TRIM(IntToText(iStrmNode))//' listed for partal stream-aquifer interaction is not in the model!',f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage('Stream node ID '//TRIM(IntToText(iStrmNode))//' listed for partal stream-aquifer interaction is not in the model!',f_iFatal,ThisProcedure)
             END IF
             iStat = -1
             RETURN
@@ -2119,7 +2117,7 @@ CONTAINS
     IF (ASSOCIATED(ModuleLogger)) THEN
         CALL ModuleLogger%EchoProgress('Printing results of stream simulation')
     ELSE
-        CALL EchoProgress('Printing results of stream simulation')
+        CALL ModuleLogger%EchoProgress('Printing results of stream simulation')
     END IF
     
     !Print stream flow hydrographs

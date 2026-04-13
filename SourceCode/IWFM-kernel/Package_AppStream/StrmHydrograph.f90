@@ -21,9 +21,7 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 MODULE StrmHydrograph
-  USE MessageLogger          , ONLY: SetLastMessage                , &
-                                     LogMessage                    , &
-                                     MessageArray                  , &
+  USE MessageLogger          , ONLY: MessageArray                  , &
                                      MessageLoggerType             , &
                                      f_iFatal                      , &
                                      f_iInfo
@@ -189,7 +187,7 @@ CONTAINS
     !Output file name
     CALL InFile%ReadData(cHydOutFile,iStat)  ;  IF (iStat .EQ. -1) RETURN ; cHydOutFile = StripTextUntilCharacter(cHydOutFile,f_cInlineCommentChar) ; CALL CleanSpecialCharacters(cHydOutFile)
     IF (cHydOutFile .EQ. '') THEN
-        IF (IsRoutedStreams) CALL LogMessage('Stream hydrograph printing is suppressed because an output file name is not specified!',f_iInfo,ThisProcedure)
+        IF (IsRoutedStreams) CALL ModuleLogger%LogMessage('Stream hydrograph printing is suppressed because an output file name is not specified!',f_iInfo,ThisProcedure)
         DO indx=1,NHyd
             CALL InFile%ReadData(iNode,iStat)  
             IF (iStat .EQ. -1) RETURN
@@ -208,7 +206,7 @@ CONTAINS
         READ (ALine,*,IOSTAT=ErrorCode) iHydNodeIDs(indx)
         CALL ConvertID_To_Index(iHydNodeIDs(indx),iStrmNodeIDs,iNode)
         IF (iNode .EQ. 0) THEN
-            CALL SetLastMessage('Stream node ID '//TRIM(IntToText(iHydNodeIDs(indx)))//' listed for hydrograph printing is not in the model!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Stream node ID '//TRIM(IntToText(iHydNodeIDs(indx)))//' listed for hydrograph printing is not in the model!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -217,7 +215,7 @@ CONTAINS
         IF (ErrorCode .NE. 0) THEN
             MessageArray(1) = 'Error in reading stream hydrograph print data!'
             MessageArray(2) = TRIM(ALine)
-            CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -409,7 +407,7 @@ CONTAINS
         IF (ASSOCIATED(ModuleLogger)) THEN
             CALL ModuleLogger%SetLastMessage('Stream node ID '//TRIM(IntToText(iNodeID))//' does not have a hydrograph printed as model results!',f_iFatal,ThisProcedure)
         ELSE
-            CALL SetLastMessage('Stream node ID '//TRIM(IntToText(iNodeID))//' does not have a hydrograph printed as model results!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Stream node ID '//TRIM(IntToText(iNodeID))//' does not have a hydrograph printed as model results!',f_iFatal,ThisProcedure)
         END IF
         iStat = -1
         RETURN

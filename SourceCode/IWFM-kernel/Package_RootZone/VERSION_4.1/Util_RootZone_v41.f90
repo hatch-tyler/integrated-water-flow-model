@@ -22,7 +22,6 @@
 !***********************************************************************
 MODULE Util_RootZone_v41
   USE MessageLogger         , ONLY: MessageLoggerType                    , &
-                                    SetLastMessage                       , &
                                     MessageArray                         , &
                                     f_iFatal
   USE IOInterface           , ONLY: GenericFileType                      , &
@@ -220,7 +219,7 @@ CONTAINS
             IF (ASSOCIATED(ModuleLogger)) THEN
                 CALL ModuleLogger%SetLastMessage(MessageArray(1:3),f_iFatal,cThisProcedure)
             ELSE
-                CALL SetLastMessage(MessageArray(1:3),f_iFatal,cThisProcedure)
+                CALL ModuleLogger%SetLastMessage(MessageArray(1:3),f_iFatal,cThisProcedure)
             END IF
             iStat = -1
             RETURN

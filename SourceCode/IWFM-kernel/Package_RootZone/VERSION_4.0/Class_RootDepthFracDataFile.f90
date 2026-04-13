@@ -22,7 +22,6 @@
 !***********************************************************************
 MODULE Class_RootDepthFracDataFile
   USE MessageLogger        , ONLY: MessageLoggerType     , &
-                                   SetLastMessage        , &
                                    f_iFatal
   USE IOInterface          , ONLY: RealTSDataInFileType  
   USE TimeseriesUtilities  , ONLY: TimeStepType
@@ -151,7 +150,7 @@ CONTAINS
         IF (ASSOCIATED(ModuleLogger)) THEN
             CALL ModuleLogger%SetLastMessage('Root depth fractions cannot be less than zero!',f_iFatal,ThisProcedure)
         ELSE
-            CALL SetLastMessage('Root depth fractions cannot be less than zero!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Root depth fractions cannot be less than zero!',f_iFatal,ThisProcedure)
         END IF
         iStat = -1
         RETURN
@@ -160,7 +159,7 @@ CONTAINS
         IF (ASSOCIATED(ModuleLogger)) THEN
             CALL ModuleLogger%SetLastMessage('Root depth fractions cannot be greater than zero!',f_iFatal,ThisProcedure)
         ELSE
-            CALL SetLastMessage('Root depth fractions cannot be greater than zero!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Root depth fractions cannot be greater than zero!',f_iFatal,ThisProcedure)
         END IF
         iStat = -1
         RETURN

@@ -23,9 +23,7 @@
 MODULE Class_UrbanLandUse_v40
   !$ USE OMP_LIB
   USE MessageLogger           , ONLY: MessageLoggerType               , &
-                                      SetLastMessage                  , &
                                       MessageArray                    , &
-                                      EchoProgress                    , &
                                       f_iFatal
   USE IOInterface             , ONLY: GenericFileType                 , &
                                       RealTSDataInFileType            , &
@@ -221,7 +219,7 @@ CONTAINS
         IF (ASSOCIATED(ModuleLogger)) THEN
             CALL ModuleLogger%SetLastMessage('Error in allocating memory for urban data!',f_iFatal,ThisProcedure)
         ELSE
-            CALL SetLastMessage('Error in allocating memory for urban data!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Error in allocating memory for urban data!',f_iFatal,ThisProcedure)
         END IF
         iStat = -1
         RETURN
@@ -291,7 +289,7 @@ CONTAINS
                 IF (ASSOCIATED(ModuleLogger)) THEN
                     CALL ModuleLogger%SetLastMessage('Data for urban lands at element '//TRIM(IntToText(ID))//' is defined more than once!',f_iFatal,ThisProcedure)
                 ELSE
-                    CALL SetLastMessage('Data for urban lands at element '//TRIM(IntToText(ID))//' is defined more than once!',f_iFatal,ThisProcedure)
+                    CALL ModuleLogger%SetLastMessage('Data for urban lands at element '//TRIM(IntToText(ID))//' is defined more than once!',f_iFatal,ThisProcedure)
                 END IF
                 iStat = -1
                 RETURN
@@ -324,7 +322,7 @@ CONTAINS
             IF (ASSOCIATED(ModuleLogger)) THEN
                 CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
             ELSE
-                CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
             END IF
             iStat = -1
             RETURN
@@ -351,7 +349,7 @@ CONTAINS
             IF (ASSOCIATED(ModuleLogger)) THEN
                 CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
             ELSE
-                CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
             END IF      
             iStat = -1
             RETURN
@@ -363,7 +361,7 @@ CONTAINS
             IF (ASSOCIATED(ModuleLogger)) THEN
                 CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
             ELSE
-                CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
             END IF      
             iStat = -1
             RETURN
@@ -376,7 +374,7 @@ CONTAINS
                 IF (ASSOCIATED(ModuleLogger)) THEN
                     CALL ModuleLogger%SetLastMessage('initial conditions for urban lands at element '//TRIM(IntToText(ID))//' is defined more than once!',f_iFatal,ThisProcedure)
                 ELSE
-                    CALL SetLastMessage('initial conditions for urban lands at element '//TRIM(IntToText(ID))//' is defined more than once!',f_iFatal,ThisProcedure)
+                    CALL ModuleLogger%SetLastMessage('initial conditions for urban lands at element '//TRIM(IntToText(ID))//' is defined more than once!',f_iFatal,ThisProcedure)
                 END IF
                 iStat = -1
                 RETURN
@@ -701,7 +699,7 @@ CONTAINS
     IF (ASSOCIATED(ModuleLogger)) THEN
         CALL ModuleLogger%EchoProgress('Reading time series data for urban lands')
     ELSE
-        CALL EchoProgress('Reading time series data for urban lands')
+        CALL ModuleLogger%EchoProgress('Reading time series data for urban lands')
     END IF
     
     !Land use areas
@@ -826,7 +824,7 @@ CONTAINS
     IF (ASSOCIATED(ModuleLogger)) THEN
         CALL ModuleLogger%EchoProgress('Simulating flows at urban lands')
     ELSE
-        CALL EchoProgress('Simulating flows at urban lands')
+        CALL ModuleLogger%EchoProgress('Simulating flows at urban lands')
     END IF
     
     ASSOCIATE (pUrban => UrbanLand%UrbData)
@@ -926,7 +924,7 @@ CONTAINS
                 IF (ASSOCIATED(ModuleLogger)) THEN
                     CALL ModuleLogger%SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
                 ELSE
-                    CALL SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
+                    CALL ModuleLogger%SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
                 END IF
                 iStat = -1
                 !$OMP END CRITICAL
@@ -972,7 +970,7 @@ CONTAINS
                 IF (ASSOCIATED(ModuleLogger)) THEN
                     CALL ModuleLogger%SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
                 ELSE
-                    CALL SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
+                    CALL ModuleLogger%SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
                 END IF
                 iStat = -1
                 !$OMP END CRITICAL
@@ -1050,7 +1048,7 @@ CONTAINS
                 IF (ASSOCIATED(ModuleLogger)) THEN
                     CALL ModuleLogger%SetLastMessage('Initial moisture content for urban land at element ' // TRIM(IntToText(iElemIDs(indxElem))) // ' is greater than total porosity!',f_iFatal,ThisProcedure)
                 ELSE
-                    CALL SetLastMessage('Initial moisture content for urban land at element ' // TRIM(IntToText(iElemIDs(indxElem))) // ' is greater than total porosity!',f_iFatal,ThisProcedure)
+                    CALL ModuleLogger%SetLastMessage('Initial moisture content for urban land at element ' // TRIM(IntToText(iElemIDs(indxElem))) // ' is greater than total porosity!',f_iFatal,ThisProcedure)
                 END IF
                 iStat = -1
                 RETURN

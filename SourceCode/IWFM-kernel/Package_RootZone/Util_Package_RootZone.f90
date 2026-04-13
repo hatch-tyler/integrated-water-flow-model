@@ -22,7 +22,6 @@
 !***********************************************************************
 MODULE Util_Package_RootZone
   USE MessageLogger          , ONLY: MessageLoggerType             , &
-                                     SetLastMessage                , &
                                      f_iFatal
   USE GeneralUtilities       , ONLY: LowerCase                     , &
                                      UpperCase                     , &
@@ -200,7 +199,7 @@ CONTAINS
             IF (ASSOCIATED(ModuleLogger)) THEN
                 CALL ModuleLogger%SetLastMessage('One or more '//TRIM(cFeatures)//' listed for '//TRIM(LowerCase(cDescription))//' are not in the model!',f_iFatal,ThisProcedure)
             ELSE
-                CALL SetLastMessage('One or more '//TRIM(cFeatures)//' listed for '//TRIM(LowerCase(cDescription))//' are not in the model!',f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage('One or more '//TRIM(cFeatures)//' listed for '//TRIM(LowerCase(cDescription))//' are not in the model!',f_iFatal,ThisProcedure)
             END IF
             iStat = -1
             RETURN
@@ -254,7 +253,7 @@ CONTAINS
             IF (ASSOCIATED(ModuleLogger)) THEN
                 CALL ModuleLogger%SetLastMessage('One or more '//TRIM(cFeatures)//' listed for '//TRIM(LowerCase(cDescription))//' are not in the model!',f_iFatal,ThisProcedure)
             ELSE
-                CALL SetLastMessage('One or more '//TRIM(cFeatures)//' listed for '//TRIM(LowerCase(cDescription))//' are not in the model!',f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage('One or more '//TRIM(cFeatures)//' listed for '//TRIM(LowerCase(cDescription))//' are not in the model!',f_iFatal,ThisProcedure)
             END IF
             iStat = -1
             RETURN
@@ -295,7 +294,7 @@ CONTAINS
             IF (ASSOCIATED(ModuleLogger)) THEN
                 CALL ModuleLogger%SetLastMessage(cLowerCaseDescription//' at element '//TRIM(IntToText(ID))//' are defined more than once!',f_iFatal,ThisProcedure)
             ELSE
-                CALL SetLastMessage(cLowerCaseDescription//' at element '//TRIM(IntToText(ID))//' are defined more than once!',f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage(cLowerCaseDescription//' at element '//TRIM(IntToText(ID))//' are defined more than once!',f_iFatal,ThisProcedure)
             END IF
             iStat = -1
             RETURN

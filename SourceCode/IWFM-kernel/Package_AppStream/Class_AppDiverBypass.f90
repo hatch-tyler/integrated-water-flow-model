@@ -21,10 +21,7 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 MODULE Class_AppDiverBypass
-  USE MessageLogger                , ONLY: LogMessage             , &
-                                           SetLastMessage         , &
-                                           EchoProgress           , &
-                                           MessageArray           , &
+  USE MessageLogger                , ONLY: MessageArray           , &
                                            MessageLoggerType      , &
                                            f_iFatal               , &
                                            f_iWarn                , &
@@ -255,7 +252,7 @@ CONTAINS
         IF (SUM(AppDiverBypass%Bypasses%RechargeSpecs%iNDest) .GT. 0) THEN
             ALLOCATE (AppDiverBypass%ElemToBypassRecvLoss(NElements) ,STAT=ErrorCode)
             IF (ErrorCode .NE. 0) THEN
-                CALL SetLastMessage('Error in allocating memory for element-to-bypass-recoverable-loss pointers!',f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage('Error in allocating memory for element-to-bypass-recoverable-loss pointers!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -279,7 +276,7 @@ CONTAINS
         IF (SUM(AppDiverBypass%Diver%RechargeSpecs%iNDest) .GT. 0) THEN
            ALLOCATE (AppDiverBypass%ElemToDiverRecvLoss(NElements) ,STAT=ErrorCode)
            IF (ErrorCode .NE. 0) THEN
-               CALL SetLastMessage('Error in allocating memory for element-to-diversion-recoverable-loss pointers!',f_iFatal,ThisProcedure)
+               CALL ModuleLogger%SetLastMessage('Error in allocating memory for element-to-diversion-recoverable-loss pointers!',f_iFatal,ThisProcedure)
                iStat = -1
                RETURN
            END IF
@@ -301,7 +298,7 @@ CONTAINS
         IF (AppDiverBypass%NDiver .GT. 0) THEN
             MessageArray(1) = 'Time-series diversions data file needs to be '
             MessageArray(2) = 'specified when there are diversions modeled!'
-            CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -310,7 +307,7 @@ CONTAINS
         IF (ANY(AppDiverBypass%Bypasses%iColBypass.GT.0)) THEN
             MessageArray(1) = 'Time-series diversions data file needs to be specified'
             MessageArray(2) = 'when there are bypasses with pre-defined bypass rates!'
-            CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -335,7 +332,7 @@ CONTAINS
         IF (AppDiverBypass%NDiver .EQ. 0) THEN
             MessageArray(1) = 'There are no diversions specified.'
             MessageArray(2) = 'Print-out of diversion details budget file is suppressed!'
-            CALL LogMessage(MessageArray(1:2),f_iInfo,ThisProcedure)
+            CALL ModuleLogger%LogMessage(MessageArray(1:2),f_iInfo,ThisProcedure)
         ELSE 
             IF (IsForInquiry) THEN
                 CALL AppDiverBypass%DiverDetailsBudRawFile%New(TRIM(DiverDetailBudFileName),iStat)
@@ -376,7 +373,7 @@ CONTAINS
     IF (ASSOCIATED(ModuleLogger)) THEN
         CALL ModuleLogger%EchoProgress('Instantiating diversions data file')
     ELSE
-        CALL EchoProgress('Instantiating diversions data file')
+        CALL ModuleLogger%EchoProgress('Instantiating diversions data file')
     END IF
 
     !Instantiate
@@ -878,7 +875,7 @@ CONTAINS
         IF (ASSOCIATED(ModuleLogger)) THEN
             CALL ModuleLogger%SetLastMessage('Bypass '//TRIM(IntToText(iBypass))//' is not simulated!',f_iFatal,ThisProcedure)
         ELSE
-            CALL SetLastMessage('Bypass '//TRIM(IntToText(iBypass))//' is not simulated!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Bypass '//TRIM(IntToText(iBypass))//' is not simulated!',f_iFatal,ThisProcedure)
         END IF
         iStat = -1
         RETURN
@@ -1447,7 +1444,7 @@ CONTAINS
         IF (ASSOCIATED(ModuleLogger)) THEN
             CALL ModuleLogger%LogMessage(MessageArray(1:2),f_iWarn,ThisProcedure)
         ELSE
-            CALL LogMessage(MessageArray(1:2),f_iWarn,ThisProcedure)
+            CALL ModuleLogger%LogMessage(MessageArray(1:2),f_iWarn,ThisProcedure)
         END IF
         Factor                                           = AppDiverBypass%Diver(iDiver)%MaxDiver / AppDiverBypass%Diver(iDiver)%DiverRead
         AppDiverBypass%Diver(iDiver)%Deli%SupplyRequired = AppDiverBypass%Diver(iDiver)%Deli%SupplyRequired * Factor
@@ -1594,7 +1591,7 @@ CONTAINS
             IF (ASSOCIATED(ModuleLogger)) THEN
                 CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
             ELSE
-                CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
             END IF
             iStat = -1
             RETURN
@@ -2188,7 +2185,7 @@ CONTAINS
             IF (ASSOCIATED(ModuleLogger)) THEN
                 CALL ModuleLogger%SetLastMessage('ID number ('//TRIM(IntToText(ID))//') of the bypass being added has already been used!',f_iFatal,ThisProcedure)
             ELSE
-                CALL SetLastMessage('ID number ('//TRIM(IntToText(ID))//') of the bypass being added has already been used!',f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage('ID number ('//TRIM(IntToText(ID))//') of the bypass being added has already been used!',f_iFatal,ThisProcedure)
             END IF
             iStat = -1
             RETURN
@@ -2219,7 +2216,7 @@ CONTAINS
         IF (ASSOCIATED(ModuleLogger)) THEN
             CALL ModuleLogger%SetLastMessage('Destination type for bypass number '//TRIM(IntToText(ID))//' is not recognized!',f_iFatal,ThisProcedure)
         ELSE
-            CALL SetLastMessage('Destination type for bypass number '//TRIM(IntToText(ID))//' is not recognized!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Destination type for bypass number '//TRIM(IntToText(ID))//' is not recognized!',f_iFatal,ThisProcedure)
         END IF
         iStat = -1
         RETURN

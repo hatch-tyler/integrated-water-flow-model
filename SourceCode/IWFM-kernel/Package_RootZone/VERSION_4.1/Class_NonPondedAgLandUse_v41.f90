@@ -23,9 +23,6 @@
 MODULE Class_NonPondedAgLandUse_v41
   !$ USE OMP_LIB
   USE MessageLogger                 , ONLY: MessageLoggerType                    , &
-                                            SetLastMessage                       , &
-                                            LogMessage                           , &
-                                            EchoProgress                         , &
                                             MessageArray                         , &
                                             f_iFatal                             , &
                                             f_iInfo
@@ -259,7 +256,7 @@ CONTAINS
         AgLand%iDemandFromMoist.NE.f_iDemandFromMoistAtEnd         ) THEN
         MessageArray(1) = 'Flag for soil moisture to be used in the computation of non-ponded '
         MessageArray(2) = 'crop water demand and irrigation timing is not recognized!'
-        CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -291,7 +288,7 @@ CONTAINS
               AgLand%RegionETPot(NCrops,NRegions)              , &
               STAT=ErrorCode                                   )
     IF (ErrorCode+iStat .NE. 0) THEN
-        CALL SetLastMessage('Error in allocating memory for non-ponded agricultural data!',f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage('Error in allocating memory for non-ponded agricultural data!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -333,14 +330,14 @@ CONTAINS
       ELSEIF (iLen .EQ. 2) THEN
         AgLand%CropCodes(indxCrop) = TRIM(Aline)
       ELSE
-        CALL SetLastMessage('Too many or too few characters for crop code of crop ' // TRIM(IntToText(indxCrop)) // '!',f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage('Too many or too few characters for crop code of crop ' // TRIM(IntToText(indxCrop)) // '!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
       END IF
       !Make sure that crop code is not defined twice
       DO indxCropP=1,indxCrop-1
         IF (AgLand%CropCodes(indxCrop) .EQ. AgLand%CropCodes(indxCropP)) THEN
-            CALL SetLastMessage('Crop code '//TRIM(AgLand%CropCodes(indxCrop))//' is defined twice!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Crop code '//TRIM(AgLand%CropCodes(indxCrop))//' is defined twice!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -370,7 +367,7 @@ CONTAINS
                 RegionAreas(NBudgetRegions)         ,  &
                 STAT=ErrorCode                      )
       IF (ErrorCode .NE. 0) THEN
-          CALL SetLastMessage('Error in allocating memory for non-ponded crops budget output data!',f_iFatal,ThisProcedure)
+          CALL ModuleLogger%SetLastMessage('Error in allocating memory for non-ponded crops budget output data!',f_iFatal,ThisProcedure)
           iStat = -1
           RETURN
       END IF
@@ -387,7 +384,7 @@ CONTAINS
           END IF
         END DO
         IF (.NOT. lCropFound) THEN
-            CALL SetLastMessage (TRIM(cBudgetCropCode)//' for water budget output is not defined as a non-ponded crop!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage(TRIM(cBudgetCropCode)//' for water budget output is not defined as a non-ponded crop!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -462,7 +459,7 @@ CONTAINS
         iElem = INT(DummyRealArray(indxElem,1))
         IF (lProcessed(iElem)) THEN
             ID = iElemIDs(iElem)
-            CALL SetLastMessage('Curve numbers for non-ponded crops at element '//TRIM(IntToText(ID))//' are defined more than once!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Curve numbers for non-ponded crops at element '//TRIM(IntToText(ID))//' are defined more than once!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -477,7 +474,7 @@ CONTAINS
         iElem = DummyIntArray(indxElem,1)
         IF (lProcessed(iElem)) THEN
             ID = iElemIDs(iElem)
-            CALL SetLastMessage('Evapotranspration column pointers for non-ponded crops at element '//TRIM(IntToText(ID))//' are defined more than once!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Evapotranspration column pointers for non-ponded crops at element '//TRIM(IntToText(ID))//' are defined more than once!',f_iFatal,ThisProcedure)
             iStat = -1
         END IF
         lProcessed(iElem)             = .TRUE.
@@ -499,7 +496,7 @@ CONTAINS
         iElem = DummyIntArray(indxElem,1)
         IF (lProcessed(iElem)) THEN
             ID = iElemIDs(iElem)
-            CALL SetLastMessage('Water supply requirement column pointers for non-ponded crops at element '//TRIM(IntToText(ID))//' are defined more than once!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Water supply requirement column pointers for non-ponded crops at element '//TRIM(IntToText(ID))//' are defined more than once!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -514,7 +511,7 @@ CONTAINS
         iElem = DummyIntArray(indxElem,1)
         IF (lProcessed(iElem)) THEN
             ID = iElemIDs(iElem)
-            CALL SetLastMessage('Irrigation period column pointers for non-ponded crops at element '//TRIM(IntToText(ID))//' are defined more than once!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Irrigation period column pointers for non-ponded crops at element '//TRIM(IntToText(ID))//' are defined more than once!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -524,7 +521,7 @@ CONTAINS
     IF (MINVAL(AgLand%Crops%iColIrigPeriod) .LT. 1) THEN
         MessageArray(1) = 'Irrigation period column number for non-ponded crops' 
         MessageArray(2) = 'cannot be less than 1!' 
-        CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -543,7 +540,7 @@ CONTAINS
         iElem = DummyIntArray(indxElem,1)
         IF (lProcessed(iElem)) THEN
             ID = iElemIDs(iElem)
-            CALL SetLastMessage('Minimum soil moisture column pointers for non-ponded crops at element '//TRIM(IntToText(ID))//' are defined more than once!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Minimum soil moisture column pointers for non-ponded crops at element '//TRIM(IntToText(ID))//' are defined more than once!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -554,7 +551,7 @@ CONTAINS
         IF (MAXVAL(AgLand%Crops%iColMinSoilM) .GT. AgLand%MinSoilMFile%iSize) THEN
             MessageArray(1) = 'Minimum soil moisture column number for a non-ponded crop is larger '
             MessageArray(2) = 'than the available columns in the Minimum Soil Moisture Data File!'
-            CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -562,7 +559,7 @@ CONTAINS
     IF (MINVAL(AgLand%Crops%iColMinSoilM) .LT. 1) THEN
         MessageArray(1) = 'Minimum soil moisture column number for non-ponded crops'
         MessageArray(2) = 'cannot be less than 1!'
-        CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -582,7 +579,7 @@ CONTAINS
             iElem = DummyIntArray(indxElem,1)
             IF (lProcessed(iElem)) THEN
                 ID = iElemIDs(iElem)
-                CALL SetLastMessage('Irrigation target soil moisture column pointers for non-ponded crops at element '//TRIM(IntToText(ID))//' are defined more than once!',f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage('Irrigation target soil moisture column pointers for non-ponded crops at element '//TRIM(IntToText(ID))//' are defined more than once!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -598,7 +595,7 @@ CONTAINS
         IF (MAXVAL(AgLand%Crops%iColTargetSoilM) .GT. AgLand%TargetSoilMFile%iSize) THEN
             MessageArray(1) = 'Irrigation target soil moisture column number for a non-ponded crop is'
             MessageArray(2) = 'larger than the available columns in the target soil moisture file!'
-            CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -606,7 +603,7 @@ CONTAINS
     IF (MINVAL(AgLand%Crops%iColTargetSoilM) .LT. 1) THEN
         MessageArray(1) = 'Irrigation target soil moisture column number for non-ponded '
         MessageArray(2) = 'crops cannot be less than 1!'
-        CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -618,7 +615,7 @@ CONTAINS
         iElem = DummyIntArray(indxElem,1)
         IF (lProcessed(iElem)) THEN
             ID = iElemIDs(iElem)
-            CALL SetLastMessage('Return flow fraction column pointers for non-ponded crops at element '//TRIM(IntToText(ID))//' are defined more than once!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Return flow fraction column pointers for non-ponded crops at element '//TRIM(IntToText(ID))//' are defined more than once!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -633,7 +630,7 @@ CONTAINS
         iElem = DummyIntArray(indxElem,1)
         IF (lProcessed(iElem)) THEN
             ID = iElemIDs(iElem)
-            CALL SetLastMessage('Re-use flow fraction column pointers for non-ponded crops at element '//TRIM(IntToText(ID))//' are defined more than once!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Re-use flow fraction column pointers for non-ponded crops at element '//TRIM(IntToText(ID))//' are defined more than once!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -656,7 +653,7 @@ CONTAINS
             iElem = DummyIntArray(indxElem,1)
             IF (lProcessed(iElem)) THEN
                 ID = iElemIDs(iElem)
-                CALL SetLastMessage('Minimum percolation column pointers for non-ponded crops at element '//TRIM(IntToText(ID))//' are defined more than once!',f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage('Minimum percolation column pointers for non-ponded crops at element '//TRIM(IntToText(ID))//' are defined more than once!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -672,7 +669,7 @@ CONTAINS
         IF (MAXVAL(AgLand%Crops%iColLeachFrac) .GT. AgLand%LeachFracFile%iSize) THEN
             MessageArray(1) = 'Minimum percolation column number for a non-ponded crop is larger'
             MessageArray(2) = 'than the available columns in the minimum percolation file!'
-            CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -680,7 +677,7 @@ CONTAINS
     IF (MINVAL(AgLand%Crops%iColLeachFrac) .LT. 1) THEN
         MessageArray(1) = 'Minimum percolation column number for non-ponded crops' 
         MessageArray(2) = 'cannot be less than 1!' 
-        CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -691,7 +688,7 @@ CONTAINS
         MAXVAL(DummyRealArray(:,2)) .GT. 1.0         ) THEN
         MessageArray(1) = 'Some fractions of initial soil moisture due to precipitation is less '
         MessageArray(2) = 'than 0.0 or greater than 1.0 for non-ponded agricultural crops!'
-        CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)      
+        CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)      
         iStat = -1
         RETURN
     END IF 
@@ -699,7 +696,7 @@ CONTAINS
         MAXVAL(DummyRealArray(:,3:)) .GT. 1.0          ) THEN
         MessageArray(1) = 'Some or all initial root zone moisture contents are less than'
         MessageArray(2) = '0.0 or greater than 1.0 for non-ponded agricultural crops!'
-        CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)      
+        CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)      
         iStat = -1
         RETURN
     END IF 
@@ -708,7 +705,7 @@ CONTAINS
         iElem = INT(DummyRealArray(indxElem,1))
         IF (lProcessed(iElem)) THEN
             ID = iElemIDs(iElem)
-            CALL SetLastMessage('Initial conditions for non-ponded crops at element '//TRIM(IntToText(ID))//' are defined more than once!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Initial conditions for non-ponded crops at element '//TRIM(IntToText(ID))//' are defined more than once!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -1058,7 +1055,7 @@ CONTAINS
     IF (ASSOCIATED(ModuleLogger)) THEN
         CALL ModuleLogger%EchoProgress('Reading time series data for non-ponded agricultural crops')
     ELSE
-        CALL EchoProgress('Reading time series data for non-ponded agricultural crops')
+        CALL ModuleLogger%EchoProgress('Reading time series data for non-ponded agricultural crops')
     END IF
     
     !Initialize
@@ -1120,7 +1117,7 @@ CONTAINS
                     IF (ASSOCIATED(ModuleLogger)) THEN
                         CALL ModuleLogger%SetLastMessage(MessageArray(:2),f_iFatal,ThisProcedure)
                     ELSE
-                        CALL SetLastMessage(MessageArray(:2),f_iFatal,ThisProcedure)
+                        CALL ModuleLogger%SetLastMessage(MessageArray(:2),f_iFatal,ThisProcedure)
                     END IF
                     iStat = -1
                     RETURN
@@ -1144,7 +1141,7 @@ CONTAINS
                     IF (ASSOCIATED(ModuleLogger)) THEN
                         CALL ModuleLogger%LogMessage(MessageArray(1:3),f_iInfo,ThisProcedure)
                     ELSE
-                        CALL LogMessage(MessageArray(1:3),f_iInfo,ThisProcedure)
+                        CALL ModuleLogger%LogMessage(MessageArray(1:3),f_iInfo,ThisProcedure)
                     END IF
                 END IF
             END DO
@@ -1161,7 +1158,7 @@ CONTAINS
                         IF (ASSOCIATED(ModuleLogger)) THEN
                             CALL ModuleLogger%SetLastMessage('Rooting depth for ' // TRIM(AgLand%CropCodes(indxCrop)) // ' cannot be zero during irrigation period!',f_iFatal,ThisProcedure)
                         ELSE
-                            CALL SetLastMessage('Rooting depth for ' // TRIM(AgLand%CropCodes(indxCrop)) // ' cannot be zero during irrigation period!',f_iFatal,ThisProcedure)
+                            CALL ModuleLogger%SetLastMessage('Rooting depth for ' // TRIM(AgLand%CropCodes(indxCrop)) // ' cannot be zero during irrigation period!',f_iFatal,ThisProcedure)
                         END IF
                         iStat = -1
                         RETURN
@@ -1464,7 +1461,7 @@ CONTAINS
     IF (ASSOCIATED(ModuleLogger)) THEN
         CALL ModuleLogger%EchoProgress('Simulating flows at non-ponded agricultural crop lands')
     ELSE
-        CALL EchoProgress('Simulating flows at non-ponded agricultural crop lands')
+        CALL ModuleLogger%EchoProgress('Simulating flows at non-ponded agricultural crop lands')
     END IF
     
     !Simulate
@@ -1572,7 +1569,7 @@ CONTAINS
                     IF (ASSOCIATED(ModuleLogger)) THEN
                         CALL ModuleLogger%SetLastMessage(MessageArray(1:5),f_iFatal,ThisProcedure)
                     ELSE
-                        CALL SetLastMessage(MessageArray(1:5),f_iFatal,ThisProcedure)
+                        CALL ModuleLogger%SetLastMessage(MessageArray(1:5),f_iFatal,ThisProcedure)
                     END IF
                     iStat = -1
                     !$OMP END CRITICAL (CRIT_NONPONDED_CONV)
@@ -1623,7 +1620,7 @@ CONTAINS
                     IF (ASSOCIATED(ModuleLogger)) THEN
                         CALL ModuleLogger%SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
                     ELSE
-                        CALL SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
+                        CALL ModuleLogger%SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
                     END IF
                     iStat = -1
                     !$OMP END CRITICAL (CRIT_NONPONDED_SOILM)
@@ -1795,7 +1792,7 @@ CONTAINS
                         IF (ASSOCIATED(ModuleLogger)) THEN
                             CALL ModuleLogger%SetLastMessage(MessageArray(1:5),f_iFatal,ThisProcedure)
                         ELSE
-                            CALL SetLastMessage(MessageArray(1:5),f_iFatal,ThisProcedure)
+                            CALL ModuleLogger%SetLastMessage(MessageArray(1:5),f_iFatal,ThisProcedure)
                         END IF
                         iStat = -1
                         !$OMP END CRITICAL (CRIT_NONPONDED_WDCONV)
@@ -1847,7 +1844,7 @@ CONTAINS
                 IF (ASSOCIATED(ModuleLogger)) THEN
                     CALL ModuleLogger%SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
                 ELSE
-                    CALL SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
+                    CALL ModuleLogger%SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
                 END IF
                 iStat = -1
                 !$OMP END CRITICAL (CRIT_NONPONDED_AGWD)
@@ -1924,7 +1921,7 @@ CONTAINS
                 IF (ASSOCIATED(ModuleLogger)) THEN
                     CALL ModuleLogger%SetLastMessage('Initial moisture content for crop ' // TRIM(NonPondedAgLand%CropCodes(indxCrop)) // ' at element ' // TRIM(IntToText(iElemIDs(indxElem))) // ' is greater than total porosity!',f_iFatal,ThisProcedure)
                 ELSE
-                    CALL SetLastMessage('Initial moisture content for crop ' // TRIM(NonPondedAgLand%CropCodes(indxCrop)) // ' at element ' // TRIM(IntToText(iElemIDs(indxElem))) // ' is greater than total porosity!',f_iFatal,ThisProcedure)
+                    CALL ModuleLogger%SetLastMessage('Initial moisture content for crop ' // TRIM(NonPondedAgLand%CropCodes(indxCrop)) // ' at element ' // TRIM(IntToText(iElemIDs(indxElem))) // ' is greater than total porosity!',f_iFatal,ThisProcedure)
                 END IF
                 iStat = -1
                 RETURN

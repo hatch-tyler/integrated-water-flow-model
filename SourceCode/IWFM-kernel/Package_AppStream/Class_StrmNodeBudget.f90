@@ -21,8 +21,7 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 MODULE Class_StrmNodeBudget
-  USE MessageLogger       , ONLY: SetLastMessage                 , &
-                                  MessageArray                   , &
+  USE MessageLogger       , ONLY: MessageArray                   , &
                                   MessageLoggerType              , &
                                   f_iFatal
   USE IOInterface         , ONLY: GenericFileType                                                
@@ -181,7 +180,7 @@ CONTAINS
            IF (iStat .EQ. -1) RETURN
            CALL ConvertID_To_Index(iStrmNodeID,iStrmNodeIDs,StrmNodeBudget%iBudNodes(indxNode))
            IF (StrmNodeBudget%iBudNodes(indxNode) .EQ. 0) THEN
-               CALL SetLastMessage('Stream node ID '//TRIM(IntToText(iStrmNodeID))//' listed for stream node budget printing is not in the model!',f_iFatal,ThisProcedure)
+               CALL ModuleLogger%SetLastMessage('Stream node ID '//TRIM(IntToText(iStrmNodeID))//' listed for stream node budget printing is not in the model!',f_iFatal,ThisProcedure)
                iStat = -1
                RETURN
            END IF
@@ -193,7 +192,7 @@ CONTAINS
             IF (SIZE(iArrayOut) .NE. NBudNodes) THEN
                 MessageArray(1) = "Some stream node numbers listed for stream node budget print-out are repeated!"
                 MessageArray(2) = "Make sure repeated node numbers are deleted."
-                CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -310,7 +309,7 @@ CONTAINS
         IF (ASSOCIATED(ModuleLogger)) THEN
             CALL ModuleLogger%SetLastMessage('Stream node budget file does not exist to retrieve the number of budget columns!',f_iFatal,ThisProcedure)
         ELSE
-            CALL SetLastMessage('Stream node budget file does not exist to retrieve the number of budget columns!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Stream node budget file does not exist to retrieve the number of budget columns!',f_iFatal,ThisProcedure)
         END IF
         iStat = -1
         RETURN
@@ -345,7 +344,7 @@ CONTAINS
         IF (ASSOCIATED(ModuleLogger)) THEN
             CALL ModuleLogger%SetLastMessage('Stream node budget file does not exist to retrieve the budget column titles!',f_iFatal,ThisProcedure)
         ELSE
-            CALL SetLastMessage('Stream node budget file does not exist to retrieve the budget column titles!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Stream node budget file does not exist to retrieve the budget column titles!',f_iFatal,ThisProcedure)
         END IF
         iStat = -1
         RETURN
@@ -394,7 +393,7 @@ CONTAINS
         IF (ASSOCIATED(ModuleLogger)) THEN
             CALL ModuleLogger%SetLastMessage('Stream node budget file does not exist to retrieve monthly budget flows!',f_iFatal,ThisProcedure)
         ELSE
-            CALL SetLastMessage('Stream node budget file does not exist to retrieve monthly budget flows!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Stream node budget file does not exist to retrieve monthly budget flows!',f_iFatal,ThisProcedure)
         END IF
         iStat = -1
         RETURN

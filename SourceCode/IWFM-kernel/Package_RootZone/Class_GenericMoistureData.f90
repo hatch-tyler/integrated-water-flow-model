@@ -22,8 +22,6 @@
 !***********************************************************************
 MODULE Class_GenericMoistureData
   USE MessageLogger       , ONLY: MessageLoggerType     , &
-                                  SetLastMessage        , &
-                                  EchoProgress          , &
                                   f_iFatal
   USE TimeSeriesUtilities , ONLY: TimeStepType
   USE IOInterface         , ONLY: RealTSDataInFileType  
@@ -125,7 +123,7 @@ CONTAINS
         IF (ASSOCIATED(ModuleLogger)) THEN
             CALL ModuleLogger%SetLastMessage('Error in allocating memory for generic moisture data!',f_iFatal,ThisProcedure)
         ELSE
-            CALL SetLastMessage('Error in allocating memory for generic moisture data!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Error in allocating memory for generic moisture data!',f_iFatal,ThisProcedure)
         END IF
         iStat = -1
         RETURN
@@ -205,7 +203,7 @@ CONTAINS
     IF (ASSOCIATED(ModuleLogger)) THEN
         CALL ModuleLogger%EchoProgress('Reading generic moisture time series data')
     ELSE
-        CALL EchoProgress('Reading generic moisture time series data')
+        CALL ModuleLogger%EchoProgress('Reading generic moisture time series data')
     END IF
     
     !Read data

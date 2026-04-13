@@ -23,8 +23,6 @@
 MODULE Class_NativeRiparianLandUse_v40
   !$ USE OMP_LIB
   USE MessageLogger           , ONLY: MessageLoggerType             , &
-                                      SetLastMessage                , &
-                                      EchoProgress                  , &
                                       MessageArray                  , &
                                       f_iFatal
   USE IOInterface             , ONLY: GenericFileType               
@@ -176,7 +174,7 @@ CONTAINS
               NVRVLand%RegionETPot_RV(NSubregions) , &
               STAT=ErrorCode                       )
     IF (ErrorCode+iStat+iStat1 .NE. 0) THEN
-        CALL SetLastMessage('Error in allocating memory for native/riparian vegetation data!',f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage('Error in allocating memory for native/riparian vegetation data!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -205,7 +203,7 @@ CONTAINS
         iElem = INT(DummyArray(indxElem,1))
         IF (lProcessed(iElem)) THEN
             ID = iElemIDs(iElem)
-            CALL SetLastMessage('curve numbers and evapotranspiration column pointers for native and riparian vegetation at element '//TRIM(IntToText(ID))//' are defined more than once!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('curve numbers and evapotranspiration column pointers for native and riparian vegetation at element '//TRIM(IntToText(ID))//' are defined more than once!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -222,7 +220,7 @@ CONTAINS
         MAXVAL(DummyArray(:,2:)) .GT. 1.0         ) THEN
       MessageArray(1) = 'Some or all initial root zone moisture contents are less than'
       MessageArray(2) = '0.0 or greater than 1.0 for native and riparian vegetation areas!'
-      CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure) 
+      CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure) 
       iStat = -1
       RETURN
     END IF
@@ -231,7 +229,7 @@ CONTAINS
         iElem = INT(DummyArray(indxElem,1))
         IF (lProcessed(iElem)) THEN
             ID = iElemIDs(iElem)
-            CALL SetLastMessage('Initial conditions for native and riparian vegetation at element '//TRIM(IntToText(ID))//' are defined more than once!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Initial conditions for native and riparian vegetation at element '//TRIM(IntToText(ID))//' are defined more than once!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -440,7 +438,7 @@ CONTAINS
     IF (ASSOCIATED(ModuleLogger)) THEN
         CALL ModuleLogger%EchoProgress('Reading time series data for native and riparian vegitation lands')
     ELSE
-        CALL EchoProgress('Reading time series data for native and riparian vegitation lands')
+        CALL ModuleLogger%EchoProgress('Reading time series data for native and riparian vegitation lands')
     END IF
     
     !Land use areas
@@ -599,7 +597,7 @@ CONTAINS
     IF (ASSOCIATED(ModuleLogger)) THEN
         CALL ModuleLogger%EchoProgress('Simulating flows at native and riparian vegetation lands')
     ELSE
-        CALL EchoProgress('Simulating flows at native and riparian vegetation lands')
+        CALL ModuleLogger%EchoProgress('Simulating flows at native and riparian vegetation lands')
     END IF
     
     !Root depth 
@@ -694,7 +692,7 @@ CONTAINS
                     IF (ASSOCIATED(ModuleLogger)) THEN
                         CALL ModuleLogger%SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
                     ELSE
-                        CALL SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
+                        CALL ModuleLogger%SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
                     END IF
                     iStat = -1
                     !$OMP END CRITICAL
@@ -735,7 +733,7 @@ CONTAINS
                     IF (ASSOCIATED(ModuleLogger)) THEN
                         CALL ModuleLogger%SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
                     ELSE
-                        CALL SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
+                        CALL ModuleLogger%SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
                     END IF
                     iStat = -1
                     !$OMP END CRITICAL
@@ -800,7 +798,7 @@ CONTAINS
                     IF (ASSOCIATED(ModuleLogger)) THEN
                         CALL ModuleLogger%SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
                     ELSE
-                        CALL SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
+                        CALL ModuleLogger%SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
                     END IF
                     iStat = -1
                     !$OMP END CRITICAL
@@ -841,7 +839,7 @@ CONTAINS
                     IF (ASSOCIATED(ModuleLogger)) THEN
                         CALL ModuleLogger%SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
                     ELSE
-                        CALL SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
+                        CALL ModuleLogger%SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
                     END IF
                     iStat = -1
                     !$OMP END CRITICAL
@@ -916,7 +914,7 @@ CONTAINS
                 IF (ASSOCIATED(ModuleLogger)) THEN
                     CALL ModuleLogger%SetLastMessage('Initial moisture content for native vegetation at element ' // TRIM(IntToText(iElemIDs(indxElem))) // ' is greater than total porosity!',f_iFatal,ThisProcedure)
                 ELSE
-                    CALL SetLastMessage('Initial moisture content for native vegetation at element ' // TRIM(IntToText(iElemIDs(indxElem))) // ' is greater than total porosity!',f_iFatal,ThisProcedure)
+                    CALL ModuleLogger%SetLastMessage('Initial moisture content for native vegetation at element ' // TRIM(IntToText(iElemIDs(indxElem))) // ' is greater than total porosity!',f_iFatal,ThisProcedure)
                 END IF
                 iStat = -1
                 RETURN
@@ -925,7 +923,7 @@ CONTAINS
                 IF (ASSOCIATED(ModuleLogger)) THEN
                     CALL ModuleLogger%SetLastMessage('Initial moisture content for riparian vegetation at element ' // TRIM(IntToText(iElemIDs(indxElem))) // ' is greater than total porosity!',f_iFatal,ThisProcedure)
                 ELSE
-                    CALL SetLastMessage('Initial moisture content for riparian vegetation at element ' // TRIM(IntToText(iElemIDs(indxElem))) // ' is greater than total porosity!',f_iFatal,ThisProcedure)
+                    CALL ModuleLogger%SetLastMessage('Initial moisture content for riparian vegetation at element ' // TRIM(IntToText(iElemIDs(indxElem))) // ' is greater than total porosity!',f_iFatal,ThisProcedure)
                 END IF
                 iStat = -1
                 RETURN

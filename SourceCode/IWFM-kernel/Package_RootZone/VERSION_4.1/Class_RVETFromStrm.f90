@@ -22,7 +22,6 @@
 !***********************************************************************
 MODULE Class_RVETFromStrm
   USE MessageLogger           , ONLY: MessageLoggerType           , &
-                                      SetLastMessage              , &
                                       MessageArray                , &
                                       f_iFatal
   USE Package_Discretization  , ONLY: AppGridType                 
@@ -161,7 +160,7 @@ CONTAINS
         IF (ASSOCIATED(ModuleLogger)) THEN
             CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
         ELSE
-            CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
         END IF
         iStat = -1
         RETURN

@@ -21,8 +21,7 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 MODULE Class_StrmReach
-  USE MessageLogger    , ONLY: SetLastMessage       , &
-                               MessageArray         , &
+  USE MessageLogger    , ONLY: MessageArray         , &
                                MessageLoggerType    , &
                                f_iFatal
   USE Package_Misc     , ONLY: FlowDestinationType  , &
@@ -281,7 +280,7 @@ CONTAINS
                 IF (ASSOCIATED(ModuleLogger)) THEN
                     CALL ModuleLogger%SetLastMessage('Lake '//TRIM(IntToText(iLakeID))//' that receive flow from stream reach '//TRIM(IntToText(iReachID))//' is not in the model!',f_iFatal,ThisProcedure)
                 ELSE
-                    CALL SetLastMessage('Lake '//TRIM(IntToText(iLakeID))//' that receive flow from stream reach '//TRIM(IntToText(iReachID))//' is not in the model!',f_iFatal,ThisProcedure)
+                    CALL ModuleLogger%SetLastMessage('Lake '//TRIM(IntToText(iLakeID))//' that receive flow from stream reach '//TRIM(IntToText(iReachID))//' is not in the model!',f_iFatal,ThisProcedure)
                 END IF
                 iStat = -1
                 RETURN
@@ -338,7 +337,7 @@ CONTAINS
         IF (ASSOCIATED(ModuleLogger)) THEN
             CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
         ELSE
-            CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
         END IF
         iStat = -1
         RETURN

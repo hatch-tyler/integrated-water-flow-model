@@ -26,10 +26,7 @@ MODULE Class_AppStream_v41
                                             PrepareStreamBudgetHeader       , &
                                             CalculateNStrmNodes             , &
                                             ReadFractionsForGW              
-  USE MessageLogger                 , ONLY: SetLastMessage                  , &
-                                            LogMessage                      , &
-                                            EchoProgress                    , &
-                                            MessageArray                    , &
+  USE MessageLogger                 , ONLY: MessageArray                    , &
                                             MessageLoggerType               , &
                                             f_iFILE                         , &
                                             f_iFatal                        , &
@@ -184,7 +181,7 @@ CONTAINS
     iGWNodeIDs = AppGrid%AppNode%ID
     
     !Inform user
-    CALL EchoProgress('Instantiating streams')
+    CALL ModuleLogger%EchoProgress('Instantiating streams')
     
     !Set the flag to check if routed or non-routed streams
     AppStream%lRouted = IsRoutedStreams
@@ -203,7 +200,7 @@ CONTAINS
     
     !Make sure that NRTB is greater than 1
     IF (NRTB .LE. 1) THEN
-        CALL SetLastMessage('Number of data points in stream rating tables should be greater than 1!',f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage('Number of data points in stream rating tables should be greater than 1!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -216,7 +213,7 @@ CONTAINS
               AppStream%Reaches(AppStream%NReaches) , &
               STAT = ErrorCode                      )
     IF (ErrorCode .NE. 0) THEN
-        CALL SetLastMessage('Error allocating memory for stream configuration data!',f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage('Error allocating memory for stream configuration data!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -283,7 +280,7 @@ CONTAINS
         MessageArray(1) = 'Stream Component versions used in Pre-Processor and Simulation must match!'
         MessageArray(2) = 'Version number in Pre-Processor = 4.1' 
         MessageArray(3) = 'Version number in Simulation    = ' // TRIM(cVersionSim)
-        CALL SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -441,7 +438,7 @@ CONTAINS
     iStat = 0
     
     !Echo progress
-    CALL EchoProgress('Instantiating streams')
+    CALL ModuleLogger%EchoProgress('Instantiating streams')
     
     !Read the preprocessed data for streams
     CALL ReadPreprocessedData(AppStream,BinFile,iStat)
@@ -457,7 +454,7 @@ CONTAINS
             IF (SIZE(AppStream%State) .EQ. 0) THEN
                 MessageArray(1) = 'For proper simulation of streams, relevant stream data files must'
                 MessageArray(2) = 'be specified when stream nodes are defined in Pre-Processor.'
-                CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -503,7 +500,7 @@ CONTAINS
             IF (SIZE(AppStream%State) .EQ. 0) THEN
                 MessageArray(1) = 'For proper simulation of streams, relevant stream data files must'
                 MessageArray(2) = 'be specified when stream nodes are defined in Pre-Processor.'
-                CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -817,7 +814,7 @@ CONTAINS
     !Allocate memory
     ALLOCATE (AppStream%Nodes(AppStream%NStrmNodes) , AppStream%Reaches(AppStream%NReaches) , STAT=ErrorCode)
     IF (ErrorCode .NE. 0) THEN
-        CALL SetLastMessage('Error allocating memory for stream data!',f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage('Error allocating memory for stream data!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -871,7 +868,7 @@ CONTAINS
                     IF (ASSOCIATED(ModuleLogger)) THEN
                         CALL ModuleLogger%SetLastMessage('Stream reach ID '//TRIM(IntToText(pReach%ID))//' is used more than once!',f_iFatal,ThisProcedure)
                     ELSE
-                        CALL SetLastMessage('Stream reach ID '//TRIM(IntToText(pReach%ID))//' is used more than once!',f_iFatal,ThisProcedure)
+                        CALL ModuleLogger%SetLastMessage('Stream reach ID '//TRIM(IntToText(pReach%ID))//' is used more than once!',f_iFatal,ThisProcedure)
                     END IF
                     iStat = -1
                     RETURN
@@ -900,7 +897,7 @@ CONTAINS
                 IF (ASSOCIATED(ModuleLogger)) THEN
                     CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                 ELSE
-                    CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                    CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                 END IF
                 iStat = -1
                 RETURN
@@ -920,7 +917,7 @@ CONTAINS
                         IF (ASSOCIATED(ModuleLogger)) THEN
                             CALL ModuleLogger%SetLastMessage('Stream node ID '//TRIM(IntToText(iStrmNodeID))//' is used more than once!',f_iFatal,ThisProcedure)
                         ELSE
-                            CALL SetLastMessage('Stream node ID '//TRIM(IntToText(iStrmNodeID))//' is used more than once!',f_iFatal,ThisProcedure)
+                            CALL ModuleLogger%SetLastMessage('Stream node ID '//TRIM(IntToText(iStrmNodeID))//' is used more than once!',f_iFatal,ThisProcedure)
                         END IF
                         iStat = -1
                         RETURN
@@ -933,7 +930,7 @@ CONTAINS
                     IF (ASSOCIATED(ModuleLogger)) THEN
                         CALL ModuleLogger%SetLastMessage('Groundwater node '//TRIM(IntToText(DummyIntArray2(2)))//' listed in stream reach '//TRIM(IntToText(pReach%ID))//' ('//TRIM(pReach%cName)//') for stream node '//TRIM(IntToText(iStrmNodeID))//' is not in the model!',f_iFatal,ThisProcedure)
                     ELSE
-                        CALL SetLastMessage('Groundwater node '//TRIM(IntToText(DummyIntArray2(2)))//' listed in stream reach '//TRIM(IntToText(pReach%ID))//' ('//TRIM(pReach%cName)//') for stream node '//TRIM(IntToText(iStrmNodeID))//' is not in the model!',f_iFatal,ThisProcedure)
+                        CALL ModuleLogger%SetLastMessage('Groundwater node '//TRIM(IntToText(DummyIntArray2(2)))//' listed in stream reach '//TRIM(IntToText(pReach%ID))//' ('//TRIM(pReach%cName)//') for stream node '//TRIM(IntToText(iStrmNodeID))//' is not in the model!',f_iFatal,ThisProcedure)
                     END IF
                     iStat = -1
                     RETURN
@@ -961,7 +958,7 @@ CONTAINS
                 IF (ASSOCIATED(ModuleLogger)) THEN
                     CALL ModuleLogger%SetLastMessage('Outflow stream node '//TRIM(IntToText(iStrmNodeID))//' for reach '//TRIM(IntToText(iReachID))//' ('//TRIM(pReach%cName)//') is not in the model!',f_iFatal,ThisProcedure)
                 ELSE
-                    CALL SetLastMessage('Outflow stream node '//TRIM(IntToText(iStrmNodeID))//' for reach '//TRIM(IntToText(iReachID))//' ('//TRIM(pReach%cName)//') is not in the model!',f_iFatal,ThisProcedure)
+                    CALL ModuleLogger%SetLastMessage('Outflow stream node '//TRIM(IntToText(iStrmNodeID))//' for reach '//TRIM(IntToText(iReachID))//' ('//TRIM(pReach%cName)//') is not in the model!',f_iFatal,ThisProcedure)
                 END IF
                 iStat = -1
                 RETURN
@@ -971,7 +968,7 @@ CONTAINS
                     IF (ASSOCIATED(ModuleLogger)) THEN
                         CALL ModuleLogger%SetLastMessage('Stream reach '//TRIM(IntToText(iReachID))//' ('//TRIM(pReach%cName)//') is outflowing back into itself!',f_iFatal,ThisProcedure)
                     ELSE
-                        CALL SetLastMessage('Stream reach '//TRIM(IntToText(iReachID))//' ('//TRIM(pReach%cName)//') is outflowing back into itself!',f_iFatal,ThisProcedure)
+                        CALL ModuleLogger%SetLastMessage('Stream reach '//TRIM(IntToText(iReachID))//' ('//TRIM(pReach%cName)//') is outflowing back into itself!',f_iFatal,ThisProcedure)
                     END IF
                     iStat = -1
                     RETURN
@@ -1032,7 +1029,7 @@ CONTAINS
         IF (ASSOCIATED(ModuleLogger)) THEN
             CALL ModuleLogger%SetLastMessage('Time unit for the stream rating tables ('//TRIM(AppStream%TimeUnitRatingTableFlow)//') is not recognized!',f_iFatal,ThisProcedure)
         ELSE
-            CALL SetLastMessage('Time unit for the stream rating tables ('//TRIM(AppStream%TimeUnitRatingTableFlow)//') is not recognized!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Time unit for the stream rating tables ('//TRIM(AppStream%TimeUnitRatingTableFlow)//') is not recognized!',f_iFatal,ThisProcedure)
         END IF
         iStat = -1
         RETURN
@@ -1050,7 +1047,7 @@ CONTAINS
             IF (ASSOCIATED(ModuleLogger)) THEN
                 CALL ModuleLogger%SetLastMessage('Stream node ID '//TRIM(IntToText(iStrmNodeID))//' listed for stream rating tables is not in the model!',f_iFatal,ThisProcedure)
             ELSE
-                CALL SetLastMessage('Stream node ID '//TRIM(IntToText(iStrmNodeID))//' listed for stream rating tables is not in the model!',f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage('Stream node ID '//TRIM(IntToText(iStrmNodeID))//' listed for stream rating tables is not in the model!',f_iFatal,ThisProcedure)
             END IF
             iStat = -1
             RETURN
@@ -1061,7 +1058,7 @@ CONTAINS
             IF (ASSOCIATED(ModuleLogger)) THEN
                 CALL ModuleLogger%SetLastMessage('Stream node ID '//TRIM(IntToText(iStrmNodeID))//' has been assigned rating tables more than once!',f_iFatal,ThisProcedure)
             ELSE
-                CALL SetLastMessage('Stream node ID '//TRIM(IntToText(iStrmNodeID))//' has been assigned rating tables more than once!',f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage('Stream node ID '//TRIM(IntToText(iStrmNodeID))//' has been assigned rating tables more than once!',f_iFatal,ThisProcedure)
             END IF
             iStat = -1
             RETURN
@@ -1083,7 +1080,7 @@ CONTAINS
             IF (ASSOCIATED(ModuleLogger)) THEN
                 CALL ModuleLogger%SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
             ELSE
-                CALL SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
             END IF
             iStat = -1
             RETURN
@@ -1108,7 +1105,7 @@ CONTAINS
                 IF (ASSOCIATED(ModuleLogger)) THEN
                     CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                 ELSE
-                    CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                    CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                 END IF
                 iStat = -1
                 RETURN
@@ -1119,7 +1116,7 @@ CONTAINS
                 IF (ASSOCIATED(ModuleLogger)) THEN
                     CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                 ELSE
-                    CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                    CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                 END IF
                 iStat = -1
                 RETURN
@@ -1133,7 +1130,7 @@ CONTAINS
             IF (ASSOCIATED(ModuleLogger)) THEN
                 CALL ModuleLogger%LogMessage(MessageArray(1:2),f_iWarn,ThisProcedure)
             ELSE
-                CALL LogMessage(MessageArray(1:2),f_iWarn,ThisProcedure)
+                CALL ModuleLogger%LogMessage(MessageArray(1:2),f_iWarn,ThisProcedure)
             END IF
         END IF
 
@@ -1208,7 +1205,7 @@ CONTAINS
       IF (ASSOCIATED(ModuleLogger)) THEN
           CALL ModuleLogger%LogMessage('***** THERE ARE NO STREAM NODES *****',f_iMessage,'',f_iFILE)
       ELSE
-          CALL LogMessage('***** THERE ARE NO STREAM NODES *****',f_iMessage,'',f_iFILE)
+          CALL ModuleLogger%LogMessage('***** THERE ARE NO STREAM NODES *****',f_iMessage,'',f_iFILE)
       END IF
       RETURN
     END IF
@@ -1222,9 +1219,9 @@ CONTAINS
         CALL ModuleLogger%LogMessage('   NO.   NO.   NO.     ELEV.     ELEV.     DEPTH    BOTTOM  THICKNESS      NODES',f_iMessage,'',f_iFILE)
         CALL ModuleLogger%LogMessage('                           (ALL UNITS ARE IN '//TRIM(UNITLTOU)//')',f_iMessage,'',f_iFILE)
     ELSE
-        CALL LogMessage(' REACH STREAM GRID     GROUND   INVERT             AQUIFER   ALLUVIAL    UPSTREAM',f_iMessage,'',f_iFILE)
-        CALL LogMessage('   NO.   NO.   NO.     ELEV.     ELEV.     DEPTH    BOTTOM  THICKNESS      NODES',f_iMessage,'',f_iFILE)
-        CALL LogMessage('                           (ALL UNITS ARE IN '//TRIM(UNITLTOU)//')',f_iMessage,'',f_iFILE)
+        CALL ModuleLogger%LogMessage(' REACH STREAM GRID     GROUND   INVERT             AQUIFER   ALLUVIAL    UPSTREAM',f_iMessage,'',f_iFILE)
+        CALL ModuleLogger%LogMessage('   NO.   NO.   NO.     ELEV.     ELEV.     DEPTH    BOTTOM  THICKNESS      NODES',f_iMessage,'',f_iFILE)
+        CALL ModuleLogger%LogMessage('                           (ALL UNITS ARE IN '//TRIM(UNITLTOU)//')',f_iMessage,'',f_iFILE)
     END IF
     
     !Write stream reach data
@@ -1251,13 +1248,13 @@ CONTAINS
           IF (ASSOCIATED(ModuleLogger)) THEN
               CALL ModuleLogger%LogMessage(TRIM(ALine),f_iMessage,'',f_iFILE)
           ELSE
-              CALL LogMessage(TRIM(ALine),f_iMessage,'',f_iFILE)
+              CALL ModuleLogger%LogMessage(TRIM(ALine),f_iMessage,'',f_iFILE)
           END IF
         END DO
         IF (ASSOCIATED(ModuleLogger)) THEN
             CALL ModuleLogger%LogMessage('',f_iMessage,'',f_iFILE)
         ELSE
-            CALL LogMessage('',f_iMessage,'',f_iFILE)
+            CALL ModuleLogger%LogMessage('',f_iMessage,'',f_iFILE)
         END IF
     END DO
     
@@ -1344,7 +1341,7 @@ CONTAINS
     IF (ASSOCIATED(ModuleLogger)) THEN
         CALL ModuleLogger%EchoProgress('Simulating stream flows')
     ELSE
-        CALL EchoProgress('Simulating stream flows')
+        CALL ModuleLogger%EchoProgress('Simulating stream flows')
     END IF
     
     !Initialize
