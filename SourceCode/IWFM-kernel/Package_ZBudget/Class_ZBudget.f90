@@ -23,10 +23,7 @@
 MODULE Class_ZBudget
   USE,INTRINSIC :: ISO_C_BINDING , ONLY: C_INT                     , &
                                          C_CHAR                  
-  USE MessageLogger              , ONLY: LogMessage                , &
-                                         SetLastMessage            , &
-                                         EchoProgress              , &
-                                         MessageLoggerType         , &
+  USE MessageLogger              , ONLY: MessageLoggerType         , &
                                          MessageArray              , &
                                          f_iFatal                  , &
                                          f_iWarn                   , &
@@ -85,8 +82,10 @@ MODULE Class_ZBudget
                                          f_iVR_lwu_AgOthIn         , &
                                          f_iVR_lwu_AgShort         , &
                                          f_iVLB                    , &
-                                         f_iVLE                       
+                                         f_iVLE
   IMPLICIT NONE
+
+  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
   
   
 
@@ -106,7 +105,8 @@ MODULE Class_ZBudget
   ! -------------------------------------------------------------
   PRIVATE
   PUBLIC :: ZBudgetType          , &
-            Abstract_CallbackFun
+            Abstract_CallbackFun , &
+            ZBudget_SetModuleLogger
   
   
   ! -------------------------------------------------------------
@@ -1132,7 +1132,7 @@ CONTAINS
         !Make sure file is ASCII or DSS
         iFileType = iGetFileType_FromName(cOutFileName)
         IF (iFileType.NE.f_iTXT  .AND.  iFileType.NE.f_iDSS) THEN
-            CALL SetLastMessage('Z-Budget output file ('//TRIM(cOutFileName)//') must be either an ASCII or DSS file!',f_iFatal,ThisProcedure)
+            CALL ZBudget%Logger%SetLastMessage('Z-Budget output file ('//TRIM(cOutFileName)//') must be either an ASCII or DSS file!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -1874,7 +1874,7 @@ CONTAINS
         IF (iPrintDeltaT_InMinutes .LT. DeltaT_InMinutes) THEN
             MessageArray(1) = 'Z-Budget output interval cannot be less than the simulation timestep!'
             MessageArray(2) = 'Adjusting the output interval to be equal to the simulation timestep for '//TRIM(cDescriptor)//'.'
-            CALL LogMessage(MessageArray(1:2),f_iWarn,ThisProcedure)
+            CALL ModuleLogger%LogMessage(MessageArray(1:2),f_iWarn,ThisProcedure)
             iPrintDeltaT_InMinutes = DeltaT_InMinutes
         END IF
         cDateZero    = IncrementTimeStamp(cCurrentDateAndTime,DeltaT_InMinutes,-1)  ! This method of calculation includes the cCurrentDateandTime in
@@ -1942,6 +1942,11 @@ CONTAINS
     END DO
     
   END SUBROUTINE ReplaceMarkers
-  
+
+
+  SUBROUTINE ZBudget_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    ModuleLogger => Logger
+  END SUBROUTINE ZBudget_SetModuleLogger
 
 END MODULE

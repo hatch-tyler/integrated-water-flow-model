@@ -21,9 +21,9 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 MODULE TSDFileHandler
-  USE MessageLogger        , ONLY: SetLastMessage                 , &
+  USE MessageLogger        , ONLY: MessageLoggerType              , &
                                    MessageArray                   , &
-                                   f_iFatal                         
+                                   f_iFatal
   USE IOInterface_Local    , ONLY: GenericFileType                , &
                                    f_iTXT                         , &
                                    f_iBIN                         , &
@@ -39,6 +39,8 @@ MODULE TSDFileHandler
                                    f_cInlineCommentChar
   USE TimeSeriesUtilities  , ONLY: TimeStepType
   IMPLICIT NONE
+
+  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
 
 
 ! ******************************************************************
@@ -59,7 +61,8 @@ MODULE TSDFileHandler
             IntPairTSDataInFileType ,  &
             RealTSDataInFileType    ,  &
             Real2DTSDataInFileType  ,  &
-            PrepareTSDOutputFile   
+            PrepareTSDOutputFile    ,  &
+            TSDFileHandler_SetModuleLogger
 
 
   ! -------------------------------------------------------------
@@ -206,7 +209,7 @@ CONTAINS
       !Allocate memory for iValue
       ALLOCATE (TSFile%iValues(NCOL)  ,  STAT=ErrorCode)
       IF (ErrorCode .NE. 0) THEN
-          CALL SetLastMessage('Error in allocating memory for input data from ' // TRIM(cFileDescription) // '!',f_iFatal,ThisProcedure)
+          CALL ModuleLogger%SetLastMessage('Error in allocating memory for input data from ' // TRIM(cFileDescription) // '!',f_iFatal,ThisProcedure)
           iStat = -1
           RETURN
       END IF
@@ -250,7 +253,7 @@ CONTAINS
       !Allocate memory for iValues1 and iValues2
       ALLOCATE (TSFile%iValues1(iNCOL) , TSFile%iValues2(iNCOL) , STAT=iErrorCode)
       IF (iErrorCode .NE. 0) THEN
-          CALL SetLastMessage('Error in allocating memory for input data from ' // TRIM(cFileDescription) // '!',f_iFatal,ThisProcedure)
+          CALL ModuleLogger%SetLastMessage('Error in allocating memory for input data from ' // TRIM(cFileDescription) // '!',f_iFatal,ThisProcedure)
           iStat = -1
           RETURN
       END IF
@@ -323,7 +326,7 @@ CONTAINS
       !Allocate memory for iValue
       ALLOCATE (TSFile%rValues(NCOL)  ,  STAT=ErrorCode)
       IF (ErrorCode .NE. 0) THEN
-          CALL SetLastMessage('Error in allocating memory for input data from ' // TRIM(cFileDescription) // '!',f_iFatal,ThisProcedure)
+          CALL ModuleLogger%SetLastMessage('Error in allocating memory for input data from ' // TRIM(cFileDescription) // '!',f_iFatal,ThisProcedure)
           iStat = -1
           RETURN
       END IF
@@ -362,7 +365,7 @@ CONTAINS
     !Allocate memory for iValue
     ALLOCATE (TSFile%rValues(nCol)  ,  STAT=ErrorCode)
     IF (ErrorCode .NE. 0) THEN
-        CALL SetLastMessage('Error in allocating memory for input data from ' // TRIM(cFileDescription) // '!',f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage('Error in allocating memory for input data from ' // TRIM(cFileDescription) // '!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -401,7 +404,7 @@ CONTAINS
     IF (.NOT. TrackTime) THEN
         MessageArray(1) = 'DSS input file is being used for ' // cFileDescription
         MessageArray(2) = 'when simulation time is not tracked!'
-        CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -426,7 +429,7 @@ CONTAINS
     !Allocate memory for rValue
     ALLOCATE (TSFile%rValues(nCol)  ,  STAT=ErrorCode)
     IF (ErrorCode .NE. 0) THEN
-        CALL SetLastMessage('Error in allocating memory for input data from ' // TRIM(cFileDescription) // '!',f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage('Error in allocating memory for input data from ' // TRIM(cFileDescription) // '!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -509,7 +512,7 @@ CONTAINS
       !Allocate memory for iValue
       ALLOCATE (TSFile%rValues(nRowLocal,nColLocal)  ,  STAT=ErrorCode)
       IF (ErrorCode .NE. 0) THEN
-          CALL SetLastMessage('Error in allocating memory for input data from ' // TRIM(cFileDescription) // '!',f_iFatal,ThisProcedure)
+          CALL ModuleLogger%SetLastMessage('Error in allocating memory for input data from ' // TRIM(cFileDescription) // '!',f_iFatal,ThisProcedure)
           iStat = -1
           RETURN
       END IF
@@ -548,7 +551,7 @@ CONTAINS
     !Allocate memory for iValue
     ALLOCATE (TSFile%rValues(nRow,nCol)  ,  STAT=ErrorCode)
     IF (ErrorCode .NE. 0) THEN
-        CALL SetLastMessage('Error in allocating memory for input data from ' // TRIM(cFileDescription) // '!',f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage('Error in allocating memory for input data from ' // TRIM(cFileDescription) // '!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -591,7 +594,7 @@ CONTAINS
     IF (.NOT. TrackTime) THEN
         MessageArray(1) = 'DSS input file is being used for ' // cFileDescription
         MessageArray(2) = 'when simulation time is not tracked!'
-        CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -615,7 +618,7 @@ CONTAINS
     !Allocate memory for iValue
     ALLOCATE (TSFile%rValues(nRow,nCol)  ,  STAT=ErrorCode)
     IF (ErrorCode .NE. 0) THEN
-        CALL SetLastMessage('Error in allocating memory for input data from ' // TRIM(cFileDescription) // '!',f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage('Error in allocating memory for input data from ' // TRIM(cFileDescription) // '!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -834,7 +837,7 @@ CONTAINS
             iLocOP = FirstLocation('(',cALine)
             iLocCP = FirstLocation(')',cALine)
             IF (iLocOP.EQ.0  .OR.  iLocCP.EQ.0) THEN
-                CALL SetLastMessage("Can't find an integer pair in "//TRIM(cDescription)//'!',f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage("Can't find an integer pair in "//TRIM(cDescription)//'!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -1103,7 +1106,7 @@ CONTAINS
       MessageArray(1) = 'There are not enough data columns in '//TRIM(ADJUSTL(LowerCase(cFileDescriptor)))//'!'
       MessageArray(2) = 'Number of columns in file        = '//TRIM(IntToText(TSDataInFile%iSize))
       MessageArray(3) = 'Highest column number referenced = '//TRIM(IntToText(iMaxColPointed))
-      CALL SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+      CALL ModuleLogger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
       iStat = -1
       RETURN
     END IF
@@ -1111,7 +1114,7 @@ CONTAINS
     IF (lCheckMinColNum) THEN
       iMinColPointed = MINVAL(iColPointers)
       IF (iMinColPointed .LE. 0) THEN
-        CALL SetLastMessage('Data column number '//TRIM(IntToText(iMinColPointed))//' does not exist in '//TRIM(ADJUSTL(LowerCase(cFileDescriptor)))//'!',f_iFatal,ThisProcedure) 
+        CALL ModuleLogger%SetLastMessage('Data column number '//TRIM(IntToText(iMinColPointed))//' does not exist in '//TRIM(ADJUSTL(LowerCase(cFileDescriptor)))//'!',f_iFatal,ThisProcedure) 
         iStat = -1
         RETURN
       END IF
@@ -1260,7 +1263,7 @@ CONTAINS
 
       !Fortran binary file
       CASE (f_iBIN)
-        CALL SetLastMessage('Fortran binary files cannot be used for time series output!',f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage('Fortran binary files cannot be used for time series output!',f_iFatal,ThisProcedure)
         iStat = -1
 
     END SELECT
@@ -1304,7 +1307,7 @@ CONTAINS
         IF (.NOT. TrackTime) THEN
             MessageArray(1)='DSS input file is being used for '//FileDefinition
             MessageArray(2)='when simulation time is not tracked!'
-            CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -1316,7 +1319,7 @@ CONTAINS
             CALL CleanSpecialCharacters(DummyChar)
             StartLocation=FirstLocation('/',TRIM(DummyChar))
             IF (StartLocation.EQ.0) THEN
-                CALL SetLastMessage('Error in pathnames defined in '//TRIM(LowerCase(FileDefinition))//'!',f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage('Error in pathnames defined in '//TRIM(LowerCase(FileDefinition))//'!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -1351,7 +1354,7 @@ CONTAINS
     
     MessageArray(1) = TRIM(ADJUSTL(ThisDataFile)) // ' file is not properly time-stamped '
     MessageArray(2) = 'for a time tracking simulation.'
-    CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+    CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
 
   END SUBROUTINE GenerateTimeStampError
 
@@ -1367,8 +1370,14 @@ CONTAINS
     
     MessageArray(1) = TRIM(ADJUSTL(ThisDataFile)) // ' could not be retrieved from '
     MessageArray(2) = 'the DSS file.'
-    CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+    CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
 
   END SUBROUTINE GenerateDataRetrievalError
-  
+
+
+  SUBROUTINE TSDFileHandler_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    ModuleLogger => Logger
+  END SUBROUTINE TSDFileHandler_SetModuleLogger
+
 END MODULE TSDFileHandler

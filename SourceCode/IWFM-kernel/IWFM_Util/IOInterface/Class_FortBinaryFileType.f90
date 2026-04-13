@@ -21,15 +21,16 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 MODULE Class_FortBinaryFileType
-  USE MessageLogger      , ONLY: SetLastMessage          , &
-                                 LogMessage              , &
+  USE MessageLogger      , ONLY: MessageLoggerType       , &
                                  f_iWarn                 , &
                                  f_iFatal
   USE GeneralUtilities   , ONLY: GenericString           , &
                                  GenericString_To_String , &
                                  f_cLineFeed
-  USE Class_BaseFileType , ONLY: BaseFileType 
+  USE Class_BaseFileType , ONLY: BaseFileType
   IMPLICIT NONE
+
+  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
   
   
   
@@ -47,7 +48,8 @@ MODULE Class_FortBinaryFileType
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: FortBinFileType               
+  PUBLIC :: FortBinFileType               , &
+            FortBinFile_SetModuleLogger
 
 
   ! -------------------------------------------------------------
@@ -138,7 +140,7 @@ CONTAINS
             FileOpenCode = ErrorCode
             RETURN
         ELSE
-            CALL SetLastMessage('Error in opening file '//TRIM(ThisFile%Name)//'!'//f_cLineFeed//TRIM(cErrMessage),f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Error in opening file '//TRIM(ThisFile%Name)//'!'//f_cLineFeed//TRIM(cErrMessage),f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -259,7 +261,7 @@ CONTAINS
 
             
         CLASS DEFAULT
-            CALL SetLastMessage('Trying to read unrecognized data type from file '//ThisFile%Name//'!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Trying to read unrecognized data type from file '//ThisFile%Name//'!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
             
@@ -329,7 +331,7 @@ CONTAINS
         
             
         CLASS DEFAULT
-            CALL SetLastMessage('Trying to read unrecognized data type from file '//ThisFile%Name//'!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Trying to read unrecognized data type from file '//ThisFile%Name//'!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
             
@@ -410,7 +412,7 @@ CONTAINS
 
             
         CLASS DEFAULT
-            CALL SetLastMessage('Trying to read unrecognized data type from file '//ThisFile%Name//'!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Trying to read unrecognized data type from file '//ThisFile%Name//'!',f_iFatal,ThisProcedure)
             iStat = -1
             
     END SELECT 
@@ -458,7 +460,7 @@ CONTAINS
             WRITE (ThisFile%UnitN) GenericString_To_String(Data)
 
         CLASS DEFAULT
-            CALL LogMessage('Trying to write unrecognized data type to file '//ThisFile%Name//'!',f_iWarn,ThisProcedure) 
+            CALL ModuleLogger%LogMessage('Trying to write unrecognized data type to file '//ThisFile%Name//'!',f_iWarn,ThisProcedure) 
             RETURN
 
     END SELECT
@@ -499,7 +501,7 @@ CONTAINS
             END DO
             
         CLASS DEFAULT
-            CALL LogMessage('Trying to write unrecognized data type to file '//ThisFile%Name//'!',f_iWarn,ThisProcedure)
+            CALL ModuleLogger%LogMessage('Trying to write unrecognized data type to file '//ThisFile%Name//'!',f_iWarn,ThisProcedure)
 
         END SELECT
 
@@ -535,7 +537,7 @@ CONTAINS
             
             
         CLASS DEFAULT
-            CALL LogMessage('Trying to write unrecognized data type to file '//ThisFile%Name//'!',f_iWarn,ThisProcedure) 
+            CALL ModuleLogger%LogMessage('Trying to write unrecognized data type to file '//ThisFile%Name//'!',f_iWarn,ThisProcedure) 
             RETURN
             
     END SELECT
@@ -579,6 +581,11 @@ CONTAINS
     END IF
     
   END FUNCTION GetPosition
-   
+
+
+  SUBROUTINE FortBinFile_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    ModuleLogger => Logger
+  END SUBROUTINE FortBinFile_SetModuleLogger
 
 END MODULE

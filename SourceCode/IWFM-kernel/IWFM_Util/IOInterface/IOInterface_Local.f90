@@ -25,10 +25,9 @@ MODULE IOInterface_Local
                                         LowerCase              , &
                                         FirstLocation          
   USE TimeSeriesUtilities       , ONLY: TimeStepType           
-  USE MessageLogger             , ONLY: SetLastMessage         , &
-                                        LogMessage             , &
+  USE MessageLogger             , ONLY: MessageLoggerType      , &
                                         f_iWarn                , &
-                                        f_iFatal               
+                                        f_iFatal
   USE Class_BaseFileType        , ONLY: BaseFileType           
   USE Class_AsciiFileType       , ONLY: AsciiInFileType        , &
                                         AsciiTSDInFileType     , &
@@ -41,8 +40,10 @@ MODULE IOInterface_Local
                                         f_iGroup               , &
                                         f_iDataSet             , &
                                         f_iAttribute           , &
-                                        f_iMaxDatasetNameLen 
+                                        f_iMaxDatasetNameLen
   IMPLICIT NONE
+
+  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
 
   
 ! ******************************************************************
@@ -70,7 +71,8 @@ MODULE IOInterface_Local
             f_iGroup               , &
             f_iDataSet             , &
             f_iAttribute           , &
-            f_iMaxDatasetNameLen     
+            f_iMaxDatasetNameLen   , &
+            IOInterface_SetModuleLogger
 
   
   ! -------------------------------------------------------------
@@ -236,13 +238,13 @@ CONTAINS
           IF (PRESENT(FileType)) THEN
               !Check if user-specified file type is recognized
               IF (.NOT. ANY(['TXT','BIN','DSS','HDF'] .EQ. UpperCase(FileType))) THEN
-                  CALL SetLastMessage('File type '//UpperCase(FileType)//' is not a recognized type for '//TRIM(LowerCase(LocalDescriptor))//'!',f_iFatal,ThisProcedure) 
+                  CALL ModuleLogger%SetLastMessage('File type '//UpperCase(FileType)//' is not a recognized type for '//TRIM(LowerCase(LocalDescriptor))//'!',f_iFatal,ThisProcedure) 
                   iStat = -1
               ELSE
                   TempFileName      = FileName(1:FirstLocation('.',FileName,Back=.TRUE.))//ADJUSTL(FileType)
                   ThisFile%FileType = IdentifyFileType(TRIM(TempFileName),InputFile,LocalIsTSFile)
                   IF (ThisFile%FileType .EQ. f_iUNKNOWN) THEN
-                      CALL SetLastMessage('File type '//UpperCase(FileType)//' is not a recognized type for '//TRIM(LowerCase(LocalDescriptor))//'!',f_iFatal,ThisProcedure) 
+                      CALL ModuleLogger%SetLastMessage('File type '//UpperCase(FileType)//' is not a recognized type for '//TRIM(LowerCase(LocalDescriptor))//'!',f_iFatal,ThisProcedure) 
                       iStat = -1
                   END IF
               END IF
@@ -251,7 +253,7 @@ CONTAINS
               ThisFile%FileType = IdentifyFileType(FileName,InputFile,LocalIsTSFile)
               IF (ThisFile%FileType .EQ. f_iUNKNOWN) THEN
                   CALL GetFileNameExtension(FileName,cFileNameExtension)
-                  CALL SetLastMessage('File type '//UpperCase(cFileNameExtension)//' is not a recognized type for '//TRIM(LowerCase(LocalDescriptor))//'!',f_iFatal,ThisProcedure) 
+                  CALL ModuleLogger%SetLastMessage('File type '//UpperCase(cFileNameExtension)//' is not a recognized type for '//TRIM(LowerCase(LocalDescriptor))//'!',f_iFatal,ThisProcedure) 
                   iStat = -1
                   RETURN
               END IF
@@ -445,7 +447,7 @@ CONTAINS
           CALL p%GetTimeStepRelatedData(NTimeSteps,TimeStep)
 
       CLASS DEFAULT
-          CALL LogMessage('GetTimeStepRelatedData method is not supported for file '//ThisFile%Me%Name//'!',f_iWarn,ThisProcedure)
+          CALL ModuleLogger%LogMessage('GetTimeStepRelatedData method is not supported for file '//ThisFile%Me%Name//'!',f_iWarn,ThisProcedure)
           
     END SELECT
       
@@ -496,7 +498,7 @@ CONTAINS
         iPos = p%GetPosition()
 
       CLASS DEFAULT
-        CALL LogMessage('GetPositionInFile method is not supported for file '//ThisFile%Me%Name//'!',f_iWarn,ThisProcedure)
+        CALL ModuleLogger%LogMessage('GetPositionInFile method is not supported for file '//ThisFile%Me%Name//'!',f_iWarn,ThisProcedure)
 
     END SELECT
     
@@ -607,7 +609,7 @@ CONTAINS
         CALL p%GetDSSPathnames(PathnameList)
         
       CLASS DEFAULT
-        CALL LogMessage('GetDSSPathnames method is not defined for file '//ThisFile%Me%Name//'!',f_iWarn,ThisProcedure)
+        CALL ModuleLogger%LogMessage('GetDSSPathnames method is not defined for file '//ThisFile%Me%Name//'!',f_iWarn,ThisProcedure)
     
     END SELECT 
   
@@ -662,7 +664,7 @@ CONTAINS
         CALL p%SetNSP(NSPValue)
 
       CLASS DEFAULT
-        CALL LogMessage('SetNSPVariable method is not defined for file '//ThisFile%Me%Name//'!',f_iWarn,ThisProcedure)
+        CALL ModuleLogger%LogMessage('SetNSPVariable method is not defined for file '//ThisFile%Me%Name//'!',f_iWarn,ThisProcedure)
 
     END SELECT
 
@@ -684,7 +686,7 @@ CONTAINS
         CALL p%SetNFQ(NFQValue)
 
       CLASS DEFAULT
-        CALL LogMessage('SetNFQVariable method is not defined for file '//ThisFile%Me%Name//'!',f_iWarn,ThisProcedure) 
+        CALL ModuleLogger%LogMessage('SetNFQVariable method is not defined for file '//ThisFile%Me%Name//'!',f_iWarn,ThisProcedure) 
         
     END SELECT
 
@@ -706,7 +708,7 @@ CONTAINS
         CALL p%SetNumberOfBlocksToSkip(NBlocksToSkip)
 
       CLASS DEFAULT
-        CALL LogMessage('SetBlocksToSkip method is not defined for file '//ThisFile%Me%Name//'!',f_iWarn,ThisProcedure) 
+        CALL ModuleLogger%LogMessage('SetBlocksToSkip method is not defined for file '//ThisFile%Me%Name//'!',f_iWarn,ThisProcedure) 
 
     END SELECT
 
@@ -731,7 +733,7 @@ CONTAINS
         CALL p%SetRateTypeData(RateTypeData)
 
       CLASS DEFAULT
-        CALL LogMessage('SetRateTypeDataVariable method is not defined for the file '//ThisFile%Me%Name//'!',f_iWarn,ThisProcedure) 
+        CALL ModuleLogger%LogMessage('SetRateTypeDataVariable method is not defined for the file '//ThisFile%Me%Name//'!',f_iWarn,ThisProcedure) 
         
     END SELECT
 
@@ -758,7 +760,7 @@ CONTAINS
         END IF
 
       CLASS DEFAULT
-        CALL LogMessage('SetParametersForAsciiFile method is not defined for file '//ThisFile%Me%Name//'!',f_iWarn,ThisProcedure) 
+        CALL ModuleLogger%LogMessage('SetParametersForAsciiFile method is not defined for file '//ThisFile%Me%Name//'!',f_iWarn,ThisProcedure) 
     END SELECT
 
   END SUBROUTINE SetParametersForASCIIFile
@@ -801,7 +803,7 @@ CONTAINS
         END IF
 
       CLASS DEFAULT
-        CALL SetLastMessage('SetParametersForDSSFile method is not defined for file '//ThisFile%Me%Name//'!',f_iFatal,ThisProcedure) 
+        CALL ModuleLogger%SetLastMessage('SetParametersForDSSFile method is not defined for file '//ThisFile%Me%Name//'!',f_iFatal,ThisProcedure) 
         iStat = -1
     END SELECT
 
@@ -826,7 +828,7 @@ CONTAINS
             iStat = 0
         
         CLASS DEFAULT
-            CALL SetLastMessage('SetCacheSize method is not defined for file '//ThisFile%Me%Name//'!',f_iFatal,ThisProcedure) 
+            CALL ModuleLogger%SetLastMessage('SetCacheSize method is not defined for file '//ThisFile%Me%Name//'!',f_iFatal,ThisProcedure) 
             iStat = -1
     END SELECT
 
@@ -849,7 +851,7 @@ CONTAINS
         CALL p%SetFormatStatement(FormatSpec,iStat)
 
       CLASS DEFAULT
-        CALL SetLastMessage('SetPrintFormatSpec method is not defined for file '//ThisFile%Me%Name//'!',f_iFatal,ThisProcedure) 
+        CALL ModuleLogger%SetLastMessage('SetPrintFormatSpec method is not defined for file '//ThisFile%Me%Name//'!',f_iFatal,ThisProcedure) 
         iStat = -1
         
     END SELECT
@@ -883,7 +885,7 @@ CONTAINS
     
     !File is not defined
     IF (.NOT. ALLOCATED(ThisFile%Me)) THEN
-        CALL SetLastMessage('An unopened file is being accessed!',f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage('An unopened file is being accessed!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -906,7 +908,7 @@ CONTAINS
             
 
         CLASS DEFAULT
-            CALL SetLastMessage('Scalar data cannot be read from file '//ThisFile%Me%Name//'!',f_iFatal,ThisProcedure)  
+            CALL ModuleLogger%SetLastMessage('Scalar data cannot be read from file '//ThisFile%Me%Name//'!',f_iFatal,ThisProcedure)  
             iStat = -1
             
     END SELECT
@@ -928,7 +930,7 @@ CONTAINS
     
     !File is not defined
     IF (.NOT. ALLOCATED(ThisFile%Me)) THEN
-        CALL SetLastMessage('An unopened file is being accessed!',f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage('An unopened file is being accessed!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -951,7 +953,7 @@ CONTAINS
             
 
         CLASS DEFAULT
-            CALL SetLastMessage('Array data cannot be read from file '//ThisFile%Me%Name//'!',f_iFatal,ThisProcedure)  
+            CALL ModuleLogger%SetLastMessage('Array data cannot be read from file '//ThisFile%Me%Name//'!',f_iFatal,ThisProcedure)  
             iStat = -1
             
     END SELECT
@@ -973,7 +975,7 @@ CONTAINS
     
     !File is not defined
     IF (.NOT. ALLOCATED(ThisFile%Me)) THEN
-        CALL SetLastMessage('An unopened file is being accessed!',f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage('An unopened file is being accessed!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -996,7 +998,7 @@ CONTAINS
             
 
         CLASS DEFAULT
-            CALL SetLastMessage('Array data cannot be read from file '//ThisFile%Me%Name//'!',f_iFatal,ThisProcedure)    
+            CALL ModuleLogger%SetLastMessage('Array data cannot be read from file '//ThisFile%Me%Name//'!',f_iFatal,ThisProcedure)    
             iStat = -1
             
     END SELECT
@@ -1018,7 +1020,7 @@ CONTAINS
     
     !File is not defined
     IF (.NOT. ALLOCATED(ThisFile%Me)) THEN
-        CALL SetLastMessage('An unopened file is being accessed!',f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage('An unopened file is being accessed!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -1041,7 +1043,7 @@ CONTAINS
             
 
         CLASS DEFAULT
-            CALL SetLastMessage('Array data cannot be read from file '//ThisFile%Me%Name//'!',f_iFatal,ThisProcedure)        
+            CALL ModuleLogger%SetLastMessage('Array data cannot be read from file '//ThisFile%Me%Name//'!',f_iFatal,ThisProcedure)        
             iStat = -1
             
     END SELECT
@@ -1062,7 +1064,7 @@ CONTAINS
     
     !File is not defined
     IF (.NOT. ALLOCATED(ThisFile%Me)) THEN
-        CALL SetLastMessage('An unopened file is being accessed!',f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage('An unopened file is being accessed!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -1078,7 +1080,7 @@ CONTAINS
             CALL p%ReadData(DataLines,iStat=iStat)
             
         CLASS DEFAULT
-            CALL SetLastMessage('Characater array data cannot be read from file '//ThisFile%Me%Name//'!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Characater array data cannot be read from file '//ThisFile%Me%Name//'!',f_iFatal,ThisProcedure)
             iStat = -1
     END SELECT
     
@@ -1099,7 +1101,7 @@ CONTAINS
     
     !File is not defined
     IF (.NOT. ALLOCATED(ThisFile%Me)) THEN
-        CALL SetLastMessage('An unopened file is being accessed!',f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage('An unopened file is being accessed!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -1122,7 +1124,7 @@ CONTAINS
             
 
         CLASS DEFAULT
-            CALL SetLastMessage('Array data cannot be read from file '//ThisFile%Me%Name//'!',f_iFatal,ThisProcedure) 
+            CALL ModuleLogger%SetLastMessage('Array data cannot be read from file '//ThisFile%Me%Name//'!',f_iFatal,ThisProcedure) 
             iStat = -1
             
     END SELECT
@@ -1145,7 +1147,7 @@ CONTAINS
     
     !File is not defined
     IF (.NOT. ALLOCATED(ThisFile%Me)) THEN
-        CALL SetLastMessage('An unopened file is being accessed!',f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage('An unopened file is being accessed!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -1164,7 +1166,7 @@ CONTAINS
 
           
       CLASS DEFAULT
-          CALL SetLastMessage('Time series scalar data cannot be read from file '//ThisFile%Me%Name//'!',f_iFatal,ThisProcedure)
+          CALL ModuleLogger%SetLastMessage('Time series scalar data cannot be read from file '//ThisFile%Me%Name//'!',f_iFatal,ThisProcedure)
           iStat = -1
 
     END SELECT
@@ -1187,7 +1189,7 @@ CONTAINS
     
     !File is not defined
     IF (.NOT. ALLOCATED(ThisFile%Me)) THEN
-        CALL SetLastMessage('An unopened file is being accessed!',f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage('An unopened file is being accessed!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -1206,7 +1208,7 @@ CONTAINS
 
             
         CLASS DEFAULT
-            CALL SetLastMessage('Time series array data cannot be read from file '//ThisFile%Me%Name//'!',f_iFatal,ThisProcedure)      
+            CALL ModuleLogger%SetLastMessage('Time series array data cannot be read from file '//ThisFile%Me%Name//'!',f_iFatal,ThisProcedure)      
             iStat = -1
             
     END SELECT
@@ -1229,7 +1231,7 @@ CONTAINS
     
     !File is not defined
     IF (.NOT. ALLOCATED(ThisFile%Me)) THEN
-        CALL SetLastMessage('An unopened file is being accessed!',f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage('An unopened file is being accessed!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -1252,7 +1254,7 @@ CONTAINS
 
             
         CLASS DEFAULT
-            CALL SetLastMessage('Time series matrix data cannot be read from file '//ThisFile%Me%Name//'!',f_iFatal,ThisProcedure)      
+            CALL ModuleLogger%SetLastMessage('Time series matrix data cannot be read from file '//ThisFile%Me%Name//'!',f_iFatal,ThisProcedure)      
             iStat = -1
             
     END SELECT
@@ -1278,7 +1280,7 @@ CONTAINS
     
     !File is not defined
     IF (.NOT. ALLOCATED(ThisFile%Me)) THEN
-        CALL SetLastMessage('An unopened file is being accessed!',f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage('An unopened file is being accessed!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -1291,7 +1293,7 @@ CONTAINS
             CALL p%ReadData(iPathNameIndex,cBeginDateAndTime,cEndDateAndTime,nActualOutput,Data,rDataDates,FileReadCode,iStat=iStat)
             
         CLASS DEFAULT
-            CALL SetLastMessage('Time series data for a time range cannot be read from file '//ThisFile%Me%Name//'!',f_iFatal,ThisProcedure)      
+            CALL ModuleLogger%SetLastMessage('Time series data for a time range cannot be read from file '//ThisFile%Me%Name//'!',f_iFatal,ThisProcedure)      
             iStat = -1
             
     END SELECT
@@ -1316,7 +1318,7 @@ CONTAINS
     
     !File is not defined
     IF (.NOT. ALLOCATED(ThisFile%Me)) THEN
-        CALL SetLastMessage('An unopened file is being accessed!',f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage('An unopened file is being accessed!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -1327,7 +1329,7 @@ CONTAINS
             iStat = 0
             
         CLASS DEFAULT
-            CALL SetLastMessage('ReadEntireTSD_FromDssFile method is not defined for file '//ThisFile%Me%Name//'!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('ReadEntireTSD_FromDssFile method is not defined for file '//ThisFile%Me%Name//'!',f_iFatal,ThisProcedure)
             iStat = -1
             
     END SELECT
@@ -1349,7 +1351,7 @@ CONTAINS
     
     !File is not defined
     IF (.NOT. ALLOCATED(ThisFile%Me)) THEN
-        CALL SetLastMessage('An unopened file is being accessed!',f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage('An unopened file is being accessed!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -1360,7 +1362,7 @@ CONTAINS
 
             
         CLASS DEFAULT
-            CALL SetLastMessage('ReadAttribute_FromHDFFile method is not defined for file '//ThisFile%Me%Name//'!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('ReadAttribute_FromHDFFile method is not defined for file '//ThisFile%Me%Name//'!',f_iFatal,ThisProcedure)
             iStat = -1
             
     END SELECT
@@ -1384,7 +1386,7 @@ CONTAINS
 
     !File is not defined
     IF (.NOT. ALLOCATED(ThisFile%Me)) THEN
-        CALL SetLastMessage('An unopened file is being accessed!',f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage('An unopened file is being accessed!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -1395,7 +1397,7 @@ CONTAINS
             iStat = 0
             
         CLASS DEFAULT
-            CALL SetLastMessage('ReadData_OneColumn_Or_OneLocation method is not defined for file '//ThisFile%Me%Name//'!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('ReadData_OneColumn_Or_OneLocation method is not defined for file '//ThisFile%Me%Name//'!',f_iFatal,ThisProcedure)
             iStat = -1
             
     END SELECT
@@ -1417,7 +1419,7 @@ CONTAINS
 
     !File is not defined
     IF (.NOT. ALLOCATED(ThisFile%Me)) THEN
-        CALL SetLastMessage('An unopened file is being accessed!',f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage('An unopened file is being accessed!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -1429,7 +1431,7 @@ CONTAINS
 
             
         CLASS DEFAULT
-            CALL SetLastMessage('ReadData_OneColumn_OneLocation method is not defined for file '//ThisFile%Me%Name//'!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('ReadData_OneColumn_OneLocation method is not defined for file '//ThisFile%Me%Name//'!',f_iFatal,ThisProcedure)
             iStat = -1
             
     END SELECT
@@ -1452,7 +1454,7 @@ CONTAINS
 
     !File is not defined
     IF (.NOT. ALLOCATED(ThisFile%Me)) THEN
-        CALL SetLastMessage('An unopened file is being accessed!',f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage('An unopened file is being accessed!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -1463,7 +1465,7 @@ CONTAINS
             iStat = 0
             
         CLASS DEFAULT
-            CALL SetLastMessage('ReadData_AllColumns_OneLocation_SeveralTimeSteps method is not defined for file '//ThisFile%Me%Name//'!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('ReadData_AllColumns_OneLocation_SeveralTimeSteps method is not defined for file '//ThisFile%Me%Name//'!',f_iFatal,ThisProcedure)
             iStat = -1
             
     END SELECT
@@ -1486,7 +1488,7 @@ CONTAINS
 
     !File is not defined
     IF (.NOT. ALLOCATED(ThisFile%Me)) THEN
-        CALL SetLastMessage('An unopened file is being accessed!',f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage('An unopened file is being accessed!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -1497,7 +1499,7 @@ CONTAINS
             iStat = 0
             
         CLASS DEFAULT
-            CALL SetLastMessage('ReadData_SomeColumns_OneLocation_SeveralTimeSteps method is not defined for file '//ThisFile%Me%Name//'!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('ReadData_SomeColumns_OneLocation_SeveralTimeSteps method is not defined for file '//ThisFile%Me%Name//'!',f_iFatal,ThisProcedure)
             iStat = -1
             
     END SELECT
@@ -1520,7 +1522,7 @@ CONTAINS
 
     !File is not defined
     IF (.NOT. ALLOCATED(ThisFile%Me)) THEN
-        CALL SetLastMessage('An unopened file is being accessed!',f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage('An unopened file is being accessed!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -1532,7 +1534,7 @@ CONTAINS
             
             
         CLASS DEFAULT
-            CALL SetLastMessage('ReadData_OneColumn_OneLocation_SeveralTimeSteps method is not defined for file '//ThisFile%Me%Name//'!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('ReadData_OneColumn_OneLocation_SeveralTimeSteps method is not defined for file '//ThisFile%Me%Name//'!',f_iFatal,ThisProcedure)
             iStat = -1
             
     END SELECT
@@ -1554,7 +1556,7 @@ CONTAINS
 
     !File is not defined
     IF (.NOT. ALLOCATED(ThisFile%Me)) THEN
-        CALL SetLastMessage('An unopened file is being accessed!',f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage('An unopened file is being accessed!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -1565,7 +1567,7 @@ CONTAINS
 
             
         CLASS DEFAULT
-            CALL SetLastMessage('Read1DArrayDataSet_FromHDFFile method is not defined for file '//ThisFile%Me%Name//'!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Read1DArrayDataSet_FromHDFFile method is not defined for file '//ThisFile%Me%Name//'!',f_iFatal,ThisProcedure)
             iStat = -1
             
     END SELECT
@@ -1587,7 +1589,7 @@ CONTAINS
 
     !File is not defined
     IF (.NOT. ALLOCATED(ThisFile%Me)) THEN
-        CALL SetLastMessage('An unopened file is being accessed!',f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage('An unopened file is being accessed!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -1598,7 +1600,7 @@ CONTAINS
 
             
         CLASS DEFAULT
-            CALL SetLastMessage('Read2DArrayDataSet_FromHDFFile method is not defined for file '//ThisFile%Me%Name//'!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Read2DArrayDataSet_FromHDFFile method is not defined for file '//ThisFile%Me%Name//'!',f_iFatal,ThisProcedure)
             iStat = -1
             
     END SELECT
@@ -1630,7 +1632,7 @@ CONTAINS
     
     !File is not defined
     IF (.NOT. ALLOCATED(ThisFile%Me)) THEN
-        CALL LogMessage('An unopened file is being accessed!',f_iWarn,ThisProcedure)
+        CALL ModuleLogger%LogMessage('An unopened file is being accessed!',f_iWarn,ThisProcedure)
         RETURN
     END IF
     
@@ -1648,7 +1650,7 @@ CONTAINS
       
             
         CLASS DEFAULT
-            CALL LogMessage('Scalar data cannot be written to file '//ThisFile%Me%Name,f_iWarn,ThisProcedure)
+            CALL ModuleLogger%LogMessage('Scalar data cannot be written to file '//ThisFile%Me%Name,f_iWarn,ThisProcedure)
 
     END SELECT
       
@@ -1668,7 +1670,7 @@ CONTAINS
     
     !File is not defined
     IF (.NOT. ALLOCATED(ThisFile%Me)) THEN
-        CALL LogMessage('An unopened file is being accessed!',f_iWarn,ThisProcedure)
+        CALL ModuleLogger%LogMessage('An unopened file is being accessed!',f_iWarn,ThisProcedure)
         RETURN
     END IF
     
@@ -1698,7 +1700,7 @@ CONTAINS
             
         
         CLASS DEFAULT
-            CALL LogMessage('Array data cannot be written to file '//ThisFile%Me%Name,f_iWarn,ThisProcedure)
+            CALL ModuleLogger%LogMessage('Array data cannot be written to file '//ThisFile%Me%Name,f_iWarn,ThisProcedure)
             
     END SELECT
       
@@ -1719,7 +1721,7 @@ CONTAINS
     
     !File is not defined
     IF (.NOT. ALLOCATED(ThisFile%Me)) THEN
-        CALL LogMessage('An unopened file is being accessed!',f_iWarn,ThisProcedure)
+        CALL ModuleLogger%LogMessage('An unopened file is being accessed!',f_iWarn,ThisProcedure)
         RETURN
     END IF
     
@@ -1737,7 +1739,7 @@ CONTAINS
             END IF
         
         CLASS DEFAULT
-            CALL LogMessage('Matrix data cannot be written to file '//ThisFile%Me%Name,f_iWarn,ThisProcedure)
+            CALL ModuleLogger%LogMessage('Matrix data cannot be written to file '//ThisFile%Me%Name,f_iWarn,ThisProcedure)
             
     END SELECT
       
@@ -1758,7 +1760,7 @@ CONTAINS
     
     !File is not defined
     IF (.NOT. ALLOCATED(ThisFile%Me)) THEN
-        CALL LogMessage('An unopened file is being accessed!',f_iWarn,ThisProcedure)
+        CALL ModuleLogger%LogMessage('An unopened file is being accessed!',f_iWarn,ThisProcedure)
         RETURN
     END IF
     
@@ -1772,7 +1774,7 @@ CONTAINS
 
             
         CLASS DEFAULT
-            CALL LogMessage('Time-series array data cannot be written to file '//ThisFile%Me%Name,f_iWarn,ThisProcedure)
+            CALL ModuleLogger%LogMessage('Time-series array data cannot be written to file '//ThisFile%Me%Name,f_iWarn,ThisProcedure)
             
     END SELECT
       
@@ -1793,7 +1795,7 @@ CONTAINS
     
     !File is not defined
     IF (.NOT. ALLOCATED(ThisFile%Me)) THEN
-        CALL LogMessage('An unopened file is being accessed!',f_iWarn,ThisProcedure)
+        CALL ModuleLogger%LogMessage('An unopened file is being accessed!',f_iWarn,ThisProcedure)
         RETURN
     END IF
     
@@ -1811,7 +1813,7 @@ CONTAINS
 
             
         CLASS DEFAULT
-            CALL LogMessage('Time-series matrix data cannot be written to file '//ThisFile%Me%Name,f_iWarn,ThisProcedure)
+            CALL ModuleLogger%LogMessage('Time-series matrix data cannot be written to file '//ThisFile%Me%Name,f_iWarn,ThisProcedure)
             
     END SELECT
       
@@ -1832,7 +1834,7 @@ CONTAINS
     
     !File is not defined
     IF (.NOT. ALLOCATED(ThisFile%Me)) THEN
-        CALL LogMessage('An unopened file is being accessed!',f_iWarn,ThisProcedure)
+        CALL ModuleLogger%LogMessage('An unopened file is being accessed!',f_iWarn,ThisProcedure)
         RETURN
     END IF
     
@@ -1842,7 +1844,7 @@ CONTAINS
 
             
         CLASS DEFAULT
-            CALL LogMessage('WriteEntireTSD_FromDssFile method is not defined for file '//ThisFile%Me%Name//'!',f_iWarn,ThisProcedure)
+            CALL ModuleLogger%LogMessage('WriteEntireTSD_FromDssFile method is not defined for file '//ThisFile%Me%Name//'!',f_iWarn,ThisProcedure)
             
     END SELECT
       
@@ -1933,7 +1935,7 @@ CONTAINS
     CHARACTER(LEN=ModNameLen+10),PARAMETER :: ThisProcedure = ModName // 'RewindFile'
     
     IF (.NOT. ALLOCATED(ThisFile%Me)) THEN
-        CALL LogMessage('An unopened file is being rewound!',f_iWarn,ThisProcedure) 
+        CALL ModuleLogger%LogMessage('An unopened file is being rewound!',f_iWarn,ThisProcedure) 
         RETURN
     END IF
 
@@ -1954,7 +1956,7 @@ CONTAINS
           CALL p%Rewind()
 
       CLASS DEFAULT   !Cannot rewind other types of files
-          CALL LogMessage('Rewind method for file '//ThisFile%Me%Name//' is not defined!',f_iWarn,ThisProcedure)
+          CALL ModuleLogger%LogMessage('Rewind method for file '//ThisFile%Me%Name//' is not defined!',f_iWarn,ThisProcedure)
           
     END SELECT
       
@@ -1972,7 +1974,7 @@ CONTAINS
     CHARACTER(LEN=ModNameLen+31),PARAMETER :: ThisProcedure = ModName // 'RewindFile_To_BeginningOfTSData'
     
     IF (.NOT. ALLOCATED(ThisFile%Me)) THEN
-        CALL SetLastMessage('An unopened file is being rewound!',f_iFatal,ThisProcedure) 
+        CALL ModuleLogger%SetLastMessage('An unopened file is being rewound!',f_iFatal,ThisProcedure) 
         iStat = -1
         RETURN
     END IF
@@ -2010,7 +2012,7 @@ CONTAINS
     
     !File is not defined
     IF (.NOT. ALLOCATED(ThisFile%Me)) THEN
-        CALL LogMessage('An unopened file is being backspaced!',f_iWarn,ThisProcedure)
+        CALL ModuleLogger%LogMessage('An unopened file is being backspaced!',f_iWarn,ThisProcedure)
         RETURN
     END IF
 
@@ -2022,7 +2024,7 @@ CONTAINS
         CALL p%Backspace(LocalNBackspace)
 
       CLASS DEFAULT 
-        CALL LogMessage('Backspace method for file '//ThisFile%Me%Name//' is not defined!',f_iWarn,ThisProcedure)
+        CALL ModuleLogger%LogMessage('Backspace method for file '//ThisFile%Me%Name//' is not defined!',f_iWarn,ThisProcedure)
 
       END SELECT
       
@@ -2045,7 +2047,7 @@ CONTAINS
     
     !File is not defined
     IF (.NOT. ALLOCATED(ThisFile%Me)) THEN
-        CALL LogMessage('Cannot skip blocks of data in an unopened file!',f_iWarn,ThisProcedure)
+        CALL ModuleLogger%LogMessage('Cannot skip blocks of data in an unopened file!',f_iWarn,ThisProcedure)
         RETURN
     END IF
 
@@ -2054,7 +2056,7 @@ CONTAINS
             CALL p%SkipDataBlocks(iNDataBlocks,iStat)
         
         CLASS DEFAULT 
-            CALL LogMessage('SkipDataBlocks method for file '//ThisFile%Me%Name//' is not defined!',f_iWarn,ThisProcedure)
+            CALL ModuleLogger%LogMessage('SkipDataBlocks method for file '//ThisFile%Me%Name//' is not defined!',f_iWarn,ThisProcedure)
         
     END SELECT
       
@@ -2077,7 +2079,7 @@ CONTAINS
     
     !File is not defined
     IF (.NOT. ALLOCATED(ThisFile%Me)) THEN
-        CALL LogMessage('Cannot go to a specified line in an unopened file!',f_iWarn,ThisProcedure)
+        CALL ModuleLogger%LogMessage('Cannot go to a specified line in an unopened file!',f_iWarn,ThisProcedure)
         RETURN
     END IF
 
@@ -2086,7 +2088,7 @@ CONTAINS
             CALL p%GoToLine(iGoToLine)
         
         CLASS DEFAULT 
-            CALL LogMessage('GoToLine method for file '//ThisFile%Me%Name//' is not defined!',f_iWarn,ThisProcedure)
+            CALL ModuleLogger%LogMessage('GoToLine method for file '//ThisFile%Me%Name//' is not defined!',f_iWarn,ThisProcedure)
         
     END SELECT
       
@@ -2107,7 +2109,7 @@ CONTAINS
     
     !File is not defined
     IF (.NOT. ALLOCATED(ThisFile%Me)) THEN
-        CALL LogMessage('An unopened file is being accessed!',f_iWarn,ThisProcedure)
+        CALL ModuleLogger%LogMessage('An unopened file is being accessed!',f_iWarn,ThisProcedure)
         RETURN
     END IF
 
@@ -2116,7 +2118,7 @@ CONTAINS
             CALL p%CreateGroup(cPathname)
                     
         CLASS DEFAULT 
-            CALL LogMessage('CreateHDFGroup method for file '//ThisFile%Me%Name//' is not defined!',f_iWarn,ThisProcedure)
+            CALL ModuleLogger%LogMessage('CreateHDFGroup method for file '//ThisFile%Me%Name//' is not defined!',f_iWarn,ThisProcedure)
 
     END SELECT
       
@@ -2139,7 +2141,7 @@ CONTAINS
     
     !File is not defined
     IF (.NOT. ALLOCATED(ThisFile%Me)) THEN
-        CALL SetLastMessage('An unopened file is being accessed!',f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage('An unopened file is being accessed!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -2149,7 +2151,7 @@ CONTAINS
             CALL p%CreateDataSet(cPathNames,NColumns,NTime,TimeStep,DataType,iStat=iStat)
                     
         CLASS DEFAULT 
-            CALL SetLastMessage('CreateHDFDataSet method for file '//ThisFile%Me%Name//' is not defined!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('CreateHDFDataSet method for file '//ThisFile%Me%Name//' is not defined!',f_iFatal,ThisProcedure)
             iStat = -1
             
     END SELECT
@@ -2171,7 +2173,7 @@ CONTAINS
     
     !File is not defined
     IF (.NOT. ALLOCATED(ThisFile%Me)) THEN
-        CALL LogMessage('An unopened file is being accessed!',f_iWarn,ThisProcedure)
+        CALL ModuleLogger%LogMessage('An unopened file is being accessed!',f_iWarn,ThisProcedure)
         RETURN
     END IF
 
@@ -2180,7 +2182,7 @@ CONTAINS
             CALL p%WriteData(iObjectType,cGrpOrDset,cAttrName,ScalarAttrData,ArrayAttrData)
                     
         CLASS DEFAULT 
-            CALL LogMessage('WriteHDFAttribute method for file '//ThisFile%Me%Name//' is not defined!',f_iWarn,ThisProcedure)
+            CALL ModuleLogger%LogMessage('WriteHDFAttribute method for file '//ThisFile%Me%Name//' is not defined!',f_iWarn,ThisProcedure)
             
     END SELECT
       
@@ -2239,6 +2241,11 @@ CONTAINS
     END SELECT
       
   END FUNCTION DoesHDFObjectExist
-  
+
+
+  SUBROUTINE IOInterface_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    ModuleLogger => Logger
+  END SUBROUTINE IOInterface_SetModuleLogger
 
 END MODULE

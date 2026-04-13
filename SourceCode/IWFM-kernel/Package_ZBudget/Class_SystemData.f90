@@ -21,13 +21,15 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 MODULE Class_SystemData
-  USE MessageLogger      , ONLY: SetLastMessage   , &
+  USE MessageLogger      , ONLY: MessageLoggerType , &
                                  f_iFatal
   USE IOInterface        , ONLY: GenericFileType  , &
                                  f_iGroup
   USE ZBudget_Parameters , ONLY: f_cAttributesDir
   USE ZBudget_Util       , ONLY: IsZBudgetFile
   IMPLICIT NONE
+
+  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
   
   
 
@@ -46,7 +48,8 @@ MODULE Class_SystemData
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: SystemDataType    
+  PUBLIC :: SystemDataType         , &
+            SystemData_SetModuleLogger
   
   
   ! -------------------------------------------------------------
@@ -113,7 +116,7 @@ CONTAINS
     !Check that this is indeed Z-Budget data file by checking if an object that Budget file doesn't have exist
     IF (.NOT. IsZBudgetFile(HDFFile)) THEN
         CALL HDFFile%GetName(cFileName)
-        CALL SetLastMessage('File '//TRIM(cFileName)//' is not a Z-Budget file type!',f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage('File '//TRIM(cFileName)//' is not a Z-Budget file type!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -227,6 +230,10 @@ CONTAINS
         
   END SUBROUTINE Kill
 
-  
-  
+
+  SUBROUTINE SystemData_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    ModuleLogger => Logger
+  END SUBROUTINE SystemData_SetModuleLogger
+
 END MODULE

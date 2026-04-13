@@ -21,7 +21,7 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 MODULE Class_ZBudgetHeader
-  USE MessageLogger       , ONLY: SetLastMessage    , &
+  USE MessageLogger       , ONLY: MessageLoggerType , &
                                   f_iFatal
   USE GeneralUtilities    , ONLY: IntToText
   USE TimeSeriesUtilities , ONLY: TimeStepType
@@ -31,6 +31,8 @@ MODULE Class_ZBudgetHeader
                                   f_cAttributesDir
   USE Class_SystemData    , ONLY: SystemDataType
   IMPLICIT NONE
+
+  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
   
   
 
@@ -49,7 +51,8 @@ MODULE Class_ZBudgetHeader
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: ZBudgetHeaderType    
+  PUBLIC :: ZBudgetHeaderType         , &
+            ZBudgetHeader_SetModuleLogger
   
   
   ! -------------------------------------------------------------
@@ -133,7 +136,7 @@ CONTAINS
     !Check that this is indeed Z-Budget data file by checking if an object that Budget file doesn't have exist
     IF (.NOT. InFile%DoesHDFObjectExist(f_cAttributesDir//'/DataHDFPaths')) THEN
         CALL InFile%GetName(cFileName)
-        CALL SetLastMessage('File '//TRIM(cFileName)//' is not a Z-Budget file type!',f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage('File '//TRIM(cFileName)//' is not a Z-Budget file type!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -303,5 +306,11 @@ CONTAINS
     CALL OutFile%WriteData(f_iGroup,f_cAttributesDir,'DSSFParts',ArrayAttrData=Header%cDSSFParts)
     
   END SUBROUTINE WriteToFile
+
+
+  SUBROUTINE ZBudgetHeader_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    ModuleLogger => Logger
+  END SUBROUTINE ZBudgetHeader_SetModuleLogger
 
 END MODULE

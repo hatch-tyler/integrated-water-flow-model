@@ -21,9 +21,13 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov
 !***********************************************************************
 MODULE TimeSeriesUtilities
-  USE MessageLogger
+  USE MessageLogger    , ONLY: MessageLoggerType , &
+                               MessageArray      , &
+                               f_iFatal
   USE GeneralUtilities
   IMPLICIT NONE
+
+  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
 
   INTEGER,PARAMETER                   :: ModNameLen = 21
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'TimeSeriesUtilities::'
@@ -78,7 +82,8 @@ MODULE TimeSeriesUtilities
           LeapYearCorrection                                , &
           f_iRecognizedIntervals_InMinutes                  , &
           f_cRecognizedIntervals                            , &
-          GetJulianDatesBetweenTimeStampsWithTimeIncrement
+          GetJulianDatesBetweenTimeStampsWithTimeIncrement  , &
+          TimeSeries_SetModuleLogger
 
 
   ! -------------------------------------------------------------
@@ -264,7 +269,7 @@ CONTAINS
         iStat = 1
         RETURN
       ELSE
-        CALL LogMessage('Cannot convert dates with calendar year less than 1 to Julian day!',f_iFatal,ThisProcedure)
+        CALL ModuleLogger%LogMessage('Cannot convert dates with calendar year less than 1 to Julian day!',f_iFatal,ThisProcedure)
       END IF
     END IF
 
@@ -274,7 +279,7 @@ CONTAINS
         iStat = 1
         RETURN
       ELSE
-        CALL LogMessage('Incorrect number for month ('//TRIM(IntToText(iMonth))//')!',f_iFatal,ThisProcedure)
+        CALL ModuleLogger%LogMessage('Incorrect number for month ('//TRIM(IntToText(iMonth))//')!',f_iFatal,ThisProcedure)
       END IF
     END IF
 
@@ -300,7 +305,7 @@ CONTAINS
         iStat = 1
         RETURN
       ELSE
-        CALL LogMessage('Day ('//TRIM(IntToText(iDay))//') of the month is incorrect given the month ('//TRIM(IntToText(iMonth))//')!',f_iFatal,ThisProcedure)
+        CALL ModuleLogger%LogMessage('Day ('//TRIM(IntToText(iDay))//') of the month is incorrect given the month ('//TRIM(IntToText(iMonth))//')!',f_iFatal,ThisProcedure)
       END IF
     END IF
 
@@ -335,7 +340,7 @@ CONTAINS
     IF (iYear .EQ. 4000) THEN
       MessageArray(1)='Time stamp '//TimeStampIn//' cannot be corrected for '
       MessageArray(2)='leap year because it includes Year 4000 flag!'
-      CALL LogMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+      CALL ModuleLogger%LogMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
     END IF
 
     !Correct February 29 if it is a leap year
@@ -483,7 +488,7 @@ CONTAINS
     IF (PRESENT(STAT)) THEN
       STAT=ErrorCode
     ELSE
-      IF (ErrorCode.NE.0) CALL LogMessage('Error in converting simulation date to Julian date',f_iFatal,ThisProcedure)
+      IF (ErrorCode.NE.0) CALL ModuleLogger%LogMessage('Error in converting simulation date to Julian date',f_iFatal,ThisProcedure)
     END IF
 
     !Compute minutes past midnight in the day specified in the time stamp
@@ -970,12 +975,12 @@ CONTAINS
 
     !Allocate memory for the data storage array
     ALLOCATE (ValuesForOutput(nrow,ncolumn,nbatch),STAT=ErrorCode)
-    IF (ErrorCode.NE.0) CALL LogMessage('Error in allocating data storage array for file '//TRIM(FileName),f_iFatal,ThisProcedure)
+    IF (ErrorCode.NE.0) CALL ModuleLogger%LogMessage('Error in allocating data storage array for file '//TRIM(FileName),f_iFatal,ThisProcedure)
 
     !Allocate memory for the time storage array
     IF (PRESENT(TimeArray)) THEN
       ALLOCATE (TimeArray(nbatch),STAT=ErrorCode)
-      IF (ErrorCode.NE.0) CALL LogMessage('Error in allocating time storage array for file '//TRIM(FileName),f_iFatal,ThisProcedure)
+      IF (ErrorCode.NE.0) CALL ModuleLogger%LogMessage('Error in allocating time storage array for file '//TRIM(FileName),f_iFatal,ThisProcedure)
     END IF
 
     !Set the data fields
@@ -1258,11 +1263,11 @@ CONTAINS
     TimeStepIndex = IsTimeIntervalValid(UNITT)
     IF (TimeStepIndex .EQ. 0) THEN
       IF (PRESENT(iStat)) THEN
-          CALL SetLastMessage(TRIM(UNITT)// ' is not a recognized time step',f_iFatal,ThisProcedure)
+          CALL ModuleLogger%SetLastMessage(TRIM(UNITT)// ' is not a recognized time step',f_iFatal,ThisProcedure)
           iStat = -1
           RETURN
       ELSE
-          CALL LogMessage(TRIM(UNITT)// ' is not a recognized time step',f_iFatal,ThisProcedure)
+          CALL ModuleLogger%LogMessage(TRIM(UNITT)// ' is not a recognized time step',f_iFatal,ThisProcedure)
       END IF
     END IF
 
@@ -1286,15 +1291,20 @@ CONTAINS
 
     !Convert FromInterval to minutes
     CALL CTimeStep_To_RTimeStep(UpperCase(FromInterval),DummyReal,FromInterval_InMinutes,ErrorCode)
-    IF (ErrorCode.NE.0) CALL LogMessage(TRIM(UpperCase(FromInterval))//' is not a valid time interval!',f_iFatal,ThisProcedure)
+    IF (ErrorCode.NE.0) CALL ModuleLogger%LogMessage(TRIM(UpperCase(FromInterval))//' is not a valid time interval!',f_iFatal,ThisProcedure)
 
     !Convert ToInterval to minutes
     CALL CTimeStep_To_RTimeStep(UpperCase(ToInterval),DummyReal,ToInterval_InMinutes,ErrorCode)
-    IF (ErrorCode.NE.0) CALL LogMessage(TRIM(UpperCase(ToInterval))//' is not a valid time interval!',f_iFatal,ThisProcedure)
+    IF (ErrorCode.NE.0) CALL ModuleLogger%LogMessage(TRIM(UpperCase(ToInterval))//' is not a valid time interval!',f_iFatal,ThisProcedure)
 
     ConversionFactor = REAL(ToInterval_InMinutes,8)/REAL(FromInterval_InMinutes,8)
 
  END FUNCTION TimeIntervalConversion
 
+
+  SUBROUTINE TimeSeries_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    ModuleLogger => Logger
+  END SUBROUTINE TimeSeries_SetModuleLogger
 
 END MODULE

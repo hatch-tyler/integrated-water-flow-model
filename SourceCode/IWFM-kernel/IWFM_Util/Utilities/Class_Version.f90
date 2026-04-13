@@ -24,11 +24,13 @@ MODULE Class_Version
   USE GeneralUtilities  ,  ONLY : FirstLocation           , &
                                   CleanSpecialCharacters  , &
                                   IntToText
-  USE MessageLogger     ,  ONLY : SetLastMessage          , &
+  USE MessageLogger     ,  ONLY : MessageLoggerType       , &
                                   MessageArray            , &
                                   f_iFatal
   USE IOInterface       ,  ONLY : GenericFileType
   IMPLICIT NONE
+
+  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
   
 
   
@@ -47,7 +49,8 @@ MODULE Class_Version
   ! -------------------------------------------------------------
     PRIVATE
     PUBLIC :: VersionType  , &
-              ReadVersion
+              ReadVersion  , &
+              Version_SetModuleLogger
 
 
   ! -------------------------------------------------------------
@@ -233,13 +236,18 @@ CONTAINS
         MessageArray(1) = 'Error in identifying the version number of the '//TRIM(cComponent)//' component!'
         MessageArray(2) = 'Make sure that the version number is listed at the first line of the'
         MessageArray(3) = TRIM(cComponent)//' input file (see the input file template for format).'
-        CALL SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
     cVersion = ALine(iStart+1:LEN_TRIM(ALine))
     
   END SUBROUTINE ReadVersion
- 
+
+
+  SUBROUTINE Version_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    ModuleLogger => Logger
+  END SUBROUTINE Version_SetModuleLogger
 
 END MODULE

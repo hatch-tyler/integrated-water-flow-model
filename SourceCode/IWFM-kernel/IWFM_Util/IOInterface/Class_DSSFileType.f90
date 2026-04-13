@@ -42,15 +42,15 @@ MODULE Class_DSSFileType
                                   NPeriods                                   , &
                                   IncrementTimeStamp                         , &
                                   OPERATOR(.TSGT.)
-  USE MessageLogger       , ONLY: LogMessage                                 , &
-                                  SetLastMessage                             , &
-                                  GetLogFileUnit                             , &
+  USE MessageLogger       , ONLY: MessageLoggerType                          , &
                                   MessageArray                               , &
                                   f_iWarn                                    , &
                                   f_iFatal
   USE Class_BaseFileType  , ONLY: BaseFileType                               , &
                                   GetAUnitNumber
   IMPLICIT NONE
+
+  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
 
 
 
@@ -70,7 +70,8 @@ MODULE Class_DSSFileType
   ! -------------------------------------------------------------
   PRIVATE
   PUBLIC :: DssInFileType   , &
-            DssOutFileType
+            DssOutFileType , &
+            DSSFile_SetModuleLogger
 
 
   ! -------------------------------------------------------------
@@ -225,7 +226,7 @@ CONTAINS
     !If there is no entry in the file list (i.e. first call to this method) set general properties for the DSS file handling methods
     IF (.NOT. ASSOCIATED(DSSFileListHead)) THEN
         !Set the message output unit
-        CALL GetLogFileUnit(iLogFileUnit=iLogFileUnit,iStat=iStat)
+        CALL ModuleLogger%GetLogFileUnit(iLogFileUnit=iLogFileUnit,iStat=iStat)
         IF (iStat .EQ. -1) RETURN
         CALL ZSET('MUNIT','',iLogFileUnit)
 
@@ -246,7 +247,7 @@ CONTAINS
                   FileOpenCode = ErrorCode
                   RETURN
               ELSE
-                  CALL SetLastMessage('Error in allocating memory for DSS file list for file '//TRIM(ADJUSTL(FileName))//'!',f_iFatal,ThisProcedure)
+                  CALL ModuleLogger%SetLastMessage('Error in allocating memory for DSS file list for file '//TRIM(ADJUSTL(FileName))//'!',f_iFatal,ThisProcedure)
                   iStat = -1
                   RETURN
               END IF
@@ -263,7 +264,7 @@ CONTAINS
                   FileOpenCode = ErrorCode
                   RETURN
               ELSE
-                  CALL SetLastMessage('Error in allocating memory for DSS file list for file '//TRIM(ADJUSTL(FileName))//'!',f_iFatal,ThisProcedure)
+                  CALL ModuleLogger%SetLastMessage('Error in allocating memory for DSS file list for file '//TRIM(ADJUSTL(FileName))//'!',f_iFatal,ThisProcedure)
                   iStat = -1
                   RETURN
               END IF
@@ -287,7 +288,7 @@ CONTAINS
               FileOpenCode = ErrorCode
               RETURN
           ELSE
-              CALL SetLastMessage('Error in opening file '//TRIM(ADJUSTL(FileName))//'!',f_iFatal,ThisProcedure)
+              CALL ModuleLogger%SetLastMessage('Error in opening file '//TRIM(ADJUSTL(FileName))//'!',f_iFatal,ThisProcedure)
               iStat = -1
               RETURN
           END IF
@@ -331,7 +332,7 @@ CONTAINS
     !First check if the DSS file exists
     CALL ZFNAME(FileName,cName,iNName,lExist)
     IF (.NOT.lExist) THEN
-        CALL SetLastMessage('DSS file '//TRIM(FileName)//' does not exist for data retrieval!',f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage('DSS file '//TRIM(FileName)//' does not exist for data retrieval!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -586,7 +587,7 @@ CONTAINS
 
     !Allocate space for the path names
     IF (nrows*NColumnsOfData.NE.SIZE(PathNames)) THEN
-        CALL SetLastMessage('Error in sizing of path name array for '//ThisFile%pFileData%Name//'!',f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage('Error in sizing of path name array for '//ThisFile%pFileData%Name//'!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -594,7 +595,7 @@ CONTAINS
               ThisFile%Year4000Flag(nrows*NColumnsOfData)       , &
               STAT=ErrorCode                                    )
     IF (ErrorCode .NE. 0) THEN
-        CALL setLastMessage('Error in allocating memory for the path names for '//ThisFile%pFileData%Name//'!',f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage('Error in allocating memory for the path names for '//ThisFile%pFileData%Name//'!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -613,7 +614,7 @@ CONTAINS
                  LEN_TRIM(PathNames(indx))          , &
                  ErrorCode                          )
       IF (ErrorCode .NE. 0) THEN
-          CALL SetLastMessage('Error in finding the interval length of a pathname in file '//ThisFile%pFileData%Name//'!',f_iFatal,ThisProcedure)
+          CALL ModuleLogger%SetLastMessage('Error in finding the interval length of a pathname in file '//ThisFile%pFileData%Name//'!',f_iFatal,ThisProcedure)
           iStat = -1
           RETURN
       END IF
@@ -630,7 +631,7 @@ CONTAINS
 
         CASE DEFAULT
           IF (Interval_InMinutes .NE. ThisFile%Interval_InMinutes) THEN
-              CALL SetLastMessage('The data intervals for records in DSS input file '//ThisFile%pFileData%Name//' should be the same!',f_iFatal,ThisProcedure)
+              CALL ModuleLogger%SetLastMessage('The data intervals for records in DSS input file '//ThisFile%pFileData%Name//' should be the same!',f_iFatal,ThisProcedure)
               iStat = -1
               RETURN
           END IF
@@ -698,7 +699,7 @@ CONTAINS
     !Allocate space for the path names
     ALLOCATE (ThisFile%PathNames(SIZE(PathNames)),STAT=ErrorCode)
     IF (ErrorCode .NE. 0) THEN
-        CALL SetLastMessage('Error in allocating memory for the path names for file '//ThisFile%pFileData%Name//'!',f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage('Error in allocating memory for the path names for file '//ThisFile%pFileData%Name//'!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -713,7 +714,7 @@ CONTAINS
               ThisFile%DataType(SIZE(DataType)) , &
               STAT=ErrorCode                    )
     IF (ErrorCode .NE. 0) THEN
-        CALL SetLastMessage('Error in allocating memory for the data unit and type for '//ThisFile%pFileData%Name//'!',f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage('Error in allocating memory for the data unit and type for '//ThisFile%pFileData%Name//'!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -771,7 +772,7 @@ CONTAINS
     !Allocate space for the path names
     ALLOCATE (ThisFile%PathNames(nrows*NColumnsOfData),STAT=ErrorCode)
     IF (ErrorCode .NE. 0) THEN
-        CALL SetLastMessage('Error in allocating memory for the path names for file '//ThisFile%pFileData%Name//'!',f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage('Error in allocating memory for the path names for file '//ThisFile%pFileData%Name//'!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -785,7 +786,7 @@ CONTAINS
               ThisFile%DataType(SIZE(DataType)) , &
               STAT=ErrorCode                    )
     IF (ErrorCode .NE. 0) THEN
-        CALL SetLastMessage('Error in allocating memory for the data unit and type for file '//ThisFile%pFileData%Name//'!',f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage('Error in allocating memory for the data unit and type for file '//ThisFile%pFileData%Name//'!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -824,7 +825,7 @@ CONTAINS
 
     !Make sure that the size of Pathnames and RateTypeData are equal
     !IF (SIZE(ThisFile%PathNames).NE.SIZE(ThisFile%RateTypeData)) &
-    !  CALL LogMessage('RateTypeData flag for '//TRIM(ThisFile%Descriptor)//' is not sized properly!',3,ThisProcedure)
+    !  CALL ModuleLogger%LogMessage('RateTypeData flag for '//TRIM(ThisFile%Descriptor)//' is not sized properly!',3,ThisProcedure)
 
   END SUBROUTINE SetRateTypeData_DSSInFile
 
@@ -868,7 +869,7 @@ CONTAINS
             IF (Stat .EQ. 0) Data = rData(1,1)
 
         CLASS DEFAULT
-            CALL SetLastMessage('The specified data type cannot be read from file '//ThisFile%pFileData%Name//'!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('The specified data type cannot be read from file '//ThisFile%pFileData%Name//'!',f_iFatal,ThisProcedure)
             iStat = -1
 
     END SELECT
@@ -903,7 +904,7 @@ CONTAINS
             IF (FileReadCode .EQ. 0) Data = rData(1,:)
 
         CLASS DEFAULT
-            CALL SetLastMessage('The specified data type cannot be read from file '//ThisFile%pFileData%Name//'!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('The specified data type cannot be read from file '//ThisFile%pFileData%Name//'!',f_iFatal,ThisProcedure)
             iStat = -1
 
     END SELECT
@@ -935,7 +936,7 @@ CONTAINS
         TYPE IS (INTEGER)
             !Do nothing
         CLASS DEFAULT
-            CALL SetLastMessage('The specified data type cannot be read from file '//ThisFile%pFileData%Name//'!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('The specified data type cannot be read from file '//ThisFile%pFileData%Name//'!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
     END SELECT
@@ -1027,7 +1028,7 @@ CONTAINS
               FileReadCode    = 2
               MessageArray(1) = 'Error in reading data from pathname'
               MessageArray(2) = TRIM(ThisFile%PathNames(indx))
-              CALL LogMessage(MessageArray(1:2),f_iWarn,ThisProcedure)
+              CALL ModuleLogger%LogMessage(MessageArray(1:2),f_iWarn,ThisProcedure)
               RETURN
           ELSE
               FileReadCode = 0
@@ -1115,7 +1116,7 @@ CONTAINS
           Stat=2
           MessageArray(1) = 'Error in reading data from pathname'
           MessageArray(2) = TRIM(PathName)
-          CALL LogMessage(MessageArray(1:2),f_iWarn,ThisProcedure)
+          CALL ModuleLogger%LogMessage(MessageArray(1:2),f_iWarn,ThisProcedure)
           RETURN
       ELSE
           Stat=0
@@ -1262,7 +1263,7 @@ CONTAINS
             CALL WriteRegularIntervalMatrix_DssOutFile(ThisFile,SimulationTime,rData,FinalPrint)
 
         CLASS DEFAULT
-            CALL LogMessage('Array of data type cannot be written to file '//ThisFile%pFileData%Name//'!',f_iWarn,ThisProcedure)
+            CALL ModuleLogger%LogMessage('Array of data type cannot be written to file '//ThisFile%pFileData%Name//'!',f_iWarn,ThisProcedure)
 
     END SELECT
 
@@ -1299,7 +1300,7 @@ CONTAINS
         TYPE IS (REAL(8))
             ThisFile%ValuesForOutput(:,:,DataPointer) = Data
         CLASS DEFAULT
-            CALL LogMessage('Array of data type acnnot be written to file '//ThisFile%pFileData%Name//'!',f_iWarn,ThisProcedure)
+            CALL ModuleLogger%LogMessage('Array of data type acnnot be written to file '//ThisFile%pFileData%Name//'!',f_iWarn,ThisProcedure)
             RETURN
     END SELECT
 
@@ -1354,7 +1355,7 @@ CONTAINS
               IF (ErrorCode .GT. 10) THEN
                   MessageArray(1) = 'Error in writing data to path for file '//ThisFile%pFileData%Name
                   MessageArray(2) = PathName
-                  CALL LogMessage(MessageArray(1:2),f_iWarn,ThisProcedure)
+                  CALL ModuleLogger%LogMessage(MessageArray(1:2),f_iWarn,ThisProcedure)
                   RETURN
               END IF
           END DO
@@ -1411,7 +1412,7 @@ CONTAINS
     IF (ErrorCode .GT. 10) THEN
         MessageArray(1) = 'Error in writing data to pathname in file'//ThisFile%pFileData%Name
         MessageArray(2) = PathName
-        CALL LogMessage(MessageArray(1:2),f_iWarn,ThisProcedure)
+        CALL ModuleLogger%LogMessage(MessageArray(1:2),f_iWarn,ThisProcedure)
         RETURN
     END IF
     ThisFile%pFileData%IFLTAB = IFLTAB
@@ -1483,7 +1484,7 @@ CONTAINS
     DO
         IF (DSSFile%DSSFileIndex .EQ. DSSFileIndex) RETURN
         IF (.NOT. ASSOCIATED(DSSFile%Next)) THEN
-            CALL SetLastMessage('File with index '//TRIM(IntToText(DSSFileIndex))//' cannot be located in the list of opened DSS files!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('File with index '//TRIM(IntToText(DSSFileIndex))//' cannot be located in the list of opened DSS files!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -1514,7 +1515,7 @@ CONTAINS
             IF (DSSFile%Name .EQ. FileName) RETURN
         END IF
         IF (.NOT. ASSOCIATED(DSSFile%Next)) THEN
-            CALL SetLastMessage('File '//TRIM(FileName)//' cannot be located in the list of opened DSS files!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('File '//TRIM(FileName)//' cannot be located in the list of opened DSS files!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -1538,7 +1539,7 @@ CONTAINS
     iStat = 0
 
     IF (LEN_TRIM(ADJUSTL(String)) .GT. f_iDefaultDataUnitAndTypeLength) THEN
-      CALL SetLastMessage('DataUnit or DataType is longer than allowed!',f_iFatal,ThisProcedure)
+      CALL ModuleLogger%SetLastMessage('DataUnit or DataType is longer than allowed!',f_iFatal,ThisProcedure)
       iStat = -1
     END IF
 
@@ -1603,7 +1604,7 @@ CONTAINS
                  LEN_TRIM(PathName(indx)) , &
                  ErrorCode                )
       IF (ErrorCode .NE. 0) THEN
-          CALL SetLastMessage('Error in finding the interval length of the pathname '//TRIM(PathName(indx))//'!',f_iFatal,ThisProcedure)
+          CALL ModuleLogger%SetLastMessage('Error in finding the interval length of the pathname '//TRIM(PathName(indx))//'!',f_iFatal,ThisProcedure)
           iStat = -1
           RETURN
       END IF
@@ -1662,7 +1663,7 @@ CONTAINS
     CALL ZSET('UNIT','',ScratchFileUnitN)
     CALL ZOPEN(IFLTAB_Scratch,'DSSScratch.DSS',ErrorCode)
     IF (ErrorCode .NE. 0) THEN
-        CALL SetLastMessage('Error in opening temporary file to squeeze '//TRIM(OldFile%pFileData%Name),f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage('Error in opening temporary file to squeeze '//TRIM(OldFile%pFileData%Name),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -1679,7 +1680,7 @@ CONTAINS
     CALL ZSET('UNIT','',OldFile%pFileData%UnitN)
     CALL ZOPEN(OldFile%pFileData%IFLTAB,OldFile%pFileData%Name,ErrorCode)
     IF (ErrorCode .NE. 0) THEN
-        CALL SetLastMessage('Error in opening file '//TRIM(OldFile%pFileData%Name)//' after squeezing!',f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage('Error in opening file '//TRIM(OldFile%pFileData%Name)//' after squeezing!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -1736,5 +1737,10 @@ CONTAINS
 
   END SUBROUTINE Rewind_To_BeginningOfTSData
 
+
+  SUBROUTINE DSSFile_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    ModuleLogger => Logger
+  END SUBROUTINE DSSFile_SetModuleLogger
 
 END MODULE

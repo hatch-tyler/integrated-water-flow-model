@@ -21,9 +21,8 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 MODULE Class_Budget
-  USE MessageLogger           , ONLY: SetLastMessage           , &
+  USE MessageLogger           , ONLY: MessageLoggerType        , &
                                       MessageArray             , &
-                                      MessageLoggerType        , &
                                       f_iFatal
   USE GeneralUtilities        , ONLY: LocateInList             , &
                                       UpperCase                , &
@@ -74,6 +73,8 @@ MODULE Class_Budget
                                       BudgetHeaderType         , &
                                       LocationDataType
   IMPLICIT NONE
+
+  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
   
   
   
@@ -94,7 +95,8 @@ MODULE Class_Budget
   PRIVATE
   PUBLIC :: BudgetType          , &
             PrintIntervalType   , &
-            ModifiedAgSupplyReq 
+            ModifiedAgSupplyReq , &
+            Budget_SetModuleLogger
 
   
   ! -------------------------------------------------------------
@@ -518,14 +520,14 @@ CONTAINS
     IF (TrackTime) THEN
         CALL CTimeStep_To_RTimeStep(cPrintTimeStepLocal,rPrintDeltaT,iPrintDeltaT_InMinutes,ErrorCode)
         IF (ErrorCode .NE. 0) THEN
-            CALL SetLastMessage(TRIM(cPrintTimeStepLocal)//' is not a recognized time interval for printing of '//TRIM(Budget%Header%cBudgetDescriptor)//'!',f_iFatal,ThisProcedure) 
+            CALL Budget%Logger%SetLastMessage(TRIM(cPrintTimeStepLocal)//' is not a recognized time interval for printing of '//TRIM(Budget%Header%cBudgetDescriptor)//'!',f_iFatal,ThisProcedure) 
             iStat = -1
             RETURN
         END IF
         IF (iPrintDeltaT_InMinutes .LT. DeltaT_InMinutes) THEN
             MessageArray(1) = 'Print interval ('//TRIM(cPrintTimeStepLocal)//') for '//TRIM(Budget%Header%cBudgetDescriptor)//' cannot be less than the'
             MessageArray(2) = 'simulation time step ('//TRIM(Budget%Header%TimeStep%Unit)//')!'
-            CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+            CALL Budget%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -553,7 +555,7 @@ CONTAINS
     IF (iFileType.NE.f_iTXT  .AND. iFileType.NE.f_iDSS) THEN
         MessageArray(1) = 'Currently budget tables can be printed only to text or DSS files!'
         MessageArray(2) = '('//TRIM(Budget%Header%cBudgetDescriptor)//')'
-        CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+        CALL Budget%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF  
@@ -717,7 +719,7 @@ CONTAINS
             CALL Budget%InputFile%ReadData(cTime,iLoc,rTempValues,ErrorCode,iStat) 
             IF (ErrorCode .NE. 0) THEN
                 CALL Budget%InputFile%GetName(cFileName)
-                CALL SetLastMessage('Error in reading data from file '//cFileName//'!',f_iFatal,ThisProcedure)
+                CALL Budget%Logger%SetLastMessage('Error in reading data from file '//cFileName//'!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -869,14 +871,14 @@ CONTAINS
     IF (TrackTime) THEN
       CALL CTimeStep_To_RTimeStep(cPrintTimeStepLocal,rPrintDeltaT,iPrintDeltaT_InMinutes,ErrorCode)
       IF (ErrorCode .NE. 0) THEN
-          CALL SetLastMessage(TRIM(cPrintTimeStepLocal)//' is not a recognized time interval for printing of '//TRIM(Budget%Header%cBudgetDescriptor)//'!',f_iFatal,ThisProcedure) 
+          CALL Budget%Logger%SetLastMessage(TRIM(cPrintTimeStepLocal)//' is not a recognized time interval for printing of '//TRIM(Budget%Header%cBudgetDescriptor)//'!',f_iFatal,ThisProcedure) 
           iStat = -1
           RETURN
       END IF
       IF (iPrintDeltaT_InMinutes .LT. DeltaT_InMinutes) THEN
         MessageArray(1) = 'Print interval ('//TRIM(cPrintTimeStepLocal)//') for '//TRIM(Budget%Header%cBudgetDescriptor)//' cannot be less than the'
         MessageArray(2) = 'simulation time step ('//TRIM(Budget%Header%TimeStep%Unit)//')!'
-        CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+        CALL Budget%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
       END IF
@@ -904,7 +906,7 @@ CONTAINS
     IF (iFileType.NE.f_iTXT  .AND. iFileType.NE.f_iDSS) THEN
       MessageArray(1) = 'Currently budget tables can be printed only to text or DSS files!'
       MessageArray(2) = '('//TRIM(Budget%Header%cBudgetDescriptor)//')'
-      CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+      CALL Budget%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
       iStat = -1
       RETURN
     END IF  
@@ -1509,7 +1511,7 @@ CONTAINS
     CALL Budget%InputFile%ReadData(cTime,iLocation,rTempValues,ErrorCode,iStat)  
     IF (ErrorCode .NE. 0) THEN
         CALL Budget%InputFile%GetName(cFileName)
-        CALL SetLastMessage('Error in reading data from file '//cFileName//'!',f_iFatal,ThisProcedure)
+        CALL Budget%Logger%SetLastMessage('Error in reading data from file '//cFileName//'!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -1972,7 +1974,7 @@ CONTAINS
     IF (OutputData%TimeStep%TrackTime) THEN
       !Make sure the right data is supplied
       IF (.NOT. PRESENT(cDateAndTime)) THEN
-          CALL SetLastMessage('Print-out date and time for time-tracked budget output is missing!',f_iFatal,ThisProcedure) 
+          CALL ModuleLogger%SetLastMessage('Print-out date and time for time-tracked budget output is missing!',f_iFatal,ThisProcedure)
           iStat = -1
           RETURN
       END IF
@@ -1981,7 +1983,7 @@ CONTAINS
     ELSE
       !Make sure the right data is supplied
       IF (.NOT. PRESENT(rTime)) THEN
-          CALL SetLastMessage('Print-out time for non-time-tracked budget output is missing!',f_iFatal,ThisProcedure) 
+          CALL ModuleLogger%SetLastMessage('Print-out time for non-time-tracked budget output is missing!',f_iFatal,ThisProcedure)
           iStat = -1
           RETURN
       END IF
@@ -2180,11 +2182,11 @@ CONTAINS
       IF (PrintInterval%PrintBeginDateAndTime .TSGT. PrintInterval%PrintEndDateAndTime) THEN
         MessageArray(1)='Starting date and time for budget table print-out for '//TRIM(OutputData%cBudgetDescriptor)
         MessageArray(2)='cannot be less than the ending date and time!'
-        CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
       END IF
-      
+
       !Make sure output begin date and time is not less than data begin date and time
       IF (PrintInterval%PrintBeginDateAndTime .TSLT. cStartDateAndTime) PrintInterval%PrintBeginDateAndTime = cStartDateAndTime
       
@@ -2217,11 +2219,11 @@ CONTAINS
       IF (PrintInterval%PrintBeginTime .GT. PrintInterval%PrintEndTime) THEN
         MessageArray(1)='Starting time for budget table print-out '//TRIM(OutputData%cBudgetDescriptor)
         MessageArray(2)='cannot be less than the ending time!'
-        CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
       END IF
-      
+
       !Make sure output begin time is not less than data begin time
       IF (PrintInterval%PrintBeginTime .LT. rStartTime) PrintInterval%PrintBeginTime = rStartTime
       
@@ -2240,5 +2242,11 @@ CONTAINS
     END IF
 
   END SUBROUTINE AdjustOutputTimes
+
+
+  SUBROUTINE Budget_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    ModuleLogger => Logger
+  END SUBROUTINE Budget_SetModuleLogger
 
 END MODULE

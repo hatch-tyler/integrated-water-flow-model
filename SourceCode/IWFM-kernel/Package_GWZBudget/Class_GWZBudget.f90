@@ -22,9 +22,7 @@
 !***********************************************************************
 MODULE Class_GWZBudget
   USE IWFM_Kernel_Version         , ONLY: IWFMKernelVersion
-  USE MessageLogger               , ONLY: SetLastMessage            , &
-                                          EchoProgress              , &
-                                          MessageLoggerType         , &
+  USE MessageLogger               , ONLY: MessageLoggerType         , &
                                           MessageArray              , &
                                           f_iFatal
   USE GeneralUtilities            , ONLY: IntToText                 , &
@@ -73,8 +71,10 @@ MODULE Class_GWZBudget
                                           LakeGWConnectorType       
   USE Package_AppSmallWatershed   , ONLY: AppSmallWatershedType     , &
                                           f_iSWShedBaseFlowBCID     , &
-                                          f_iSWShedPercFlowBCID 
+                                          f_iSWShedPercFlowBCID
   IMPLICIT NONE
+
+  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
   
   
   
@@ -130,7 +130,8 @@ MODULE Class_GWZBudget
   ! -------------------------------------------------------------
   PRIVATE
   PUBLIC :: GWZBudgetType     , &
-            f_iZBudgetType_GW 
+            f_iZBudgetType_GW , &
+            GWZBudget_SetModuleLogger
             
   
 
@@ -1051,7 +1052,7 @@ CONTAINS
     !Compile flow id numbers simulated in the model
     ALLOCATE (ModelFlowTypes(NFlowTypes) , STAT=ErrorCode)
     IF (ErrorCode.NE.0) THEN
-        CALL SetLastMessage('Error in allocating memory for groundwater Z-Budget flow types',f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage('Error in allocating memory for groundwater Z-Budget flow types',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -1821,5 +1822,10 @@ CONTAINS
            
   END SUBROUTINE ComputeVelocity
 
+
+  SUBROUTINE GWZBudget_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    ModuleLogger => Logger
+  END SUBROUTINE GWZBudget_SetModuleLogger
 
 END MODULE

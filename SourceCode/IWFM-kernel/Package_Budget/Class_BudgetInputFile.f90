@@ -21,8 +21,7 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 MODULE Class_BudgetInputFile
-  USE MessageLogger           , ONLY: SetLastMessage        , &
-                                      MessageLoggerType     , &
+  USE MessageLogger           , ONLY: MessageLoggerType     , &
                                       f_iFatal
   USE TimeSeriesUtilities     , ONLY: TimeStepType 
   USE GeneralUtilities        , ONLY: IntToText             , &
@@ -35,6 +34,8 @@ MODULE Class_BudgetInputFile
                                       f_iGroup
   USE Budget_Parameters
   IMPLICIT NONE
+
+  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
   
   
 
@@ -54,7 +55,8 @@ MODULE Class_BudgetInputFile
   PRIVATE
   PUBLIC :: BudgetInputFileType               , &
             LocationDataType                  , &
-            BudgetHeaderType                        
+            BudgetHeaderType                  , &
+            BudgetInputFile_SetModuleLogger
   
   
   ! -------------------------------------------------------------
@@ -413,7 +415,7 @@ CONTAINS
       !Make sure that this is inded a Budget file
       IF (.NOT. InputFile%DoesHDFObjectExist(cAttributesDir//'/DSSOutput%cPathNames')) THEN
           CALL InputFile%GetName(cFileName)
-          CALL SetLastMessage('File '//TRIM(cFileName)//' is not a Budget file type!',f_iFatal,ThisProcedure)
+          CALL ModuleLogger%SetLastMessage('File '//TRIM(cFileName)//' is not a Budget file type!',f_iFatal,ThisProcedure)
           iStat = -1
           RETURN
       END IF
@@ -608,5 +610,11 @@ CONTAINS
     END ASSOCIATE  
 
   END SUBROUTINE ReadHeader_FromBinFile
-  
+
+
+  SUBROUTINE BudgetInputFile_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    ModuleLogger => Logger
+  END SUBROUTINE BudgetInputFile_SetModuleLogger
+
 END MODULE

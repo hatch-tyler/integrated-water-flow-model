@@ -78,6 +78,26 @@ MODULE Package_Model
   USE Class_BaseHydrograph        , ONLY: BaseHydrograph_SetModuleLogger
   USE Class_TecplotOutput         , ONLY: TecplotOutput_SetModuleLogger
   USE Class_PairedData            , ONLY: PairedData_SetModuleLogger
+  USE Class_BaseFileType          , ONLY: BaseFile_SetModuleLogger
+  USE Class_AsciiFileType         , ONLY: AsciiFile_SetModuleLogger
+  USE Class_DSSFileType           , ONLY: DSSFile_SetModuleLogger
+  USE Class_FortBinaryFileType    , ONLY: FortBinFile_SetModuleLogger
+  USE Class_HDF5FileType          , ONLY: HDF5File_SetModuleLogger
+  USE IOInterface                 , ONLY: IOInterface_SetModuleLogger
+  USE TSDFileHandler              , ONLY: TSDFileHandler_SetModuleLogger
+  USE Class_Version               , ONLY: Version_SetModuleLogger
+  USE GeneralUtilities            , ONLY: GeneralUtils_SetModuleLogger
+  USE GenericLinkedList            , ONLY: GenLinkedList_SetModuleLogger
+  USE TimeSeriesUtilities         , ONLY: TimeSeries_SetModuleLogger
+  USE Class_Budget                , ONLY: Budget_SetModuleLogger
+  USE Class_BudgetInputFile       , ONLY: BudgetInputFile_SetModuleLogger
+  USE Class_SystemData            , ONLY: SystemData_SetModuleLogger
+  USE Class_ZBudget               , ONLY: ZBudget_SetModuleLogger
+  USE Class_ZBudgetHeader         , ONLY: ZBudgetHeader_SetModuleLogger
+  USE Class_ZoneList              , ONLY: ZoneList_SetModuleLogger
+  USE Package_Supply              , ONLY: Supply_SetModuleLogger
+  USE Class_GWZBudget             , ONLY: GWZBudget_SetModuleLogger
+  USE WSA_ANN                     , ONLY: WSA_ANN_SetModuleLogger
   USE Package_Misc                , ONLY: FlowDestinationType                         , &
                                           SolverDataType                              , &
                                           Print_Screen                                , &
@@ -939,6 +959,26 @@ CONTAINS
     CALL AppGW_SetAllModuleLoggers(DefaultLogger)
     CALL AppStream_SetAllModuleLoggers(DefaultLogger)
     CALL RootZone_SetAllModuleLoggers(DefaultLogger)
+    CALL BaseFile_SetModuleLogger(DefaultLogger)
+    CALL AsciiFile_SetModuleLogger(DefaultLogger)
+    CALL DSSFile_SetModuleLogger(DefaultLogger)
+    CALL FortBinFile_SetModuleLogger(DefaultLogger)
+    CALL HDF5File_SetModuleLogger(DefaultLogger)
+    CALL IOInterface_SetModuleLogger(DefaultLogger)
+    CALL TSDFileHandler_SetModuleLogger(DefaultLogger)
+    CALL Version_SetModuleLogger(DefaultLogger)
+    CALL GeneralUtils_SetModuleLogger(DefaultLogger)
+    CALL GenLinkedList_SetModuleLogger(DefaultLogger)
+    CALL TimeSeries_SetModuleLogger(DefaultLogger)
+    CALL Budget_SetModuleLogger(DefaultLogger)
+    CALL BudgetInputFile_SetModuleLogger(DefaultLogger)
+    CALL SystemData_SetModuleLogger(DefaultLogger)
+    CALL ZBudget_SetModuleLogger(DefaultLogger)
+    CALL ZBudgetHeader_SetModuleLogger(DefaultLogger)
+    CALL ZoneList_SetModuleLogger(DefaultLogger)
+    CALL Supply_SetModuleLogger(DefaultLogger)
+    CALL GWZBudget_SetModuleLogger(DefaultLogger)
+    CALL WSA_ANN_SetModuleLogger(DefaultLogger)
 
     !Matrix data
     CALL Model%Matrix%SetLogger(DefaultLogger)
@@ -1069,6 +1109,26 @@ CONTAINS
     CALL AppGW_SetAllModuleLoggers(DefaultLogger)
     CALL AppStream_SetAllModuleLoggers(DefaultLogger)
     CALL RootZone_SetAllModuleLoggers(DefaultLogger)
+    CALL BaseFile_SetModuleLogger(DefaultLogger)
+    CALL AsciiFile_SetModuleLogger(DefaultLogger)
+    CALL DSSFile_SetModuleLogger(DefaultLogger)
+    CALL FortBinFile_SetModuleLogger(DefaultLogger)
+    CALL HDF5File_SetModuleLogger(DefaultLogger)
+    CALL IOInterface_SetModuleLogger(DefaultLogger)
+    CALL TSDFileHandler_SetModuleLogger(DefaultLogger)
+    CALL Version_SetModuleLogger(DefaultLogger)
+    CALL GeneralUtils_SetModuleLogger(DefaultLogger)
+    CALL GenLinkedList_SetModuleLogger(DefaultLogger)
+    CALL TimeSeries_SetModuleLogger(DefaultLogger)
+    CALL Budget_SetModuleLogger(DefaultLogger)
+    CALL BudgetInputFile_SetModuleLogger(DefaultLogger)
+    CALL SystemData_SetModuleLogger(DefaultLogger)
+    CALL ZBudget_SetModuleLogger(DefaultLogger)
+    CALL ZBudgetHeader_SetModuleLogger(DefaultLogger)
+    CALL ZoneList_SetModuleLogger(DefaultLogger)
+    CALL Supply_SetModuleLogger(DefaultLogger)
+    CALL GWZBudget_SetModuleLogger(DefaultLogger)
+    CALL WSA_ANN_SetModuleLogger(DefaultLogger)
 
     !Solution scheme control data
     CALL Model%Matrix%SetSolver(MSOLVE,0.01d0*Model%Convergence%Tolerance,Model%Convergence%IterMax,RELAX,iStat)  ;  iF (iStat .EQ. -1) RETURN
@@ -1451,6 +1511,26 @@ CONTAINS
     CALL AppGW_SetAllModuleLoggers(DefaultLogger)
     CALL AppStream_SetAllModuleLoggers(DefaultLogger)
     CALL RootZone_SetAllModuleLoggers(DefaultLogger)
+    CALL BaseFile_SetModuleLogger(DefaultLogger)
+    CALL AsciiFile_SetModuleLogger(DefaultLogger)
+    CALL DSSFile_SetModuleLogger(DefaultLogger)
+    CALL FortBinFile_SetModuleLogger(DefaultLogger)
+    CALL HDF5File_SetModuleLogger(DefaultLogger)
+    CALL IOInterface_SetModuleLogger(DefaultLogger)
+    CALL TSDFileHandler_SetModuleLogger(DefaultLogger)
+    CALL Version_SetModuleLogger(DefaultLogger)
+    CALL GeneralUtils_SetModuleLogger(DefaultLogger)
+    CALL GenLinkedList_SetModuleLogger(DefaultLogger)
+    CALL TimeSeries_SetModuleLogger(DefaultLogger)
+    CALL Budget_SetModuleLogger(DefaultLogger)
+    CALL BudgetInputFile_SetModuleLogger(DefaultLogger)
+    CALL SystemData_SetModuleLogger(DefaultLogger)
+    CALL ZBudget_SetModuleLogger(DefaultLogger)
+    CALL ZBudgetHeader_SetModuleLogger(DefaultLogger)
+    CALL ZoneList_SetModuleLogger(DefaultLogger)
+    CALL Supply_SetModuleLogger(DefaultLogger)
+    CALL GWZBudget_SetModuleLogger(DefaultLogger)
+    CALL WSA_ANN_SetModuleLogger(DefaultLogger)
 
     !Solution scheme control data
     CALL Model%Matrix%SetSolver(MSOLVE,0.01d0*Model%Convergence%Tolerance,Model%Convergence%IterMax,RELAX,iStat)  ;  IF (iStat .EQ. -1) RETURN
@@ -1820,6 +1900,26 @@ CONTAINS
     CALL AppGW_SetAllModuleLoggers(DefaultLogger)
     CALL AppStream_SetAllModuleLoggers(DefaultLogger)
     CALL RootZone_SetAllModuleLoggers(DefaultLogger)
+    CALL BaseFile_SetModuleLogger(DefaultLogger)
+    CALL AsciiFile_SetModuleLogger(DefaultLogger)
+    CALL DSSFile_SetModuleLogger(DefaultLogger)
+    CALL FortBinFile_SetModuleLogger(DefaultLogger)
+    CALL HDF5File_SetModuleLogger(DefaultLogger)
+    CALL IOInterface_SetModuleLogger(DefaultLogger)
+    CALL TSDFileHandler_SetModuleLogger(DefaultLogger)
+    CALL Version_SetModuleLogger(DefaultLogger)
+    CALL GeneralUtils_SetModuleLogger(DefaultLogger)
+    CALL GenLinkedList_SetModuleLogger(DefaultLogger)
+    CALL TimeSeries_SetModuleLogger(DefaultLogger)
+    CALL Budget_SetModuleLogger(DefaultLogger)
+    CALL BudgetInputFile_SetModuleLogger(DefaultLogger)
+    CALL SystemData_SetModuleLogger(DefaultLogger)
+    CALL ZBudget_SetModuleLogger(DefaultLogger)
+    CALL ZBudgetHeader_SetModuleLogger(DefaultLogger)
+    CALL ZoneList_SetModuleLogger(DefaultLogger)
+    CALL Supply_SetModuleLogger(DefaultLogger)
+    CALL GWZBudget_SetModuleLogger(DefaultLogger)
+    CALL WSA_ANN_SetModuleLogger(DefaultLogger)
 
     !Solution scheme control data
     Model%Convergence%Tolerance = Toler

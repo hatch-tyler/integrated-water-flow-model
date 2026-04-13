@@ -21,8 +21,7 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 MODULE Package_Supply
-  USE MessageLogger               , ONLY: MessageLoggerType              , &
-                                          EchoProgress
+  USE MessageLogger               , ONLY: MessageLoggerType
   USE Package_Misc                , ONLY: f_iFlowDest_Element               , &
                                           f_iSupply_Diversion               , &
                                           f_iSupply_Pumping                 , &
@@ -44,9 +43,12 @@ MODULE Package_Supply
                                           f_iAdjustForAgUrb                            
   USE Package_ComponentConnectors , ONLY: SupplyDestinationConnectorType
   IMPLICIT NONE
+
+  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
   
   PRIVATE
   PUBLIC :: Supply                                     ,  &
+            Supply_SetModuleLogger                    ,  &
                                                        
             IrigFracFileType                           ,  &
             
@@ -86,7 +88,7 @@ CONTAINS
     REAL(8),POINTER                               :: pDiver_Ag(:),pDiver_Urb(:),pPump_Ag(:),pPump_Urb(:)
     
     !Inform user
-    CALL EchoProgress('Compiling water supply')
+    CALL ModuleLogger%EchoProgress('Compiling water supply')
 
     !Initialize 
     iDemandCalcLocation = RootZone%GetDemandCalcLocation()
@@ -120,6 +122,11 @@ CONTAINS
     END IF
   
   END SUBROUTINE Supply
-  
+
+
+  SUBROUTINE Supply_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    ModuleLogger => Logger
+  END SUBROUTINE Supply_SetModuleLogger
 
 END MODULE

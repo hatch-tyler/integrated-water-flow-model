@@ -21,12 +21,14 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 MODULE Class_BaseFileType
-  USE MessageLogger     , ONLY: SetLastMessage  , &
-                                MessageArray    , & 
+  USE MessageLogger     , ONLY: MessageLoggerType , &
+                                MessageArray    , &
                                 f_iFatal
   USE GeneralUtilities
   USE,INTRINSIC :: ISO_FORTRAN_ENV
   IMPLICIT NONE
+
+  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
   
   
   
@@ -46,7 +48,8 @@ MODULE Class_BaseFileType
   PRIVATE
   PUBLIC  :: BaseFileType    , &
              IsFileOpen      , &
-             GetAUnitNumber
+             GetAUnitNumber  , &
+             BaseFile_SetModuleLogger
 
   
   ! -------------------------------------------------------------
@@ -202,10 +205,10 @@ CONTAINS
     IF (Error .EQ. 0) THEN
         !Do nothing; read/write action was successful
     ELSEIF (IS_IOSTAT_END(Error)) THEN
-        CALL SetLastMessage('Error in reading data! End-of-file reached in file '//TRIM(ThisFile%Name),f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage('Error in reading data! End-of-file reached in file '//TRIM(ThisFile%Name),f_iFatal,ThisProcedure)
         iStat = -1
     ELSEIF (Error .EQ. 47) THEN
-        CALL SetLastMessage('Error in writing out to file! File '//TRIM(ThisFile%Name)//' is read-only',f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage('Error in writing out to file! File '//TRIM(ThisFile%Name)//' is read-only',f_iFatal,ThisProcedure)
         iStat = -1
     ELSE
         IF (PRESENT(iErrorLine)) THEN
@@ -214,12 +217,12 @@ CONTAINS
                 iLen                    = LEN(cDataType)
                 cDataType_Local(1:iLen) = LowerCase(cDataType)
                 cDataType_Local         = ADJUSTL(cDataType_Local)
-                CALL SetLastMessage('Error in reading '//TRIM(cDataType_Local)//' data from file '//TRIM(ThisFile%Name)//' at or around line '//TRIM(IntToText(iErrorLine))//'!',f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage('Error in reading '//TRIM(cDataType_Local)//' data from file '//TRIM(ThisFile%Name)//' at or around line '//TRIM(IntToText(iErrorLine))//'!',f_iFatal,ThisProcedure)
             ELSE 
-                CALL SetLastMessage('Error in reading data from file '//TRIM(ThisFile%Name)//' at or around line '//TRIM(IntToText(iErrorLine))//'!',f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage('Error in reading data from file '//TRIM(ThisFile%Name)//' at or around line '//TRIM(IntToText(iErrorLine))//'!',f_iFatal,ThisProcedure)
             END IF
         ELSE
-            CALL SetLastMessage('Error in reading data from file '//TRIM(ThisFile%Name)//'!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Error in reading data from file '//TRIM(ThisFile%Name)//'!',f_iFatal,ThisProcedure)
         END IF
         iStat = -1
     END IF 
@@ -270,5 +273,10 @@ CONTAINS
 
   END FUNCTION IsFileOpen
 
+
+  SUBROUTINE BaseFile_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    ModuleLogger => Logger
+  END SUBROUTINE BaseFile_SetModuleLogger
 
 END MODULE

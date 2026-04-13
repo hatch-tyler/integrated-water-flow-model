@@ -21,9 +21,11 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 MODULE GenericLinkedList
-  USE MessageLogger  , ONLY: SetLastMessage  , &
+  USE MessageLogger  , ONLY: MessageLoggerType , &
                              f_iFatal
   IMPLICIT NONE
+
+  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
   
   
   
@@ -42,7 +44,8 @@ MODULE GenericLinkedList
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: GenericLinkedListType  
+  PUBLIC :: GenericLinkedListType  , &
+            GenLinkedList_SetModuleLogger  
   
   
   ! -------------------------------------------------------------
@@ -211,7 +214,7 @@ CONTAINS
     !Allocate return array
     ALLOCATE (iArray(List%iNNodes) , STAT=iErrorCode , ERRMSG=cErrorMsg)
     IF (iErrorCode .NE. 0) THEN
-        CALL SetLastMessage('Error in allocating memory to convert a linked list to an integer array.'//NEW_LINE('x')//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage('Error in allocating memory to convert a linked list to an integer array.'//NEW_LINE('x')//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -277,6 +280,11 @@ CONTAINS
     List%pCurrent => List%pCurrent%pNext
     
   END SUBROUTINE Next
-  
-  
+
+
+  SUBROUTINE GenLinkedList_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    ModuleLogger => Logger
+  END SUBROUTINE GenLinkedList_SetModuleLogger
+
 END MODULE
