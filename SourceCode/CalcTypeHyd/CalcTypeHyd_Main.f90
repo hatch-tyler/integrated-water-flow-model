@@ -16,7 +16,7 @@ PROGRAM CalcTypeHyd_Main
                                SetLogFileName, &
                                KillLogFile   , &
                                LogLastMessage, &
-                               LogMessage    , &
+                               DefaultLogger , &
                                f_iInfo
   USE Class_CalcTypeHyd, ONLY: CalcTypeHydType
 
@@ -39,10 +39,10 @@ PROGRAM CalcTypeHyd_Main
     END IF
 
     ! Banner
-    CALL LogMessage(' ', f_iInfo, 'CalcTypeHyd')
-    CALL LogMessage('Program CalcTypeHyd - Cluster type hydrograph computation', &
+    CALL DefaultLogger%LogMessage(' ', f_iInfo, 'CalcTypeHyd')
+    CALL DefaultLogger%LogMessage('Program CalcTypeHyd - Cluster type hydrograph computation', &
                     f_iInfo, 'CalcTypeHyd')
-    CALL LogMessage(' ', f_iInfo, 'CalcTypeHyd')
+    CALL DefaultLogger%LogMessage(' ', f_iInfo, 'CalcTypeHyd')
 
     ! Get input file from command line or use default
     iNArgs = COMMAND_ARGUMENT_COUNT()
@@ -69,8 +69,8 @@ PROGRAM CalcTypeHyd_Main
     ! Clean up
     CALL App%Kill()
 
-    CALL LogMessage(' ', f_iInfo, 'CalcTypeHyd')
-    CALL LogMessage('NORMAL TERMINATION - CalcTypeHyd', f_iInfo, 'CalcTypeHyd')
+    CALL DefaultLogger%LogMessage(' ', f_iInfo, 'CalcTypeHyd')
+    CALL DefaultLogger%LogMessage('NORMAL TERMINATION - CalcTypeHyd', f_iInfo, 'CalcTypeHyd')
 
     EXIT  ! Normal exit from single-pass block
   END DO

@@ -40,11 +40,10 @@ PROGRAM IWFM_f2_MultiModel
   USE MessageLogger          , ONLY: PrintRunTime            , &
                                      SetLogFileName          , &
                                      KillLogFile             , &
-                                     LogMessage              , &
-                                     SetLastMessage          , &  
+                                     DefaultLogger           , &
                                      LogLastMessage          , &
                                      GetLastMessage          , &
-                                     MessageArray            , & 
+                                     MessageArray            , &
                                      f_iInfo                 , &
                                      f_iMessage              , &
                                      f_iWarn                 , &
@@ -279,7 +278,7 @@ PROGRAM IWFM_f2_MultiModel
           MessageArray(2) = 'Maximum exchange flow that did not converge (units in consistent'
           MessageArray(3) = ' simulation units) at time step '//TRIM(IntToText(Connections%iMaxNonConvergeTStep))//':'
           WRITE (MessageArray(4),'(G13.6,4X,A,4X,A)') Connections%rMaxNonConvergeFlow,TRIM(Connections%cMaxNonConvergeVar),TRIM(Connections%cMaxNonConvergeModel)
-          CALL LogMessage(MessageArray(1:4),f_iWarn,'',iDestination=f_iSCREEN_FILE)
+          CALL DefaultLogger%LogMessage(MessageArray(1:4),f_iWarn,'',iDestination=f_iSCREEN_FILE)
       END IF
   END IF
       
@@ -330,12 +329,12 @@ CONTAINS
     IF (iStat .EQ. -1) GOTO 10
     
     !Print title
-    CALL LogMessage(REPEAT('*',50)//f_cLineFeed//ArrangeText('IWFM',50)//f_cLineFeed//ArrangeText('Multi-Model Simulation',50)//f_cLineFeed//REPEAT('*',50),f_iMessage,'',f_iFILE)
+    CALL DefaultLogger%LogMessage(REPEAT('*',50)//f_cLineFeed//ArrangeText('IWFM',50)//f_cLineFeed//ArrangeText('Multi-Model Simulation',50)//f_cLineFeed//REPEAT('*',50),f_iMessage,'',f_iFILE)
     
     !Get the current date and time, and display
     CALL DATE_AND_TIME(DATE=RDATE,TIME=RTIME)
-    CALL LogMessage(f_cLineFeed,f_iMessage,'',f_iFILE)
-    CALL LogMessage(' THIS RUN IS MADE ON '//                       &
+    CALL DefaultLogger%LogMessage(f_cLineFeed,f_iMessage,'',f_iFILE)
+    CALL DefaultLogger%LogMessage(' THIS RUN IS MADE ON '//                       &
                     RDATE(5:6)//'/'//RDATE(7:8)//'/'//RDATE(1:4)//  &
                     ' AT '                                      //  &
                     RTIME(1:2)//':'//RTIME(3:4)//':'//RTIME(5:6),f_iMessage,'',f_iFILE)
@@ -345,20 +344,20 @@ CONTAINS
     IF (iStat .NE. 0) GOTO 10
     
     !Print out models
-    CALL LogMessage(f_cLineFeed,f_iMessage,'',f_iFILE)
-    CALL LogMessage(' THE FOLLOWING MODELS WERE USED IN THIS RUN:',f_iMessage,'',f_iFILE)
+    CALL DefaultLogger%LogMessage(f_cLineFeed,f_iMessage,'',f_iFILE)
+    CALL DefaultLogger%LogMessage(' THE FOLLOWING MODELS WERE USED IN THIS RUN:',f_iMessage,'',f_iFILE)
     DO indx=1,iNModels
         WRITE (MessageArray(1),'(I3,4X,A10,4X,A)') iModelIDs(indx),cModelNames(indx),TRIM(cSimFileNames(indx))
-        CALL LogMessage(MessageArray(1),f_iMessage,'',f_iFILE)
+        CALL DefaultLogger%LogMessage(MessageArray(1),f_iMessage,'',f_iFILE)
     END DO
-    CALL LogMessage(f_cLineFeed//' *** CHECK THE RESPECTIVE SimulationMessages.out FILE FOR MODEL-SPECIFIC MESSAGES.',f_iMessage,'',f_iFILE)
+    CALL DefaultLogger%LogMessage(f_cLineFeed//' *** CHECK THE RESPECTIVE SimulationMessages.out FILE FOR MODEL-SPECIFIC MESSAGES.',f_iMessage,'',f_iFILE)
     
     !Active images (First one is the master that controls communication between models, last one is the error checker)
     iNActiveImages = iNModels + 2
     
     !Make sure there are enough processors 
     IF (iNActiveImages .GT. NUM_IMAGES()) THEN
-        CALL SetLastMessage('There should be at least '//TRIM(IntToText(iNActiveImages))//' processor to run this many models concurrently!',f_iFatal,ThisProcedure)
+        CALL DefaultLogger%SetLastMessage('There should be at least '//TRIM(IntToText(iNActiveImages))//' processor to run this many models concurrently!',f_iFatal,ThisProcedure)
         iStat = -1
         GOTO 10
     END IF
@@ -494,7 +493,7 @@ CONTAINS
         
         !Can't link model to itself
         IF (iModel1 .EQ. iModel2) THEN
-            CALL SetLastMessage('Model '//TRIM(IntToText(iModel1))//' is being linked to itself at nodes '//TRIM(IntToText(iNode1))//' and '//TRIM(IntToText(iNode2))//'!',f_iFatal,ThisProcedure)
+            CALL DefaultLogger%SetLastMessage('Model '//TRIM(IntToText(iModel1))//' is being linked to itself at nodes '//TRIM(IntToText(iNode1))//' and '//TRIM(IntToText(iNode2))//'!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -502,7 +501,7 @@ CONTAINS
         !Convert first model ID to index (can't convert node IDs yet since models have not been instantiated)
         iIndex = LocateInList(iModel1 , iModelIDs)
         IF (iIndex .EQ. 0) THEN
-            CALL SetLastMessage('Model ID '//TRIM(IntToText(iModel1))//' listed for model linkage data for groundwater is not defined!',f_iFatal,ThisProcedure)
+            CALL DefaultLogger%SetLastMessage('Model ID '//TRIM(IntToText(iModel1))//' listed for model linkage data for groundwater is not defined!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -511,7 +510,7 @@ CONTAINS
         !Convert second model ID to index (can't convert node IDs yet since models have not been instantiated)
         iIndex = LocateInList(iModel2 , iModelIDs)
         IF (iIndex .EQ. 0) THEN
-            CALL SetLastMessage('Model ID '//TRIM(IntToText(iModel2))//' listed for model linkage data for groundwater is not defined!',f_iFatal,ThisProcedure)
+            CALL DefaultLogger%SetLastMessage('Model ID '//TRIM(IntToText(iModel2))//' listed for model linkage data for groundwater is not defined!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -571,7 +570,7 @@ CONTAINS
         !Convert first model ID to index; can't convert stream node IDs yet since models have not been instantiated
         iIndex = LocateInList(Connections%iModelST(indx) , iModelIDs)
         IF (iIndex .EQ. 0) THEN
-            CALL SetLastMessage('Model ID '//TRIM(IntToText(Connections%iModelST(indx)))//' listed for model linkage data for streams is not defined!',f_iFatal,ThisProcedure)
+            CALL DefaultLogger%SetLastMessage('Model ID '//TRIM(IntToText(Connections%iModelST(indx)))//' listed for model linkage data for streams is not defined!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -580,7 +579,7 @@ CONTAINS
         !Convert second model ID to index; can't convert stream node IDs yet since models have not been instantiated
         iIndex = LocateInList(Connections%iModelConnectedST(indx) , iModelIDs)
         IF (iIndex .EQ. 0) THEN
-            CALL SetLastMessage('Model ID '//TRIM(IntToText(Connections%iModelConnectedST(indx)))//' listed for model linkage data for streams is not defined!',f_iFatal,ThisProcedure)
+            CALL DefaultLogger%SetLastMessage('Model ID '//TRIM(IntToText(Connections%iModelConnectedST(indx)))//' listed for model linkage data for streams is not defined!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -622,7 +621,7 @@ CONTAINS
         !Convert first model ID to index; can't convert other IDs yet since models have not been instantiated
         iIndex = LocateInList(Connections%iModelBP(indx) , iModelIDs)
         IF (iIndex .EQ. 0) THEN
-            CALL SetLastMessage('Model ID '//TRIM(IntToText(Connections%iModelBP(indx)))//' listed for model linkage data for bypasses is not defined!',f_iFatal,ThisProcedure)
+            CALL DefaultLogger%SetLastMessage('Model ID '//TRIM(IntToText(Connections%iModelBP(indx)))//' listed for model linkage data for bypasses is not defined!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -631,7 +630,7 @@ CONTAINS
         !Convert second model ID to index; can't convert other IDs yet since models have not been instantiated
         iIndex = LocateInList(Connections%iModelConnectedBP(indx) , iModelIDs)
         IF (iIndex .EQ. 0) THEN
-            CALL SetLastMessage('Model ID '//TRIM(IntToText(Connections%iModelConnectedBP(indx)))//' listed for model linkage data for bypasses is not defined!',f_iFatal,ThisProcedure)
+            CALL DefaultLogger%SetLastMessage('Model ID '//TRIM(IntToText(Connections%iModelConnectedBP(indx)))//' listed for model linkage data for bypasses is not defined!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -674,7 +673,7 @@ CONTAINS
         !Convert first model ID to index; can't convert other IDs yet since models have not been instantiated
         iIndex = LocateInList(Connections%iModelDiv(indx) , iModelIDs)
         IF (iIndex .EQ. 0) THEN
-            CALL SetLastMessage('Model ID '//TRIM(IntToText(Connections%iModelDiv(indx)))//' listed for model linkage data for diversions is not defined!',f_iFatal,ThisProcedure)
+            CALL DefaultLogger%SetLastMessage('Model ID '//TRIM(IntToText(Connections%iModelDiv(indx)))//' listed for model linkage data for diversions is not defined!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -683,7 +682,7 @@ CONTAINS
         !Convert second model ID to index; can't convert other IDs yet since models have not been instantiated
         iIndex = LocateInList(Connections%iModelConnectedDiv(indx) , iModelIDs)
         IF (iIndex .EQ. 0) THEN
-            CALL SetLastMessage('Model ID '//TRIM(IntToText(Connections%iModelConnectedDiv(indx)))//' listed for model linkage data for diversions is not defined!',f_iFatal,ThisProcedure)
+            CALL DefaultLogger%SetLastMessage('Model ID '//TRIM(IntToText(Connections%iModelConnectedDiv(indx)))//' listed for model linkage data for diversions is not defined!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -905,21 +904,21 @@ CONTAINS
         iImage = indxModel + 1
         !Check beginning time 
         IF (TRIM(TimeStep_Check%CurrentDateAndTime) .NE. TRIM(TimeStep[iImage]%CurrentDateAndTime)) THEN
-            CALL SetLastMessage('Simulation beginning date must be the same for all models!',f_iFatal,ThisProcedure)
+            CALL DefaultLogger%SetLastMessage('Simulation beginning date must be the same for all models!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
         
         !Check timestep length
         IF (TRIM(TimeStep_Check%Unit) .NE. TRIM(TimeStep[iImage]%Unit)) THEN
-            CALL SetLastMessage('Simulation timestep length must be the same for all models!',f_iFatal,ThisProcedure)
+            CALL DefaultLogger%SetLastMessage('Simulation timestep length must be the same for all models!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
 
         !Check ending time
         IF (iNTime_Check .NE. iNTime[iImage]) THEN
-            CALL SetLastMessage('Simulation end date must be the same for all models!',f_iFatal,ThisProcedure)
+            CALL DefaultLogger%SetLastMessage('Simulation end date must be the same for all models!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -965,13 +964,13 @@ CONTAINS
             iNodeIndex = LocateInList(iNodeID,Model%iNodeIDs)
             !Is node ID legit?
             IF (iNodeIndex .EQ. 0) THEN
-                CALL SetLastMessage('Node '//TRIM(IntTotext(iNodeID))//' listed for model linkage is not in '//TRIM(cModelNames(iModelIndex)[1])//' model!',f_iFatal,ThisProcedure)
+                CALL DefaultLogger%SetLastMessage('Node '//TRIM(IntTotext(iNodeID))//' listed for model linkage is not in '//TRIM(cModelNames(iModelIndex)[1])//' model!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
             !Node must be a boundary node
             IF (.NOT. Model%IsBoundaryNode(iNodeIndex)) THEN
-                CALL SetLastMessage('Node '//TRIM(IntTotext(iNodeID))//' listed for model linkage in '//TRIM(cModelNames(iModelIndex)[1])//' model is not a boundary node!',f_iFatal,ThisProcedure)
+                CALL DefaultLogger%SetLastMessage('Node '//TRIM(IntTotext(iNodeID))//' listed for model linkage in '//TRIM(cModelNames(iModelIndex)[1])//' model is not a boundary node!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -990,13 +989,13 @@ CONTAINS
                 iNodeIndex = LocateInList(iNodeID,Model%iNodeIDs)
                 !Is node ID legit?
                 IF (iNodeIndex .EQ. 0) THEN
-                    CALL SetLastMessage('Groundwater node '//TRIM(IntTotext(iNodeID))//' listed for model linkage is not in model '//TRIM(cModelNames(iModelIndex)[1])//'!',f_iFatal,ThisProcedure)
+                    CALL DefaultLogger%SetLastMessage('Groundwater node '//TRIM(IntTotext(iNodeID))//' listed for model linkage is not in model '//TRIM(cModelNames(iModelIndex)[1])//'!',f_iFatal,ThisProcedure)
                     iStat = -1
                     RETURN
                 END IF
                 !Node must be a boundary node
                 IF (.NOT. Model%IsBoundaryNode(iNodeIndex)) THEN
-                    CALL SetLastMessage('Groundwater node '//TRIM(IntTotext(iNodeID))//' listed for model linkage in '//TRIM(cModelNames(iModelIndex)[1])//' model is not a boundary node!',f_iFatal,ThisProcedure)
+                    CALL DefaultLogger%SetLastMessage('Groundwater node '//TRIM(IntTotext(iNodeID))//' listed for model linkage in '//TRIM(cModelNames(iModelIndex)[1])//' model is not a boundary node!',f_iFatal,ThisProcedure)
                     iStat = -1
                     RETURN
                 END IF
@@ -1023,7 +1022,7 @@ CONTAINS
              iNodeIndex = LocateInList(iNodeID,Model%iStrmNodeIDs)
              !Is node ID legit?
              IF (iNodeIndex .EQ. 0) THEN
-                 CALL SetLastMessage('Stream node '//TRIM(IntTotext(iNodeID))//' listed for model linkage is not in model '//TRIM(cModelNames(iModelIndex)[1])//'!',f_iFatal,ThisProcedure)
+                 CALL DefaultLogger%SetLastMessage('Stream node '//TRIM(IntTotext(iNodeID))//' listed for model linkage is not in model '//TRIM(cModelNames(iModelIndex)[1])//'!',f_iFatal,ThisProcedure)
                  iStat = -1
                  RETURN
              END IF
@@ -1037,7 +1036,7 @@ CONTAINS
              iNodeIndex = LocateInList(iNodeID,Model%iStrmNodeIDs)
              !Is node ID legit?
              IF (iNodeIndex .EQ. 0) THEN
-                 CALL SetLastMessage('Stream node '//TRIM(IntTotext(iNodeID))//' listed for model linkage is not in model '//TRIM(cModelNames(iModelIndex)[1])//'!',f_iFatal,ThisProcedure)
+                 CALL DefaultLogger%SetLastMessage('Stream node '//TRIM(IntTotext(iNodeID))//' listed for model linkage is not in model '//TRIM(cModelNames(iModelIndex)[1])//'!',f_iFatal,ThisProcedure)
                  iStat = -1
                  RETURN
              END IF
@@ -1063,7 +1062,7 @@ CONTAINS
             !Convert bypass ID
             iIndex = LocateInList(iBPID , iBypassIDs)
             IF (iIndex .EQ. 0) THEN
-                CALL SetLastMessage('Bypass '//TRIM(IntTotext(iBPID))//' listed for model linkage is not in the exporting model '//TRIM(cModelNames(iModelIndex)[1])//'!',f_iFatal,ThisProcedure)
+                CALL DefaultLogger%SetLastMessage('Bypass '//TRIM(IntTotext(iBPID))//' listed for model linkage is not in the exporting model '//TRIM(cModelNames(iModelIndex)[1])//'!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -1072,7 +1071,7 @@ CONTAINS
             !Make sure bypass is destined to outside of the model that it is taken out of
             CALL Model%GetBypassDiversionOriginDestData(.TRUE.,iIndex,iStrmNodeExport,iDestType,iDest)
             IF (iDestType .NE. f_iFlowDest_Outside) THEN
-                CALL SetLastMessage('Bypass '//TRIM(IntTotext(iBPID))//' listed for model linkage in model '//TRIM(cModelNames(iModelIndex)[1])//' is not delivered outside that model!',f_iFatal,ThisProcedure)
+                CALL DefaultLogger%SetLastMessage('Bypass '//TRIM(IntTotext(iBPID))//' listed for model linkage in model '//TRIM(cModelNames(iModelIndex)[1])//' is not delivered outside that model!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -1083,7 +1082,7 @@ CONTAINS
             !Convert bypass ID
             iIndex = LocateInList(iConnectedBPID , iBypassIDs)
             IF (iIndex .EQ. 0) THEN
-                CALL SetLastMessage('Bypass '//TRIM(IntTotext(iConnectedBPID))//' listed for model linkage is not in the importing model '//TRIM(cModelNames(iModelIndex)[1])//'!',f_iFatal,ThisProcedure)
+                CALL DefaultLogger%SetLastMessage('Bypass '//TRIM(IntTotext(iConnectedBPID))//' listed for model linkage is not in the importing model '//TRIM(cModelNames(iModelIndex)[1])//'!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -1092,7 +1091,7 @@ CONTAINS
             !Make sure bypass is being imported
             CALL Model%GetBypassDiversionOriginDestData(.TRUE.,iIndex,iStrmNodeExport,iDestType,iDest)
             IF (iStrmNodeExport .NE. 0) THEN
-                CALL SetLastMessage('Bypass '//TRIM(IntTotext(iConnectedBPID))//' listed for model linkage in model '//TRIM(cModelNames(iModelIndex)[1])//' is not imported from outside the model area!',f_iFatal,ThisProcedure)
+                CALL DefaultLogger%SetLastMessage('Bypass '//TRIM(IntTotext(iConnectedBPID))//' listed for model linkage in model '//TRIM(cModelNames(iModelIndex)[1])//' is not imported from outside the model area!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -1116,7 +1115,7 @@ CONTAINS
             !Convert diversion ID
             iIndex = LocateInList(iDivID , iDiverIDs)
             IF (iIndex .EQ. 0) THEN
-                CALL SetLastMessage('Diversion '//TRIM(IntTotext(iDivID))//' listed for model linkage is not in the exporting model '//TRIM(cModelNames(iModelIndex)[1])//'!',f_iFatal,ThisProcedure)
+                CALL DefaultLogger%SetLastMessage('Diversion '//TRIM(IntTotext(iDivID))//' listed for model linkage is not in the exporting model '//TRIM(cModelNames(iModelIndex)[1])//'!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -1125,7 +1124,7 @@ CONTAINS
             !Make sure diversion is destined to outside of the model that it is taken out of
             CALL Model%GetBypassDiversionOriginDestData(.FALSE.,iIndex,iStrmNodeExport,iDestType,iDest)
             IF (iDestType .NE. f_iFlowDest_Outside) THEN
-                CALL SetLastMessage('Diversion '//TRIM(IntTotext(iDivID))//' listed for model linkage in model '//TRIM(cModelNames(iModelIndex)[1])//' is not delivered outside that model!',f_iFatal,ThisProcedure)
+                CALL DefaultLogger%SetLastMessage('Diversion '//TRIM(IntTotext(iDivID))//' listed for model linkage in model '//TRIM(cModelNames(iModelIndex)[1])//' is not delivered outside that model!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -1136,7 +1135,7 @@ CONTAINS
             !Convert diversion ID
             iIndex = LocateInList(iConnectedDivID , iDiverIDs)
             IF (iIndex .EQ. 0) THEN
-                CALL SetLastMessage('Diversion '//TRIM(IntTotext(iConnectedDivID))//' listed for model linkage is not in the importing model '//TRIM(cModelNames(iModelIndex)[1])//'!',f_iFatal,ThisProcedure)
+                CALL DefaultLogger%SetLastMessage('Diversion '//TRIM(IntTotext(iConnectedDivID))//' listed for model linkage is not in the importing model '//TRIM(cModelNames(iModelIndex)[1])//'!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -1145,7 +1144,7 @@ CONTAINS
             !Make sure diversion is being imported
             CALL Model%GetBypassDiversionOriginDestData(.FALSE.,iIndex,iStrmNodeExport,iDestType,iDest)
             IF (iStrmNodeExport .NE. 0) THEN
-                CALL SetLastMessage('Diversion '//TRIM(IntTotext(iConnectedDivID))//' listed for model linkage in model '//TRIM(cModelNames(iModelIndex)[1])//' is not imported from outside the model area!',f_iFatal,ThisProcedure)
+                CALL DefaultLogger%SetLastMessage('Diversion '//TRIM(IntTotext(iConnectedDivID))//' listed for model linkage in model '//TRIM(cModelNames(iModelIndex)[1])//' is not imported from outside the model area!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -1279,7 +1278,7 @@ CONTAINS
                 MessageArray(1) = 'The following (model, node, layer) has zero effective conductance!'
                 MessageArray(2) = 'This means it is either an inactive node or being linked to all inactive nodes.'
                 MessageArray(3) = '(' // TRIM(cModelNames(iModel1)) // ', ' // TRIM(IntToText(iNode1)) // ', ' // TRIM(IntToText(iLayer1)) // ')'
-                CALL LogMessage(MessageArray(1:3),f_iInfo,ThisProcedure)
+                CALL DefaultLogger%LogMessage(MessageArray(1:3),f_iInfo,ThisProcedure)
             END IF
         END DO
     END IF
@@ -1321,10 +1320,10 @@ CONTAINS
         !Print time step
         WRITE (MessageArray(1),'(A)') '*   TIME STEP '//TRIM(IntToText(TimeStep%CurrentTimeStep))//' AT '//TRIM(TimeStep%CurrentDateAndTime)
         MessageArray(1) = f_cLineFeed//REPEAT('-',50)//f_cLineFeed//TRIM(MessageArray(1))//f_cLineFeed//REPEAT('-',50)
-        CALL LogMessage(MessageArray(1),f_iMessage,'',Destination=f_iFILE)
+        CALL DefaultLogger%LogMessage(MessageArray(1),f_iMessage,'',Destination=f_iFILE)
         
         !Print title for iteration and convergence tracking
-        CALL LogMessage('   ITER      CONVERGENCE      MAX.DIFF         FLOW           VARIABLE        MODEL'//f_cLineFeed//REPEAT('-',83),f_iMessage,'',Destination=f_iFILE)
+        CALL DefaultLogger%LogMessage('   ITER      CONVERGENCE      MAX.DIFF         FLOW           VARIABLE        MODEL'//f_cLineFeed//REPEAT('-',83),f_iMessage,'',Destination=f_iFILE)
     END IF
     
   END SUBROUTINE AdvanceTime
@@ -1639,7 +1638,7 @@ CONTAINS
         
         !Print-out converegence
         WRITE (cMessage,'(I7,4X,G13.6,4X,G13.6,4X,G13.6,4X,A,4X,A)') iIter,SQRT(rConverge),rDiffMax,rValue,ADJUSTL(cVariable),TRIM(ADJUSTL(cModel))
-        CALL LogMessage(TRIM(cMessage),f_iMessage,'',Destination=f_iFILE)
+        CALL DefaultLogger%LogMessage(TRIM(cMessage),f_iMessage,'',Destination=f_iFILE)
         
         !Did the models converge?
         IF (SQRT(rConverge) .GT. Connections%rConvergence) lConverged = .FALSE.
@@ -1700,10 +1699,10 @@ CONTAINS
         IF (cErrorMessage .NE. '') THEN
             IF (iErrModelIndex .GT. 0) THEN
                 cMessage      = '* MESSAGE GENERATED BY MODEL '// TRIM(cModelNames(iErrModelIndex))
-                CALL LogMessage(TRIM(cMessage)//f_cLineFeed//REPEAT('*',80),f_iMessage,'',f_iSCREEN)
+                CALL DefaultLogger%LogMessage(TRIM(cMessage)//f_cLineFeed//REPEAT('*',80),f_iMessage,'',f_iSCREEN)
                 cErrorMessage = TRIM(cErrorMessage) // f_cLineFeed // TRIM(cMessage) // f_cLineFeed // REPEAT('*',80)
             END IF
-            CALL LogMessage(TRIM(cErrorMessage),f_iMessage,'',Destination=f_iFILE)
+            CALL DefaultLogger%LogMessage(TRIM(cErrorMessage),f_iMessage,'',Destination=f_iFILE)
         END IF
     END IF
     

@@ -4,7 +4,7 @@
 !***********************************************************************
 MODULE Class_PESTOutput
 
-  USE MessageLogger    , ONLY: SetLastMessage , &
+  USE MessageLogger    , ONLY: MessageLoggerType , &
                                f_iFatal
   USE GeneralUtilities , ONLY: IntToText
 
@@ -12,8 +12,10 @@ MODULE Class_PESTOutput
 
   PRIVATE
   PUBLIC :: PESTOutputType
+  PUBLIC :: PESTOutput_SetModuleLogger
 
   CHARACTER(LEN=25), PARAMETER :: cModName = 'Class_PESTOutput'
+  TYPE(MessageLoggerType),POINTER,PRIVATE :: ModuleLogger => NULL()
 
   ! =====================================================================
   ! PESTOutputType - PEST instruction and PCF file writer
@@ -32,6 +34,18 @@ MODULE Class_PESTOutput
   END TYPE PESTOutputType
 
 CONTAINS
+
+
+  ! -------------------------------------------------------------
+  ! --- SET MODULE LOGGER
+  ! -------------------------------------------------------------
+  SUBROUTINE PESTOutput_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType),TARGET,INTENT(IN) :: Logger
+
+    ModuleLogger => Logger
+
+  END SUBROUTINE PESTOutput_SetModuleLogger
+
 
   ! =====================================================================
   ! New - Open instruction and PCF files, write header
@@ -52,7 +66,7 @@ CONTAINS
 
     OPEN(UNIT=iInsUnit, FILE=cInsFile, STATUS='REPLACE', IOSTAT=iErr)
     IF (iErr /= 0) THEN
-      CALL SetLastMessage('Cannot open instruction file: '//TRIM(cInsFile), f_iFatal, cModName)
+      CALL ModuleLogger%SetLastMessage('Cannot open instruction file: '//TRIM(cInsFile), f_iFatal, cModName)
       iStat = -1
       RETURN
     END IF
@@ -60,7 +74,7 @@ CONTAINS
 
     OPEN(UNIT=iPCFUnit, FILE=cPCFFile, STATUS='REPLACE', IOSTAT=iErr)
     IF (iErr /= 0) THEN
-      CALL SetLastMessage('Cannot open PCF file: '//TRIM(cPCFFile), f_iFatal, cModName)
+      CALL ModuleLogger%SetLastMessage('Cannot open PCF file: '//TRIM(cPCFFile), f_iFatal, cModName)
       CLOSE(iInsUnit)
       iStat = -1
       RETURN

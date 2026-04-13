@@ -24,7 +24,7 @@ MODULE IWFM_ZBudget_Exports
   USE,INTRINSIC :: ISO_C_BINDING , ONLY: C_INT                   , &
                                          C_DOUBLE                , &
                                          C_CHAR                  
-  USE MessageLogger              , ONLY: SetLastMessage          , &
+  USE MessageLogger              , ONLY: MessageLoggerType       , &
                                          f_iFatal
   USE TimeSeriesUtilities        , ONLY: TimeStepType            , &
                                          IncrementTimeStamp      , &
@@ -61,9 +61,21 @@ MODULE IWFM_ZBudget_Exports
   ! -------------------------------------------------------------
   INTEGER,PARAMETER                   :: ModNameLen = 22
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'IWFM_ZBudget_Exports::'
-  
+  TYPE(MessageLoggerType),POINTER,PRIVATE :: ModuleLogger => NULL()
+
 
 CONTAINS
+
+
+  ! -------------------------------------------------------------
+  ! --- SET MODULE LOGGER
+  ! -------------------------------------------------------------
+  SUBROUTINE IWFM_ZBudget_Exports_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType),TARGET,INTENT(IN) :: Logger
+
+    ModuleLogger => Logger
+
+  END SUBROUTINE IWFM_ZBudget_Exports_SetModuleLogger
 
 
     
@@ -612,7 +624,7 @@ CONTAINS
         TYPE IS (ZoneType)
             CALL ZBudget%GetTitleLines(iZone,pZone%Area*rFact_AR,pZone%cName,ZBudget%Header%ASCIIOutput%iLenTitles,cUnit_AR_F,cUnit_VL_F,cTitles_Work)
         CLASS DEFAULT
-            CALL SetLastMessage(TRIM(IntToText(iZone)) // ' cannot be located in the zone list!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage(TRIM(IntToText(iZone)) // ' cannot be located in the zone list!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
     END SELECT

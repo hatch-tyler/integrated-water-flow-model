@@ -25,7 +25,7 @@ MODULE IWFM_Model_Exports
   USE,INTRINSIC :: ISO_C_BINDING  , ONLY: C_INT                                    , &
                                           C_DOUBLE                                 , &
                                           C_CHAR
-  USE MessageLogger               , ONLY: SetLastMessage                           , &
+  USE MessageLogger               , ONLY: MessageLoggerType                        , &
                                           f_iWarn
   USE GeneralUtilities            , ONLY: FirstLocation                            , &
                                           GetFileDirectory                         , &
@@ -88,13 +88,25 @@ MODULE IWFM_Model_Exports
   ! -------------------------------------------------------------
   INTEGER,PRIVATE,PARAMETER                    :: iModNameLen = 20
   CHARACTER(LEN=iModNameLen),PRIVATE,PARAMETER :: cModName    = 'IWFM_Model_Exports::'
+  TYPE(MessageLoggerType),POINTER,PRIVATE :: ModuleLogger => NULL()
   
   
   
 CONTAINS
 
 
-    
+  ! -------------------------------------------------------------
+  ! --- SET MODULE LOGGER
+  ! -------------------------------------------------------------
+  SUBROUTINE IWFM_Model_Exports_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType),TARGET,INTENT(IN) :: Logger
+
+    ModuleLogger => Logger
+
+  END SUBROUTINE IWFM_Model_Exports_SetModuleLogger
+
+
+
 
 ! ******************************************************************
 ! ******************************************************************
@@ -157,7 +169,7 @@ CONTAINS
     END DO
     IF (iCurrentModelIndex .EQ. 0) THEN
         !$OMP END CRITICAL(IWFM_MODEL_MGMT)
-        CALL SetLastMessage('Maximum number of concurrent models reached!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Maximum number of concurrent models reached!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -240,7 +252,7 @@ CONTAINS
     END DO
     IF (iCurrentModelIndex .EQ. 0) THEN
         !$OMP END CRITICAL(IWFM_MODEL_MGMT)
-        CALL SetLastMessage('Maximum number of concurrent models reached!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Maximum number of concurrent models reached!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -346,7 +358,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -367,7 +379,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -389,7 +401,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -411,7 +423,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -432,7 +444,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -456,7 +468,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -477,7 +489,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -498,7 +510,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -530,7 +542,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -559,7 +571,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -588,7 +600,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -618,7 +630,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -670,7 +682,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -715,7 +727,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -752,7 +764,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -781,7 +793,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -807,7 +819,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -850,7 +862,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -906,7 +918,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -966,7 +978,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -1024,7 +1036,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -1061,7 +1073,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -1105,7 +1117,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -1148,7 +1160,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -1185,7 +1197,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -1222,7 +1234,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -1250,7 +1262,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -1276,7 +1288,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -1317,7 +1329,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -1365,7 +1377,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -1417,7 +1429,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -1467,7 +1479,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -1504,7 +1516,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -1548,7 +1560,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -1591,7 +1603,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -1634,7 +1646,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -1660,7 +1672,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -1687,7 +1699,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -1721,7 +1733,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -1751,7 +1763,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -1777,7 +1789,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -1800,7 +1812,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -1823,7 +1835,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -1847,7 +1859,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -1872,7 +1884,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -1896,7 +1908,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -1920,7 +1932,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -1940,7 +1952,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -1968,7 +1980,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -1999,7 +2011,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2020,7 +2032,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2042,7 +2054,7 @@ CONTAINS
       
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2069,7 +2081,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2102,7 +2114,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2124,7 +2136,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2144,7 +2156,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2165,7 +2177,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2185,7 +2197,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2206,7 +2218,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2226,7 +2238,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2246,7 +2258,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2267,7 +2279,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2292,7 +2304,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2316,7 +2328,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2339,7 +2351,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2360,7 +2372,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2382,7 +2394,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2404,7 +2416,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2426,7 +2438,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2447,7 +2459,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2468,7 +2480,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2489,7 +2501,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2510,7 +2522,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2531,7 +2543,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2550,7 +2562,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2571,7 +2583,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2592,7 +2604,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2614,7 +2626,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2635,7 +2647,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2657,7 +2669,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2678,7 +2690,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2699,7 +2711,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2719,7 +2731,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2739,7 +2751,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2760,7 +2772,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2781,7 +2793,7 @@ CONTAINS
      
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2805,7 +2817,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2830,7 +2842,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2854,7 +2866,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2875,7 +2887,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2899,7 +2911,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2921,7 +2933,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2942,7 +2954,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2963,7 +2975,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2984,7 +2996,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -3005,7 +3017,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -3026,7 +3038,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -3047,7 +3059,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -3071,7 +3083,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -3093,7 +3105,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -3114,7 +3126,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -3140,7 +3152,7 @@ CONTAINS
         
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -3229,7 +3241,7 @@ CONTAINS
         
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -3307,7 +3319,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -3336,7 +3348,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -3365,7 +3377,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -3394,7 +3406,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -3423,7 +3435,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -3452,7 +3464,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -3481,7 +3493,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -3510,7 +3522,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -3539,7 +3551,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -3568,7 +3580,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -3597,7 +3609,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -3626,7 +3638,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -3655,7 +3667,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -3684,7 +3696,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -3711,7 +3723,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -3732,7 +3744,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -3756,7 +3768,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -3777,7 +3789,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -3798,7 +3810,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -3823,7 +3835,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -3849,7 +3861,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -3870,7 +3882,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -3890,7 +3902,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -3914,7 +3926,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -3940,7 +3952,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -3965,7 +3977,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -3988,7 +4000,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -4010,7 +4022,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -4031,7 +4043,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -4050,7 +4062,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -4071,7 +4083,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -4092,7 +4104,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -4113,7 +4125,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -4133,7 +4145,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -4154,7 +4166,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -4179,7 +4191,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -4210,7 +4222,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -4236,7 +4248,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -4257,7 +4269,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -4276,7 +4288,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -4298,7 +4310,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -4320,7 +4332,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -4342,7 +4354,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -4364,7 +4376,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -4384,7 +4396,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -4409,7 +4421,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -4466,7 +4478,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -4486,7 +4498,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -4545,7 +4557,7 @@ CONTAINS
   
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -4564,7 +4576,7 @@ CONTAINS
 
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -4588,7 +4600,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -4609,7 +4621,7 @@ CONTAINS
   
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -4629,7 +4641,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -4651,7 +4663,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -4671,7 +4683,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -4690,7 +4702,7 @@ CONTAINS
 
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -4710,7 +4722,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -4761,7 +4773,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -4793,7 +4805,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -4822,7 +4834,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -4848,13 +4860,13 @@ CONTAINS
     !$OMP CRITICAL(IWFM_MODEL_MGMT)
     IF (iModelID .LT. 1 .OR. iModelID .GT. MAX_MODEL_SLOTS) THEN
         !$OMP END CRITICAL(IWFM_MODEL_MGMT)
-        CALL SetLastMessage('Model ID out of range',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Model ID out of range',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     IF (.NOT. ASSOCIATED(ModelSlots(iModelID)%ptr)) THEN
         !$OMP END CRITICAL(IWFM_MODEL_MGMT)
-        CALL SetLastMessage('Model '//TRIM(IntToText(iModelID))//' not instantiated',f_iWarn,cModName)
+        CALL ModuleLogger%SetLastMessage('Model '//TRIM(IntToText(iModelID))//' not instantiated',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF

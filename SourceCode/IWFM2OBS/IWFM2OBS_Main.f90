@@ -16,7 +16,7 @@ PROGRAM IWFM2OBS_Main
                              SetLogFileName, &
                              KillLogFile   , &
                              LogLastMessage, &
-                             LogMessage    , &
+                             DefaultLogger , &
                              f_iInfo
   USE Class_IWFM2OBS, ONLY: IWFM2OBSType
 
@@ -39,11 +39,11 @@ PROGRAM IWFM2OBS_Main
     END IF
 
     ! Banner
-    CALL LogMessage(' ', f_iInfo, 'IWFM2OBS')
-    CALL LogMessage('Program IWFM2OBS - Hydrograph to PEST SMP converter', &
+    CALL DefaultLogger%LogMessage(' ', f_iInfo, 'IWFM2OBS')
+    CALL DefaultLogger%LogMessage('Program IWFM2OBS - Hydrograph to PEST SMP converter', &
                     f_iInfo, 'IWFM2OBS')
-    CALL LogMessage('with multi-layer target support', f_iInfo, 'IWFM2OBS')
-    CALL LogMessage(' ', f_iInfo, 'IWFM2OBS')
+    CALL DefaultLogger%LogMessage('with multi-layer target support', f_iInfo, 'IWFM2OBS')
+    CALL DefaultLogger%LogMessage(' ', f_iInfo, 'IWFM2OBS')
 
     ! Get input file from command line or prompt
     iNArgs = COMMAND_ARGUMENT_COUNT()
@@ -76,8 +76,8 @@ PROGRAM IWFM2OBS_Main
     ! Clean up
     CALL App%Kill()
 
-    CALL LogMessage(' ', f_iInfo, 'IWFM2OBS')
-    CALL LogMessage('NORMAL TERMINATION - IWFM2OBS', f_iInfo, 'IWFM2OBS')
+    CALL DefaultLogger%LogMessage(' ', f_iInfo, 'IWFM2OBS')
+    CALL DefaultLogger%LogMessage('NORMAL TERMINATION - IWFM2OBS', f_iInfo, 'IWFM2OBS')
 
     EXIT  ! Normal exit from single-pass block
   END DO

@@ -4,8 +4,7 @@
 !***********************************************************************
 MODULE Class_HeadDifference
 
-  USE MessageLogger    , ONLY: SetLastMessage , &
-                               LogMessage     , &
+  USE MessageLogger    , ONLY: MessageLoggerType , &
                                f_iFatal       , &
                                f_iWarn        , &
                                f_iInfo
@@ -16,8 +15,10 @@ MODULE Class_HeadDifference
 
   PRIVATE
   PUBLIC :: HeadDifferenceType, HeadDiffPairType
+  PUBLIC :: HeadDifference_SetModuleLogger
 
   CHARACTER(LEN=25), PARAMETER :: cModName = 'Class_HeadDifference'
+  TYPE(MessageLoggerType),POINTER,PRIVATE :: ModuleLogger => NULL()
 
   ! =====================================================================
   ! HeadDiffPairType - One pair of well IDs for head differencing
@@ -56,6 +57,18 @@ MODULE Class_HeadDifference
 
 CONTAINS
 
+
+  ! -------------------------------------------------------------
+  ! --- SET MODULE LOGGER
+  ! -------------------------------------------------------------
+  SUBROUTINE HeadDifference_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType),TARGET,INTENT(IN) :: Logger
+
+    ModuleLogger => Logger
+
+  END SUBROUTINE HeadDifference_SetModuleLogger
+
+
   ! =====================================================================
   ! New - Read head difference pairs file
   ! =====================================================================
@@ -73,7 +86,7 @@ CONTAINS
     ! Count lines
     OPEN(UNIT=iUnit, FILE=cHDFile, STATUS='OLD', IOSTAT=iErr)
     IF (iErr /= 0) THEN
-      CALL SetLastMessage('Cannot open head difference file: '//TRIM(cHDFile), f_iFatal, cModName)
+      CALL ModuleLogger%SetLastMessage('Cannot open head difference file: '//TRIM(cHDFile), f_iFatal, cModName)
       iStat = -1
       RETURN
     END IF
@@ -86,7 +99,7 @@ CONTAINS
     END DO
 
     IF (iLine == 0) THEN
-      CALL SetLastMessage('No pairs in head difference file: '//TRIM(cHDFile), f_iFatal, cModName)
+      CALL ModuleLogger%SetLastMessage('No pairs in head difference file: '//TRIM(cHDFile), f_iFatal, cModName)
       CLOSE(iUnit)
       iStat = -1
       RETURN
@@ -95,7 +108,7 @@ CONTAINS
     This%iNPairs = iLine
     ALLOCATE(This%Pairs(iLine), STAT=iErr)
     IF (iErr /= 0) THEN
-      CALL SetLastMessage('Cannot allocate head difference pairs', f_iFatal, cModName)
+      CALL ModuleLogger%SetLastMessage('Cannot allocate head difference pairs', f_iFatal, cModName)
       CLOSE(iUnit)
       iStat = -1
       RETURN
@@ -106,7 +119,7 @@ CONTAINS
     DO n = 1, This%iNPairs
       READ(iUnit, *, IOSTAT=iErr) cID1, cID2
       IF (iErr /= 0) THEN
-        CALL SetLastMessage('Error reading line '//TRIM(IntToText(n))//' of '//TRIM(cHDFile), &
+        CALL ModuleLogger%SetLastMessage('Error reading line '//TRIM(IntToText(n))//' of '//TRIM(cHDFile), &
              f_iFatal, cModName)
         CLOSE(iUnit)
         iStat = -1
@@ -117,7 +130,7 @@ CONTAINS
 
       ! Validate: IDs must differ
       IF (This%Pairs(n)%cID1 == This%Pairs(n)%cID2) THEN
-        CALL SetLastMessage('Identical IDs in pair at line '//TRIM(IntToText(n))// &
+        CALL ModuleLogger%SetLastMessage('Identical IDs in pair at line '//TRIM(IntToText(n))// &
              ' of '//TRIM(cHDFile), f_iFatal, cModName)
         CLOSE(iUnit)
         iStat = -1
@@ -175,7 +188,7 @@ CONTAINS
         END IF
       END DO
       IF (.NOT. lFound) THEN
-        CALL SetLastMessage('Head difference ID '//TRIM(This%Pairs(n)%cID1)// &
+        CALL ModuleLogger%SetLastMessage('Head difference ID '//TRIM(This%Pairs(n)%cID1)// &
              ' not found in observation file', f_iFatal, cModName)
         iStat = -1
         RETURN
@@ -190,7 +203,7 @@ CONTAINS
         END IF
       END DO
       IF (.NOT. lFound) THEN
-        CALL SetLastMessage('Head difference ID '//TRIM(This%Pairs(n)%cID2)// &
+        CALL ModuleLogger%SetLastMessage('Head difference ID '//TRIM(This%Pairs(n)%cID2)// &
              ' not found in observation file', f_iFatal, cModName)
         iStat = -1
         RETURN

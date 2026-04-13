@@ -22,7 +22,7 @@
 !***********************************************************************
 PROGRAM BUDGET
   USE MessageLogger    , ONLY: SetLogFileName , &
-                               LogMessage     , &
+                               DefaultLogger  , &
                                LogLastMessage , &
                                PrintRunTime   , &
                                MessageArray   , &
@@ -55,7 +55,7 @@ PROGRAM BUDGET
   MessageArray(1) = 'PROGRAM: IWFM Budget Post-Processor ' // TRIM(IWFMVersion%GetVersion())
   MessageArray(2) = 'This run is made on '//TRIM(GetDate())//' at '//TRIM(GetTime())
   MessageArray(3) = ''
-  CALL LogMessage(MessageArray(1:3),f_iMessage,'',iDestination=f_iFILE)
+  CALL DefaultLogger%LogMessage(MessageArray(1:3),f_iMessage,'',iDestination=f_iFILE)
 
 
   !Print budget tables

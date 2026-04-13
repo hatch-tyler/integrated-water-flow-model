@@ -15,8 +15,7 @@
 !***********************************************************************
 MODULE Class_IWFM2OBS
 
-  USE MessageLogger      , ONLY: SetLastMessage   , &
-                                 LogMessage        , &
+  USE MessageLogger      , ONLY: MessageLoggerType , &
                                  LogLastMessage    , &
                                  f_iFatal          , &
                                  f_iWarn           , &
@@ -44,8 +43,10 @@ MODULE Class_IWFM2OBS
 
   PRIVATE
   PUBLIC :: IWFM2OBSType
+  PUBLIC :: IWFM2OBS_SetModuleLogger
 
   CHARACTER(LEN=25), PARAMETER :: cModName = 'Class_IWFM2OBS'
+  TYPE(MessageLoggerType),POINTER,PRIVATE :: ModuleLogger => NULL()
 
   ! Hydrograph type indices (matching original convention)
   INTEGER, PARAMETER :: iSUBSID = 1
@@ -100,6 +101,18 @@ MODULE Class_IWFM2OBS
   END TYPE IWFM2OBSType
 
 CONTAINS
+
+
+  ! -------------------------------------------------------------
+  ! --- SET MODULE LOGGER
+  ! -------------------------------------------------------------
+  SUBROUTINE IWFM2OBS_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType),TARGET,INTENT(IN) :: Logger
+
+    ModuleLogger => Logger
+
+  END SUBROUTINE IWFM2OBS_SetModuleLogger
+
 
   ! =====================================================================
   ! New - Read input file and initialize
@@ -165,7 +178,7 @@ CONTAINS
     END IF
 
     IF (iErr /= 0 .OR. (iDateSpec /= 1 .AND. iDateSpec /= 2)) THEN
-      CALL SetLastMessage('Invalid date format (must be 1 or 2)', &
+      CALL ModuleLogger%SetLastMessage('Invalid date format (must be 1 or 2)', &
            f_iFatal, cModName)
       iStat = -1; RETURN
     END IF
@@ -175,7 +188,7 @@ CONTAINS
     DO iHyd = iGWHEAD, iSUBSID, -1
       CALL InFile%ReadData(cLine, iStat)
       IF (iStat == -1) THEN
-        CALL SetLastMessage('Error reading '//TRIM(cHydName(iHyd))// &
+        CALL ModuleLogger%SetLastMessage('Error reading '//TRIM(cHydName(iHyd))// &
              ' hydrograph file path', f_iFatal, cModName)
         RETURN
       END IF
@@ -239,13 +252,13 @@ CONTAINS
 
     ! ---- Model discovery mode: discover .out files (reading deferred to Run) ----
     IF (This%lModelMode) THEN
-      CALL LogMessage('Model discovery mode: parsing simulation main file...', &
+      CALL ModuleLogger%LogMessage('Model discovery mode: parsing simulation main file...', &
            f_iInfo, cModName)
       CALL This%HydReader%DiscoverModelFiles(This%cSimMainFile, cWorkDir, &
            iDateSpec, iStat)
       IF (iStat /= 0) THEN
         CALL LogLastMessage()
-        CALL SetLastMessage('Failed to discover model files from: '// &
+        CALL ModuleLogger%SetLastMessage('Failed to discover model files from: '// &
              TRIM(This%cSimMainFile), f_iFatal, cModName)
         RETURN
       END IF
@@ -253,7 +266,7 @@ CONTAINS
       ! Log discovered .out files (direct in-memory reading happens in Run)
       DO iHyd = 1, iNUMHYD
         IF (This%HydReader%HydInfo(iHyd)%lActive) THEN
-          CALL LogMessage('  '//TRIM(cHydName(iHyd))//': .out = '// &
+          CALL ModuleLogger%LogMessage('  '//TRIM(cHydName(iHyd))//': .out = '// &
                TRIM(This%HydReader%HydInfo(iHyd)%cOutFilePath), f_iInfo, cModName)
         END IF
       END DO
@@ -277,15 +290,15 @@ CONTAINS
     ! Report configuration
     DO iHyd = 1, iNUMHYD
       IF (This%HydConfig(iHyd)%lActive) THEN
-        CALL LogMessage('  '//TRIM(cHydName(iHyd))//': '// &
+        CALL ModuleLogger%LogMessage('  '//TRIM(cHydName(iHyd))//': '// &
              TRIM(This%HydConfig(iHyd)%cHydFile), f_iInfo, cModName)
       END IF
     END DO
     IF (This%lHeadDiff) &
-      CALL LogMessage('  Head differences: '//TRIM(This%cHDiffFile), &
+      CALL ModuleLogger%LogMessage('  Head differences: '//TRIM(This%cHDiffFile), &
            f_iInfo, cModName)
     IF (This%lMultiLayer) &
-      CALL LogMessage('  Multi-layer target: active ('// &
+      CALL ModuleLogger%LogMessage('  Multi-layer target: active ('// &
            TRIM(IntToText(This%MultiLayer%GetNObs()))//' wells)', &
            f_iInfo, cModName)
 
@@ -306,7 +319,7 @@ CONTAINS
     DO iHyd = 1, iNUMHYD
       IF (.NOT. This%HydConfig(iHyd)%lActive) CYCLE
 
-      CALL LogMessage('Processing '//TRIM(cHydName(iHyd))//' hydrographs...', &
+      CALL ModuleLogger%LogMessage('Processing '//TRIM(cHydName(iHyd))//' hydrographs...', &
            f_iInfo, cModName)
 
       IF (This%lModelMode .AND. This%HydReader%HydInfo(iHyd)%lActive) THEN
@@ -315,7 +328,7 @@ CONTAINS
       ELSE IF (This%lModelMode .AND. &
                UpperCase(ADJUSTL(TRIM(This%HydConfig(iHyd)%cHydFile))) == 'AUTO') THEN
         ! Model discovery mode but no .out file found for this type — skip
-        CALL LogMessage('  '//TRIM(cHydName(iHyd))// &
+        CALL ModuleLogger%LogMessage('  '//TRIM(cHydName(iHyd))// &
              ': AUTO specified but no .out file discovered — skipping', &
              f_iInfo, cModName)
       ELSE
@@ -330,7 +343,7 @@ CONTAINS
 
       IF (iStat /= 0) THEN
         CALL LogLastMessage()
-        CALL LogMessage('  Error processing '//TRIM(cHydName(iHyd)), &
+        CALL ModuleLogger%LogMessage('  Error processing '//TRIM(cHydName(iHyd)), &
              f_iWarn, cModName)
         iStat = 0  ! Continue with other types
         CYCLE
@@ -369,7 +382,7 @@ CONTAINS
             CLOSE(199)
           END IF
           CLOSE(198)
-          CALL LogMessage('Copied '//TRIM(cSrcFile)//' -> '// &
+          CALL ModuleLogger%LogMessage('Copied '//TRIM(cSrcFile)//' -> '// &
                TRIM(cMlFile)//' (pre-averaged composite)', f_iInfo, cModName)
         END IF
       END BLOCK
@@ -377,12 +390,12 @@ CONTAINS
 
     ! Multi-layer target: post-process subsidence output (sum across layers)
     IF (This%lMultiLayer .AND. This%HydConfig(iSUBSID)%lActive) THEN
-      CALL LogMessage('Applying multi-layer subsidence summation...', &
+      CALL ModuleLogger%LogMessage('Applying multi-layer subsidence summation...', &
            f_iInfo, cModName)
       CALL ApplyMultiLayerSubsidence(This, iStat)
       IF (iStat /= 0) THEN
         CALL LogLastMessage()
-        CALL LogMessage('  Error in multi-layer subsidence processing', &
+        CALL ModuleLogger%LogMessage('  Error in multi-layer subsidence processing', &
              f_iWarn, cModName)
         iStat = 0
       END IF
@@ -433,7 +446,7 @@ CONTAINS
     iNLayers = This%MultiLayer%GetNLayers()
     ALLOCATE(rLayerVals(iNLayers), rLayerT(MAX(iNLayers, 4)), STAT=iErr)
     IF (iErr /= 0) THEN
-      CALL SetLastMessage('Cannot allocate layer values array', &
+      CALL ModuleLogger%SetLastMessage('Cannot allocate layer values array', &
            f_iFatal, cModName)
       iStat = -1; RETURN
     END IF
@@ -452,7 +465,7 @@ CONTAINS
     OPEN(UNIT=iInUnit, FILE=This%HydConfig(iGWHEAD)%cOutFile, &
          STATUS='OLD', IOSTAT=iErr)
     IF (iErr /= 0) THEN
-      CALL SetLastMessage('Cannot open per-layer SMP: '// &
+      CALL ModuleLogger%SetLastMessage('Cannot open per-layer SMP: '// &
            TRIM(This%HydConfig(iGWHEAD)%cOutFile), f_iFatal, cModName)
       iStat = -1; RETURN
     END IF
@@ -467,7 +480,7 @@ CONTAINS
 
     IF (iNAll == 0) THEN
       CLOSE(iInUnit)
-      CALL SetLastMessage('Per-layer SMP file is empty', f_iFatal, cModName)
+      CALL ModuleLogger%SetLastMessage('Per-layer SMP file is empty', f_iFatal, cModName)
       iStat = -1; RETURN
     END IF
 
@@ -475,7 +488,7 @@ CONTAINS
              rAllVals(iNAll), STAT=iErr)
     IF (iErr /= 0) THEN
       CLOSE(iInUnit)
-      CALL SetLastMessage('Cannot allocate memory for SMP records ('// &
+      CALL ModuleLogger%SetLastMessage('Cannot allocate memory for SMP records ('// &
            TRIM(IntToText(iNAll))//' lines)', f_iFatal, cModName)
       iStat = -1; RETURN
     END IF
@@ -499,7 +512,7 @@ CONTAINS
     iNAll = iRec
     CLOSE(iInUnit)
 
-    CALL LogMessage('  Read '//TRIM(IntToText(iNAll))// &
+    CALL ModuleLogger%LogMessage('  Read '//TRIM(IntToText(iNAll))// &
          ' records from per-layer SMP into memory', f_iInfo, cModName)
 
     ! ---- Step 2: Build contiguous ID index ----
@@ -532,13 +545,13 @@ CONTAINS
       END DO
       IF (iNUniq > 0) iIDCount(iNUniq) = iNAll - iIDStart(iNUniq) + 1
 
-      CALL LogMessage('  '//TRIM(IntToText(iNUniq))//' unique IDs in index', &
+      CALL ModuleLogger%LogMessage('  '//TRIM(IntToText(iNUniq))//' unique IDs in index', &
            f_iInfo, cModName)
 
       ! ---- Step 3: Open output files ----
       OPEN(UNIT=iOutUnit, FILE=cOutFile, STATUS='REPLACE', IOSTAT=iErr)
       IF (iErr /= 0) THEN
-        CALL SetLastMessage('Cannot open multi-layer output: '// &
+        CALL ModuleLogger%SetLastMessage('Cannot open multi-layer output: '// &
              TRIM(cOutFile), f_iFatal, cModName)
         iStat = -1; EXIT
       END IF
@@ -621,7 +634,7 @@ CONTAINS
       CLOSE(iOutUnit)
 
       IF (iStat == 0) THEN
-        CALL LogMessage('  Multi-layer output written to: '//TRIM(cOutFile), &
+        CALL ModuleLogger%LogMessage('  Multi-layer output written to: '//TRIM(cOutFile), &
              f_iInfo, cModName)
       END IF
 
@@ -679,7 +692,7 @@ CONTAINS
     iNLayers = This%MultiLayer%GetNLayers()
     ALLOCATE(rLayerVals(iNLayers), STAT=iErr)
     IF (iErr /= 0) THEN
-      CALL SetLastMessage('Cannot allocate layer values array', &
+      CALL ModuleLogger%SetLastMessage('Cannot allocate layer values array', &
            f_iFatal, cModName)
       iStat = -1; RETURN
     END IF
@@ -697,7 +710,7 @@ CONTAINS
     OPEN(UNIT=iInUnit, FILE=This%HydConfig(iSUBSID)%cOutFile, &
          STATUS='OLD', IOSTAT=iErr)
     IF (iErr /= 0) THEN
-      CALL SetLastMessage('Cannot open per-layer subsidence SMP: '// &
+      CALL ModuleLogger%SetLastMessage('Cannot open per-layer subsidence SMP: '// &
            TRIM(This%HydConfig(iSUBSID)%cOutFile), f_iFatal, cModName)
       iStat = -1; RETURN
     END IF
@@ -712,7 +725,7 @@ CONTAINS
 
     IF (iNAll == 0) THEN
       CLOSE(iInUnit)
-      CALL SetLastMessage('Per-layer subsidence SMP file is empty', &
+      CALL ModuleLogger%SetLastMessage('Per-layer subsidence SMP file is empty', &
            f_iFatal, cModName)
       iStat = -1; RETURN
     END IF
@@ -721,7 +734,7 @@ CONTAINS
              rAllVals(iNAll), STAT=iErr)
     IF (iErr /= 0) THEN
       CLOSE(iInUnit)
-      CALL SetLastMessage('Cannot allocate memory for subsidence SMP records ('// &
+      CALL ModuleLogger%SetLastMessage('Cannot allocate memory for subsidence SMP records ('// &
            TRIM(IntToText(iNAll))//' lines)', f_iFatal, cModName)
       iStat = -1; RETURN
     END IF
@@ -745,7 +758,7 @@ CONTAINS
     iNAll = iRec
     CLOSE(iInUnit)
 
-    CALL LogMessage('  Read '//TRIM(IntToText(iNAll))// &
+    CALL ModuleLogger%LogMessage('  Read '//TRIM(IntToText(iNAll))// &
          ' records from per-layer subsidence SMP', f_iInfo, cModName)
 
     ! ---- Step 2: Build contiguous ID index ----
@@ -781,7 +794,7 @@ CONTAINS
       ! ---- Step 3: Open output file ----
       OPEN(UNIT=iOutUnit, FILE=cOutFile, STATUS='REPLACE', IOSTAT=iErr)
       IF (iErr /= 0) THEN
-        CALL SetLastMessage('Cannot open multi-layer subsidence output: '// &
+        CALL ModuleLogger%SetLastMessage('Cannot open multi-layer subsidence output: '// &
              TRIM(cOutFile), f_iFatal, cModName)
         iStat = -1; EXIT
       END IF
@@ -849,7 +862,7 @@ CONTAINS
       CLOSE(iOutUnit)
 
       IF (iStat == 0) THEN
-        CALL LogMessage('  Multi-layer subsidence output written to: '// &
+        CALL ModuleLogger%LogMessage('  Multi-layer subsidence output written to: '// &
              TRIM(cOutFile), f_iInfo, cModName)
       END IF
 
@@ -889,7 +902,7 @@ CONTAINS
     OPEN(UNIT=iObsUnit, FILE=This%HydConfig(iHyd)%cObsFile, &
          STATUS='OLD', IOSTAT=iErr)
     IF (iErr /= 0) THEN
-      CALL SetLastMessage('Cannot open observation file: '// &
+      CALL ModuleLogger%SetLastMessage('Cannot open observation file: '// &
            TRIM(This%HydConfig(iHyd)%cObsFile), f_iFatal, cModName)
       iStat = -1; RETURN
     END IF
@@ -899,7 +912,7 @@ CONTAINS
     CLOSE(iObsUnit)
     IF (iStat /= 0) RETURN
 
-    CALL LogMessage('  Loaded '//TRIM(IntToText(iNObsIDs))// &
+    CALL ModuleLogger%LogMessage('  Loaded '//TRIM(IntToText(iNObsIDs))// &
          ' observation IDs from '//TRIM(This%HydConfig(iHyd)%cObsFile), &
          f_iInfo, cModName)
 
@@ -921,7 +934,7 @@ CONTAINS
     END IF
 
     IF (This%HydReader%iNFiltered == 0 .OR. This%HydReader%iNTimes == 0) THEN
-      CALL LogMessage('  No matching data found, skipping interpolation', &
+      CALL ModuleLogger%LogMessage('  No matching data found, skipping interpolation', &
            f_iWarn, cModName)
       IF (ALLOCATED(cObsIDs)) DEALLOCATE(cObsIDs)
       RETURN
@@ -1012,7 +1025,7 @@ CONTAINS
     ! We need to group these by base name (strip %N)
     ALLOCATE(cBaseIDs(iNFiltered), iWellCol(iNFiltered, iNLayers), STAT=iErr)
     IF (iErr /= 0) THEN
-      CALL SetLastMessage('Cannot allocate PreAverage arrays', f_iFatal, cModName)
+      CALL ModuleLogger%SetLastMessage('Cannot allocate PreAverage arrays', f_iFatal, cModName)
       iStat = -1; RETURN
     END IF
 
@@ -1052,14 +1065,14 @@ CONTAINS
       END IF
     END DO
 
-    CALL LogMessage('  PreAverage: '//TRIM(IntToText(iNFiltered))// &
+    CALL ModuleLogger%LogMessage('  PreAverage: '//TRIM(IntToText(iNFiltered))// &
          ' per-layer columns -> '//TRIM(IntToText(iNWells))//' wells', &
          f_iInfo, cModName)
 
     ! ---- Step 2: Compute T-weighted averages at all timesteps ----
     ALLOCATE(rAvgData(iNTimes, iNWells), STAT=iErr)
     IF (iErr /= 0) THEN
-      CALL SetLastMessage('Cannot allocate averaged data array', f_iFatal, cModName)
+      CALL ModuleLogger%SetLastMessage('Cannot allocate averaged data array', f_iFatal, cModName)
       iStat = -1; RETURN
     END IF
     rAvgData = 0.0D0
@@ -1103,7 +1116,7 @@ CONTAINS
     ! ---- Step 3: Write continuous composite SMP ----
     OPEN(UNIT=iOutUnit, FILE='GW_Sim_ml_continuous.smp', STATUS='REPLACE', IOSTAT=iErr)
     IF (iErr /= 0) THEN
-      CALL LogMessage('  WARNING: Cannot open GW_Sim_ml_continuous.smp for writing', &
+      CALL ModuleLogger%LogMessage('  WARNING: Cannot open GW_Sim_ml_continuous.smp for writing', &
            f_iWarn, cModName)
     ELSE
       BLOCK
@@ -1124,7 +1137,7 @@ CONTAINS
             ! Validate date is within model simulation period
             IF (iJulDay < iJulStart .OR. iJulDay > iJulEnd) THEN
               CALL JulianDateToDayMonthYear(iJulDay, iDay, iMon, iYear, iErr)
-              CALL SetLastMessage('Date at timestep '//TRIM(IntToText(j))// &
+              CALL ModuleLogger%SetLastMessage('Date at timestep '//TRIM(IntToText(j))// &
                    ' ('//TRIM(IntToText(iMon))//'/'//TRIM(IntToText(iDay))//'/'// &
                    TRIM(IntToText(iYear))//') is outside model period', &
                    f_iFatal, cModName)
@@ -1134,7 +1147,7 @@ CONTAINS
 
             CALL JulianDateToDayMonthYear(iJulDay, iDay, iMon, iYear, iErr)
             IF (iErr /= 0) THEN
-              CALL SetLastMessage('Cannot convert Julian day '// &
+              CALL ModuleLogger%SetLastMessage('Cannot convert Julian day '// &
                    TRIM(IntToText(iJulDay))//' at timestep '//TRIM(IntToText(j)), &
                    f_iFatal, cModName)
               CLOSE(iOutUnit)
@@ -1148,7 +1161,7 @@ CONTAINS
         END DO
       END BLOCK
       CLOSE(iOutUnit)
-      CALL LogMessage('  Wrote GW_Sim_ml_continuous.smp ('// &
+      CALL ModuleLogger%LogMessage('  Wrote GW_Sim_ml_continuous.smp ('// &
            TRIM(IntToText(iNWells))//' wells x '// &
            TRIM(IntToText(iNTimes))//' timesteps)', f_iInfo, cModName)
     END IF
@@ -1160,7 +1173,7 @@ CONTAINS
     ALLOCATE(This%HydReader%rModelData(iNTimes, iNWells), &
              This%HydReader%cFilteredIDs(iNWells), STAT=iErr)
     IF (iErr /= 0) THEN
-      CALL SetLastMessage('Cannot reallocate HydReader arrays', f_iFatal, cModName)
+      CALL ModuleLogger%SetLastMessage('Cannot reallocate HydReader arrays', f_iFatal, cModName)
       iStat = -1; RETURN
     END IF
 
@@ -1171,7 +1184,7 @@ CONTAINS
     ! Clean up
     DEALLOCATE(cBaseIDs, iWellCol, rAvgData)
 
-    CALL LogMessage('  Replaced per-layer data with '// &
+    CALL ModuleLogger%LogMessage('  Replaced per-layer data with '// &
          TRIM(IntToText(iNWells))//' composite wells', f_iInfo, cModName)
 
   END SUBROUTINE PreAverageMultiLayer
