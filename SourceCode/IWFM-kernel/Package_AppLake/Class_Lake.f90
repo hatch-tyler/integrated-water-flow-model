@@ -21,8 +21,7 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 MODULE Class_Lake
-  USE MessageLogger          , ONLY: SetLastMessage           , &
-                                     MessageArray             , &
+  USE MessageLogger          , ONLY: MessageArray             , &
                                      MessageLoggerType        , &
                                      f_iFatal
   USE GeneralUtilities       , ONLY: AllocArray               , &
@@ -241,14 +240,14 @@ CONTAINS
         ID = INT(DummyArray(1))
         CALL ConvertID_To_Index(ID,iLakeIDs,iLake)
         IF (iLake .EQ. 0) THEN 
-            CALL SetLastMessage('Lake ID '//TRIM(IntToText(ID))//' listed for inital lake elevation is not recognized!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Lake ID '//TRIM(IntToText(ID))//' listed for inital lake elevation is not recognized!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
         
         !Make sure lake data was not entered previously
         IF (lProcessed(iLake)) THEN
-            CALL SetLastMessage('Initial elevation for lake '//TRIM(IntToText(ID))//' is entered more than once!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Initial elevation for lake '//TRIM(IntToText(ID))//' is entered more than once!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -263,7 +262,7 @@ CONTAINS
             MessageArray(1) = 'Initial lake elevation for lake '//TRIM(IntToText(ID))//' is lower than the lowest ground surface elevation!'
             WRITE(MessageArray(2),'(A,F8.4)') 'Lowest ground surface elevation = ',Lakes(iLake)%RatingTable%XPoint(1)
             WRITE(MessageArray(3),'(A,F8.4)') 'Initial lake elevation          = ',Lakes(iLake)%Elev
-            CALL SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF

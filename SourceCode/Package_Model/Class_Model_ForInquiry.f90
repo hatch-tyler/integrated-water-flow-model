@@ -22,7 +22,6 @@
 !***********************************************************************
 MODULE Class_Model_ForInquiry
   USE MessageLogger               , ONLY: MessageLoggerType                               , &
-                                          SetLastMessage                                  , &
                                           f_iFatal
   USE GeneralUtilities            , ONLY: EstablishAbsolutePathFileName                   , &
                                           LocateInList                                    , &
@@ -676,7 +675,7 @@ CONTAINS
         IF (ASSOCIATED(ModuleLogger)) THEN
             CALL ModuleLogger%SetLastMessage('Requested hydrograph data is not part of the model output!',f_iFatal,ThisProcedure)
         ELSE
-            CALL SetLastMessage('Requested hydrograph data is not part of the model output!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Requested hydrograph data is not part of the model output!',f_iFatal,ThisProcedure)
         END IF
         iStat = -1
         RETURN
@@ -751,7 +750,7 @@ CONTAINS
         IF (ASSOCIATED(ModuleLogger)) THEN
             CALL ModuleLogger%SetLastMessage('Specified budget is not part of the model output!',f_iFatal,ThisProcedure)
         ELSE
-            CALL SetLastMessage('Specified budget is not part of the model output!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Specified budget is not part of the model output!',f_iFatal,ThisProcedure)
         END IF
         iStat = -1
         RETURN
@@ -796,7 +795,7 @@ CONTAINS
         IF (ASSOCIATED(ModuleLogger)) THEN
             CALL ModuleLogger%SetLastMessage('Specified budget is not part of the model output!',f_iFatal,ThisProcedure)
         ELSE
-            CALL SetLastMessage('Specified budget is not part of the model output!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Specified budget is not part of the model output!',f_iFatal,ThisProcedure)
         END IF
         iStat = -1
         RETURN
@@ -862,7 +861,7 @@ CONTAINS
         IF (ASSOCIATED(ModuleLogger)) THEN
             CALL ModuleLogger%SetLastMessage('Specified budget is not part of the model output!',f_iFatal,ThisProcedure)
         ELSE
-            CALL SetLastMessage('Specified budget is not part of the model output!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Specified budget is not part of the model output!',f_iFatal,ThisProcedure)
         END IF
         iStat = -1
         RETURN
@@ -963,7 +962,7 @@ CONTAINS
         IF (ASSOCIATED(ModuleLogger)) THEN
             CALL ModuleLogger%SetLastMessage('Specified budget is not part of the model output!',f_iFatal,ThisProcedure)
         ELSE
-            CALL SetLastMessage('Specified budget is not part of the model output!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Specified budget is not part of the model output!',f_iFatal,ThisProcedure)
         END IF
         iStat = -1
         RETURN
@@ -1045,7 +1044,7 @@ CONTAINS
         IF (ASSOCIATED(ModuleLogger)) THEN
             CALL ModuleLogger%SetLastMessage('Specified budget is not part of the model output to retrieve data from!',f_iFatal,ThisProcedure)
         ELSE
-            CALL SetLastMessage('Specified budget is not part of the model output to retrieve data from!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Specified budget is not part of the model output to retrieve data from!',f_iFatal,ThisProcedure)
         END IF
         iStat = -1
         RETURN
@@ -1104,7 +1103,7 @@ CONTAINS
         IF (ASSOCIATED(ModuleLogger)) THEN
             CALL ModuleLogger%SetLastMessage('Groundwater budget is not part of the model output to retrieve cumulative chnage in storage!',f_iFatal,ThisProcedure)
         ELSE
-            CALL SetLastMessage('Groundwater budget is not part of the model output to retrieve cumulative chnage in storage!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Groundwater budget is not part of the model output to retrieve cumulative chnage in storage!',f_iFatal,ThisProcedure)
         END IF
         iStat = -1
         RETURN
@@ -1148,7 +1147,7 @@ CONTAINS
         IF (ASSOCIATED(ModuleLogger)) THEN
             CALL ModuleLogger%SetLastMessage('Groundwater budget is not part of the model output to retrieve cumulative chnage in storage!',f_iFatal,ThisProcedure)
         ELSE
-            CALL SetLastMessage('Groundwater budget is not part of the model output to retrieve cumulative chnage in storage!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Groundwater budget is not part of the model output to retrieve cumulative chnage in storage!',f_iFatal,ThisProcedure)
         END IF
         iStat = -1
         RETURN
@@ -1221,7 +1220,7 @@ CONTAINS
         IF (ASSOCIATED(ModuleLogger)) THEN
             CALL ModuleLogger%SetLastMessage('Specified zone budget type is not found as part of the model output!',f_iFatal,ThisProcedure)
         ELSE
-            CALL SetLastMessage('Specified zone budget type is not found as part of the model output!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Specified zone budget type is not found as part of the model output!',f_iFatal,ThisProcedure)
         END IF
         iStat = -1
         RETURN
@@ -1282,7 +1281,7 @@ CONTAINS
         IF (ASSOCIATED(ModuleLogger)) THEN
             CALL ModuleLogger%SetLastMessage('Specified zone budget is not part of the model output!',f_iFatal,ThisProcedure)
         ELSE
-            CALL SetLastMessage('Specified zone budget is not part of the model output!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Specified zone budget is not part of the model output!',f_iFatal,ThisProcedure)
         END IF
         iStat = -1
         RETURN
@@ -1349,7 +1348,7 @@ CONTAINS
         IF (ASSOCIATED(ModuleLogger)) THEN
             CALL ModuleLogger%SetLastMessage('Specified zone budget is not part of the model output!',f_iFatal,ThisProcedure)
         ELSE
-            CALL SetLastMessage('Specified zone budget is not part of the model output!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Specified zone budget is not part of the model output!',f_iFatal,ThisProcedure)
         END IF
         iStat = -1
         RETURN
@@ -1449,7 +1448,7 @@ CONTAINS
         IF (ASSOCIATED(ModuleLogger)) THEN
             CALL ModuleLogger%SetLastMessage('Specified zone budget is not part of the model output!',f_iFatal,ThisProcedure)
         ELSE
-            CALL SetLastMessage('Specified zone budget is not part of the model output!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Specified zone budget is not part of the model output!',f_iFatal,ThisProcedure)
         END IF
         iStat = -1
         RETURN
@@ -1532,7 +1531,7 @@ CONTAINS
         IF (ASSOCIATED(ModuleLogger)) THEN
             CALL ModuleLogger%SetLastMessage('Specified zone budget is not part of the model output!',f_iFatal,ThisProcedure)
         ELSE
-            CALL SetLastMessage('Specified zone budget is not part of the model output!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Specified zone budget is not part of the model output!',f_iFatal,ThisProcedure)
         END IF
         iStat = -1
         RETURN
@@ -1586,7 +1585,7 @@ CONTAINS
         IF (ASSOCIATED(ModuleLogger)) THEN
             CALL ModuleLogger%SetLastMessage('Groundwater zone budget is not part of the model output!',f_iFatal,ThisProcedure)
         ELSE
-            CALL SetLastMessage('Groundwater zone budget is not part of the model output!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Groundwater zone budget is not part of the model output!',f_iFatal,ThisProcedure)
         END IF
         iStat = -1
         RETURN
@@ -1638,7 +1637,7 @@ CONTAINS
         IF (ASSOCIATED(ModuleLogger)) THEN
             CALL ModuleLogger%SetLastMessage('Groundwater zone budget is not part of the model output!',f_iFatal,ThisProcedure)
         ELSE
-            CALL SetLastMessage('Groundwater zone budget is not part of the model output!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Groundwater zone budget is not part of the model output!',f_iFatal,ThisProcedure)
         END IF
         iStat = -1
         RETURN
@@ -1696,7 +1695,7 @@ CONTAINS
     IF (ASSOCIATED(ModuleLogger)) THEN
         CALL ModuleLogger%SetLastMessage('An output file for GWHeadsAll cannot be found to retrieve gw heads at all nodes and layers!',f_iFatal,ThisProcedure)
     ELSE
-        CALL SetLastMessage('An output file for GWHeadsAll cannot be found to retrieve gw heads at all nodes and layers!',f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage('An output file for GWHeadsAll cannot be found to retrieve gw heads at all nodes and layers!',f_iFatal,ThisProcedure)
     END IF
     iStat = -1
     

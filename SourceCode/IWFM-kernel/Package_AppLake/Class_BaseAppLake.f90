@@ -22,9 +22,7 @@
 !***********************************************************************
 MODULE Class_BaseAppLake
    USE IWFM_Kernel_Version         , ONLY: ReadVersion
-   USE MessageLogger               , ONLY: EchoProgress            , &
-                                           SetLastMessage          , &
-                                           MessageArray            , &
+   USE MessageLogger               , ONLY: MessageArray            , &
                                            MessageLoggerType       , &
                                            f_iFatal
    USE GeneralUtilities            , ONLY: ArrangeText             , &
@@ -761,7 +759,7 @@ CONTAINS
         iElem =  iListElems(indxElem)
         DO indxElem1=indxElem+1,SIZE(iListElems)
             IF (iElem .EQ. iListElems(indxElem1)) THEN
-                CALL SetLastMessage('Element '//TRIM(IntToText(iElem))//' is listed more than once as a lake element!' ,f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage('Element '//TRIM(IntToText(iElem))//' is listed more than once as a lake element!' ,f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -897,7 +895,7 @@ CONTAINS
     !Allocate memory
     ALLOCATE (AppLake%Lakes(NLakes) , STAT=ErrorCode)
     IF (ErrorCode .NE. 0) THEN
-        CALL SetLastMessage('Error in allocating memory for application lakes!',f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage('Error in allocating memory for application lakes!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -913,7 +911,7 @@ CONTAINS
                       pLake%NodeAreas(pLake%NNodes)   , &
                       STAT=ErrorCode                  )
             IF (ErrorCode .NE. 0) THEN
-                CALL SetLastMessage('Error in allocating memory for lake '//TRIM(IntToText(pLake%ID))//'!',f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage('Error in allocating memory for lake '//TRIM(IntToText(pLake%ID))//'!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -1012,7 +1010,7 @@ CONTAINS
     IF (ASSOCIATED(ModuleLogger)) THEN
         CALL ModuleLogger%EchoProgress('Printing results of lake simulation')
     ELSE
-        CALL EchoProgress('Printing results of lake simulation')
+        CALL ModuleLogger%EchoProgress('Printing results of lake simulation')
     END IF
 
     !Initialize
@@ -1138,7 +1136,7 @@ CONTAINS
             iDest   = LocateInList(iDestID,iStrmNodeIDs)
             IF (iDest .EQ. 0) THEN
                 iLakeID = AppLake%Lakes(indx)%ID
-                CALL SetLastMessage('Stream node '//TRIM(IntToText(iDestID))//' that receive outflow from lake '//TRIM(IntToText(iLakeID))//' is not in the model!',f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage('Stream node '//TRIM(IntToText(iDestID))//' that receive outflow from lake '//TRIM(IntToText(iLakeID))//' is not in the model!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -1502,7 +1500,7 @@ CONTAINS
         ID    = AppLake%Lakes(iLake(1))%ID
         MessageArray(1) = 'Precipitation data column for lake '//TRIM(IntToText(ID))//' is greater than the'
         MessageArray(2) = 'available data columns in the Precipitation Data file!'
-        CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -1513,7 +1511,7 @@ CONTAINS
         ID    = AppLake%Lakes(iLake(1))%ID
         MessageArray(1) = 'Evapotranspiration data column for lake '//TRIM(IntToText(ID))//' is greater than the'
         MessageArray(2) = 'available data columns in the Evapotranspiration Data file!'
-        CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF

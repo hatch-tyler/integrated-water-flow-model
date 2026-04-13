@@ -24,9 +24,7 @@ MODULE Package_AppSmallWatershed
   USE IWFM_Kernel_Version         , ONLY: ReadVersion                   
   USE TimeSeriesUtilities         , ONLY: TimeStepType                  
   USE IOInterface                 , ONLY: GenericFileType                  
-  USE MessageLogger               , ONLY: SetLastMessage              , &
-                                          EchoProgress                , &
-                                          MessageLoggerType           , &
+  USE MessageLogger               , ONLY: MessageLoggerType           , &
                                           f_iFatal
   USE Package_Discretization      , ONLY: AppGridType                 , &
                                           StratigraphyType            
@@ -198,7 +196,7 @@ CONTAINS
     IF (cFileName .EQ. '') RETURN
     
     !Inform user
-    CALL EchoProgress('Instantiating small watershed component...')
+    CALL ModuleLogger%EchoProgress('Instantiating small watershed component...')
     
     !Open main input file and retrive AppSmallWatershed version number
     CALL MainFile%New(FileName=cFileName,InputFile=.TRUE.,IsTSFile=.FALSE.,Descriptor='small watershed parameters',iStat=iStat) 
@@ -224,7 +222,7 @@ CONTAINS
             ALLOCATE(AppSmallWatershed_v41_Type :: AppSWShed%Me)
             AppSWShed%iComponentVersion = 41
         CASE DEFAULT
-            CALL SetLastMessage('Small Watershed Component version number is not recognized ('//TRIM(cVersion)//')!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Small Watershed Component version number is not recognized ('//TRIM(cVersion)//')!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
     END SELECT

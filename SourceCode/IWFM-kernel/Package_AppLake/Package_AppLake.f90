@@ -23,9 +23,7 @@
 MODULE Package_AppLake
   USE IWFM_Kernel_Version         , ONLY: ReadVersion             , &
                                           IWFMKernelVersion
-  USE MessageLogger               , ONLY: SetLastMessage          , &
-                                          EchoProgress            , &
-                                          MessageArray            , &
+  USE MessageLogger               , ONLY: MessageArray            , &
                                           MessageLoggerType       , &
                                           f_iFatal
   USE IOInterface                 , ONLY: GenericFileType         , &
@@ -232,7 +230,7 @@ CONTAINS
             AppLake%lDefined          = .TRUE.
             
         CASE DEFAULT
-            CALL SetLastMessage('Lake Component version number is not recognized ('//TRIM(cVersionLocal)//')!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Lake Component version number is not recognized ('//TRIM(cVersionLocal)//')!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END SELECT
@@ -289,7 +287,7 @@ CONTAINS
             AppLake%lDefined          = .TRUE.
             
         CASE DEFAULT
-            CALL SetLastMessage('Lake Component version number is not recognized ('//TRIM(IntToText(iVersion))//')!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Lake Component version number is not recognized ('//TRIM(IntToText(iVersion))//')!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
     END SELECT
@@ -328,7 +326,7 @@ CONTAINS
         IF (AppLake%iComponentVersion .GT. 0) THEN
             MessageArray(1) = 'For proper simulation of lakes, relevant lake data files must'
             MessageArray(2) = 'be specified when lakes are defined in Pre-Processor.'
-            CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         ELSE
@@ -355,7 +353,7 @@ CONTAINS
             IF (AppLake%iComponentVersion .NE. 50) ErrorCode = 1
             
         CASE DEFAULT
-            CALL SetLastMessage('Lake Component version number is not recognized ('//TRIM(cVersionSim)//')!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Lake Component version number is not recognized ('//TRIM(cVersionSim)//')!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
     END SELECT
@@ -363,7 +361,7 @@ CONTAINS
         MessageArray(1) = 'Lake Component versions used in Pre-Processor and Simulation must match!'
         WRITE(MessageArray(2),'(A,F3.1)') 'Version number in Pre-Processor = ',rVersionPre
         MessageArray(3) = 'Version number in Simulation    = ' // TRIM(cVersionSim)
-        CALL SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -431,7 +429,7 @@ CONTAINS
             AppLake%lDefined          = .TRUE.
             
         CASE DEFAULT
-            CALL SetLastMessage('Lake Component version number is not recognized ('//TRIM(IntToText(iVersion))//')!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Lake Component version number is not recognized ('//TRIM(IntToText(iVersion))//')!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
     END SELECT
@@ -503,7 +501,7 @@ CONTAINS
             AppLake%lDefined          = .TRUE.
             
         CASE DEFAULT
-            CALL SetLastMessage('Lake Component version number is not recognized ('//TRIM(cVersionPre)//')!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Lake Component version number is not recognized ('//TRIM(cVersionPre)//')!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
     END SELECT
@@ -661,7 +659,7 @@ CONTAINS
         CASE ('5.0')
             ALLOCATE(AppLake_v50_Type :: AppLake%Me)
         CASE DEFAULT
-            CALL SetLastMessage('Lake Component version number is not recognized ('//TRIM(cVersion)//')!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Lake Component version number is not recognized ('//TRIM(cVersion)//')!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
     END SELECT
@@ -1100,7 +1098,7 @@ CONTAINS
         IF (ASSOCIATED(ModuleLogger)) THEN
             CALL ModuleLogger%EchoProgress('Simulating lakes')
         ELSE
-            CALL EchoProgress('Simulating lakes')
+            CALL ModuleLogger%EchoProgress('Simulating lakes')
         END IF
     
         !Simulate
@@ -1125,7 +1123,7 @@ CONTAINS
         IF (ASSOCIATED(ModuleLogger)) THEN
             CALL ModuleLogger%EchoProgress('Registering lake component with matrix...')
         ELSE
-            CALL EchoProgress('Registering lake component with matrix...')
+            CALL ModuleLogger%EchoProgress('Registering lake component with matrix...')
         END IF
         CALL AppLake%Me%RegisterWithMatrix(Matrix,iStat)
     END IF

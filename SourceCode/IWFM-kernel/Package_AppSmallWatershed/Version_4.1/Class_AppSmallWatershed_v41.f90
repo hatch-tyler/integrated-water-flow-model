@@ -21,9 +21,7 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 MODULE Class_AppSmallWatershed_v41
-  USE MessageLogger               , ONLY: SetLastMessage                , &
-                                          EchoProgress                  , &
-                                          MessageArray                  , &
+  USE MessageLogger               , ONLY: MessageArray                  , &
                                           MessageLoggerType             , &
                                           f_iFatal
   USE IOInterface                 , ONLY: GenericFileType                   
@@ -148,11 +146,11 @@ CONTAINS
     IF (cFileName .EQ. '') RETURN
     
     !Inform user
-    CALL EchoProgress('Instantiating small watershed component...')
+    CALL ModuleLogger%EchoProgress('Instantiating small watershed component...')
     
     !Make sure a crop coefficient filename is defined
     IF (LEN_TRIM(cCropCoeffFileName) .EQ. 0) THEN
-        CALL SetLastMessage('A crop/habitat coefficient file needs to be defined in the Main Control Input File for Small Watershed Component v4.1!',f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage('A crop/habitat coefficient file needs to be defined in the Main Control Input File for Small Watershed Component v4.1!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -297,7 +295,7 @@ CONTAINS
     !Make sure time unit is recognized
     IF (TimeStep%TrackTime) THEN
         IF (IsTimeIntervalValid(cTimeUnitK) .EQ. 0) THEN
-            CALL SetLastMessage('Time unit for small watershed root zone hydraulic conductivity is not valid!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Time unit for small watershed root zone hydraulic conductivity is not valid!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -318,12 +316,12 @@ CONTAINS
             !Make sure small watershed ID is legit and has not been already processed
             CALL ConvertID_To_Index(iSWShedID,iSWShedIDs,iSWShed)
             IF (iSWShed .EQ. 0) THEN
-                CALL SetLastMessage('Small watershed ID '//TRIM(IntToText(iSWShedID))//' listed for root zone parameter definition is not in the model!',f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage('Small watershed ID '//TRIM(IntToText(iSWShedID))//' listed for root zone parameter definition is not in the model!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
             IF (lProcessed(iSWShed)) THEN
-                CALL SetLastMessage('Small watershed ID '//TRIM(IntToText(iSWShedID))//' is listed more than once for root zone parameter definitions!',f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage('Small watershed ID '//TRIM(IntToText(iSWShedID))//' is listed more than once for root zone parameter definitions!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -344,21 +342,21 @@ CONTAINS
             
             !Total porosity should be less than 1.0
             IF (pSWSheds(iSWShed)%Soil%TotalPorosity .GT. 1.0) THEN
-                CALL SetLastMessage('At small watershed ' // TRIM(IntToText(iSWShedID)) // ' total porosity is greater than 1.0!',f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage('At small watershed ' // TRIM(IntToText(iSWShedID)) // ' total porosity is greater than 1.0!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
             
             !Wilting point should be less than field capacity
             IF (pSWSheds(iSWShed)%Soil%WiltingPoint .GE. pSWSheds(iSWShed)%Soil%FieldCapacity) THEN
-                CALL SetLastMessage('At small watershed ' // TRIM(IntToText(iSWShedID)) // ' wilting point is greater than or equal to field capacity!',f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage('At small watershed ' // TRIM(IntToText(iSWShedID)) // ' wilting point is greater than or equal to field capacity!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
             
             !Field capacity should be less than or equal to total porosity
             IF (pSWSheds(iSWShed)%Soil%FieldCapacity .GT. pSWSheds(iSWShed)%Soil%TotalPorosity) THEN
-                CALL SetLastMessage('At small watershed ' // TRIM(IntToText(iSWShedID)) // ' field capacity is greater than total porosity!',f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage('At small watershed ' // TRIM(IntToText(iSWShedID)) // ' field capacity is greater than total porosity!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -370,7 +368,7 @@ CONTAINS
             
             !KunsatMethod must be recognized
             IF (.NOT. ANY(pSWSheds(iSWShed)%Soil%KunsatMethod .EQ. f_iKunsatMethodList)) THEN
-                CALL SetLastMessage('Method to compute unsaturated hydraulic conductivity at small watershed '//TRIM(IntToText(iSWShedID))//' is not recognized!',f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage('Method to compute unsaturated hydraulic conductivity at small watershed '//TRIM(IntToText(iSWShedID))//' is not recognized!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -432,7 +430,7 @@ CONTAINS
         ID              = AppSWShed%Smallwatersheds(iSWShed(1))%ID
         MessageArray(1) = 'Crop/habitat coefficient data column for small watershed '//TRIM(IntToText(ID))//' is greater than the'
         MessageArray(2) = 'available data columns in the Crop/Habitat Coefficient Data File!'
-        CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
         iStat = -1
     END IF
     

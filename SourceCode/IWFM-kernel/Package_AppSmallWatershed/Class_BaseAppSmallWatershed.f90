@@ -37,9 +37,7 @@ MODULE Class_BaseAppSmallWatershed
                                        GetUniqueArrayComponents       , &
                                        ConvertID_To_Index, &
                                    f_cInlineCommentChar
-  USE MessageLogger            , ONLY: SetLastMessage                 , &
-                                       EchoProgress                   , &
-                                       MessageArray                   , &
+  USE MessageLogger            , ONLY: MessageArray                   , &
                                        MessageLoggerType              , &
                                        f_iFatal
   USE Package_Misc             , ONLY: SolverDataType                 , &
@@ -1242,7 +1240,7 @@ CONTAINS
     !Make sure time unit is recognized
     IF (TimeStep%TrackTime) THEN
         IF (IsTimeIntervalValid(cTimeUnitT) .EQ. 0) THEN
-            CALL SetLastMessage('Time unit for small watershed recession coefficients is not valid!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Time unit for small watershed recession coefficients is not valid!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -1263,12 +1261,12 @@ CONTAINS
             iSWShedID = INT(rDummyArray(1))
             CALL ConvertID_To_Index(iSWShedID,iSWShedIDs,iSWShed)
             IF (iSWShed .EQ. 0) THEN
-                CALL SetLastMessage('Small watershed ID '//TRIM(IntToText(iSWShedID))//' listed for aquifer parameter definition is not in the model!',f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage('Small watershed ID '//TRIM(IntToText(iSWShedID))//' listed for aquifer parameter definition is not in the model!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
             IF (lProcessed(iSWShed)) THEN
-                CALL SetLastMessage('Small watershed '//TRIM(IntToText(iSWShedID))//' is listed more than once for aquifer parameter definitions!',f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage('Small watershed '//TRIM(IntToText(iSWShedID))//' is listed more than once for aquifer parameter definitions!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -1325,12 +1323,12 @@ CONTAINS
             iSWShedID = INT(prDummyArray(1))
             CALL ConvertID_To_Index(iSWShedID,iSWSHedIDs,iSWShed)
             IF (iSWShed .EQ. 0) THEN
-                CALL SetLastMessage('Small watershed ID '//TRIM(IntToText(iSWShedID))//' listed for initial conditions is not in the model!',f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage('Small watershed ID '//TRIM(IntToText(iSWShedID))//' listed for initial conditions is not in the model!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
             IF (lProcessed(iSWShed)) THEN
-                CALL SetLastMessage('Small watershed ID '//TRIM(IntToText(iSWShedID))//' is listed more than once for initial conditions definition!',f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage('Small watershed ID '//TRIM(IntToText(iSWShedID))//' is listed more than once for initial conditions definition!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -1339,7 +1337,7 @@ CONTAINS
             !Make sure that initail moistuire content is less than or equal to 1.0
             IF (lReadRootZoneIC) THEN
                 IF (prDummyArray(2) .GT. 1.0   .OR.  prDummyArray(2) .LT. 0.0) THEN
-                    CALL SetLastMessage('The initial soil moisture content at small watershed ID '//TRIM(IntToText(iSWShedID))// ' must be between 0.0 and 1.0!',f_iFatal,ThisProcedure)
+                    CALL ModuleLogger%SetLastMessage('The initial soil moisture content at small watershed ID '//TRIM(IntToText(iSWShedID))// ' must be between 0.0 and 1.0!',f_iFatal,ThisProcedure)
                     iStat = -1
                     RETURN
                 END IF
@@ -1403,7 +1401,7 @@ CONTAINS
     !Make sure time unit is recognized
     IF (TimeStep%TrackTime) THEN
         IF (IsTimeIntervalValid(AppSWShed%cVarTimeUnit) .EQ. 0) THEN
-            CALL SetLastMessage('Time unit for maximum recharge rate for small watersheds is not valid!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Time unit for maximum recharge rate for small watersheds is not valid!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -1425,7 +1423,7 @@ CONTAINS
                 IF (pSWSheds(indxSWShed)%StrmNode .EQ. 0) THEN
                     MessageArray(1) = 'Stream node number '//TRIM(IntToText(iStrmNodeID))//' where the surface flow from small'
                     MessageArray(2) = 'watershed '//TRIM(IntToText(iSWShedID))//' flows into is not in the model!'
-                    CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                    CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                     iStat = -1
                     RETURN
                 END IF
@@ -1436,7 +1434,7 @@ CONTAINS
             !Make sure same ID number is not used
             DO indx=1,indxSWShed-1
                 IF (iSWShedID .EQ. pSWSheds(indx)%ID) THEN
-                    CALL SetLastMessage('Small watershed ID number '//TRIM(IntToText(iSWShedID))//' is used more than once!',f_iFatal,ThisProcedure)
+                    CALL ModuleLogger%SetLastMessage('Small watershed ID number '//TRIM(IntToText(iSWShedID))//' is used more than once!',f_iFatal,ThisProcedure)
                     iStat = -1
                     RETURN
                 END IF
@@ -1454,7 +1452,7 @@ CONTAINS
             QSUM                  = 0.0
             CALL ConvertID_To_Index(IGWNodeIDs_SWShed,iGWNodeIDs,iGWNodes)
             IF (ANY(iGWNodes.EQ.0)) THEN
-                CALL SetLastMessage('One or more groundwater nodes listed for small watershed '//TRIM(IntToText(iSWShedID))//' are not in the model!',f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage('One or more groundwater nodes listed for small watershed '//TRIM(IntToText(iSWShedID))//' are not in the model!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -1486,7 +1484,7 @@ CONTAINS
                    MessageArray(2) = 'small watershed '//TRIM(IntToText(iSWShedID))      //  &
                                      ' at layer '//TRIM(IntToText(iBaseFlowLayer))       //  &
                                      ' is an inactive node!'
-                   CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                   CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                    iStat = -1
                    RETURN
                END IF
@@ -1496,7 +1494,7 @@ CONTAINS
                    MessageArray(2) = 'small watershed '//TRIM(IntToText(iSWShedID))      //  &
                                      ' at layer '//TRIM(IntToText(iBaseFlowLayer))       //  &
                                      ' is not on the model boundary!'
-                   CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                   CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                    iStat = -1
                    RETURN
                END IF
@@ -1815,7 +1813,7 @@ CONTAINS
         ID      = AppSWShed%Smallwatersheds(iSWShed(1))%ID
         MessageArray(1) = 'Precipitation data column for small watershed '//TRIM(IntToText(ID))//' is greater than the'
         MessageArray(2) = 'available data columns in the Precipitation Data file!'
-        CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -1826,7 +1824,7 @@ CONTAINS
         ID      = AppSWShed%Smallwatersheds(iSWShed(1))%ID
         MessageArray(1) = 'Evapotranspiration data column for small watershed '//TRIM(IntToText(ID))//' is greater than the'
         MessageArray(2) = 'available data columns in the Evapotranspiration Data file!'
-        CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -1958,7 +1956,7 @@ CONTAINS
     IF (ASSOCIATED(ModuleLogger)) THEN
         CALL ModuleLogger%EchoProgress('Simulating small watershed b.c.')
     ELSE
-        CALL EchoProgress('Simulating small watershed b.c.')
+        CALL ModuleLogger%EchoProgress('Simulating small watershed b.c.')
     END IF
     
     !Initialize
@@ -2016,7 +2014,7 @@ CONTAINS
                 IF (ASSOCIATED(ModuleLogger)) THEN
                     CALL ModuleLogger%SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
                 ELSE
-                    CALL SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
+                    CALL ModuleLogger%SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
                 END IF
                 iStat = -1
                 RETURN
