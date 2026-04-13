@@ -21,8 +21,7 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 MODULE StrmLakeConnector
-  USE MessageLogger      , ONLY: SetLastMessage   , &
-                                 MessageArray     , &
+  USE MessageLogger      , ONLY: MessageArray     , &
                                  MessageLoggerType, &
                                  f_iFatal
   USE GeneralUtilities   , ONLY: LocateInList     , &
@@ -539,7 +538,7 @@ CONTAINS
                 IF (ASSOCIATED(ModuleLogger)) THEN
                     CALL ModuleLogger%SetLastMessage('Lake '//TRIM(IntToText(iDestID))//' that receives flow from stream node '//TRIM(IntToText(iSourceID))//' is not in the model!',f_iFatal,ThisProcedure)
                 ELSE
-                    CALL SetLastMessage('Lake '//TRIM(IntToText(iDestID))//' that receives flow from stream node '//TRIM(IntToText(iSourceID))//' is not in the model!',f_iFatal,ThisProcedure)
+                    CALL ModuleLogger%SetLastMessage('Lake '//TRIM(IntToText(iDestID))//' that receives flow from stream node '//TRIM(IntToText(iSourceID))//' is not in the model!',f_iFatal,ThisProcedure)
                 END IF
                 iStat = -1
                 RETURN
@@ -557,7 +556,7 @@ CONTAINS
                 IF (ASSOCIATED(ModuleLogger)) THEN
                     CALL ModuleLogger%SetLastMessage('Lake '//TRIM(IntToText(iDestID))//' that receives flow from stream node '//TRIM(IntToText(iSourceID))//' by means of a bypass is not in the model!',f_iFatal,ThisProcedure)
                 ELSE
-                    CALL SetLastMessage('Lake '//TRIM(IntToText(iDestID))//' that receives flow from stream node '//TRIM(IntToText(iSourceID))//' by means of a bypass is not in the model!',f_iFatal,ThisProcedure)
+                    CALL ModuleLogger%SetLastMessage('Lake '//TRIM(IntToText(iDestID))//' that receives flow from stream node '//TRIM(IntToText(iSourceID))//' by means of a bypass is not in the model!',f_iFatal,ThisProcedure)
                 END IF
                 iStat = -1
                 RETURN
@@ -575,7 +574,7 @@ CONTAINS
                 IF (ASSOCIATED(ModuleLogger)) THEN
                     CALL ModuleLogger%SetLastMessage('Stream node '//TRIM(IntToText(iDestID))//' that receives flow from lake '//TRIM(IntToText(iSourceID))//' is not in the model!',f_iFatal,ThisProcedure)
                 ELSE
-                    CALL SetLastMessage('Stream node '//TRIM(IntToText(iDestID))//' that receives flow from lake '//TRIM(IntToText(iSourceID))//' is not in the model!',f_iFatal,ThisProcedure)
+                    CALL ModuleLogger%SetLastMessage('Stream node '//TRIM(IntToText(iDestID))//' that receives flow from lake '//TRIM(IntToText(iSourceID))//' is not in the model!',f_iFatal,ThisProcedure)
                 END IF
                 iStat = -1
                 RETURN

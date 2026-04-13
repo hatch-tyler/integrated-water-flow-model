@@ -21,9 +21,7 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 MODULE Class_StrmGWConnector_v41
-  USE MessageLogger              , ONLY: SetLastMessage          , &
-                                         LogMessage              , &
-                                         MessageArray            , &
+  USE MessageLogger              , ONLY: MessageArray            , &
                                          MessageLoggerType       , &
                                          f_iWarn                 , &
                                          f_iFatal
@@ -158,7 +156,7 @@ CONTAINS
             IF (ASSOCIATED(ModuleLogger)) THEN
                 CALL ModuleLogger%SetLastMessage('Stream node '//TRIM(IntToText(iStrmNodeID))//' listed for stream bed parameters is not in the model!',f_iFatal,ThisProcedure)
             ELSE
-                CALL SetLastMessage('Stream node '//TRIM(IntToText(iStrmNodeID))//' listed for stream bed parameters is not in the model!',f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage('Stream node '//TRIM(IntToText(iStrmNodeID))//' listed for stream bed parameters is not in the model!',f_iFatal,ThisProcedure)
             END IF
             iStat = -1
             RETURN
@@ -167,7 +165,7 @@ CONTAINS
             IF (ASSOCIATED(ModuleLogger)) THEN
                 CALL ModuleLogger%SetLastMessage('Stream bed parameters for stream node '//TRIM(IntToText(iStrmNodeID))//' are defined more than once!',f_iFatal,ThisProcedure)
             ELSE
-                CALL SetLastMessage('Stream bed parameters for stream node '//TRIM(IntToText(iStrmNodeID))//' are defined more than once!',f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage('Stream bed parameters for stream node '//TRIM(IntToText(iStrmNodeID))//' are defined more than once!',f_iFatal,ThisProcedure)
             END IF
             iStat = -1
             RETURN
@@ -191,7 +189,7 @@ CONTAINS
                 IF (ASSOCIATED(ModuleLogger)) THEN
                     CALL ModuleLogger%LogMessage(MessageArray(1:2),f_iWarn,ThisProcedure)
                 ELSE
-                    CALL LogMessage(MessageArray(1:2),f_iWarn,ThisProcedure)
+                    CALL ModuleLogger%LogMessage(MessageArray(1:2),f_iWarn,ThisProcedure)
                 END IF
                 IF (BedThick(indxNode) .LE. 0.0) THEN
                     MessageArray(1) = 'Stream bed thickness at stream node ' // TRIM(IntToText(iStrmNodeID)) // ' and GW node '// TRIM(IntToText(iGWNodeID)) // ' is less than or equal to zero!'
@@ -199,7 +197,7 @@ CONTAINS
                     IF (ASSOCIATED(ModuleLogger)) THEN
                         CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                     ELSE
-                        CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                        CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                     END IF
                     iStat = -1
                     RETURN
@@ -215,7 +213,7 @@ CONTAINS
         IF (ASSOCIATED(ModuleLogger)) THEN
             CALL ModuleLogger%SetLastMessage('Error allocating memory for stream-gw connection data!',f_iFatal,ThisProcedure)
         ELSE
-            CALL SetLastMessage('Error allocating memory for stream-gw connection data!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('Error allocating memory for stream-gw connection data!',f_iFatal,ThisProcedure)
         END IF
         iStat = -1
         RETURN

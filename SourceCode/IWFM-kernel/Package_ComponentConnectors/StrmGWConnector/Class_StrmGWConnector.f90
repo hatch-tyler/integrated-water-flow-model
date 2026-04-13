@@ -22,9 +22,7 @@
 !***********************************************************************
 MODULE Class_StrmGWConnector
   USE GeneralUtilities
-  USe MessageLogger             , ONLY: SetLastMessage        , &
-                                        EchoProgress          , &
-                                        MessageArray          , &
+  USe MessageLogger             , ONLY: MessageArray          , &
                                         MessageLoggerType     , &
                                         f_iFatal
   USE IOInterface
@@ -212,7 +210,7 @@ CONTAINS
             Connector%lDefined    = .TRUE.
             
         CASE DEFAULT
-            CALL SetLastMessage('Version number '//TRIM(IntToText(iVersion))//' for stream-groundwater interaction is not recognized!',f_iFatal,ThisProcedure) 
+            CALL ModuleLogger%SetLastMessage('Version number '//TRIM(IntToText(iVersion))//' for stream-groundwater interaction is not recognized!',f_iFatal,ThisProcedure) 
             iStat = -1
     END SELECT 
        
@@ -246,7 +244,7 @@ CONTAINS
             Connector%lDefined    = .TRUE.
             
         CASE (42)
-            CALL SetLastMessage('AddGWNodes method is not defined for stream-groundwater interaction component version 4.2!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('AddGWNodes method is not defined for stream-groundwater interaction component version 4.2!',f_iFatal,ThisProcedure)
             iStat = -1
             
         CASE (50)
@@ -257,7 +255,7 @@ CONTAINS
             Connector%lDefined    = .TRUE.
             
         CASE DEFAULT
-            CALL SetLastMessage('Version number '//TRIM(IntToText(iVersion))//' for stream-groundwater interaction is not recognized!',f_iFatal,ThisProcedure) 
+            CALL ModuleLogger%SetLastMessage('Version number '//TRIM(IntToText(iVersion))//' for stream-groundwater interaction is not recognized!',f_iFatal,ThisProcedure) 
             iStat = -1
     END SELECT 
 
@@ -277,11 +275,11 @@ CONTAINS
     
     SELECT CASE (iVersion)
         CASE (40)
-            CALL SetLastMessage('AddGWNodeToStrmNode method is not defined for stream-groundwater interaction component version 4.0!',f_iFatal,ThisProcedure) 
+            CALL ModuleLogger%SetLastMessage('AddGWNodeToStrmNode method is not defined for stream-groundwater interaction component version 4.0!',f_iFatal,ThisProcedure) 
             iStat = -1
             
         CASE (41)
-            CALL SetLastMessage('AddGWNodeToStrmNode method is not defined for stream-groundwater interaction component version 4.1!',f_iFatal,ThisProcedure) 
+            CALL ModuleLogger%SetLastMessage('AddGWNodeToStrmNode method is not defined for stream-groundwater interaction component version 4.1!',f_iFatal,ThisProcedure) 
             iStat = -1
             
         CASE (42)
@@ -317,11 +315,11 @@ CONTAINS
             END IF
             
         CASE (50)
-            CALL SetLastMessage('AddGWNodeToStrmNode method is not defined for stream-groundwater interaction component version 5.0!',f_iFatal,ThisProcedure)
+            CALL ModuleLogger%SetLastMessage('AddGWNodeToStrmNode method is not defined for stream-groundwater interaction component version 5.0!',f_iFatal,ThisProcedure)
             iStat = -1
             
         CASE DEFAULT
-            CALL SetLastMessage('Version number '//TRIM(IntToText(iVersion))//' for stream-groundwater interaction is not recognized!',f_iFatal,ThisProcedure) 
+            CALL ModuleLogger%SetLastMessage('Version number '//TRIM(IntToText(iVersion))//' for stream-groundwater interaction is not recognized!',f_iFatal,ThisProcedure) 
             iStat = -1
     END SELECT 
 
@@ -913,7 +911,7 @@ CONTAINS
     IF (ASSOCIATED(ModuleLogger)) THEN
         CALL ModuleLogger%EchoProgress('Registering stream-groundwater connector with matrix...')
     ELSE
-        CALL EchoProgress('Registering stream-groundwater connector with matrix...')
+        CALL ModuleLogger%EchoProgress('Registering stream-groundwater connector with matrix...')
     END IF
     
     !Register connectivity with matrix

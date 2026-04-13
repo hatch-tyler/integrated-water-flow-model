@@ -24,8 +24,6 @@ MODULE Class_AtmosphericData
   USE IOInterface          , ONLY: RealTSDataInFileType
   USE TimeSeriesUtilities  , ONLY: TimeStepType
   USE MessageLogger        , ONLY: MessageLoggerType    , &
-                                   EchoProgress         , &
-                                   SetLastMessage       , &
                                    f_iFatal
   IMPLICIT NONE
 
@@ -128,7 +126,7 @@ CONTAINS
     IF (cFileName .EQ. '') RETURN
     
     !Print progress
-    CALL EchoProgress('Instantiating '//TRIM(cDataName)//' data...')
+    CALL ModuleLogger%EchoProgress('Instantiating '//TRIM(cDataName)//' data...')
 
     !Instantiate
     CALL AtmosphericData%Init(cFileName,cWorkingDirectory,TRIM(cDataName)//' data file',TimeStep%TrackTime,1,.TRUE.,Factor,DummyArray,iStat=iStat)  
@@ -239,7 +237,7 @@ CONTAINS
             IF (ASSOCIATED(ModuleLogger)) THEN
                 CALL ModuleLogger%SetLastMessage('Timeseries input for '//TRIM(AtmosphericData%cDataName)//' data cannot be less than zero!',f_iFatal,ThisProcedure)
             ELSE
-                CALL SetLastMessage('Timeseries input for '//TRIM(AtmosphericData%cDataName)//' data cannot be less than zero!',f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage('Timeseries input for '//TRIM(AtmosphericData%cDataName)//' data cannot be less than zero!',f_iFatal,ThisProcedure)
             END IF
             iStat = -1
             RETURN
@@ -269,7 +267,7 @@ CONTAINS
     IF (ASSOCIATED(ModuleLogger)) THEN
         CALL ModuleLogger%EchoProgress('Reading time series '//AtmosphericData%cDataName//' data...')
     ELSE
-        CALL EchoProgress('Reading time series '//AtmosphericData%cDataName//' data...')
+        CALL ModuleLogger%EchoProgress('Reading time series '//AtmosphericData%cDataName//' data...')
     END IF
 
     !Read data
@@ -285,7 +283,7 @@ CONTAINS
                 IF (ASSOCIATED(ModuleLogger)) THEN
                     CALL ModuleLogger%SetLastMessage('Timeseries input for '//TRIM(AtmosphericData%cDataName)//' data cannot be less than zero!',f_iFatal,ThisProcedure)
                 ELSE
-                    CALL SetLastMessage('Timeseries input for '//TRIM(AtmosphericData%cDataName)//' data cannot be less than zero!',f_iFatal,ThisProcedure)
+                    CALL ModuleLogger%SetLastMessage('Timeseries input for '//TRIM(AtmosphericData%cDataName)//' data cannot be less than zero!',f_iFatal,ThisProcedure)
                 END IF
                 iStat = -1
                 RETURN

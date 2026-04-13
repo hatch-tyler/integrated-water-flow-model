@@ -21,9 +21,7 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 MODULE SupplyDestinationConnector
-  USE MessageLogger          , ONLY: SetLastMessage         , &
-                                     EchoProgress           , &
-                                     MessageArray           , &
+  USE MessageLogger          , ONLY: MessageArray           , &
                                      MessageLoggerType      , &
                                      f_iFatal
   USE GeneralUtilities       , ONLY: IntToText              , &
@@ -190,7 +188,7 @@ CONTAINS
     ELSEIF (iDemandCalcLocation .EQ. f_iFlowDest_Subregion) THEN
         NDestination = NSubregions
     ELSE
-        CALL SetLastMessage('Computational unit for water demand calculations is not recognized!',f_iFatal,ThisProcedure)
+        CALL ModuleLogger%SetLastMessage('Computational unit for water demand calculations is not recognized!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -279,7 +277,7 @@ CONTAINS
                 MessageArray(1) = 'A ' // TRIM(LowerCase(cDescription)) //' is delivered to an element that is not in the model domain!'
                 MessageArray(2) = TRIM(cDescription) // ' number = ' //TRIM(IntToText(iSupply))
                 MessageArray(3) = 'Element delivered = ' // TRIM(IntToText(Destination%iDest))
-                CALL SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -306,7 +304,7 @@ CONTAINS
                     MessageArray(1) = 'A ' // TRIM(LowerCase(cDescription)) //' is delivered to an element that is not in the model domain!'
                     MessageArray(2) = TRIM(cDescription) // ' number = ' //TRIM(IntToText(iSupply))
                     MessageArray(3) = 'Element delivered = ' // TRIM(IntToText(iElem))
-                    CALL SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+                    CALL ModuleLogger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
                     iStat = -1
                     RETURN
                 END IF
@@ -332,7 +330,7 @@ CONTAINS
                 MessageArray(1) = 'A ' // TRIM(LowerCase(cDescription)) //' is delivered to a subregion that is not in the model domain!'
                 MessageArray(2) = TRIM(cDescription) // ' number = ' //TRIM(IntToText(iSupply))
                 MessageArray(3) = 'Subregion delivered = ' // TRIM(IntToText(iRegion))
-                CALL SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -386,7 +384,7 @@ CONTAINS
                 MessageArray(1) = 'A ' // TRIM(LowerCase(cDescription)) //' is delivered to an element that is not in the model domain!'
                 MessageArray(2) = TRIM(cDescription) // ' number = ' //TRIM(IntToText(iSupply))
                 MessageArray(3) = 'Element delivered = ' // TRIM(IntToText(Destination%iDest))
-                CALL SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -427,7 +425,7 @@ CONTAINS
                 MessageArray(1) = 'A ' // TRIM(LowerCase(cDescription)) //' is delivered to a subregion that is not in the model domain!'
                 MessageArray(2) = TRIM(cDescription) // ' number = ' //TRIM(IntToText(iSupply))
                 MessageArray(3) = 'Subregion delivered = ' // TRIM(IntToText(iRegion))
-                CALL SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -868,7 +866,7 @@ CONTAINS
         IF (Supply_Ag .GT. 0.0) THEN
             rFrac = SUM(pConnector%SupplyToDestFracs_Ag)
             IF (ABS(1d0-rFrac) .GT. 1d-2) THEN
-                CALL SetLastMessage('Not all agricultural water supply for '//TRIM(cSupplyDescription)//' '//TRIM(IntToText(indx))//' is going to the desired demand location!',f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage('Not all agricultural water supply for '//TRIM(cSupplyDescription)//' '//TRIM(IntToText(indx))//' is going to the desired demand location!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -879,7 +877,7 @@ CONTAINS
         IF (Supply_Urb .GT. 0.0) THEN
             rFrac = SUM(pConnector%SupplyToDestFracs_Urb)
             IF (ABS(1d0-rFrac) .GT. 1d-2) THEN
-                CALL SetLastMessage('Not all urban water supply for '//TRIM(cSupplyDescription)//' '//TRIM(IntToText(indx))//' is going to the desired demand location!',f_iFatal,ThisProcedure)
+                CALL ModuleLogger%SetLastMessage('Not all urban water supply for '//TRIM(cSupplyDescription)//' '//TRIM(IntToText(indx))//' is going to the desired demand location!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF

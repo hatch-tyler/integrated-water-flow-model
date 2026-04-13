@@ -21,9 +21,7 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 MODULE LakeGWConnector
-  USE MessageLogger          , ONLY: SetLastMessage           , &
-                                     EchoProgress             , &
-                                     MessageLoggerType        , &
+  USE MessageLogger          , ONLY: MessageLoggerType        , &
                                      f_iFatal
   USE GeneralUtilities       , ONLY: ShellSort                , &
                                      GetUniqueArrayComponents , &
@@ -535,7 +533,7 @@ CONTAINS
                   IF (ASSOCIATED(ModuleLogger)) THEN
                       CALL ModuleLogger%SetLastMessage('Time unit for conductance between lakes is not consistent!',f_iFatal,ThisProcedure)
                   ELSE
-                      CALL SetLastMessage('Time unit for conductance between lakes is not consistent!',f_iFatal,ThisProcedure)
+                      CALL ModuleLogger%SetLastMessage('Time unit for conductance between lakes is not consistent!',f_iFatal,ThisProcedure)
                   END IF
                   iStat = -1
                   RETURN
@@ -839,7 +837,7 @@ CONTAINS
         IF (ASSOCIATED(ModuleLogger)) THEN
             CALL ModuleLogger%EchoProgress('Registering lake-groundwater connector with matrix...')
         ELSE
-            CALL EchoProgress('Registering lake-groundwater connector with matrix...')
+            CALL ModuleLogger%EchoProgress('Registering lake-groundwater connector with matrix...')
         END IF
     END IF
     

@@ -22,7 +22,6 @@
 !***********************************************************************
 MODULE Package_PrecipitationET
   USE MessageLogger          , ONLY: MessageLoggerType    , &
-                                     SetLastMessage       , &
                                      f_iFatal
   USE IOInterface            , ONLY: RealTSDataInFileType
   USE TimeSeriesUtilities    , ONLY: TimeStepType
@@ -281,7 +280,7 @@ CONTAINS
                 IF (ASSOCIATED(ModuleLogger)) THEN
                     CALL ModuleLogger%SetLastMessage('Time intervals for ETo and Kc input data do not match!',f_iFatal,ThisProcedure)
                 ELSE
-                    CALL SetLastMessage('Time intervals for ETo and Kc input data do not match!',f_iFatal,ThisProcedure)
+                    CALL ModuleLogger%SetLastMessage('Time intervals for ETo and Kc input data do not match!',f_iFatal,ThisProcedure)
                 END IF
                 iStat = -1
                 RETURN
