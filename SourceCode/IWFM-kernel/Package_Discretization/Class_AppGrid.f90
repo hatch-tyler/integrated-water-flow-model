@@ -934,7 +934,7 @@ CONTAINS
     CALL InFile%ReadData(Vertex,iStat)   ;  IF (iStat .EQ. -1) RETURN
     
     !Base grid
-    CALL AppGrid%GridType%Init(X,Y,NVertex,Vertex,iStat)
+    CALL AppGrid%GridType%Init(ModuleLogger,X,Y,NVertex,Vertex,iStat)
     IF (iStat .EQ. -1) RETURN
 
     !Read app. grid nodal data
@@ -1278,7 +1278,7 @@ CONTAINS
     CALL ConvertID_To_Index(iElemSubregionIDs,iSubregionIDs_Unique,iSubregion_Indices)
     
     !Set the base grid data
-    CALL AppGrid%GridType%Init(X,Y,NVertex,Vertex,iStat)
+    CALL AppGrid%GridType%Init(ModuleLogger,X,Y,NVertex,Vertex,iStat)
     IF (iStat .EQ. -1) RETURN
     
     !Establish the face list

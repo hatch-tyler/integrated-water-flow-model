@@ -76,6 +76,7 @@ MODULE Class_Grid
   ! --- GRID DATA TYPE
   ! -------------------------------------------------------------
   TYPE GridType
+      TYPE(MessageLoggerType),POINTER :: Logger => NULL()  !Per-instance logger
       REAL(8),ALLOCATABLE           :: X(:)        !Nodal X coordinates for each (node)
       REAL(8),ALLOCATABLE           :: Y(:)        !Nodal Y coordinates for each (node)
       INTEGER,ALLOCATABLE           :: NVertex(:)  !Number of vertices for each (element)
@@ -164,15 +165,19 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- CONSTRUCTOR
   ! -------------------------------------------------------------
-  SUBROUTINE New(Grid,X,Y,NVertex,Vertex,iStat)
-    CLASS(GridType),INTENT(OUT) :: Grid
-    REAL(8),INTENT(IN)          :: X(:),Y(:)
-    INTEGER,INTENT(IN)          :: NVertex(:),Vertex(:,:)
-    INTEGER,INTENT(OUT)         :: iStat
+  SUBROUTINE New(Grid,Logger,X,Y,NVertex,Vertex,iStat)
+    CLASS(GridType),INTENT(OUT)                :: Grid
+    TYPE(MessageLoggerType),TARGET,INTENT(IN)  :: Logger
+    REAL(8),INTENT(IN)                         :: X(:),Y(:)
+    INTEGER,INTENT(IN)                         :: NVertex(:),Vertex(:,:)
+    INTEGER,INTENT(OUT)                        :: iStat
 
     !Local variables
     CHARACTER(LEN=f_iModNameLen+3) :: ThisProcedure = f_cModName // 'New'
     INTEGER                        :: ErrorCode
+
+    !Set logger (first statement — safe after INTENT(OUT) reset)
+    Grid%Logger => Logger
 
     !Initialize
     iStat = 0
@@ -180,7 +185,7 @@ CONTAINS
     !Allocate memory for nodes
     ALLOCATE(Grid%X(SIZE(X)) , Grid%Y(SIZE(Y)) , STAT=ErrorCode)
     IF (ErrorCode .NE. 0) THEN
-        CALL ModuleLogger%SetLastMessage('Error in allocating memory for nodal coordinates of a grid!',f_iFatal,ThisProcedure)
+        CALL Grid%Logger%SetLastMessage('Error in allocating memory for nodal coordinates of a grid!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -188,7 +193,7 @@ CONTAINS
     !Allocate memory for elements
     ALLOCATE(Grid%NVertex(SIZE(NVertex)) , Grid%Vertex(4,SIZE(NVertex)) , STAT=ErrorCode)
     IF (ErrorCode .NE. 0) THEN
-        CALL ModuleLogger%SetLastMessage('Error in allocating memory for elements of a grid!',f_iFatal,ThisProcedure)
+        CALL Grid%Logger%SetLastMessage('Error in allocating memory for elements of a grid!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -265,7 +270,7 @@ CONTAINS
         NodeNumber = NodeList(indx)
         IF (Area(indx) .LE. 0.0) THEN
             ID = iNodeIDs(NodeNumber)
-            CALL ModuleLogger%SetLastMessage('Nodal area at node '//TRIM(IntToText(ID))//' is zero!',f_iFatal,ThisProcedure)
+            CALL Grid%Logger%SetLastMessage('Nodal area at node '//TRIM(IntToText(ID))//' is zero!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -310,7 +315,7 @@ CONTAINS
         NodeNumber = iBeginIndex + indx - 1
         IF (Area(indx) .LE. 0.0) THEN
             ID = iNodeIDs(NodeNumber)
-            CALL ModuleLogger%SetLastMessage('Nodal area at node '//TRIM(IntToText(ID))//' is zero!',f_iFatal,ThisProcedure)
+            CALL Grid%Logger%SetLastMessage('Nodal area at node '//TRIM(IntToText(ID))//' is zero!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -446,7 +451,7 @@ CONTAINS
           ID = iElemIDs(ElemNo)
           MessageArray(1) = 'The area for element '//TRIM(IntToText(ID))//' is less than or equal to zero!'
           MessageArray(2) = 'Check the nodal coordinates for this element.'
-          CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+          CALL Grid%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
           iStat = -1
           RETURN
       END IF
@@ -500,7 +505,7 @@ CONTAINS
           ID = iElemIDs(ElemNo)
           MessageArray(1)='The area for element '//TRIM(IntToText(ID))//' is less than or equal to zero!'
           MessageArray(2)='Check the nodal coordinates for this element.'
-          CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+          CALL Grid%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
           iStat = -1
           RETURN
       END IF
@@ -539,7 +544,7 @@ CONTAINS
       IF (Area(1) .LE. 0.0) THEN  !Problem with node coordinates
         MessageArray(1)='The area for element '//TRIM(IntToText(indxElem))//' at node '//TRIM(IntToText(Vertex(1)))//' is less than or equal to zero!'
         MessageArray(2)='Check the nodal coordinates for this element.'
-        CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+        CALL Grid%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
       END IF
@@ -551,7 +556,7 @@ CONTAINS
         IF (Area(indxVertex) .LE. 0.0) THEN  !Problem with node coordinates
           MessageArray(1)='The area for element '//TRIM(IntToText(indxElem))//' at node '//TRIM(IntToText(Vertex(indxVertex)))//' is less than or equal to zero!'
           MessageArray(2)='Check the nodal coordinates for this element.'
-          CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+          CALL Grid%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
           iStat = -1
           RETURN
         END IF

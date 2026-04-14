@@ -4100,12 +4100,12 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET AppGrid
   ! -------------------------------------------------------------
-  PURE SUBROUTINE GetAppGrid(Model,AppGrid)
+  SUBROUTINE GetAppGrid(Model,AppGrid)
     CLASS(ModelType),INTENT(IN)   :: Model
     TYPE(AppGridType),INTENT(OUT) :: AppGrid
-    
+
     AppGrid = Model%AppGrid
-    
+
   END SUBROUTINE GetAppGrid
   
   

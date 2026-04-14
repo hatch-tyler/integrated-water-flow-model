@@ -131,7 +131,7 @@ CONTAINS
     NNodes = SIZE(X)
 
     !Create the storage for the nodes of parametric grid
-    CALL ParamGrid%GridData%Init(X,Y,NVertex,Vertex,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    CALL ParamGrid%GridData%Init(ModuleLogger,X,Y,NVertex,Vertex,iStat)  ;  IF (iStat .EQ. -1) RETURN
     ALLOCATE (ParamGrid%ParamNode(NNodes))
     DO indxNode=1,NNodes
         ALLOCATE (ParamGrid%ParamNode(indxNode)%Layer(NLayer))
