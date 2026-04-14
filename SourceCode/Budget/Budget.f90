@@ -24,14 +24,14 @@ PROGRAM BUDGET
   USE MessageLogger    , ONLY: SetLogFileName , &
                                DefaultLogger  , &
                                LogLastMessage , &
-                               PrintRunTime   , &
                                MessageArray   , &
                                f_iMessage     , &
                                f_iFILE
   USE IWFM_Version     , ONLY: IWFMVersion
   USE BudgetControls
   USE GeneralUtilities
-  USE ProgramTimer     , ONLY: StartTimer
+  USE ProgramTimer     , ONLY: DefaultTimer     , &
+                               ProgramTimerType
   USE IOInterface
   IMPLICIT NONE
 
@@ -40,7 +40,7 @@ PROGRAM BUDGET
   INTEGER               :: iStat
 
   !Start CPU timer
-  CALL StartTimer()
+  CALL DefaultTimer%Start()
 
   !Refresh the standard output file
   CALL DummyFile%New(FileName='BudgetMessages.out',InputFile=.FALSE.,iStat=iStat)

@@ -24,15 +24,16 @@ MODULE ZBudgetControls
   USE IWFM_Version           , ONLY: IWFMVersion
   USE IWFM_Kernel_Version    , ONLY: IWFMKernelVersion
   USE MessageLogger          , ONLY: MessageLoggerType                  , &
+                                     DefaultLogger                      , &
                                      LogLastMessage                     , &
-                                     PrintRunTime                       , &
                                      MessageArray                       , &
                                      f_iMessage                         , &
                                      f_iWarn                            , &
                                      f_iFatal                           , &
                                      f_iSCREEN_FILE                     , &
                                      f_iSCREEN
-  USE ProgramTimer           , ONLY: StopTimer           
+  USE ProgramTimer           , ONLY: DefaultTimer        , &
+                                     ProgramTimerType
   USE GeneralUtilities       , ONLY: StripTextUntilCharacter            , &
                                      CleanSpecialCharacters             , &
                                      IntToText                          , &
@@ -319,8 +320,8 @@ CONTAINS
         CALL ModuleLogger%LogMessage(f_cLineFeed//'Program completed successfully.',f_iMessage,'')
     END IF
     
-    CALL StopTimer()
-    CALL PrintRunTime()
+    CALL DefaultTimer%Stop()
+    CALL DefaultLogger%PrintRunTime()
     CALL StandardOutputFile%Kill()
     STOP
 

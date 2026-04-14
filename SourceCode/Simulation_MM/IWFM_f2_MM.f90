@@ -35,10 +35,9 @@
 !
 !***********************************************************************
 PROGRAM IWFM_f2_MultiModel
-  USE ProgramTimer           , ONLY: StartTimer              , &
-                                     StopTimer               
-  USE MessageLogger          , ONLY: PrintRunTime            , &
-                                     SetLogFileName          , &
+  USE ProgramTimer           , ONLY: DefaultTimer            , &
+                                     ProgramTimerType
+  USE MessageLogger          , ONLY: SetLogFileName          , &
                                      KillLogFile             , &
                                      DefaultLogger           , &
                                      LogLastMessage          , &
@@ -322,7 +321,7 @@ CONTAINS
     IF (.NOT. lMaster) GOTO 10
     
     !Start program timer
-    CALL StartTimer()  
+    CALL DefaultTimer%Start()
   
     !Standard output file
     CALL SetLogFileName('SimulationMessages_MM.out',iStat)
@@ -1708,7 +1707,7 @@ CONTAINS
     
     !Finish up run
     IF (lMaster) THEN
-        CALL PrintRunTime()
+        CALL DefaultLogger%PrintRunTime()
         CALL KillLogFile()
     END IF
     

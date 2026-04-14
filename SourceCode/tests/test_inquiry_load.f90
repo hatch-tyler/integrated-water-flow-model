@@ -27,7 +27,7 @@
 PROGRAM test_inquiry_load
   USE Package_Model         , ONLY: ModelType
   USE MessageLogger         , ONLY: SetLogFileName, KillLogFile, LogLastMessage
-  USE ProgramTimer          , ONLY: StartTimer, StopTimer
+  USE ProgramTimer          , ONLY: DefaultTimer, ProgramTimerType
   IMPLICIT NONE
 
   ! Local variables
@@ -73,7 +73,7 @@ PROGRAM test_inquiry_load
   WRITE(*,*) ''
 
   ! ----- Start timer + open log file -----
-  CALL StartTimer()
+  CALL DefaultTimer%Start()
   CALL SetLogFileName('SimulationMessages.out', iStat)
   IF (iStat .EQ. -1) THEN
     CALL LogLastMessage()
@@ -180,7 +180,7 @@ PROGRAM test_inquiry_load
   WRITE(*,*) 'Calling Model%Kill()'
   CALL Model%Kill()
 
-  CALL StopTimer()
+  CALL DefaultTimer%Stop()
   CALL KillLogFile()
 
   WRITE(*,*) ''

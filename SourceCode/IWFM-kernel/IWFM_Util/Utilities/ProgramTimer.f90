@@ -97,8 +97,9 @@ MODULE ProgramTimer
   ! -------------------------------------------------------------
   ! New type-based API
   PUBLIC :: ProgramTimerType
+  PUBLIC :: DefaultTimer
 
-  ! Backward-compatible wrapper procedures
+  ! Backward-compatible wrapper procedures (used internally by MessageLogger)
   PUBLIC :: StartTimer    , &
             StopTimer     , &
             GetRunTime    , &

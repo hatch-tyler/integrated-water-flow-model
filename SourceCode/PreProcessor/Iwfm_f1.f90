@@ -22,9 +22,9 @@
 !***********************************************************************
 PROGRAM IWFM_F1
   !$ USE OMP_LIB
-  USE ProgramTimer      , ONLY: StartTimer       , &
-                                StopTimer
-  USE MessageLogger     , ONLY: PrintRunTime     , &
+  USE ProgramTimer      , ONLY: DefaultTimer     , &
+                                ProgramTimerType
+  USE MessageLogger     , ONLY: DefaultLogger    , &
                                 SetLogFileName   , &
                                 KillLogFile      , &
                                 LogLastMessage
@@ -48,7 +48,7 @@ PROGRAM IWFM_F1
 
 
   !Start timer
-  CALL StartTimer()
+  CALL DefaultTimer%Start()
 
   !Set message log file
   CALL SetLogFileName('PreprocessorMessages.out',iStat)
@@ -70,8 +70,8 @@ PROGRAM IWFM_F1
   END IF
 
   !Print run-time
-  CALL StopTimer()
-  CALL PrintRunTime()
+  CALL DefaultTimer%Stop()
+  CALL DefaultLogger%PrintRunTime()
 
   !Close message log file
   CALL KillLogFile()

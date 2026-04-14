@@ -22,9 +22,9 @@
 !***********************************************************************
 PROGRAM IWFM_F2
   !$ USE OMP_LIB
-  USE ProgramTimer      , ONLY: StartTimer       , &
-                                StopTimer
-  USE MessageLogger     , ONLY: PrintRunTime     , &
+  USE ProgramTimer      , ONLY: DefaultTimer     , &
+                                ProgramTimerType
+  USE MessageLogger     , ONLY: DefaultLogger    , &
                                 SetLogFileName   , &
                                 KillLogFile      , &
                                 LogLastMessage
@@ -49,7 +49,7 @@ PROGRAM IWFM_F2
 
 
   !Start program timer
-  CALL StartTimer()
+  CALL DefaultTimer%Start()
 
 
   !Standard output file
@@ -85,8 +85,8 @@ PROGRAM IWFM_F2
   CALL Model%Kill()
 
   !Complete the simulation and print model run time
-  CALL StopTimer()
-  CALL PrintRunTime()
+  CALL DefaultTimer%Stop()
+  CALL DefaultLogger%PrintRunTime()
   CALL KillLogFile()
 
   !$ CALL KMP_SET_BLOCKTIME(iBlockTime)

@@ -27,7 +27,10 @@
 !
 !***********************************************************************
 MODULE MessageLogger
-  USE ProgramTimer
+  USE ProgramTimer      , ONLY: StartTimer       , &
+                                StopTimer        , &
+                                GetRunTime       , &
+                                TimerStopped
   USE ISO_FORTRAN_ENV, ONLY: OUTPUT_UNIT, ERROR_UNIT
   IMPLICIT NONE
 
@@ -665,7 +668,7 @@ CONTAINS
                     'Incorrect error level returned from procedure '//TRIM(ADJUSTL(cProgName)),.TRUE.)
             CALL WriteFormattedMessage(ERROR_UNIT,cFmt,cAdvance,'FATAL',cSeveralMessages,iNMessage, &
                 'Incorrect error level returned from procedure '//TRIM(ADJUSTL(cProgName)),.TRUE.)
-            CALL PrintRunTime()
+            CALL this%PrintRunTime()
             CALL KillLogFile()
             STOP
 
@@ -694,7 +697,7 @@ CONTAINS
             IF (lWillPrintToFile) &
                 CALL WriteFormattedMessage(iUnitN,cFmt,cAdvance,'FATAL',cSeveralMessages,iNMessage,cProgName,.TRUE.)
             CALL WriteFormattedMessage(ERROR_UNIT,cFmt,cAdvance,'FATAL',cSeveralMessages,iNMessage,cProgName,.TRUE.)
-            CALL PrintRunTime()
+            CALL this%PrintRunTime()
             CALL KillLogFile()
             STOP
     END SELECT

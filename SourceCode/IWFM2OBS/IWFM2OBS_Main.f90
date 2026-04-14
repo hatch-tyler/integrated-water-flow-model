@@ -10,10 +10,9 @@
 !***********************************************************************
 PROGRAM IWFM2OBS_Main
 
-  USE ProgramTimer  , ONLY: StartTimer  , &
-                             StopTimer
-  USE MessageLogger , ONLY: PrintRunTime , &
-                             SetLogFileName, &
+  USE ProgramTimer  , ONLY: DefaultTimer  , &
+                             ProgramTimerType
+  USE MessageLogger , ONLY: SetLogFileName, &
                              KillLogFile   , &
                              LogLastMessage, &
                              DefaultLogger , &
@@ -27,7 +26,7 @@ PROGRAM IWFM2OBS_Main
   INTEGER            :: iStat, iNArgs
 
   ! Start timer
-  CALL StartTimer()
+  CALL DefaultTimer%Start()
 
   DO  ! Single-pass block for structured error exit
 
@@ -82,8 +81,8 @@ PROGRAM IWFM2OBS_Main
     EXIT  ! Normal exit from single-pass block
   END DO
 
-  CALL StopTimer()
-  CALL PrintRunTime()
+  CALL DefaultTimer%Stop()
+  CALL DefaultLogger%PrintRunTime()
   CALL KillLogFile()
 
 END PROGRAM IWFM2OBS_Main

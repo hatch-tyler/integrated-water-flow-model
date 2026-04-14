@@ -32,7 +32,8 @@ PROGRAM ZBudget
                                 f_iMessage            , &
                                 f_iYesEchoProgress    , &
                                 f_iFILE                  
-  USE ProgramTimer      , ONLY: StartTimer               
+  USE ProgramTimer      , ONLY: DefaultTimer           , &
+                                ProgramTimerType
   USE IWFM_Version      , ONLY: IWFMVersion
   USE ZBudgetControls   , ONLY: ProcessZBudgets       , &
                                 EndExecution
@@ -43,7 +44,7 @@ PROGRAM ZBudget
   INTEGER               :: iStat
 
   !Start timer
-  CALL StartTimer()
+  CALL DefaultTimer%Start()
   
   !Set flag to echo progress
   CALL SetFlagToEchoProgress(f_iYesEchoProgress,iStat)

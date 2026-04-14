@@ -23,14 +23,15 @@
 MODULE BudgetControls
   USE IWFM_Kernel_Version  , ONLY: IWFMKernelVersion
   USE MessageLogger        , ONLY: MessageLoggerType         , &
+                                   DefaultLogger             , &
                                    LogLastMessage            , &
-                                   PrintRunTime              , &
                                    MessageArray              , &
                                    f_iWarn                   , &
                                    f_iFatal                  , &
                                    f_iMessage                , &
                                    f_iSCREEN
-  USE ProgramTimer         , ONLY: StopTimer      
+  USE ProgramTimer         , ONLY: DefaultTimer           , &
+                                   ProgramTimerType
   USE GeneralUtilities     , ONLY: StripTextUntilCharacter   , &
                                    CleanSpecialCharacters    , &
                                    LocateInList              , &
@@ -358,8 +359,8 @@ CONTAINS
      ELSE
          CALL ModuleLogger%LogMessage(f_cLineFeed//'Program completed successfully.',f_iMessage,'')
      END IF
-     CALL StopTimer()
-     CALL PrintRunTime()
+     CALL DefaultTimer%Stop()
+     CALL DefaultLogger%PrintRunTime()
      STOP
   
   END SUBROUTINE EndExecution
