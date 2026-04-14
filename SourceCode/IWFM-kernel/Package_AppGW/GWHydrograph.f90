@@ -247,7 +247,7 @@ CONTAINS
             iStat = -1
             RETURN
         END IF
-        CALL GWHydData%HeadTecplotFile%New(lIsForInquiry,cHeadTecplotFileName,'groundwater head print-out for TecPlot',iStat)  ;  IF (iStat .EQ. -1) RETURN
+        CALL GWHydData%HeadTecplotFile%New(ModuleLogger,lIsForInquiry,cHeadTecplotFileName,'groundwater head print-out for TecPlot',iStat)  ;  IF (iStat .EQ. -1) RETURN
         GWHydData%lHeadTecplotFile_Defined = .TRUE.
     END IF
     
@@ -268,7 +268,7 @@ CONTAINS
             iStat = -1
             RETURN
         END IF
-        CALL GWHydData%VelocityTecplotFile%New(lIsForInquiry,cVelTecplotFileName,'groundwater velocities print-out for TecPlot',iStat=iStat)
+        CALL GWHydData%VelocityTecplotFile%New(ModuleLogger,lIsForInquiry,cVelTecplotFileName,'groundwater velocities print-out for TecPlot',iStat=iStat)
         IF (iStat .EQ. -1) RETURN
         GWHydData%lVelocityTecplotFile_Defined = .TRUE.
     END IF
@@ -280,7 +280,7 @@ CONTAINS
         iStat = -1
         RETURN
     END IF
-    CALL GWHydData%GWHydOutput%New(lIsForInquiry,InFile,cWorkingDirectory,AppGrid,Stratigraphy,iGWNodeIDs,f_iHyd_GWHead,cUNITLTOU,'HEAD',TimeStep,iStat)
+    CALL GWHydData%GWHydOutput%New(ModuleLogger,lIsForInquiry,InFile,cWorkingDirectory,AppGrid,Stratigraphy,iGWNodeIDs,f_iHyd_GWHead,cUNITLTOU,'HEAD',TimeStep,iStat)
     IF (iStat .EQ. -1) RETURN
     GWHydData%lGWHydOutput_Defined = GWHydData%GWHydOutput%IsDefined()
     IF (.NOT. GWHydData%lGWHydOutput_Defined) DEALLOCATE (GWHydData%GWHydOutput , STAT=iErrorCode)

@@ -52,6 +52,7 @@ MODULE Class_PairedData
   ! --- PAIRED DATA TYPE
   ! -------------------------------------------------------------
   TYPE,EXTENDS(AbstractFunctionType) :: PairedDataType
+    TYPE(MessageLoggerType),POINTER :: Logger => NULL()
     INTEGER             :: NPoints   =  0        !Number of data points
     REAL(8),ALLOCATABLE :: XPoint(:)             !X value
     REAL(8),ALLOCATABLE :: YPoint(:)             !Y value corresponding to X value
@@ -114,27 +115,29 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- INSTANTIATE DATA BASED ON USER SPECIFIED VALUES
   ! -------------------------------------------------------------
-  SUBROUTINE PairedData_(PairedData,NPoints,XPoint,YPoint,iStat)
-    CLASS(PairedDataType),INTENT(OUT) :: PairedData
-    INTEGER,INTENT(IN)                :: NPoints
-    REAL(8),INTENT(IN)                :: XPoint(:),YPoint(:)
-    INTEGER,INTENT(OUT)               :: iStat
-    
+  SUBROUTINE PairedData_(PairedData,Logger,NPoints,XPoint,YPoint,iStat)
+    CLASS(PairedDataType),INTENT(OUT)           :: PairedData
+    TYPE(MessageLoggerType),TARGET,INTENT(IN)   :: Logger
+    INTEGER,INTENT(IN)                          :: NPoints
+    REAL(8),INTENT(IN)                          :: XPoint(:),YPoint(:)
+    INTEGER,INTENT(OUT)                         :: iStat
+
     !Local variables
     CHARACTER(LEN=ModNameLen+11) :: ThisProcedure = ModName // 'PairedData_'
     INTEGER                      :: ErrorCode
     CHARACTER                    :: cErrMessage*500
-    
+
     !Initialize
+    PairedData%Logger => Logger
     iStat = 0
-    
+
     DEALLOCATE (PairedData%XPoint , PairedData%YPoint , STAT=ErrorCode)
     
     PairedData%NPoints = NPoints
     
     ALLOCATE (PairedData%XPoint(NPoints) , PairedData%YPoint(NPoints) , STAT=ErrorCode , ERRMSG=cErrMessage)
     IF (ErrorCode .NE. 0) THEN
-        CALL ModuleLogger%SetLastMessage('Error in allocating memory for paired data!'//NEW_LINE('x')//TRIM(cErrMessage),f_iFatal,ThisProcedure)
+        CALL PairedData%Logger%SetLastMessage('Error in allocating memory for paired data!'//NEW_LINE('x')//TRIM(cErrMessage),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -147,14 +150,16 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- READ DATA FROM FILE
   ! -------------------------------------------------------------
-  SUBROUTINE PairedData_ReadFromFile(PairedData,InFile,iStat)
-    CLASS(PairedDataType),INTENT(OUT) :: PairedData
-    TYPE(GenericFileType)             :: InFile
-    INTEGER,INTENT(OUT)               :: iStat
+  SUBROUTINE PairedData_ReadFromFile(PairedData,Logger,InFile,iStat)
+    CLASS(PairedDataType),INTENT(OUT)           :: PairedData
+    TYPE(MessageLoggerType),TARGET,INTENT(IN)   :: Logger
+    TYPE(GenericFileType)                        :: InFile
+    INTEGER,INTENT(OUT)                         :: iStat
     
     !Local variables
     INTEGER :: NPoints
-    
+
+    PairedData%Logger => Logger
     CALL InFile%ReadData(NPoints,iStat)  ;  IF (iStat .EQ. -1) RETURN   ;  PairedData%NPoints = NPoints
     ALLOCATE (PairedData%XPoint(NPoints)  , PairedData%YPoint(NPoints))
     CALL InFile%ReadData(PairedData%XPoint,iStat)  ;  IF (iStat .EQ. -1) RETURN 

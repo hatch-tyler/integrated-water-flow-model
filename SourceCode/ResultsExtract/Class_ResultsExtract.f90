@@ -688,10 +688,10 @@ CONTAINS
                        iStat=iStat)
     IF (iStat == -1) RETURN
 
-    CALL This%AppGrid%New(PPBinFile, iStat)
+    CALL This%AppGrid%New(ModuleLogger, PPBinFile, iStat)
     IF (iStat == -1) RETURN
 
-    CALL This%Stratigraphy%New(This%AppGrid%NNodes, PPBinFile, iStat)
+    CALL This%Stratigraphy%New(ModuleLogger, This%AppGrid%NNodes, PPBinFile, iStat)
     IF (iStat == -1) RETURN
 
     CALL PPBinFile%Kill()

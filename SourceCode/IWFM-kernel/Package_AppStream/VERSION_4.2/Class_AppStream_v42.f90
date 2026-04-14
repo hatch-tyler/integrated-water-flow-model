@@ -857,7 +857,7 @@ CONTAINS
     END IF
     
     !Read stream node data
-    CALL StrmNode_New(AppStream%NStrmNodes,BinFile,AppStream%Nodes,iStat)  
+    CALL StrmNode_New(AppStream%NStrmNodes,BinFile,ModuleLogger,AppStream%Nodes,iStat)
     IF (iStat .EQ. -1) RETURN
     
     !Read stream reach data
@@ -1115,7 +1115,7 @@ CONTAINS
         HRTB(2:) = DummyArray2D(:,1) * FACTLT
         QRTB(2:) = DummyArray2D(:,2) * FACTQ
         HRTB     = HRTB + AppStream%Nodes(iNode)%BottomElev
-        CALL AppStream%Nodes(iNode)%RatingTable%New(NRTB,HRTB,QRTB,iStat)
+        CALL AppStream%Nodes(iNode)%RatingTable%New(ModuleLogger,NRTB,HRTB,QRTB,iStat)
         IF (iStat .EQ. -1) RETURN
         
         !Make sure rating table is specified properly

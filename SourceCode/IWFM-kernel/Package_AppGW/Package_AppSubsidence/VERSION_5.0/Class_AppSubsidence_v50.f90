@@ -281,7 +281,7 @@ CONTAINS
             RETURN
         END IF
         CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(ALine)),cWorkingDirectory,cAbsPathFileName)
-        CALL AppSubsidence%TecplotFile%New(IsForInquiry,cAbsPathFileName,'subsidence print-out for Tecplot',iStat)  ;  IF (iStat .EQ. -1) RETURN
+        CALL AppSubsidence%TecplotFile%New(ModuleLogger,IsForInquiry,cAbsPathFileName,'subsidence print-out for Tecplot',iStat)  ;  IF (iStat .EQ. -1) RETURN
         AppSubsidence%lTecplotFile_Defined = .TRUE.
 
         !Print zero subsidence as initial values
@@ -331,7 +331,7 @@ CONTAINS
         iStat = -1
         RETURN
     END IF
-    CALL AppSubsidence%SubsHydOutput%New(IsForInquiry,SubsMainFile,cWorkingDirectory,AppGrid,Stratigraphy,iGWNodeIDs,f_iHyd_Subsidence,AppSubsidence%cUnitLen,'TOTAL_CHANGE_THICK',TimeStep,iStat)
+    CALL AppSubsidence%SubsHydOutput%New(ModuleLogger,IsForInquiry,SubsMainFile,cWorkingDirectory,AppGrid,Stratigraphy,iGWNodeIDs,f_iHyd_Subsidence,AppSubsidence%cUnitLen,'TOTAL_CHANGE_THICK',TimeStep,iStat)
     IF (iStat .EQ. -1) RETURN
     AppSubsidence%lSubsHydOutput_Defined = AppSubsidence%SubsHydOutput%IsDefined()
     IF (AppSubsidence%lSubsHydOutput_Defined) THEN

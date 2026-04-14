@@ -726,11 +726,11 @@ CONTAINS
     IF (IsLogFileDefined()) CALL PrintProjectTitleAndFiles(ProjectTitles,ProjectFileNames)
     
     !Set the application grid
-    CALL Model%AppGrid%New(ProjectFileNames(PP_NodeFileID) , ProjectFileNames(PP_ElementConfigFileID) , iStat)  ;  IF (iStat .EQ. -1) RETURN
+    CALL Model%AppGrid%New(ModuleLogger, ProjectFileNames(PP_NodeFileID) , ProjectFileNames(PP_ElementConfigFileID) , iStat)  ;  IF (iStat .EQ. -1) RETURN
     NNodes = Model%AppGrid%NNodes
 
     !Set the stratigraphy
-    CALL Model%Stratigraphy%New(NNodes , Model%AppGrid%AppNode%ID , ProjectFileNames(PP_StratigraphyFileID),iStat)  ;  IF (iStat .EQ. -1) RETURN  
+    CALL Model%Stratigraphy%New(ModuleLogger, NNodes , Model%AppGrid%AppNode%ID , ProjectFileNames(PP_StratigraphyFileID),iStat)  ;  IF (iStat .EQ. -1) RETURN  
     NLayers = Model%Stratigraphy%NLayers
    
     !Set the application streams
@@ -836,11 +836,11 @@ CONTAINS
     IF (IsLogFileDefined()) CALL PrintProjectTitleAndFiles(cProjectTitles,cPP_FileNames)
     
     !Set the application grid
-    CALL Model%AppGrid%New(cPP_FileNames(PP_NodeFileID) , cPP_FileNames(PP_ElementConfigFileID) , iStat)  ;  IF (iStat .EQ. -1) RETURN
+    CALL Model%AppGrid%New(ModuleLogger, cPP_FileNames(PP_NodeFileID) , cPP_FileNames(PP_ElementConfigFileID) , iStat)  ;  IF (iStat .EQ. -1) RETURN
     NNodes = Model%AppGrid%NNodes
 
     !Set the stratigraphy
-    CALL Model%Stratigraphy%New(NNodes , Model%AppGrid%AppNode%ID , cPP_FileNames(PP_StratigraphyFileID),iStat)  ;  IF (iStat .EQ. -1) RETURN
+    CALL Model%Stratigraphy%New(ModuleLogger, NNodes , Model%AppGrid%AppNode%ID , cPP_FileNames(PP_StratigraphyFileID),iStat)  ;  IF (iStat .EQ. -1) RETURN
     NLayers = Model%Stratigraphy%NLayers
    
     !Set the application streams
@@ -907,11 +907,11 @@ CONTAINS
     LOGICAL :: lWSA
     
     !Instantiate grid data 
-    CALL Model%AppGrid%New(BinaryFile,iStat)  
+    CALL Model%AppGrid%New(ModuleLogger,BinaryFile,iStat)
     IF (iStat .EQ. -1) RETURN
 
-    !Instantiate stratigraphy data 
-    CALL Model%Stratigraphy%New(Model%AppGrid%NNodes,BinaryFile,iStat)  
+    !Instantiate stratigraphy data
+    CALL Model%Stratigraphy%New(ModuleLogger,Model%AppGrid%NNodes,BinaryFile,iStat)  
     IF (iStat .EQ. -1) RETURN
 
     !Instantiate component connectors 
@@ -1153,13 +1153,13 @@ CONTAINS
     
     !Grid data
     CALL DATE_AND_TIME(VALUES=iTimerStart)
-    CALL Model%AppGrid%New(PPBinaryFile,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    CALL Model%AppGrid%New(ModuleLogger,PPBinaryFile,iStat)  ;  IF (iStat .EQ. -1) RETURN
     NNodes    = Model%AppGrid%NNodes
     NElements = Model%AppGrid%NElements
     NFaces    = Model%AppGrid%NFaces
 
     !Stratigraphy data
-    CALL Model%Stratigraphy%New(NNodes,PPBinaryFile,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    CALL Model%Stratigraphy%New(ModuleLogger,NNodes,PPBinaryFile,iStat)  ;  IF (iStat .EQ. -1) RETURN
     NLayers = Model%Stratigraphy%NLayers
     CALL DATE_AND_TIME(VALUES=iTimerValues)
     CALL LogInitTime('Grid+Stratigraphy', iTimerStart, iTimerValues)

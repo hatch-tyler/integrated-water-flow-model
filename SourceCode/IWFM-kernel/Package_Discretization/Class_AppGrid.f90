@@ -635,10 +635,11 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- READ GRID DATA
   ! -------------------------------------------------------------
-  SUBROUTINE ReadAppGridData(AppGrid,NodeFileName,ElementConfigFileName,iStat) 
-    CLASS(AppGridType),INTENT(OUT) :: AppGrid 
-    CHARACTER(LEN=*),INTENT(IN)    :: NodeFileName , ElementConfigFileName
-    INTEGER,INTENT(OUT)            :: iStat
+  SUBROUTINE ReadAppGridData(AppGrid,Logger,NodeFileName,ElementConfigFileName,iStat)
+    CLASS(AppGridType),INTENT(OUT)              :: AppGrid
+    TYPE(MessageLoggerType),TARGET,INTENT(IN)   :: Logger
+    CHARACTER(LEN=*),INTENT(IN)                 :: NodeFileName , ElementConfigFileName
+    INTEGER,INTENT(OUT)                         :: iStat
 
     !Local variables
     CHARACTER(LEN=ModNameLen+15)              :: ThisProcedure = ModName // 'ReadAppGridData'
@@ -646,26 +647,27 @@ CONTAINS
     INTEGER,ALLOCATABLE                       :: iElemSubregionIDs(:),iSubregionIDs(:),NVertex(:),Vertex_IDs(:,:),NodeID(:),ElemID(:)
     REAL(8),ALLOCATABLE                       :: X(:),Y(:)
     CHARACTER(LEN=iRegionNameLen),ALLOCATABLE :: cSubregionNames(:)
-    
+
     !Initialize
+    AppGrid%Logger => Logger
     iStat = 0
-    
+
     !Check if grid is initialized
     IF (AppGrid%NNodes .NE. 0) THEN
-        CALL ModuleLogger%SetLastMessage('An application grid that is already defined is being re-defined!',f_iFatal,ThisProcedure)
+        CALL AppGrid%Logger%SetLastMessage('An application grid that is already defined is being re-defined!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
 
     !Print progress
-    CALL ModuleLogger%EchoProgress('Instantiating application grid')
+    CALL AppGrid%Logger%EchoProgress('Instantiating application grid')
 
-    !Read grid data     
+    !Read grid data
     CALL ReadNodeData(NodeFileName,NodeID,X,Y,iStat)  ;  IF (iStat .EQ. -1) RETURN
     CALL ReadElementConfigData(ElementConfigFileName,ElemID,NVertex,Vertex_IDs,iElemSubregionIDs,iSubregionIDs,cSubregionNames,iStat)  ;  IF (iStat .EQ. -1) RETURN
-    
+
     !Instantiate application grid
-    CALL ConstructAppGrid(X,Y,NVertex,Vertex_IDs,NodeID,ElemID,iElemSubregionIDs,iSubregionIDs,cSubregionNames,AppGrid,iStat)  
+    CALL ConstructAppGrid(X,Y,NVertex,Vertex_IDs,NodeID,ElemID,iElemSubregionIDs,iSubregionIDs,cSubregionNames,Logger,AppGrid,iStat)
     IF (iStat .EQ. -1) RETURN
     
     !Free memory
@@ -895,23 +897,25 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- READ GRID DATA FROM BINARY FILE
   ! -------------------------------------------------------------
-  SUBROUTINE ReadProcessedAppGridData(AppGrid,InFile,iStat) 
-    CLASS(AppGridType),INTENT(OUT) :: AppGrid
-    TYPE(GenericFileType)          :: InFile
-    INTEGER,INTENT(OUT)            :: iStat
+  SUBROUTINE ReadProcessedAppGridData(AppGrid,Logger,InFile,iStat)
+    CLASS(AppGridType),INTENT(OUT)              :: AppGrid
+    TYPE(MessageLoggerType),TARGET,INTENT(IN)   :: Logger
+    TYPE(GenericFileType)                        :: InFile
+    INTEGER,INTENT(OUT)                         :: iStat
 
     !Local variables
     CHARACTER(LEN=ModNameLen+24)  :: ThisProcedure = ModName//'ReadProcessedAppGridData'
     INTEGER                       :: indx,indx1,NBndFace,ErrorCode
     INTEGER,ALLOCATABLE           :: NVertex(:),Vertex(:,:)
     REAL(8),ALLOCATABLE           :: X(:),Y(:)
-    
+
     !Initialize
+    AppGrid%Logger => Logger
     iStat = 0
 
     !Check if grid is initialized
     IF (AppGrid%NNodes .GT. 0) THEN
-        CALL ModuleLogger%SetLastMessage('An application grid that is already defined is being re-defined!',f_iFatal,ThisProcedure)
+        CALL AppGrid%Logger%SetLastMessage('An application grid that is already defined is being re-defined!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -934,7 +938,7 @@ CONTAINS
     CALL InFile%ReadData(Vertex,iStat)   ;  IF (iStat .EQ. -1) RETURN
     
     !Base grid
-    CALL AppGrid%GridType%Init(ModuleLogger,X,Y,NVertex,Vertex,iStat)
+    CALL AppGrid%GridType%Init(AppGrid%Logger,X,Y,NVertex,Vertex,iStat)
     IF (iStat .EQ. -1) RETURN
 
     !Read app. grid nodal data
@@ -951,7 +955,7 @@ CONTAINS
     IF (iStat .EQ. -1) RETURN
 
     !Read app. grid face data
-    CALL AppGrid%AppFace%New(InFile,AppGrid%NFaces,iStat)
+    CALL AppGrid%AppFace%New(AppGrid%Logger,InFile,AppGrid%NFaces,iStat)
     IF (iStat .EQ. -1) RETURN
     
     !Read boundary face list
@@ -1222,12 +1226,13 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GENERATE GRID DATA BASED ON NODE AND ELEMENT INFO
   ! -------------------------------------------------------------
-  SUBROUTINE ConstructAppGrid(X,Y,NVertex,Vertex_IDs,NodeID,ElemID,iElemSubregionIDs,iSubregionIDs,cSubregionNames,AppGrid,iStat)
-    REAL(8),INTENT(IN)            :: X(:),Y(:)
-    INTEGER,INTENT(IN)            :: NVertex(:),Vertex_IDs(:,:),NodeID(:),ElemID(:),iElemSubregionIDs(:),iSubregionIDs(:)
-    CHARACTER(LEN=*),INTENT(IN)   :: cSubregionNames(:)
-    TYPE(AppGridType),INTENT(OUT) :: AppGrid
-    INTEGER,INTENT(OUT)           :: iStat
+  SUBROUTINE ConstructAppGrid(X,Y,NVertex,Vertex_IDs,NodeID,ElemID,iElemSubregionIDs,iSubregionIDs,cSubregionNames,Logger,AppGrid,iStat)
+    REAL(8),INTENT(IN)                          :: X(:),Y(:)
+    INTEGER,INTENT(IN)                          :: NVertex(:),Vertex_IDs(:,:),NodeID(:),ElemID(:),iElemSubregionIDs(:),iSubregionIDs(:)
+    CHARACTER(LEN=*),INTENT(IN)                 :: cSubregionNames(:)
+    TYPE(MessageLoggerType),TARGET,INTENT(IN)   :: Logger
+    TYPE(AppGridType),INTENT(OUT)               :: AppGrid
+    INTEGER,INTENT(OUT)                         :: iStat
     
     !Local variables
     CHARACTER(LEN=ModNameLen+16)  :: ThisProcedure = ModName//'ConstructAppGrid'
@@ -1238,9 +1243,10 @@ CONTAINS
     INTEGER,ALLOCATABLE           :: DummyIntArray(:),iSubregionIDs_Unique(:)
     
     !Initialize
+    AppGrid%Logger => Logger
     iStat         = 0
     iStatParallel = 0
-    
+
     !Convert vertex IDs to indices
     CALL ConvertID_To_Index(PACK(Vertex_IDs,MASK=.TRUE.),NodeID,Vertex_1D)
     Vertex = RESHAPE(Vertex_1D,[SIZE(Vertex_IDs,DIM=1),SIZE(Vertex_IDS,DIM=2)])
@@ -1254,7 +1260,7 @@ CONTAINS
             IF (iaNodeID .EQ. 0) CYCLE
             iLoc = LocateInList(iaNodeID,NodeID)
             IF (iLoc .EQ. 0) THEN
-                CALL ModuleLogger%SetLastMessage('Node ID '//TRIM(IntToText(iaNodeID))//' listed for element '//TRIM(IntToText(ElemID(indxElem)))//' is not in the model!',f_iFatal,ThisProcedure)
+                CALL AppGrid%Logger%SetLastMessage('Node ID '//TRIM(IntToText(iaNodeID))//' listed for element '//TRIM(IntToText(ElemID(indxElem)))//' is not in the model!',f_iFatal,ThisProcedure)
                 iStat = -1
             END IF
         END DO
@@ -1268,21 +1274,21 @@ CONTAINS
     IF (SIZE(iSubregionIDs_Unique) .NE. SIZE(cSubregionNames)) THEN
         MessageArray(1) = 'Number of subregion names listed in Element Configuration File is'
         MessageArray(2) = 'different than the unique subregion IDs specified for elements!'
-        CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+        CALL AppGrid%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
-      
+
     !Convert subregion IDs to indices
     CALL ShellSort(iSubregionIDs_Unique)
     CALL ConvertID_To_Index(iElemSubregionIDs,iSubregionIDs_Unique,iSubregion_Indices)
     
     !Set the base grid data
-    CALL AppGrid%GridType%Init(ModuleLogger,X,Y,NVertex,Vertex,iStat)
+    CALL AppGrid%GridType%Init(AppGrid%Logger,X,Y,NVertex,Vertex,iStat)
     IF (iStat .EQ. -1) RETURN
-    
+
     !Establish the face list
-    CALL AppGrid%AppFace%New(NVertex,Vertex,X,Y,iStat)  
+    CALL AppGrid%AppFace%New(AppGrid%Logger,NVertex,Vertex,X,Y,iStat)
     IF (iStat .EQ. -1) RETURN
     AppGrid%NFaces = AppGrid%AppFace%GetNFaces()
     
@@ -1302,7 +1308,7 @@ CONTAINS
     AppGrid%NNodes = NNodes
     ALLOCATE (AppGrid%AppNode(NNodes) , STAT=ErrorCode)
     IF (ErrorCode .NE. 0) THEN
-        CALL ModuleLogger%SetLastMessage('Error in allocating memory for the nodes of the application grid!',f_iFatal,ThisProcedure)
+        CALL AppGrid%Logger%SetLastMessage('Error in allocating memory for the nodes of the application grid!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -1313,7 +1319,7 @@ CONTAINS
     AppGrid%NElements = NElements
     ALLOCATE (AppGrid%AppElement(NElements) , STAT=ErrorCode)
     IF (ErrorCode .NE. 0) THEN
-        CALL ModuleLogger%SetLastMessage('Error in allocating memory for the elements of the application grid!',f_iFatal,ThisProcedure)
+        CALL AppGrid%Logger%SetLastMessage('Error in allocating memory for the elements of the application grid!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -1331,7 +1337,7 @@ CONTAINS
         IF (ConvexNode .NE. 0) THEN
             MessageArray(1)='Element '//TRIM(IntToText(AppGrid%AppElement(indx)%ID))//' is not convex'
             MessageArray(2)='(has an angle larger than or equal to 180 degrees) at node '//TRIM(IntToText(NodeID(ConvexNode))) 
-            CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+            CALL AppGrid%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
             iStat = -1
         END IF
     END DO
@@ -1362,7 +1368,7 @@ CONTAINS
                     ID              = AppGrid%AppElement(indx)%ID
                     MessageArray(1) = 'All faces of element '// TRIM(IntToText(ID)) // ' are boundary faces!'
                     MessageArray(2) = 'Such a grid setup is not allowed.'
-                    CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                    CALL AppGrid%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                     iStatParallel = -1
                     !$OMP END CRITICAL
                 END IF
@@ -1382,7 +1388,7 @@ CONTAINS
     DO indx=1,NElements
         ALLOCATE (AppGrid%AppElement(indx)%VertexArea(NVertex(indx)) , AppGrid%AppElement(indx)%VertexAreaFraction(NVertex(indx)) , STAT=ErrorCode)
         IF (ErrorCode .NE. 0) THEN
-            CALL ModuleLogger%SetLastMessage('Error in allocating memory for vertex areas for element '//TRIM(IntToText(AppGrid%AppElement(indx)%ID))//'!',f_iFatal,ThisProcedure)          
+            CALL AppGrid%Logger%SetLastMessage('Error in allocating memory for vertex areas for element '//TRIM(IntToText(AppGrid%AppElement(indx)%ID))//'!',f_iFatal,ThisProcedure)          
             iStatParallel = -1
         END IF
         CALL ElementVertexArea(AppGrid%GridType,indx,[(indxVertex,indxVertex=1,NVertex(indx))],AppGrid%AppElement(indx)%VertexArea,iStat)  
@@ -1449,7 +1455,7 @@ CONTAINS
         IF (iStat .EQ. -1) THEN
             iStatParallel = -1
         END IF
-        IF (SIZE(AppGrid%AppNode(indx)%SurroundingElement) .EQ. 0) CALL ModuleLogger%LogMessage('Node number '//TRIM(IntToText(AppGrid%AppNode(indx)%ID))//' does not have any surrounding elements!',f_iWarn,ThisProcedure)
+        IF (SIZE(AppGrid%AppNode(indx)%SurroundingElement) .EQ. 0) CALL AppGrid%Logger%LogMessage('Node number '//TRIM(IntToText(AppGrid%AppNode(indx)%ID))//' does not have any surrounding elements!',f_iWarn,ThisProcedure)
     END DO
     !$OMP END DO 
     !$OMP END PARALLEL  
@@ -1467,7 +1473,7 @@ CONTAINS
             iStatParallel = -1
         END IF
         AppGrid%AppNode(indx)%NConnectedNode = SIZE(AppGrid%AppNode(indx)%ConnectedNode)
-        IF (AppGrid%AppNode(indx)%NConnectedNode .EQ. 0) CALL ModuleLogger%LogMessage('Node number '//TRIM(IntToText(AppGrid%AppNode(indx)%ID))//' does not have any connected nodes!',f_iWarn,ThisProcedure)
+        IF (AppGrid%AppNode(indx)%NConnectedNode .EQ. 0) CALL AppGrid%Logger%LogMessage('Node number '//TRIM(IntToText(AppGrid%AppNode(indx)%ID))//' does not have any connected nodes!',f_iWarn,ThisProcedure)
     END DO
     !$OMP END DO 
     !$OMP END PARALLEL  
@@ -1486,7 +1492,7 @@ CONTAINS
             iStatParallel = -1
         END IF
         AppGrid%AppNode(indx)%NFaceID = SIZE(AppGrid%AppNode(indx)%FaceID)
-        IF (AppGrid%AppNode(indx)%NFaceID .EQ. 0) CALL ModuleLogger%LogMessage('Node number '//TRIM(IntToText(AppGrid%AppNode(indx)%ID))//' does not have any faces connecting at it!',f_iWarn,ThisProcedure)
+        IF (AppGrid%AppNode(indx)%NFaceID .EQ. 0) CALL AppGrid%Logger%LogMessage('Node number '//TRIM(IntToText(AppGrid%AppNode(indx)%ID))//' does not have any faces connecting at it!',f_iWarn,ThisProcedure)
     END DO
     !$OMP END DO 
     !$OMP END PARALLEL  
@@ -1510,7 +1516,7 @@ CONTAINS
         IF (iStat .EQ. -1) THEN
             iStatParallel = -1
         END IF
-        IF (SIZE(AppGrid%AppNode(indx)%ElemID_OnCCWSide) .EQ. 0) CALL ModuleLogger%LogMessage('Node number '//TRIM(IntToText(AppGrid%AppNode(indx)%ID))//' does not have any surrounding elements!',f_iWarn,ThisProcedure)
+        IF (SIZE(AppGrid%AppNode(indx)%ElemID_OnCCWSide) .EQ. 0) CALL AppGrid%Logger%LogMessage('Node number '//TRIM(IntToText(AppGrid%AppNode(indx)%ID))//' does not have any surrounding elements!',f_iWarn,ThisProcedure)
     END DO
     !$OMP END DO 
     !$OMP END PARALLEL  
@@ -1531,7 +1537,7 @@ CONTAINS
         CALL ShellSort(iSubregionIDs,cSubregionNames)
         DO indx=1,SIZE(iSubregionIDs)
             IF (iSubregionIDS(indx) .NE. iSubregionIDs_Unique(indx)) THEN
-                CALL ModuleLogger%SetLastMessage('No name is provided for subregion '//TRIM(IntToText(iSubregionIDs_Unique(indx))) // 'listed for some elements!',f_iFatal,ThisProcedure) 
+                CALL AppGrid%Logger%SetLastMessage('No name is provided for subregion '//TRIM(IntToText(iSubregionIDs_Unique(indx))) // 'listed for some elements!',f_iFatal,ThisProcedure) 
                 iStat = -1
                 RETURN
             END IF
@@ -1615,10 +1621,10 @@ CONTAINS
                 END IF
             END IF
         END DO
-        CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+        CALL AppGrid%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
         iStat = -1
     END IF
-    
+
   END SUBROUTINE CheckForOverlaps
   
   
@@ -1763,7 +1769,7 @@ CONTAINS
           END IF  
           IF (MOD(indxNode,15) .EQ. 0) indxMsgArray = indxMsgArray + 1
       END DO
-      CALL ModuleLogger%LogMessage(MessageArray(1:MIN(indxMsgArray,iMaxDim)),f_iWarn,ThisProcedure)
+      CALL AppGrid%Logger%LogMessage(MessageArray(1:MIN(indxMsgArray,iMaxDim)),f_iWarn,ThisProcedure)
       
     END SUBROUTINE PrintInternalBndNodes
         
@@ -2490,7 +2496,7 @@ CONTAINS
             MessageArray(1) = 'Something is wrong with element '//TRIM(IntToText(iElemID))//'!'
             MessageArray(2) = 'Cannot identify its element faces.'
             MessageArray(3) = 'Please check.'
-            CALL ModuleLogger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+            CALL AppGrid%Logger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -2530,7 +2536,7 @@ CONTAINS
     AppGrid%NSubregions = NSubregions
     ALLOCATE (AppGrid%AppSubregion(NSubregions) , STAT=ErrorCode)
     IF (ErrorCode .NE. 0) THEN
-        CALL ModuleLogger%SetLastMessage('Error in allocating memory for subregional data of the application grid!',f_iFatal,ThisProcedure)
+        CALL AppGrid%Logger%SetLastMessage('Error in allocating memory for subregional data of the application grid!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -2548,7 +2554,7 @@ CONTAINS
       pAppSubregion%NRegionElements =  NRegionElements
       ALLOCATE (pAppSubregion%RegionElements(NRegionElements) ,STAT=ErrorCode)
       IF (ErrorCode .NE. 0) THEN
-          CALL ModuleLogger%SetLastMessage('Error in allocating memory for the list of elements in subregion '//TRIM(IntToText(indxRegion))//'!',f_iFatal,ThisProcedure)
+          CALL AppGrid%Logger%SetLastMessage('Error in allocating memory for the list of elements in subregion '//TRIM(IntToText(indxRegion))//'!',f_iFatal,ThisProcedure)
           iStat = -1
           RETURN
       END IF          
@@ -2561,10 +2567,10 @@ CONTAINS
       IF (AppGrid%AppSubregion(indxRegion)%NRegionElements .EQ. 0) THEN
         MessageArray(1) = 'All subregions must have at least one element.'
         MessageArray(2) = 'Subregion ' // TRIM(IntToText(indxRegion)) // ' has no elements!'
-        CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+        CALL AppGrid%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
-      END IF 
+      END IF
     END DO
     
     !Compile data for neighboring regions

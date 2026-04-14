@@ -497,7 +497,7 @@ CONTAINS
             rLakeElevs(indxPoint)    = rDummy2(1) * FactElev
             rLakeOutflows(indxPoint) = rDummy2(2) * FactQ
         END DO
-        CALL AppLake%OutflowRatingTables(iLake)%New(iNPoints,rLakeElevs,rLakeOutflows,iStat) 
+        CALL AppLake%OutflowRatingTables(iLake)%New(ModuleLogger,iNPoints,rLakeElevs,rLakeOutflows,iStat) 
         IF (iStat .EQ. -1) RETURN
         
         !Make sure first entry of rating table is not less than the lowest of the lake bottom

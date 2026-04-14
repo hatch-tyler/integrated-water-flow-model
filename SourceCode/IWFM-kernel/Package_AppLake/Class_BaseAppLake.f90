@@ -921,7 +921,7 @@ CONTAINS
             CALL InFile%ReadData(pLake%Elements,iStat)         ;  IF (iStat .EQ. -1) RETURN
             CALL InFile%ReadData(pLake%Nodes,iStat)            ;  IF (iStat .EQ. -1) RETURN
             CALL InFile%ReadData(pLake%NodeAreas,iStat)        ;  IF (iStat .EQ. -1) RETURN
-            CALL pLake%RatingTable%New(InFile,iStat)           ;  IF (iStat .EQ. -1) RETURN
+            CALL pLake%RatingTable%New(ModuleLogger,InFile,iStat)           ;  IF (iStat .EQ. -1) RETURN
         END ASSOCIATE
     END DO
     
@@ -1473,7 +1473,7 @@ CONTAINS
     END DO  
         
     !Instantiate rating table
-    CALL RatingTable%New(Counter+1,HLake,VLake,iStat)        
+    CALL RatingTable%New(ModuleLogger,Counter+1,HLake,VLake,iStat)        
 
   END SUBROUTINE GenerateRatingTable  
 

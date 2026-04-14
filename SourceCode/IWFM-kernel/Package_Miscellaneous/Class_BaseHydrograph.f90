@@ -122,6 +122,7 @@ MODULE Class_BaseHydrograph
   ! -------------------------------------------------------------
   TYPE HydOutputType
       PRIVATE
+      TYPE(MessageLoggerType),POINTER,PUBLIC :: Logger => NULL()
       TYPE(GenericFileType),ALLOCATABLE      :: OutFile                        !Output file for the gw hydrographs
       TYPE(RealTSDataInFileType),ALLOCATABLE :: InFile_ForInquiry              !If the model is instantiated for post-processing this file is used to read hydrographs in; instead of the OutFile above
       INTEGER                                :: NHyd_AtNode         = 0        !Number of hydrographs defined at a node
@@ -189,9 +190,10 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- NEW OUTPUT FOR USER-SPECIFIED HYDROGRAPH PRINTING
   ! -------------------------------------------------------------
-  SUBROUTINE New(HydOutput,IsForInquiry,InFile,cWorkingDirectory,AppGrid,Stratigraphy,iGWNodeIDs,iHydFor,UNITLTOU,CPart,TimeStep,iStat)
-    CLASS(HydOutputType)              :: HydOutput
-    LOGICAL,INTENT(IN)                :: IsForInquiry
+  SUBROUTINE New(HydOutput,Logger,IsForInquiry,InFile,cWorkingDirectory,AppGrid,Stratigraphy,iGWNodeIDs,iHydFor,UNITLTOU,CPart,TimeStep,iStat)
+    CLASS(HydOutputType)                        :: HydOutput
+    TYPE(MessageLoggerType),TARGET,INTENT(IN)   :: Logger
+    LOGICAL,INTENT(IN)                          :: IsForInquiry
     TYPE(GenericFileType)             :: InFile
     TYPE(AppGridType),INTENT(IN)      :: AppGrid
     TYPE(StratigraphyType),INTENT(IN) :: Stratigraphy
@@ -207,8 +209,9 @@ CONTAINS
     CHARACTER(:),ALLOCATABLE :: cAbsPathFileName
     
     !Initialize
+    HydOutput%Logger => Logger
     iStat = 0
-    
+
     !Read the general data
     CALL InFile%ReadData(NHyd,iStat)    ;  IF (iStat .EQ. -1) RETURN
     CALL InFile%ReadData(FactXY,iStat)  ;  IF (iStat .EQ. -1) RETURN
@@ -729,11 +732,7 @@ CONTAINS
         END SELECT
     END DO
     IF (iHydIndex .EQ. 0) THEN
-        IF (ASSOCIATED(ModuleLogger)) THEN
-            CALL ModuleLogger%SetLastMessage('Groundwater hydrograph ID '//TRIM(IntToText(iHydID))//' is not in the model!',f_iFatal,ThisProcedure)
-        ELSE
-            CALL ModuleLogger%SetLastMessage('Groundwater hydrograph ID '//TRIM(IntToText(iHydID))//' is not in the model!',f_iFatal,ThisProcedure)
-        END IF
+        CALL HydOutput%Logger%SetLastMessage('Groundwater hydrograph ID '//TRIM(IntToText(iHydID))//' is not in the model!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF

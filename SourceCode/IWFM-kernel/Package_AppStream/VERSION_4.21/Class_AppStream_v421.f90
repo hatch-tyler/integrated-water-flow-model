@@ -576,7 +576,7 @@ CONTAINS
     END IF
     
     !Read stream node data
-    CALL StrmNode_New(AppStream%NStrmNodes,BinFile,AppStream%Nodes,iStat)  
+    CALL StrmNode_New(AppStream%NStrmNodes,BinFile,ModuleLogger,AppStream%Nodes,iStat)
     IF (iStat .EQ. -1) RETURN
     
     !Read stream reach data
@@ -584,7 +584,7 @@ CONTAINS
     
     !Read wetted perimeter rating tables
     DO indxNode=1,AppStream%NStrmNodes
-        CALL AppStream%RatingTable_WetPerimeter(indxNode)%New(BinFile,iStat)
+        CALL AppStream%RatingTable_WetPerimeter(indxNode)%New(ModuleLogger,BinFile,iStat)
         IF (iStat .EQ. -1) RETURN
     END DO
     
@@ -912,8 +912,8 @@ CONTAINS
         QRTB(2:) = DummyArray2D(:,2) * FACTQ
         WPTB(2:) = DummyArray2D(:,3) * FACTLT
         HRTB     = HRTB + AppStream%Nodes(iNode)%BottomElev
-        CALL AppStream%Nodes(iNode)%RatingTable%New(NRTB,HRTB,QRTB,iStat)         ;  IF (iStat .EQ. -1) RETURN
-        CALL AppStream%RatingTable_WetPerimeter(iNode)%New(NRTB,HRTB,WPTB,iStat)  ;  IF (iStat .EQ. -1) RETURN
+        CALL AppStream%Nodes(iNode)%RatingTable%New(ModuleLogger,NRTB,HRTB,QRTB,iStat)         ;  IF (iStat .EQ. -1) RETURN
+        CALL AppStream%RatingTable_WetPerimeter(iNode)%New(ModuleLogger,NRTB,HRTB,WPTB,iStat)  ;  IF (iStat .EQ. -1) RETURN
         
         !Make sure rating table is specified properly
         DO indx=2,NRTB

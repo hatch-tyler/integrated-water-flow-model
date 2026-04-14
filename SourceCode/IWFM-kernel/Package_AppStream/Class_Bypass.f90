@@ -367,7 +367,7 @@ CONTAINS
             END IF
             CALL AllocArray(Dummy2DRealArray,NPoints,2,ThisProcedure,iStat)  ;  IF (iStat .EQ. -1) RETURN
             CALL InFile%ReadData(Dummy2DRealArray,iStat)                     ;  IF (iStat .EQ. -1) RETURN
-            CALL pBypass%RatingTable%New(NPoints,Dummy2DRealArray(:,1)*FactFlow,Dummy2DRealArray(:,2)*FactBypass,iStat)  
+            CALL pBypass%RatingTable%New(ModuleLogger,NPoints,Dummy2DRealArray(:,1)*FactFlow,Dummy2DRealArray(:,2)*FactBypass,iStat)  
             IF (iStat .EQ. -1) RETURN
         END IF
         

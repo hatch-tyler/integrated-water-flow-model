@@ -21,8 +21,9 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 MODULE Class_StrmNode_v41
+  USE MessageLogger    , ONLY: MessageLoggerType
   USE IOInterface      , ONLY: GenericFileType
-  USE Class_PairedData , ONLY: PairedDataType         
+  USE Class_PairedData , ONLY: PairedDataType
   USE Class_StrmNode   ,       StrmNode_Base_New                   => StrmNode_New                   , &
                                StrmNode_Base_WritePreprocessedData => StrmNode_WritePreprocessedData
   IMPLICIT NONE
@@ -76,25 +77,26 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- READ PREPROCESSED DATA
   ! -------------------------------------------------------------
-  SUBROUTINE StrmNode_New(NNodes,InFile,Nodes,iStat)
-    INTEGER,INTENT(IN)      :: NNodes
-    TYPE(GenericFileType)   :: InFile
-    TYPE(StrmNode_v41_Type) :: Nodes(NNodes)
-    INTEGER,INTENT(OUT)     :: iStat
-    
+  SUBROUTINE StrmNode_New(NNodes,InFile,Logger,Nodes,iStat)
+    INTEGER,INTENT(IN)                        :: NNodes
+    TYPE(GenericFileType)                     :: InFile
+    TYPE(MessageLoggerType),TARGET,INTENT(IN) :: Logger
+    TYPE(StrmNode_v41_Type)                   :: Nodes(NNodes)
+    INTEGER,INTENT(OUT)                       :: iStat
+
     !Local variables
     INTEGER :: indxNode
-    
+
     !Initialize
     iStat = 0
-    
+
     !First read the base data
-    CALL StrmNode_Base_New(NNodes,InFile,Nodes%StrmNodeType,iStat)  
+    CALL StrmNode_Base_New(NNodes,InFile,Logger,Nodes%StrmNodeType,iStat)
     IF (iStat .EQ. -1) RETURN
-    
+
     !Then read the extended data
     DO indxNode=1,NNodes
-      CALL Nodes(indxNode)%RatingTable_WetPerimeter%New(InFile,iStat)
+      CALL Nodes(indxNode)%RatingTable_WetPerimeter%New(Logger,InFile,iStat)
       IF (iStat .EQ. -1) RETURN
     END DO
     

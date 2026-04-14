@@ -54,6 +54,7 @@ MODULE Class_TecplotOutput
   ! -------------------------------------------------------------
   TYPE TecplotOutputType
       PRIVATE
+      TYPE(MessageLoggerType),POINTER,PUBLIC :: Logger => NULL()
       TYPE(GenericFileType) :: OutFile
   CONTAINS
       PROCEDURE,PASS :: New
@@ -96,17 +97,19 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- INSTANTIATE TECPLOT OUTPUT FILE
   ! -------------------------------------------------------------
-  SUBROUTINE New(TecplotOut,IsForInquiry,cFileName,cDescriptor,iStat)
-    CLASS(TecplotOutputType)    :: TecplotOut
-    LOGICAL,INTENT(IN)          :: IsForInquiry
-    CHARACTER(LEN=*),INTENT(IN) :: cFileName,cDescriptor
-    INTEGER,INTENT(OUT)         :: iStat
-    
+  SUBROUTINE New(TecplotOut,Logger,IsForInquiry,cFileName,cDescriptor,iStat)
+    CLASS(TecplotOutputType)                    :: TecplotOut
+    TYPE(MessageLoggerType),TARGET,INTENT(IN)   :: Logger
+    LOGICAL,INTENT(IN)                          :: IsForInquiry
+    CHARACTER(LEN=*),INTENT(IN)                 :: cFileName,cDescriptor
+    INTEGER,INTENT(OUT)                         :: iStat
+
     !Initialize
+    TecplotOut%Logger => Logger
     iStat = 0
-    
+
     !Inform user
-    CALL ModuleLogger%EchoProgress('   Instantiating '//TRIM(cDescriptor))
+    CALL TecplotOut%Logger%EchoProgress('   Instantiating '//TRIM(cDescriptor))
     
     !Open file
     IF (IsForInquiry) THEN
