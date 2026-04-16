@@ -193,20 +193,12 @@ MODULE Package_Model
                                           StrmGWConnectorType                         , &
                                           LakeGWConnectorType                         , &
                                           SupplyDestinationConnectorType              , &
-                                          StrmGWConnector_SetModuleLogger             , &
                                           StrmLakeConnector_SetModuleLogger           , &
                                           LakeGWConnector_SetModuleLogger             , &
                                           SupplyDest_SetModuleLogger                  , &
-                                          BaseStrmGWConnector_SetModuleLogger         , &
-                                          StrmGWConnector_v40_SetModuleLogger         , &
-                                          StrmGWConnector_v41_SetModuleLogger         , &
-                                          StrmGWConnector_v42_SetModuleLogger         , &
-                                          StrmGWConnector_v421_SetModuleLogger        , &
-                                          StrmGWConnector_v50_SetModuleLogger         , &
                                           f_iLakeToStrmFlow
   USE Package_PrecipitationET     , ONLY: PrecipitationType                           , &
-                                          ETType                                      , &
-                                          PrecipET_SetModuleLogger
+                                          ETType
   USE Package_Matrix              , ONLY: MatrixType                                  , &
                                           ConnectivityListType
   USE Package_GWZBudget           , ONLY: GWZBudgetType                               , &
@@ -735,20 +727,21 @@ CONTAINS
    
     !Set the application streams
     lWSA = .FALSE.
+    Model%StrmGWConnector%Logger => ModuleLogger
     CALL Model%AppStream%New(ProjectFileNames(PP_StreamDataFileID),Model%AppGrid,Model%Stratigraphy,lRoutedStreams,lWSA,Model%StrmGWConnector,Model%StrmLakeConnector,iStat)
     IF (iStat .EQ. -1) RETURN
     NStrmNodes = Model%AppStream%GetNStrmNodes()
     ALLOCATE (iStrmNodeIDs(NStrmNodes))
     CALL Model%AppStream%GetStrmNodeIDs(iStrmNodeIDs)
-   
+
     !Set the application lakes
     CALL Model%AppLake%New(ProjectFileNames(PP_LakeDataFileID),Model%Stratigraphy,Model%AppGrid,Model%StrmLakeConnector,Model%LakeGWConnector,iStat)
     IF (iStat .EQ. -1) RETURN
     NLakes = Model%AppLake%GetNLakes()
     ALLOCATE (iLakeIDs(NLakes))
     CALL Model%AppLake%GetLakeIDs(iLakeIDs)
-  
-    !Convert IDs used in stream-lake connection to indices 
+
+    !Convert IDs used in stream-lake connection to indices
     IF (lRoutedStreams) THEN
         CALL Model%StrmLakeConnector%IDs_To_Indices(NLakes,NStrmNodes,iStrmNodeIDs,iLakeIDs,iStat)  ;  IF (iStat .EQ. -1) RETURN
         CALL Model%AppLake%DestinationIDs_To_Indices(iStrmNodeIDs,iStat)  ;  IF (iStat .EQ. -1) RETURN
@@ -845,6 +838,7 @@ CONTAINS
    
     !Set the application streams
     lWSA = .FALSE.
+    Model%StrmGWConnector%Logger => ModuleLogger
     CALL Model%AppStream%New(cPP_FileNames(PP_StreamDataFileID),Model%AppGrid,Model%Stratigraphy,lRoutedStreams,lWSA,Model%StrmGWConnector,Model%StrmLakeConnector,iStat)
     IF (iStat .EQ. -1) RETURN
     NStrmNodes = Model%AppStream%GetNStrmNodes()
@@ -914,10 +908,11 @@ CONTAINS
     CALL Model%Stratigraphy%New(ModuleLogger,Model%AppGrid%NNodes,BinaryFile,iStat)  
     IF (iStat .EQ. -1) RETURN
 
-    !Instantiate component connectors 
-    CALL Model%StrmLakeConnector%New(BinaryFile,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    !Instantiate component connectors
+    CALL Model%StrmLakeConnector%New(ModuleLogger,BinaryFile,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    Model%StrmGWConnector%Logger => ModuleLogger
     CALL Model%StrmGWConnector%New(BinaryFile,iStat)    ;  IF (iStat .EQ. -1) RETURN
-    CALL Model%LakeGWConnector%New(BinaryFile,iStat)    ;  IF (iStat .EQ. -1) RETURN
+    CALL Model%LakeGWConnector%New(ModuleLogger,BinaryFile,iStat)    ;  IF (iStat .EQ. -1) RETURN
   
     !Instantiate lakes
     CALL Model%AppLake%New(BinaryFile,iStat)
@@ -939,15 +934,8 @@ CONTAINS
     CALL BaseHydrograph_SetModuleLogger(DefaultLogger)
     CALL TecplotOutput_SetModuleLogger(DefaultLogger)
     CALL PairedData_SetModuleLogger(DefaultLogger)
-    CALL PrecipET_SetModuleLogger(DefaultLogger)
+
     !Set module-level loggers for Batch 3 packages
-    CALL BaseStrmGWConnector_SetModuleLogger(DefaultLogger)
-    CALL StrmGWConnector_SetModuleLogger(DefaultLogger)
-    CALL StrmGWConnector_v40_SetModuleLogger(DefaultLogger)
-    CALL StrmGWConnector_v41_SetModuleLogger(DefaultLogger)
-    CALL StrmGWConnector_v42_SetModuleLogger(DefaultLogger)
-    CALL StrmGWConnector_v421_SetModuleLogger(DefaultLogger)
-    CALL StrmGWConnector_v50_SetModuleLogger(DefaultLogger)
     CALL StrmLakeConnector_SetModuleLogger(DefaultLogger)
     CALL LakeGWConnector_SetModuleLogger(DefaultLogger)
     CALL SupplyDest_SetModuleLogger(DefaultLogger)
@@ -1112,7 +1100,7 @@ CONTAINS
     CALL BaseHydrograph_SetModuleLogger(DefaultLogger)
     CALL TecplotOutput_SetModuleLogger(DefaultLogger)
     CALL PairedData_SetModuleLogger(DefaultLogger)
-    CALL PrecipET_SetModuleLogger(DefaultLogger)
+
     CALL AppGW_SetAllModuleLoggers(DefaultLogger)
     CALL AppStream_SetAllModuleLoggers(DefaultLogger)
     CALL RootZone_SetAllModuleLoggers(DefaultLogger)
@@ -1164,17 +1152,18 @@ CONTAINS
     CALL LogInitTime('Grid+Stratigraphy', iTimerStart, iTimerValues)
 
     !Component connectors
-    CALL Model%StrmLakeConnector%New(PPBinaryFile,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    CALL Model%StrmLakeConnector%New(ModuleLogger,PPBinaryFile,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    Model%StrmGWConnector%Logger => ModuleLogger
     CALL Model%StrmGWConnector%New(PPBinaryFile,iStat)    ;  IF (iStat .EQ. -1) RETURN
-    CALL Model%LakeGWConnector%New(PPBinaryFile,iStat)    ;  IF (iStat .EQ. -1) RETURN
+    CALL Model%LakeGWConnector%New(ModuleLogger,PPBinaryFile,iStat)    ;  IF (iStat .EQ. -1) RETURN
   
     !Precipitation data
     CALL DATE_AND_TIME(VALUES=iTimerStart)
-    CALL Model%PrecipData%New(ProjectFileNames(SIM_PrecipDataFileID),Model%cSIMWorkingDirectory,'precipitation',Model%TimeStep,iStat)
+    CALL Model%PrecipData%New(ModuleLogger,ProjectFileNames(SIM_PrecipDataFileID),Model%cSIMWorkingDirectory,'precipitation',Model%TimeStep,iStat)
     IF (iStat .EQ. -1) RETURN
 
     !ET data
-    CALL Model%ETData%New(ProjectFileNames(SIM_ETDataFileID),Model%cSIMWorkingDirectory,'ET',Model%TimeStep,iStat,ProjectFileNames(SIM_CropCoeffFileID))
+    CALL Model%ETData%New(ModuleLogger,ProjectFileNames(SIM_ETDataFileID),Model%cSIMWorkingDirectory,'ET',Model%TimeStep,iStat,ProjectFileNames(SIM_CropCoeffFileID))
     IF (iStat .EQ. -1) RETURN
     CALL DATE_AND_TIME(VALUES=iTimerValues)
     CALL LogInitTime('Precip+ET data', iTimerStart, iTimerValues)
@@ -1300,9 +1289,9 @@ CONTAINS
     CALL LogInitTime('UnsatZone+SWShed+RootZone', iTimerStart, iTimerValues)
 
     !Compile destination-supply connectors
-    CALL Model%AppStream%GetDiversionDestination(SupplyDest)            ;  CALL Model%DiverDestinationConnector%New('Diversion',Model%iDemandCalcLocation,SupplyDest,Model%AppGrid,iStat)           ;  IF (iStat .EQ. -1) RETURN
-    CALL Model%AppGW%GetPumpDestination(f_iSupply_Well,SupplyDest)      ;  CALL Model%WellDestinationConnector%New('Well',Model%iDemandCalcLocation,SupplyDest,Model%AppGrid,iStat)                 ;  IF (iStat .EQ. -1) RETURN
-    CALL Model%AppGW%GetPumpDestination(f_iSupply_ElemPump,SupplyDest)  ;  CALL Model%ElemPumpDestinationConnector%New('Element pumping',Model%iDemandCalcLocation,SupplyDest,Model%AppGrid,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    CALL Model%AppStream%GetDiversionDestination(SupplyDest)            ;  CALL Model%DiverDestinationConnector%New(ModuleLogger,'Diversion',Model%iDemandCalcLocation,SupplyDest,Model%AppGrid,iStat)           ;  IF (iStat .EQ. -1) RETURN
+    CALL Model%AppGW%GetPumpDestination(f_iSupply_Well,SupplyDest)      ;  CALL Model%WellDestinationConnector%New(ModuleLogger,'Well',Model%iDemandCalcLocation,SupplyDest,Model%AppGrid,iStat)                 ;  IF (iStat .EQ. -1) RETURN
+    CALL Model%AppGW%GetPumpDestination(f_iSupply_ElemPump,SupplyDest)  ;  CALL Model%ElemPumpDestinationConnector%New(ModuleLogger,'Element pumping',Model%iDemandCalcLocation,SupplyDest,Model%AppGrid,iStat)  ;  IF (iStat .EQ. -1) RETURN
   
     !Irrigation fractions data file
     CALL Model%IrigFracFile%New(ProjectFileNames(SIM_IrigFracDataFileID),Model%cSIMWorkingDirectory,Model%TimeStep,iStat)  
@@ -1518,7 +1507,7 @@ CONTAINS
     CALL BaseHydrograph_SetModuleLogger(DefaultLogger)
     CALL TecplotOutput_SetModuleLogger(DefaultLogger)
     CALL PairedData_SetModuleLogger(DefaultLogger)
-    CALL PrecipET_SetModuleLogger(DefaultLogger)
+
     CALL AppGW_SetAllModuleLoggers(DefaultLogger)
     CALL AppStream_SetAllModuleLoggers(DefaultLogger)
     CALL RootZone_SetAllModuleLoggers(DefaultLogger)
@@ -1557,11 +1546,11 @@ CONTAINS
     IF (iStat .EQ. -1) RETURN
 
     !Precipitation data
-    CALL Model%PrecipData%New(ProjectFileNames(SIM_PrecipDataFileID),Model%cSIMWorkingDirectory,'precipitation data',Model%TimeStep,iStat)
+    CALL Model%PrecipData%New(ModuleLogger,ProjectFileNames(SIM_PrecipDataFileID),Model%cSIMWorkingDirectory,'precipitation data',Model%TimeStep,iStat)
     IF (iStat .EQ. -1) RETURN
 
     !ET data
-    CALL Model%ETData%New(ProjectFileNames(SIM_ETDataFileID),Model%cSIMWorkingDirectory,'ET data',Model%TimeStep,iStat,ProjectFileNames(SIM_CropCoeffFileID))
+    CALL Model%ETData%New(ModuleLogger,ProjectFileNames(SIM_ETDataFileID),Model%cSIMWorkingDirectory,'ET data',Model%TimeStep,iStat,ProjectFileNames(SIM_CropCoeffFileID))
     IF (iStat .EQ. -1) RETURN
   
     !Lakes
@@ -1681,14 +1670,14 @@ CONTAINS
     Model%lRootZone_Defined = Model%RootZone%IsDefined()
 
     !Compile destination-supply connectors
-    CALL Model%AppStream%GetDiversionDestination(SupplyDest)            ;  CALL Model%DiverDestinationConnector%New('Diversion',Model%iDemandCalcLocation,SupplyDest,Model%AppGrid,iStat)           ;  IF (iStat .EQ. -1) RETURN
-    CALL Model%AppGW%GetPumpDestination(f_iSupply_Well,SupplyDest)      ;  CALL Model%WellDestinationConnector%New('Well',Model%iDemandCalcLocation,SupplyDest,Model%AppGrid,iStat)                 ;  IF (iStat .EQ. -1) RETURN
-    CALL Model%AppGW%GetPumpDestination(f_iSupply_ElemPump,SupplyDest)  ;  CALL Model%ElemPumpDestinationConnector%New('Element pumping',Model%iDemandCalcLocation,SupplyDest,Model%AppGrid,iStat)  ;  IF (iStat .EQ. -1) RETURN
-  
+    CALL Model%AppStream%GetDiversionDestination(SupplyDest)            ;  CALL Model%DiverDestinationConnector%New(ModuleLogger,'Diversion',Model%iDemandCalcLocation,SupplyDest,Model%AppGrid,iStat)           ;  IF (iStat .EQ. -1) RETURN
+    CALL Model%AppGW%GetPumpDestination(f_iSupply_Well,SupplyDest)      ;  CALL Model%WellDestinationConnector%New(ModuleLogger,'Well',Model%iDemandCalcLocation,SupplyDest,Model%AppGrid,iStat)                 ;  IF (iStat .EQ. -1) RETURN
+    CALL Model%AppGW%GetPumpDestination(f_iSupply_ElemPump,SupplyDest)  ;  CALL Model%ElemPumpDestinationConnector%New(ModuleLogger,'Element pumping',Model%iDemandCalcLocation,SupplyDest,Model%AppGrid,iStat)  ;  IF (iStat .EQ. -1) RETURN
+
     !Irrigation fractions data file
-    CALL Model%IrigFracFile%New(ProjectFileNames(SIM_IrigFracDataFileID),Model%cSIMWorkingDirectory,Model%TimeStep,iStat)  
+    CALL Model%IrigFracFile%New(ProjectFileNames(SIM_IrigFracDataFileID),Model%cSIMWorkingDirectory,Model%TimeStep,iStat)
     IF (iStat .EQ. -1) RETURN
-    
+
     !Automatic supply adjustment related data
     IF (.NOT. Model%lRootZone_Defined) THEN
         CALL Model%SupplyAdjust%SetAdjustFlag(f_iAdjustNone,iStat)
@@ -1912,7 +1901,7 @@ CONTAINS
     CALL BaseHydrograph_SetModuleLogger(DefaultLogger)
     CALL TecplotOutput_SetModuleLogger(DefaultLogger)
     CALL PairedData_SetModuleLogger(DefaultLogger)
-    CALL PrecipET_SetModuleLogger(DefaultLogger)
+
     CALL AppGW_SetAllModuleLoggers(DefaultLogger)
     CALL AppStream_SetAllModuleLoggers(DefaultLogger)
     CALL RootZone_SetAllModuleLoggers(DefaultLogger)
@@ -1953,11 +1942,11 @@ CONTAINS
     IF (iStat .EQ. -1) RETURN
     
     !Precipitation data
-    CALL Model%PrecipData%New(cSIMFileNames(SIM_PrecipDataFileID),Model%cSIMWorkingDirectory,'precipitation data',Model%TimeStep,iStat)
+    CALL Model%PrecipData%New(ModuleLogger,cSIMFileNames(SIM_PrecipDataFileID),Model%cSIMWorkingDirectory,'precipitation data',Model%TimeStep,iStat)
     IF (iStat .EQ. -1) RETURN
 
     !ET data
-    CALL Model%ETData%New(cSIMFileNames(SIM_ETDataFileID),Model%cSIMWorkingDirectory,'ET data',Model%TimeStep,iStat)
+    CALL Model%ETData%New(ModuleLogger,cSIMFileNames(SIM_ETDataFileID),Model%cSIMWorkingDirectory,'ET data',Model%TimeStep,iStat)
     IF (iStat .EQ. -1) RETURN
   
     !Lakes
@@ -2077,10 +2066,10 @@ CONTAINS
     Model%lRootZone_Defined = Model%RootZone%IsDefined()
 
     !Compile destination-supply connectors
-    CALL Model%AppStream%GetDiversionDestination(SupplyDest)            ;  CALL Model%DiverDestinationConnector%New('Diversion',Model%iDemandCalcLocation,SupplyDest,Model%AppGrid,iStat)           ;  IF (iStat .EQ. -1) RETURN
-    CALL Model%AppGW%GetPumpDestination(f_iSupply_Well,SupplyDest)      ;  CALL Model%WellDestinationConnector%New('Well',Model%iDemandCalcLocation,SupplyDest,Model%AppGrid,iStat)                 ;  IF (iStat .EQ. -1) RETURN
-    CALL Model%AppGW%GetPumpDestination(f_iSupply_ElemPump,SupplyDest)  ;  CALL Model%ElemPumpDestinationConnector%New('Element pumping',Model%iDemandCalcLocation,SupplyDest,Model%AppGrid,iStat)  ;  IF (iStat .EQ. -1) RETURN
-  
+    CALL Model%AppStream%GetDiversionDestination(SupplyDest)            ;  CALL Model%DiverDestinationConnector%New(ModuleLogger,'Diversion',Model%iDemandCalcLocation,SupplyDest,Model%AppGrid,iStat)           ;  IF (iStat .EQ. -1) RETURN
+    CALL Model%AppGW%GetPumpDestination(f_iSupply_Well,SupplyDest)      ;  CALL Model%WellDestinationConnector%New(ModuleLogger,'Well',Model%iDemandCalcLocation,SupplyDest,Model%AppGrid,iStat)                 ;  IF (iStat .EQ. -1) RETURN
+    CALL Model%AppGW%GetPumpDestination(f_iSupply_ElemPump,SupplyDest)  ;  CALL Model%ElemPumpDestinationConnector%New(ModuleLogger,'Element pumping',Model%iDemandCalcLocation,SupplyDest,Model%AppGrid,iStat)  ;  IF (iStat .EQ. -1) RETURN
+
     !Irrigation fractions data file
     CALL Model%IrigFracFile%New(cSIMFileNames(SIM_IrigFracDataFileID),Model%cSIMWorkingDirectory,Model%TimeStep,iStat)  
     IF (iStat .EQ. -1) RETURN

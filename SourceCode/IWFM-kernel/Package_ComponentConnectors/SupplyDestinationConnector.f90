@@ -113,6 +113,7 @@ MODULE SupplyDestinationConnector
   ! --- SUPPLY-DESTINATION CONNECTOR DATABASE TYPE
   ! -------------------------------------------------------------
   TYPE SupplyDestinationConnectorType
+      TYPE(MessageLoggerType),POINTER                :: Logger => NULL()
       INTEGER                                   :: NSupply                = 0  !Number of supplies (i.e. size of SupplyToDestination array)
       INTEGER                                   :: NDestination           = 0  !Number of destinations (i.e. size of DestinationToSupply array)
       TYPE(SupplyToDestinationType),ALLOCATABLE :: SupplyToDestination(:)
@@ -166,19 +167,21 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- INSTANTAITE SupplyDestinationConnector OBJECT
   ! -------------------------------------------------------------  
-  SUBROUTINE SupplyDestinationConnector_New(Connector,cSupplyDescription,iDemandCalcLocation,SupplyDest,AppGrid,iStat)
-    CLASS(SupplyDestinationConnectorType) :: Connector
-    CHARACTER(LEN=*),INTENT(IN)           :: cSupplyDescription
-    INTEGER,INTENT(IN)                    :: iDemandCalcLocation
-    TYPE(FlowDestinationType),INTENT(IN)  :: SupplyDest(:)
-    TYPE(AppGridType),INTENT(IN)          :: AppGrid
-    INTEGER,INTENT(OUT)                   :: iStat
-    
+  SUBROUTINE SupplyDestinationConnector_New(Connector,Logger,cSupplyDescription,iDemandCalcLocation,SupplyDest,AppGrid,iStat)
+    CLASS(SupplyDestinationConnectorType)        :: Connector
+    TYPE(MessageLoggerType),POINTER,INTENT(IN)   :: Logger
+    CHARACTER(LEN=*),INTENT(IN)                  :: cSupplyDescription
+    INTEGER,INTENT(IN)                           :: iDemandCalcLocation
+    TYPE(FlowDestinationType),INTENT(IN)         :: SupplyDest(:)
+    TYPE(AppGridType),INTENT(IN)                 :: AppGrid
+    INTEGER,INTENT(OUT)                          :: iStat
+
     !Local variables
     CHARACTER(LEN=ModNameLen+30) :: ThisProcedure = ModName // 'SupplyDestinationConnector_New'
     INTEGER                      :: indxSupply,NSupply,NDestination,NElements,NSubregions
-    
+
     !Initialize
+    Connector%Logger => Logger
     iStat       = 0
     NSupply     = SIZE(SupplyDest)
     NElements   = AppGrid%NElements
@@ -188,11 +191,11 @@ CONTAINS
     ELSEIF (iDemandCalcLocation .EQ. f_iFlowDest_Subregion) THEN
         NDestination = NSubregions
     ELSE
-        CALL ModuleLogger%SetLastMessage('Computational unit for water demand calculations is not recognized!',f_iFatal,ThisProcedure)
+        CALL Connector%Logger%SetLastMessage('Computational unit for water demand calculations is not recognized!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
-    
+
     !Allocate memory
     ALLOCATE (Connector%SupplyToDestination(NSupply) , Connector%DestinationToSupply(NDestination))
     Connector%NSupply      = NSupply

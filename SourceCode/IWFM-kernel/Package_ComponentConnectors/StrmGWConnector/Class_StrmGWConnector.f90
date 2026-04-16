@@ -30,19 +30,13 @@ MODULE Class_StrmGWConnector
   USE Package_Matrix            , ONLY: MatrixType               , &
                                         ConnectivityListType
   USE Package_Misc              , ONLY: AbstractFunctionType
-  USE Class_BaseStrmGWConnector , ONLY: BaseStrmGWConnectorType              , &
-                                        BaseStrmGWConnector_SetModuleLogger
-  USE Class_StrmGWConnector_v40 , ONLY: StrmGWConnector_v40_Type             , &
-                                        StrmGWConnector_v40_SetModuleLogger
-  USE Class_StrmGWConnector_v41 , ONLY: StrmGWConnector_v41_Type             , &
-                                        StrmGWConnector_v41_SetModuleLogger
+  USE Class_BaseStrmGWConnector , ONLY: BaseStrmGWConnectorType
+  USE Class_StrmGWConnector_v40 , ONLY: StrmGWConnector_v40_Type
+  USE Class_StrmGWConnector_v41 , ONLY: StrmGWConnector_v41_Type
   USE Class_StrmGWConnector_v42 , ONLY: StrmGWConnector_v42_Type             , &
-                                        StrmGWConnector_v42_SetModuleLogger  , &
                                         MaxnGWNodes
-  USE Class_StrmGWConnector_v421, ONLY: StrmGWConnector_v421_Type            , &
-                                        StrmGWConnector_v421_SetModuleLogger
-  USE Class_StrmGWConnector_v50 , ONLY: StrmGWConnector_v50_Type             , &
-                                        StrmGWConnector_v50_SetModuleLogger
+  USE Class_StrmGWConnector_v421, ONLY: StrmGWConnector_v421_Type
+  USE Class_StrmGWConnector_v50 , ONLY: StrmGWConnector_v50_Type
   IMPLICIT NONE
   
   
@@ -61,21 +55,14 @@ MODULE Class_StrmGWConnector
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: StrmGWConnectorType                       , &
-            StrmGWConnector_SetModuleLogger            , &
-            BaseStrmGWConnector_SetModuleLogger        , &
-            StrmGWConnector_v40_SetModuleLogger        , &
-            StrmGWConnector_v41_SetModuleLogger        , &
-            StrmGWConnector_v42_SetModuleLogger        , &
-            StrmGWConnector_v421_SetModuleLogger       , &
-            StrmGWConnector_v50_SetModuleLogger
+  PUBLIC :: StrmGWConnectorType
   
   
   ! -------------------------------------------------------------
   ! --- GENERIC STREAM-GW CONNECTOR TYPE
   ! -------------------------------------------------------------
   TYPE StrmGWConnectorType
-      PRIVATE
+      TYPE(MessageLoggerType),POINTER,PUBLIC      :: Logger => NULL()
       LOGICAL                                    :: lDefined = .FALSE.
       CLASS(BaseStrmGWConnectorType),ALLOCATABLE :: Me
   CONTAINS
@@ -118,12 +105,6 @@ MODULE Class_StrmGWConnector
   ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
-  ! -------------------------------------------------------------
-  ! --- MODULE-LEVEL LOGGER
-  ! -------------------------------------------------------------
-  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
-
-
   INTEGER,PARAMETER                   :: ModNameLen = 23
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'Class_StrmGWConnector::'
 
@@ -131,17 +112,6 @@ MODULE Class_StrmGWConnector
 
 
 CONTAINS
-
-
-  ! -------------------------------------------------------------
-  ! --- SET MODULE-LEVEL LOGGER
-  ! -------------------------------------------------------------
-  SUBROUTINE StrmGWConnector_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
-    ModuleLogger => Logger
-  END SUBROUTINE StrmGWConnector_SetModuleLogger
-
-    
 
 
 ! ******************************************************************
@@ -176,20 +146,23 @@ CONTAINS
             
         CASE (40)
             ALLOCATE (StrmGWConnector_v40_Type :: Connector%Me)
+            Connector%Me%Logger => Connector%Logger
             CALL Connector%Me%New(InFile,iStat)
             IF (iStat .EQ. -1) RETURN
             Connector%Me%iVersion = iVersion
             Connector%lDefined    = .TRUE.
-            
+
         CASE (41)
             ALLOCATE (StrmGWConnector_v41_Type :: Connector%Me)
+            Connector%Me%Logger => Connector%Logger
             CALL Connector%Me%New(InFile,iStat)
             IF (iStat .EQ. -1) RETURN
             Connector%Me%iVersion = iVersion
             Connector%lDefined    = .TRUE.
-            
+
         CASE (42)
             ALLOCATE (StrmGWConnector_v42_Type :: Connector%Me)
+            Connector%Me%Logger => Connector%Logger
             CALL Connector%Me%New(InFile,iStat)
             IF (iStat .EQ. -1) RETURN
             Connector%Me%iVersion = iVersion
@@ -197,6 +170,7 @@ CONTAINS
 
         CASE (421)
             ALLOCATE (StrmGWConnector_v421_Type :: Connector%Me)
+            Connector%Me%Logger => Connector%Logger
             CALL Connector%Me%New(InFile,iStat)
             IF (iStat .EQ. -1) RETURN
             Connector%Me%iVersion = iVersion
@@ -204,16 +178,17 @@ CONTAINS
 
         CASE (50)
             ALLOCATE (StrmGWConnector_v50_Type :: Connector%Me)
+            Connector%Me%Logger => Connector%Logger
             CALL Connector%Me%New(InFile,iStat)
             IF (iStat .EQ. -1) RETURN
             Connector%Me%iVersion = iVersion
             Connector%lDefined    = .TRUE.
-            
+
         CASE DEFAULT
-            CALL ModuleLogger%SetLastMessage('Version number '//TRIM(IntToText(iVersion))//' for stream-groundwater interaction is not recognized!',f_iFatal,ThisProcedure) 
+            CALL Connector%Logger%SetLastMessage('Version number '//TRIM(IntToText(iVersion))//' for stream-groundwater interaction is not recognized!',f_iFatal,ThisProcedure)
             iStat = -1
-    END SELECT 
-       
+    END SELECT
+
   END SUBROUTINE ReadPreprocessedData
   
   
@@ -231,33 +206,36 @@ CONTAINS
     SELECT CASE (iVersion)
         CASE (40)
             ALLOCATE (StrmGWConnector_v40_Type :: Connector%Me)
+            Connector%Me%Logger => Connector%Logger
             CALL Connector%Me%New(iGWNodes,iLayers,iStat)
             IF (iStat .EQ. -1) RETURN
             Connector%Me%iVersion = iVersion
             Connector%lDefined    = .TRUE.
-            
+
         CASE (41)
             ALLOCATE (StrmGWConnector_v41_Type :: Connector%Me)
+            Connector%Me%Logger => Connector%Logger
             CALL Connector%Me%New(iGWNodes,iLayers,iStat)
             IF (iStat .EQ. -1) RETURN
             Connector%Me%iVersion = iVersion
             Connector%lDefined    = .TRUE.
-            
+
         CASE (42)
-            CALL ModuleLogger%SetLastMessage('AddGWNodes method is not defined for stream-groundwater interaction component version 4.2!',f_iFatal,ThisProcedure)
+            CALL Connector%Logger%SetLastMessage('AddGWNodes method is not defined for stream-groundwater interaction component version 4.2!',f_iFatal,ThisProcedure)
             iStat = -1
-            
+
         CASE (50)
             ALLOCATE (StrmGWConnector_v50_Type :: Connector%Me)
+            Connector%Me%Logger => Connector%Logger
             CALL Connector%Me%New(iGWNodes,iLayers,iStat)
             IF (iStat .EQ. -1) RETURN
             Connector%Me%iVersion = iVersion
             Connector%lDefined    = .TRUE.
-            
+
         CASE DEFAULT
-            CALL ModuleLogger%SetLastMessage('Version number '//TRIM(IntToText(iVersion))//' for stream-groundwater interaction is not recognized!',f_iFatal,ThisProcedure) 
+            CALL Connector%Logger%SetLastMessage('Version number '//TRIM(IntToText(iVersion))//' for stream-groundwater interaction is not recognized!',f_iFatal,ThisProcedure)
             iStat = -1
-    END SELECT 
+    END SELECT
 
   END SUBROUTINE AddGWNodes
   
@@ -275,11 +253,11 @@ CONTAINS
     
     SELECT CASE (iVersion)
         CASE (40)
-            CALL ModuleLogger%SetLastMessage('AddGWNodeToStrmNode method is not defined for stream-groundwater interaction component version 4.0!',f_iFatal,ThisProcedure) 
+            CALL Connector%Logger%SetLastMessage('AddGWNodeToStrmNode method is not defined for stream-groundwater interaction component version 4.0!',f_iFatal,ThisProcedure) 
             iStat = -1
             
         CASE (41)
-            CALL ModuleLogger%SetLastMessage('AddGWNodeToStrmNode method is not defined for stream-groundwater interaction component version 4.1!',f_iFatal,ThisProcedure) 
+            CALL Connector%Logger%SetLastMessage('AddGWNodeToStrmNode method is not defined for stream-groundwater interaction component version 4.1!',f_iFatal,ThisProcedure) 
             iStat = -1
             
         CASE (42)
@@ -290,6 +268,7 @@ CONTAINS
                 END SELECT
             ELSE
                 ALLOCATE (StrmGWConnector_v42_Type :: Connector%Me)
+                Connector%Me%Logger => Connector%Logger
                 SELECT TYPE (p => Connector%Me)
                     TYPE IS (StrmGWConnector_v42_Type)
                         CALL p%AddGWNodesToStrmNode(NStrmNodes,iStrmNode,iGWNodes,iLayers,iRanks)
@@ -297,7 +276,7 @@ CONTAINS
                 Connector%Me%iVersion = iVersion
                 Connector%lDefined    = .TRUE.
             END IF
-            
+
         CASE (421)
             IF (ALLOCATED(Connector%Me)) THEN
                 SELECT TYPE (p => Connector%Me)
@@ -306,6 +285,7 @@ CONTAINS
                 END SELECT
             ELSE
                 ALLOCATE (StrmGWConnector_v421_Type :: Connector%Me)
+                Connector%Me%Logger => Connector%Logger
                 SELECT TYPE (p => Connector%Me)
                     TYPE IS (StrmGWConnector_v421_Type)
                         CALL p%AddGWNodesToStrmNode(NStrmNodes,iStrmNode,iGWNodes,iLayers,iRanks)
@@ -315,11 +295,11 @@ CONTAINS
             END IF
             
         CASE (50)
-            CALL ModuleLogger%SetLastMessage('AddGWNodeToStrmNode method is not defined for stream-groundwater interaction component version 5.0!',f_iFatal,ThisProcedure)
+            CALL Connector%Logger%SetLastMessage('AddGWNodeToStrmNode method is not defined for stream-groundwater interaction component version 5.0!',f_iFatal,ThisProcedure)
             iStat = -1
             
         CASE DEFAULT
-            CALL ModuleLogger%SetLastMessage('Version number '//TRIM(IntToText(iVersion))//' for stream-groundwater interaction is not recognized!',f_iFatal,ThisProcedure) 
+            CALL Connector%Logger%SetLastMessage('Version number '//TRIM(IntToText(iVersion))//' for stream-groundwater interaction is not recognized!',f_iFatal,ThisProcedure) 
             iStat = -1
     END SELECT 
 
@@ -908,11 +888,7 @@ CONTAINS
     IF (.NOT. Connector%lDefined) RETURN
     
     !Inform user
-    IF (ASSOCIATED(ModuleLogger)) THEN
-        CALL ModuleLogger%EchoProgress('Registering stream-groundwater connector with matrix...')
-    ELSE
-        CALL ModuleLogger%EchoProgress('Registering stream-groundwater connector with matrix...')
-    END IF
+    CALL Connector%Logger%EchoProgress('Registering stream-groundwater connector with matrix...')
     
     !Register connectivity with matrix
     CALL Connector%Me%RegisterWithMatrix(StrmConnectivity,AppGrid,Matrix,iStat)
