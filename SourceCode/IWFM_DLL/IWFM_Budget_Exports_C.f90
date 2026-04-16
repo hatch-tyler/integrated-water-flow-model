@@ -29,6 +29,7 @@ MODULE IWFM_Budget_Exports
                                          f_iTimeStampLength                      
   USE GeneralUtilities           , ONLY: String_Copy_C_F                         , &
                                          String_Copy_F_C
+  USE MessageLogger              , ONLY: MessageLoggerType
   USE Package_Budget             , ONLY: BudgetType                              , &
                                          f_iMaxLocationNameLen                   , &
                                          f_iColumnHeaderLen
@@ -44,6 +45,7 @@ MODULE IWFM_Budget_Exports
   ! -------------------------------------------------------------
   ! --- VARIABLES
   ! -------------------------------------------------------------
+  TYPE(MessageLoggerType),POINTER,PRIVATE :: ModuleLogger => NULL()
   TYPE(BudgetType),SAVE    :: Budget
   LOGICAL,SAVE             :: lBudget_Instantiated = .FALSE.
   
@@ -53,7 +55,11 @@ MODULE IWFM_Budget_Exports
 CONTAINS
 
 
-    
+  SUBROUTINE IWFM_Budget_Exports_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType),TARGET,INTENT(IN) :: Logger
+    ModuleLogger => Logger
+  END SUBROUTINE IWFM_Budget_Exports_SetModuleLogger
+
 
 ! ******************************************************************
 ! ******************************************************************
@@ -90,7 +96,7 @@ CONTAINS
     END IF
 
     !Open file
-    CALL Budget%New(cFileName_F,iStat)
+    CALL Budget%New(ModuleLogger,cFileName_F,iStat)
     IF (iStat .EQ. -1) THEN
         CALL Budget%Kill()
         !$OMP END CRITICAL(IWFM_BUDGET_MGMT)

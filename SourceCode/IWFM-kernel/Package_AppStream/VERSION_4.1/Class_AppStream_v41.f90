@@ -361,7 +361,7 @@ CONTAINS
     IF (lRoutedStreams) THEN
         IF (ReachBudRawFileName .NE. '') THEN
             IF (IsForInquiry) THEN
-                CALL AppStream%StrmReachBudRawFile%New(ReachBudRawFileName,iStat)
+                CALL AppStream%StrmReachBudRawFile%New(ModuleLogger,ReachBudRawFileName,iStat)
                 IF (iStat .EQ. -1) RETURN
             ELSE
                 !Sort reach IDs for budget printing in order
@@ -372,7 +372,7 @@ CONTAINS
                 iReachIDs = AppStream%Reaches%ID
                 !Prepare budget header
                 BudHeader = PrepareStreamBudgetHeader(AppStream%NReaches,AppStream%iPrintReachBudgetOrder,iReachIDs,iStrmNodeIDs,NTIME,TimeStep,cVersionFull,cReachNames=AppStream%Reaches%cName)
-                CALL AppStream%StrmReachBudRawFile%New(ReachBudRawFileName,BudHeader,iStat)
+                CALL AppStream%StrmReachBudRawFile%New(ModuleLogger,ReachBudRawFileName,BudHeader,iStat)
                 IF (iStat .EQ. -1) RETURN
                 CALL BudHeader%Kill()
             END IF

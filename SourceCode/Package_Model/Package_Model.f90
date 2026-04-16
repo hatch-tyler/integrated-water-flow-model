@@ -989,8 +989,7 @@ CONTAINS
     CALL Matrix_SetModuleLogger(DefaultLogger)
 
     !Matrix data
-    CALL Model%Matrix%SetLogger(DefaultLogger)
-    CALL Model%Matrix%New(BinaryFile,iStat)
+    CALL Model%Matrix%New(DefaultLogger,BinaryFile,iStat)
 
   END SUBROUTINE SetStaticComponent_FromBinFile
   
@@ -1248,8 +1247,7 @@ CONTAINS
     !Matrix (skip in inquiry mode — solver not needed for queries)
     CALL DATE_AND_TIME(VALUES=iTimerStart)
     IF (.NOT. lForInquiry) THEN
-      CALL Model%Matrix%SetLogger(DefaultLogger)
-      CALL Model%Matrix%New(PPBinaryFile,iStat)
+      CALL Model%Matrix%New(DefaultLogger,PPBinaryFile,iStat)
       IF (iStat .EQ. -1) RETURN
     END IF
 
@@ -1326,7 +1324,8 @@ CONTAINS
     !GW ZBudget object
     cZBudRawFileName  = Model%AppGW%GetZBudgetRawFileName()
     lDeepPerc_Defined = Model%lRootZone_Defined .OR. Model%lAppUnsatZone_Defined
-    CALL Model%GWZBudget%New(lForInquiry                         , &
+    CALL Model%GWZBudget%New(DefaultLogger                        , &
+                             lForInquiry                         , &
                              cZBudRawFileName                    , &
                              Model%AppGrid                       , &
                              Model%Stratigraphy                  , &
@@ -1341,7 +1340,7 @@ CONTAINS
                              Model%lRootZone_Defined             , &
                              iStat                               )
     IF (iStat .EQ. -1) RETURN
-    
+
     !Check consistency between model components
     CALL CheckModelConsistency(Model,iStat)
     IF (iStat .EQ. -1) RETURN
@@ -1706,7 +1705,8 @@ CONTAINS
     !ZBudget object
     cZBudRawFileName     = Model%AppGW%GetZBudgetRawFileName()
     lNetDeepPerc_Defined = Model%lRootZone_Defined .OR. Model%lAppUnsatZone_Defined
-    CALL Model%GWZBudget%New(lForInquiry                         , &
+    CALL Model%GWZBudget%New(DefaultLogger                        , &
+                             lForInquiry                         , &
                              cZBudRawFileName                    , &
                              Model%AppGrid                       , &
                              Model%Stratigraphy                  , &
@@ -2101,7 +2101,8 @@ CONTAINS
     !ZBudget object
     cZBudRawFileName     = Model%AppGW%GetZBudgetRawFileName()
     lNetDeepPerc_Defined = Model%lRootZone_Defined .OR. Model%lAppUnsatZone_Defined
-    CALL Model%GWZBudget%New(lForInquiry                         , &
+    CALL Model%GWZBudget%New(DefaultLogger                        , &
+                             lForInquiry                         , &
                              cZBudRawFileName                    , &
                              Model%AppGrid                       , &
                              Model%Stratigraphy                  , &
@@ -6698,7 +6699,8 @@ CONTAINS
             CALL Model%GWZBudget%GetOutFileName(cOutFileName)
             lDeepPerc_Defined = Model%lRootZone_Defined .OR. Model%lAppUnsatZone_Defined
             CALL Model%GWZBudget%Kill()
-            CALL Model%GWZBudget%New(.FALSE.                             , &
+            CALL Model%GWZBudget%New(DefaultLogger                        , &
+                                     .FALSE.                             , &
                                      cOutFileName                        , &
                                      Model%AppGrid                       , &
                                      Model%Stratigraphy                  , &
@@ -8652,7 +8654,8 @@ CONTAINS
             CALL Model%GWZBudget%GetOutFileName(cOutFileName)
             lDeepPerc_Defined = Model%lRootZone_Defined .OR. Model%lAppUnsatZone_Defined
             CALL Model%GWZBudget%Kill()
-            CALL Model%GWZBudget%New(.FALSE.                             , &
+            CALL Model%GWZBudget%New(DefaultLogger                        , &
+                                     .FALSE.                             , &
                                      cOutFileName                        , &
                                      Model%AppGrid                       , &
                                      Model%Stratigraphy                  , &
@@ -8694,7 +8697,8 @@ CONTAINS
         CALL Model%GWZBudget%GetOutFileName(cOutFileName)
         lDeepPerc_Defined = Model%lRootZone_Defined .OR. Model%lAppUnsatZone_Defined
         CALL Model%GWZBudget%Kill()
-        CALL Model%GWZBudget%New(.FALSE.                             , &
+        CALL Model%GWZBudget%New(DefaultLogger                        , &
+                                 .FALSE.                             , &
                                  cOutFileName                        , &
                                  Model%AppGrid                       , &
                                  Model%Stratigraphy                  , &

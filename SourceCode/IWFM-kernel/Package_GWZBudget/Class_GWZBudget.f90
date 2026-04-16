@@ -287,9 +287,10 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- CREATE NEW GW Z-BUDGET DATA FILE FOR POPULATING
   ! -------------------------------------------------------------
-  SUBROUTINE Create(GWZBudget,IsForInquiry,cZBudgetOutFileName,AppGrid,Stratigraphy,AppGW,AppStream,AppLake,AppSWShed,StrmGWConnector,TimeStep,NTIME,lDeepPerc,lRootZone_Defined,iStat)
-    CLASS(GWZBudgetType)                   :: GWZBudget
-    LOGICAL,INTENT(IN)                     :: IsForInquiry
+  SUBROUTINE Create(GWZBudget,Logger,IsForInquiry,cZBudgetOutFileName,AppGrid,Stratigraphy,AppGW,AppStream,AppLake,AppSWShed,StrmGWConnector,TimeStep,NTIME,lDeepPerc,lRootZone_Defined,iStat)
+    CLASS(GWZBudgetType)                       :: GWZBudget
+    TYPE(MessageLoggerType),TARGET,INTENT(IN)  :: Logger
+    LOGICAL,INTENT(IN)                         :: IsForInquiry
     CHARACTER(LEN=*),INTENT(IN)            :: cZBudgetOutFileName
     TYPE(AppGridType),INTENT(IN)           :: AppGrid
     TYPE(StratigraphyType),INTENT(IN)      :: Stratigraphy
@@ -310,6 +311,9 @@ CONTAINS
     INTEGER,ALLOCATABLE     :: IDRLayers(:)
     TYPE(TimeStepType)      :: TimeStepLocal
     
+    !Set logger
+    GWZBudget%Logger => Logger
+
     !Initialize
     iStat = 0
     IF (AppGW%IsGWBudgetGenerated()) GWZBudget%lComputeFaceFlows    = .TRUE.
@@ -326,7 +330,7 @@ CONTAINS
     
     !If opened for inquiry, open file and return
     IF (IsForInquiry) THEN
-        IF (cZBudgetOutFileName .NE. '') CALL GWZBudget%New(cZBudgetOutFileName,iStat)
+        IF (cZBudgetOutFileName .NE. '') CALL GWZBudget%New(Logger,cZBudgetOutFileName,iStat)
         RETURN
     END IF
     
@@ -352,7 +356,7 @@ CONTAINS
     !Compile header for Z-Budget and instantiate Z-Budget for output 
     CALL CompileHeaderSystemData(TimeStep,lDeepPerc,lRootZone_Defined,AppGW,AppStream,AppLake,AppSWShed,StrmGWConnector,AppGrid,Stratigraphy,Header,SystemData,GWZBudget%NModelFlowTypes,GWZBudget%ModelFlowTypes,iStat)
     IF (iStat .EQ. -1) RETURN
-    CALL GWZBudget%ZBudgetType%New(cZBudgetOutFileName,NTIME,TimeStepLocal,Header,SystemData,iStat)
+    CALL GWZBudget%ZBudgetType%New(Logger,cZBudgetOutFileName,NTIME,TimeStepLocal,Header,SystemData,iStat)
     
   END SUBROUTINE Create
   
@@ -451,7 +455,7 @@ CONTAINS
     CHARACTER(LEN=1)                              :: cZoneNames(0)
     
     !Compile zone information
-    CALL ZoneList%New(ZBudget%Header%iNData,ZBudget%Header%lFaceFlows_Defined,ZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)
+    CALL ZoneList%New(ModuleLogger,ZBudget%Header%iNData,ZBudget%Header%lFaceFlows_Defined,ZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)
     IF (iStat .NE. 0) RETURN
     
     !Get the sub-data; first column will be Time so that will be eliminated later
@@ -489,7 +493,7 @@ CONTAINS
     CHARACTER(LEN=f_iColumnHeaderLen),ALLOCATABLE :: cColTitles_Local(:)
     
     !Compile zone information
-    CALL ZoneList%New(ZBudget%Header%iNData,ZBudget%Header%lFaceFlows_Defined,ZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)
+    CALL ZoneList%New(ModuleLogger,ZBudget%Header%iNData,ZBudget%Header%lFaceFlows_Defined,ZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)
     IF (iStat .NE. 0) RETURN
     
     !Get the undiversified column titles; first column will be Time so that will be eliminated later
@@ -530,7 +534,7 @@ CONTAINS
     
     IF (GWZBudget%IsOutfileDefined()) THEN
         !Generate zone list
-        CALL ZoneList%New(GWZBudget%Header%iNData,GWZBudget%Header%lFaceFlows_Defined,GWZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)
+        CALL ZoneList%New(ModuleLogger,GWZBudget%Header%iNData,GWZBudget%Header%lFaceFlows_Defined,GWZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)
         IF (iStat .NE. 0) RETURN
         
         !Retrieve data
@@ -633,7 +637,7 @@ CONTAINS
     
     IF (GWZBudget%IsOutfileDefined()) THEN
         !Generate zone list
-        CALL ZoneList%New(GWZBudget%Header%iNData,GWZBudget%Header%lFaceFlows_Defined,GWZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)
+        CALL ZoneList%New(ModuleLogger,GWZBudget%Header%iNData,GWZBudget%Header%lFaceFlows_Defined,GWZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)
         IF (iStat .NE. 0) RETURN
         
         !Retrieve data
@@ -719,7 +723,7 @@ CONTAINS
     END IF
             
     !Generate zone list
-    CALL ZoneList%New(GWZBudget%Header%iNData,GWZBudget%Header%lFaceFlows_Defined,GWZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    CALL ZoneList%New(ModuleLogger,GWZBudget%Header%iNData,GWZBudget%Header%lFaceFlows_Defined,GWZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)  ;  IF (iStat .EQ. -1) RETURN
     
     !Read data
     CALL GWZBudget%ReadData(ZoneList,iZoneID,iCols,cInterval,cBeginDate,cEndDate,rFactAR,rFactVL,iDataTypes,inActualOutput,rValues,iStat)  ;  IF (iStat .EQ. -1) RETURN
@@ -791,7 +795,8 @@ CONTAINS
     
     !Close ZBudget file and regenerate
     CALL ZBudget%Kill()
-    CALL ZBudget%Create(lForInquiry       , &
+    CALL ZBudget%Create(ZBudget%Logger     , &
+                        lForInquiry       , &
                         cFileName         , &
                         AppGrid           , &
                         Stratigraphy      , &

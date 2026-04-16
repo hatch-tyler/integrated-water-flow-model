@@ -630,11 +630,11 @@ CONTAINS
     IF (cALine .NE. '') THEN
         CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(cALine)),cWorkingDirectory,cAbsPathFileName)
         IF (lIsForInquiry) THEN
-            CALL AppGW%GWBudFile%New(cAbsPathFileName,iStat)
+            CALL AppGW%GWBudFile%New(ModuleLogger,cAbsPathFileName,iStat)
             IF (iStat .EQ. -1) RETURN
         ELSE
             BudHeader = PrepareGWBudgetHeader(NTIME,TimeStep,AppGrid)
-            CALL AppGW%GWBudFile%New(cAbsPathFileName,BudHeader,iStat)
+            CALL AppGW%GWBudFile%New(ModuleLogger,cAbsPathFileName,BudHeader,iStat)
             IF (iStat .EQ. -1) RETURN
             CALL BudHeader%Kill()
             !Allocate memory for subregional storage values

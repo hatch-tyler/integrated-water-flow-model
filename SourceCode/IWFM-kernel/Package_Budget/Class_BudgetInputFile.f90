@@ -169,19 +169,23 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- CREATE BUDGET INPUT FILE
   ! -------------------------------------------------------------
-  SUBROUTINE Create(BudgetFile,cFileName,OutputData,iStat)
-    CLASS(BudgetInputFileType)        :: BudgetFile
-    CHARACTER(LEN=*),INTENT(IN)       :: cFileName
-    TYPE(BudgetHeaderType),INTENT(IN) :: OutputData
-    INTEGER,INTENT(OUT)               :: iStat
+  SUBROUTINE Create(BudgetFile,Logger,cFileName,OutputData,iStat)
+    CLASS(BudgetInputFileType)                :: BudgetFile
+    TYPE(MessageLoggerType),TARGET,INTENT(IN) :: Logger
+    CHARACTER(LEN=*),INTENT(IN)               :: cFileName
+    TYPE(BudgetHeaderType),INTENT(IN)         :: OutputData
+    INTEGER,INTENT(OUT)                       :: iStat
     
     !Local variables
     CHARACTER(LEN=ModNameLen+6),PARAMETER :: ThisProcedure = ModName // 'Create'
     INTEGER                               :: nDataColumns(OutputData%NLocations)
     
+    !Set logger
+    BudgetFile%Logger => Logger
+
     !Initialize
     iStat = 0
-    
+
     !Make sure that file is an HDF5 file
     IF (iGetFileType_FromName(cFileName) .NE. f_iHDF) THEN
         CALL BudgetFile%Logger%SetLastMessage('File '//TRIM(ADJUSTL(cFileName))//' must be an HDF5 file for budget output!',f_iFatal,ThisProcedure)
@@ -210,10 +214,14 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- OPEN AN EXISTING BUDGET INPUT FILE
   ! -------------------------------------------------------------
-  SUBROUTINE Open(BudgetFile,cFileName,iStat) 
-    CLASS(BudgetInputFileType)  :: BudgetFile
-    CHARACTER(LEN=*),INTENT(IN) :: cFileName
-    INTEGER,INTENT(OUT)         :: iStat
+  SUBROUTINE Open(BudgetFile,Logger,cFileName,iStat)
+    CLASS(BudgetInputFileType)                :: BudgetFile
+    TYPE(MessageLoggerType),TARGET,INTENT(IN) :: Logger
+    CHARACTER(LEN=*),INTENT(IN)               :: cFileName
+    INTEGER,INTENT(OUT)                       :: iStat
+
+    !Set logger
+    BudgetFile%Logger => Logger
 
     !Open file
     CALL BudgetFile%New(FileName=cFileName,InputFile=.TRUE.,iStat=iStat)

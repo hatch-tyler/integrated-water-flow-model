@@ -315,7 +315,7 @@ CONTAINS
     IF (BudgetClass%cBudgetOutputFileName .EQ. '') RETURN
     
     !Instantiate the budget data
-    CALL Budget%New(BudgetClass%cBudgetInputFileName,iStat)
+    CALL Budget%New(ModuleLogger,BudgetClass%cBudgetInputFileName,iStat)
     IF (iStat .EQ. -1) RETURN
     
     !Inform user

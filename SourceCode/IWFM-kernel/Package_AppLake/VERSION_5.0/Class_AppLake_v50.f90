@@ -528,12 +528,12 @@ CONTAINS
     IF (cLakeBudgetFileName .NE. '') THEN
         ALLOCATE (AppLake%LakeBudRawFile)
         IF (IsForInquiry) THEN
-            CALL AppLake%LakeBudRawFile%New(TRIM(cLakeBudgetFileName),iStat)
+            CALL AppLake%LakeBudRawFile%New(ModuleLogger,TRIM(cLakeBudgetFileName),iStat)
             IF (iStat .EQ. -1) RETURN
         ELSE
             cComponentVersion = '5.0-' // TRIM(cPackageVersion)
             BudHeader = PrepareLakeBudgetHeader(AppLake%Lakes,NTIME,TimeStep,TRIM(cComponentVersion))
-            CALL AppLake%LakeBudRawFile%New(TRIM(cLakeBudgetFileName),BudHeader,iStat)
+            CALL AppLake%LakeBudRawFile%New(ModuleLogger,TRIM(cLakeBudgetFileName),BudHeader,iStat)
             IF (iStat .EQ. -1) RETURN
             CALL BudHeader%Kill()
         END IF

@@ -192,31 +192,39 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- CREATE A NEW BUDGET FILE
   ! -------------------------------------------------------------
-  SUBROUTINE Create(Budget,cInputFileName,HeaderData,iStat)
-    CLASS(BudgetType)                 :: Budget
-    CHARACTER(LEN=*),INTENT(IN)       :: cInputFileName
-    TYPE(BudgetHeaderType),INTENT(IN) :: HeaderData
-    INTEGER,INTENT(OUT)               :: iStat
-    
+  SUBROUTINE Create(Budget,Logger,cInputFileName,HeaderData,iStat)
+    CLASS(BudgetType)                         :: Budget
+    TYPE(MessageLoggerType),TARGET,INTENT(IN) :: Logger
+    CHARACTER(LEN=*),INTENT(IN)               :: cInputFileName
+    TYPE(BudgetHeaderType),INTENT(IN)         :: HeaderData
+    INTEGER,INTENT(OUT)                       :: iStat
+
+    !Set logger
+    Budget%Logger => Logger
+
     !Instantiate input file
-    CALL Budget%InputFile%NewFile(cInputFileName,HeaderData,iStat)
-    
+    CALL Budget%InputFile%NewFile(Logger,cInputFileName,HeaderData,iStat)
+
   END SUBROUTINE Create
 
   
   ! -------------------------------------------------------------
   ! --- OPEN AN EXISTING BUDGET FILE
   ! -------------------------------------------------------------
-  SUBROUTINE Open(Budget,cInputFileName,iStat) 
-    CLASS(BudgetType)           :: Budget
-    CHARACTER(LEN=*),INTENT(IN) :: cInputFileName
-    INTEGER,INTENT(OUT)         :: iStat
-    
+  SUBROUTINE Open(Budget,Logger,cInputFileName,iStat)
+    CLASS(BudgetType)                         :: Budget
+    TYPE(MessageLoggerType),TARGET,INTENT(IN) :: Logger
+    CHARACTER(LEN=*),INTENT(IN)               :: cInputFileName
+    INTEGER,INTENT(OUT)                       :: iStat
+
+    !Set logger
+    Budget%Logger => Logger
+
     !Initialize
     iStat = 0
     
     !Instantiate input file
-    CALL Budget%InputFile%NewFile(cInputFileName,iStat)
+    CALL Budget%InputFile%NewFile(Logger,cInputFileName,iStat)
     IF (iStat .EQ. -1) RETURN
     
     !Get the output related data

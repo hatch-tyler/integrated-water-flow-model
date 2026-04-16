@@ -757,7 +757,7 @@ CONTAINS
     END IF
     
     !Open file
-    CALL Budget%New(Model%cBudgetFiles(iLoc),iStat)
+    CALL Budget%New(ModuleLogger,Model%cBudgetFiles(iLoc),iStat)
     IF (iStat .NE. 0) RETURN
     
     !Number of columns (includes Time column)
@@ -802,7 +802,7 @@ CONTAINS
     END IF
     
     !Open file
-    CALL Budget%New(Model%cBudgetFiles(iLoc),iStat)
+    CALL Budget%New(ModuleLogger,Model%cBudgetFiles(iLoc),iStat)
     IF (iStat .NE. 0) RETURN
     
     !Number of columns (includes Time column)
@@ -868,7 +868,7 @@ CONTAINS
     END IF
     
     !Open file
-    CALL Budget%New(Model%cBudgetFiles(iLoc),iStat)
+    CALL Budget%New(ModuleLogger,Model%cBudgetFiles(iLoc),iStat)
     IF (iStat .NE. 0) RETURN
             
     !Get monthly budget flows
@@ -969,7 +969,7 @@ CONTAINS
     END IF
     
     !Open file
-    CALL Budget%New(Model%cBudgetFiles(iLoc),iStat)
+    CALL Budget%New(ModuleLogger,Model%cBudgetFiles(iLoc),iStat)
     IF (iStat .NE. 0) RETURN
     
     !Get monthly budget flows
@@ -1051,7 +1051,7 @@ CONTAINS
     END IF
     
     !Open file
-    CALL Budget%New(Model%cBudgetFiles(iLoc),iStat)
+    CALL Budget%New(ModuleLogger,Model%cBudgetFiles(iLoc),iStat)
     IF (iStat .NE. 0) RETURN
     
     !Read data based on budget type
@@ -1110,7 +1110,7 @@ CONTAINS
     END IF
     
     !Open file
-    CALL Budget%New(Model%cBudgetFiles(iLoc),iStat)
+    CALL Budget%New(ModuleLogger,Model%cBudgetFiles(iLoc),iStat)
     IF (iStat .NE. 0) RETURN
         
     !Get the data
@@ -1154,7 +1154,7 @@ CONTAINS
     END IF
     
     !Open file
-    CALL Budget%New(Model%cBudgetFiles(iLoc),iStat)
+    CALL Budget%New(ModuleLogger,Model%cBudgetFiles(iLoc),iStat)
     IF (iStat .NE. 0) RETURN
     
     !Get the data
@@ -1227,11 +1227,11 @@ CONTAINS
     END IF
     
     !Open file
-    CALL ZBudget%New(Model%cZBudgetFiles(iLoc),iStat)
+    CALL ZBudget%New(ModuleLogger,Model%cZBudgetFiles(iLoc),iStat)
     IF (iStat .NE. 0) GOTO 10
     
     !Generate zone list
-    CALL ZoneList%New(ZBudget%Header%iNData,ZBudget%Header%lFaceFlows_Defined,ZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)
+    CALL ZoneList%New(ModuleLogger,ZBudget%Header%iNData,ZBudget%Header%lFaceFlows_Defined,ZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)
     IF (iStat .NE. 0) GOTO 10
     
     !Get the number of non-diversified columns; first column will be Time so that will be eliminated later
@@ -1288,11 +1288,11 @@ CONTAINS
     END IF
     
     !Open file
-    CALL ZBudget%New(Model%cZBudgetFiles(iLoc),iStat)
+    CALL ZBudget%New(ModuleLogger,Model%cZBudgetFiles(iLoc),iStat)
     IF (iStat .NE. 0) GOTO 10
     
     !Generate zone list
-    CALL ZoneList%New(ZBudget%Header%iNData,ZBudget%Header%lFaceFlows_Defined,ZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)
+    CALL ZoneList%New(ModuleLogger,ZBudget%Header%iNData,ZBudget%Header%lFaceFlows_Defined,ZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)
     IF (iStat .NE. 0) GOTO 10
     
     !Get the non-diversified column titles; first column will be Time so that will be eliminated later
@@ -1355,11 +1355,11 @@ CONTAINS
     END IF
     
     !Open file
-    CALL ZBudget%New(Model%cZBudgetFiles(iLoc),iStat)
+    CALL ZBudget%New(ModuleLogger,Model%cZBudgetFiles(iLoc),iStat)
     IF (iStat .NE. 0) GOTO 10
     
     !Generate zone list
-    CALL ZoneList%New(ZBudget%Header%iNData,ZBudget%Header%lFaceFlows_Defined,ZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)
+    CALL ZoneList%New(ModuleLogger,ZBudget%Header%iNData,ZBudget%Header%lFaceFlows_Defined,ZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)
     IF (iStat .NE. 0) GOTO 10
     
     !Get the inflow/outflow columns depending on the ZBudget 
@@ -1455,11 +1455,11 @@ CONTAINS
     END IF
     
     !Open file
-    CALL ZBudget%New(Model%cZBudgetFiles(iLoc),iStat)
+    CALL ZBudget%New(ModuleLogger,Model%cZBudgetFiles(iLoc),iStat)
     IF (iStat .NE. 0) GOTO 10
     
     !Generate zone list
-    CALL ZoneList%New(ZBudget%Header%iNData,ZBudget%Header%lFaceFlows_Defined,ZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)
+    CALL ZoneList%New(ModuleLogger,ZBudget%Header%iNData,ZBudget%Header%lFaceFlows_Defined,ZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)
     IF (iStat .NE. 0) GOTO 10
     
     !Get the inflow/outflow columns depending on the ZBudget 
@@ -1538,11 +1538,11 @@ CONTAINS
     END IF
     
     !Open file
-    CALL ZBudget%New(Model%cZBudgetFiles(iLoc),iStat)
+    CALL ZBudget%New(ModuleLogger,Model%cZBudgetFiles(iLoc),iStat)
     IF (iStat .EQ. -1) GOTO 10
     
     !Generate zone list
-    CALL ZoneList%New(ZBudget%Header%iNData,ZBudget%Header%lFaceFlows_Defined,ZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)  ;  IF (iStat .EQ. -1) GOTO 10
+    CALL ZoneList%New(ModuleLogger,ZBudget%Header%iNData,ZBudget%Header%lFaceFlows_Defined,ZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)  ;  IF (iStat .EQ. -1) GOTO 10
     
     !Read data
     CALL ZBudget%ReadData(ZoneList,iZoneID,iCols,cInterval,cBeginDate,cEndDate,rFactAR,rFactVL,iDataTypes,inActualOutput,rValues,iStat)  ;  IF (iStat .EQ. -1) GOTO 10
@@ -1592,11 +1592,11 @@ CONTAINS
     END IF
     
     !Open file
-    CALL ZBudget%New(Model%cZBudgetFiles(iLoc),iStat)
+    CALL ZBudget%New(ModuleLogger,Model%cZBudgetFiles(iLoc),iStat)
     IF (iStat .EQ. -1) GOTO 10
     
     !Generate zone list
-    CALL ZoneList%New(ZBudget%Header%iNData,ZBudget%Header%lFaceFlows_Defined,ZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)
+    CALL ZoneList%New(ModuleLogger,ZBudget%Header%iNData,ZBudget%Header%lFaceFlows_Defined,ZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)
     IF (iStat .NE. 0) GOTO 10
     
     !Retrieve data
@@ -1644,11 +1644,11 @@ CONTAINS
     END IF
     
     !Open file
-    CALL ZBudget%New(Model%cZBudgetFiles(iLoc),iStat)
+    CALL ZBudget%New(ModuleLogger,Model%cZBudgetFiles(iLoc),iStat)
     IF (iStat .EQ. -1) GOTO 10
     
     !Generate zone list
-    CALL ZoneList%New(ZBudget%Header%iNData,ZBudget%Header%lFaceFlows_Defined,ZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)
+    CALL ZoneList%New(ModuleLogger,ZBudget%Header%iNData,ZBudget%Header%lFaceFlows_Defined,ZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)
     IF (iStat .NE. 0) GOTO 10
     
     !Retrieve data

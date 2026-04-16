@@ -227,7 +227,7 @@ CONTAINS
       
       !Check that Z-Budget input file is an HDF file and instantate the Z-Budget object
       IF (iGetFileType_FromName(cHDFFileName) .NE. f_iHDF) CALL ModuleLogger%LogMessage(TRIM(cHDFFileName)//' is not an HDF5 file!',f_iFatal,ThisProcedure)
-      CALL ZBudget%New(cHDFFileName,iStat)
+      CALL ZBudget%New(ModuleLogger,cHDFFileName,iStat)
       IF (iStat .EQ. -1) RETURN
       
       !If the print interval is provided as empty, set it to the time interval of the data
@@ -240,7 +240,7 @@ CONTAINS
       CALL ModuleLogger%LogMessage('Processing '//TRIM(LowerCase(ZBudget%Header%cDescriptor)),f_iMessage,'',Destination=f_iSCREEN_FILE)
       
       !Create the zone list
-      CALL ZoneList%New(ZBudget%Header%iNData,ZBudget%Header%lFaceFlows_Defined,ZBudget%SystemData,TRIM(cZoneDefFileName),iStat)
+      CALL ZoneList%New(ModuleLogger,ZBudget%Header%iNData,ZBudget%Header%lFaceFlows_Defined,ZBudget%SystemData,TRIM(cZoneDefFileName),iStat)
       IF (iStat .EQ. -1) RETURN
       
       !Read the zones to be processed

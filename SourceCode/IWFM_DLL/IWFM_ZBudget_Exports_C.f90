@@ -112,7 +112,7 @@ CONTAINS
     END IF
 
     !Open file
-    CALL ZBudget%New(cFileName_F,iStat)
+    CALL ZBudget%New(ModuleLogger,cFileName_F,iStat)
     IF (iStat .EQ. -1) THEN
         CALL ZBudget%Kill()
         !$OMP END CRITICAL(IWFM_ZBUDGET_MGMT)
@@ -143,7 +143,7 @@ CONTAINS
     CALL ZoneList%Kill()
     
     !Then create the zone list
-    CALL ZoneList%New(ZBudget%Header%iNData,ZBudget%Header%lFaceFlows_Defined,ZBudget%SystemData,TRIM(cFileName_F),iStat)
+    CALL ZoneList%New(ModuleLogger,ZBudget%Header%iNData,ZBudget%Header%lFaceFlows_Defined,ZBudget%SystemData,TRIM(cFileName_F),iStat)
     
   END SUBROUTINE IW_ZBudget_GenerateZoneList_FromFile
   
@@ -176,7 +176,7 @@ CONTAINS
     cZoneNamesArray(nZonesWithNames) = cZoneNames_F(iLocArray(nZonesWithNames):iLenZoneNames)
     
     !Then create the zone list
-    CALL ZoneList%New(ZBudget%Header%iNData,ZBudget%Header%lFaceFlows_Defined,ZBudget%SystemData,iZExtent,iElems,iLayers,iZones,iZonesWithNames,cZoneNamesArray,iStat)
+    CALL ZoneList%New(ModuleLogger,ZBudget%Header%iNData,ZBudget%Header%lFaceFlows_Defined,ZBudget%SystemData,iZExtent,iElems,iLayers,iZones,iZonesWithNames,cZoneNamesArray,iStat)
     
   END SUBROUTINE IW_ZBudget_GenerateZoneList
 

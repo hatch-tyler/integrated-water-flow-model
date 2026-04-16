@@ -71,6 +71,7 @@ MODULE Class_ZBudgetHeader
   ! --- Z-BUDGET HEADER DATA TYPE
   ! -------------------------------------------------------------
   TYPE ZBudgetHeaderType
+      TYPE(MessageLoggerType),POINTER              :: Logger => NULL()
       CHARACTER(LEN=100)                           :: cSoftwareVersion         = ''        !Version of the software that generated the Z-Budget raw data
       CHARACTER(LEN=100)                           :: cDescriptor              = ''        !Descriptor for the Z-Budget file
       LOGICAL                                      :: lVertFlows_DefinedAtNode = .TRUE.    !Are vertical flows, if defined, defined at nodes or elements?
@@ -122,21 +123,25 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- READ ZBUDGET HEADER FROM FILE
   ! -------------------------------------------------------------
-  SUBROUTINE ReadFromFile(Header,SystemData,InFile,iStat)
-    CLASS(ZBudgetHeaderType)        :: Header
-    TYPE(SystemDataType),INTENT(IN) :: SystemData
-    TYPE(GenericFileType)           :: InFile
-    INTEGER,INTENT(OUT)             :: iStat
-    
+  SUBROUTINE ReadFromFile(Header,Logger,SystemData,InFile,iStat)
+    CLASS(ZBudgetHeaderType)                  :: Header
+    TYPE(MessageLoggerType),TARGET,INTENT(IN) :: Logger
+    TYPE(SystemDataType),INTENT(IN)           :: SystemData
+    TYPE(GenericFileType)                     :: InFile
+    INTEGER,INTENT(OUT)                       :: iStat
+
     !Local variables
     CHARACTER(LEN=ModNameLen+12),PARAMETER :: ThisProcedure = ModNAme // 'ReadFromFile'
     INTEGER                                :: indxData,indxLayer,NErrorInCols,NErrorOutCols
     CHARACTER(:),ALLOCATABLE               :: cFileName
-    
+
+    !Set logger
+    Header%Logger => Logger
+
     !Check that this is indeed Z-Budget data file by checking if an object that Budget file doesn't have exist
     IF (.NOT. InFile%DoesHDFObjectExist(f_cAttributesDir//'/DataHDFPaths')) THEN
         CALL InFile%GetName(cFileName)
-        CALL ModuleLogger%SetLastMessage('File '//TRIM(cFileName)//' is not a Z-Budget file type!',f_iFatal,ThisProcedure)
+        CALL Header%Logger%SetLastMessage('File '//TRIM(cFileName)//' is not a Z-Budget file type!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF

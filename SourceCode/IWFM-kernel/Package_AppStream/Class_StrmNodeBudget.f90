@@ -217,11 +217,11 @@ CONTAINS
     IF (IsRoutedStreams) THEN
         CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(BudFileName)),cWorkingDirectory,cAbsPathFileName)
         IF (IsForInquiry) THEN
-            CALL StrmNodeBudget%StrmNodeBudRawFile%New(cAbsPathFileName,iStat)  
+            CALL StrmNodeBudget%StrmNodeBudRawFile%New(ModuleLogger,cAbsPathFileName,iStat)
             IF (iStat .EQ. -1) RETURN
         ELSE
             BudHeader = pProcPrepareHeader(NBudNodes,iDummyArray,iReachIDs,iStrmNodeIDs,NTIME,TimeStep,cVersion,iBudNodes=StrmNodeBudget%iBudNodes)
-            CALL StrmNodeBudget%StrmNodeBudRawFile%New(cAbsPathFileName,BudHeader,iStat)
+            CALL StrmNodeBudget%StrmNodeBudRawFile%New(ModuleLogger,cAbsPathFileName,BudHeader,iStat)
             IF (iStat .EQ. -1) RETURN
             CALL BudHeader%Kill()
         END IF

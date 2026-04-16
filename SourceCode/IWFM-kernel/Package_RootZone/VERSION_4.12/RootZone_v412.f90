@@ -962,7 +962,7 @@ CONTAINS
     
     !Instantiate the land and water use raw file for when it is openned for inquiry
     IF (IsForInquiry) THEN
-        CALL RawFile%New(cFileName,iStat)
+        CALL RawFile%New(ModuleLogger,cFileName,iStat)
         RETURN
     END IF
     
@@ -1073,7 +1073,7 @@ CONTAINS
     END ASSOCIATE
                                              
     !Instantiate the land and water use raw file
-    CALL RawFile%New(cFileName,OutputData,iStat)
+    CALL RawFile%New(ModuleLogger,cFileName,OutputData,iStat)
     
   END SUBROUTINE LWUseBudRawFile_New
   
@@ -1105,7 +1105,7 @@ CONTAINS
     
     !If this is for inquiry, open file for reading and return
     IF (IsForInquiry) THEN
-        IF (cFileName .NE. '') CALL ZBudFile%New(cFileName,iStat)
+        IF (cFileName .NE. '') CALL ZBudFile%New(ModuleLogger,cFileName,iStat)
         RETURN
     END IF
     
@@ -1326,7 +1326,7 @@ CONTAINS
                          'URB_SHORTAGE'         ]
                              
     !Instantiate Z-Budget file
-    CALL ZBudFile%New(cFileName,NTIME,TimeStepLocal,Header,SystemData,iStat)
+    CALL ZBudFile%New(ModuleLogger,cFileName,NTIME,TimeStepLocal,Header,SystemData,iStat)
     
   END SUBROUTINE LWUseZoneBudRawFile_New
 
@@ -1480,7 +1480,7 @@ CONTAINS
                                                   
     !Instantiate the root zone budget raw file for when it is opened for inquiry
     IF (IsForInquiry) THEN
-        CALL RawFile%New(cFileName,iStat)
+        CALL RawFile%New(ModuleLogger,cFileName,iStat)
         RETURN
     END IF
     
@@ -1638,7 +1638,7 @@ CONTAINS
     END ASSOCIATE
                                              
     !Instantiate the root zone budget file
-    CALL RawFile%New(cFileName,OutputData,iStat)
+    CALL RawFile%New(ModuleLogger,cFileName,OutputData,iStat)
     
     !Free memory
     CALL OutputData%Kill()
@@ -1673,7 +1673,7 @@ CONTAINS
     
     !If this is for inquiry, open file for reading and return
     IF (IsForInquiry) THEN
-        IF (cFileName .NE. '') CALL ZBudFile%New(cFileName,iStat)
+        IF (cFileName .NE. '') CALL ZBudFile%New(ModuleLogger,cFileName,iStat)
         RETURN
     END IF
     
@@ -2060,7 +2060,7 @@ CONTAINS
                          'NRV_DISCREPANCY'          ] 
                              
     !Instantiate Z-Budget file
-    CALL ZBudFile%New(cFileName,NTIME,TimeStepLocal,Header,SystemData,iStat)
+    CALL ZBudFile%New(ModuleLogger,cFileName,NTIME,TimeStepLocal,Header,SystemData,iStat)
     
   END SUBROUTINE RootZoneZoneBudRawFile_New
   
@@ -2113,7 +2113,7 @@ CONTAINS
     
     !Instantiate the land and water use raw file for when it is opened for inquiry
     IF (IsForInquiry) THEN
-        CALL RawFile%New(cFileName,iStat)
+        CALL RawFile%New(ModuleLogger,cFileName,iStat)
         RETURN
     END IF
        
@@ -2224,7 +2224,7 @@ CONTAINS
     END ASSOCIATE
                                              
     !Instantiate the land and water use raw file
-    CALL RawFile%New(cFileName,OutputData,iStat)
+    CALL RawFile%New(ModuleLogger,cFileName,OutputData,iStat)
         
   END SUBROUTINE AgLWUseBudRawFile_New
   
@@ -2297,7 +2297,7 @@ CONTAINS
     
     !Instantiate the root zone budget raw file for when it is opened for inquiry
     IF (IsForInquiry) THEN
-        CALL RawFile%New(cFileName,iStat)
+        CALL RawFile%New(ModuleLogger,cFileName,iStat)
         RETURN
     END IF
 
@@ -2428,7 +2428,7 @@ CONTAINS
     END ASSOCIATE
                                              
     !Instantiate the root zone budget raw file
-    CALL RawFile%New(cFileName,OutputData,iStat)
+    CALL RawFile%New(ModuleLogger,cFileName,OutputData,iStat)
     
   END SUBROUTINE NonPondedAgRootZoneBudRawFile_New
   
@@ -2507,7 +2507,7 @@ CONTAINS
     
     !Instantiate the root zone budget raw file for when it is opened for inquiry
     IF (IsForInquiry) THEN
-        CALL RawFile%New(cFileName,iStat)
+        CALL RawFile%New(ModuleLogger,cFileName,iStat)
         RETURN
     END IF
 
@@ -2644,7 +2644,7 @@ CONTAINS
     END ASSOCIATE
                                              
     !Instantiate the root zone budget raw file
-    CALL RawFile%New(cFileName,OutputData,iStat)
+    CALL RawFile%New(ModuleLogger,cFileName,OutputData,iStat)
     
   END SUBROUTINE PondedAgRootZoneBudRawFile_New
 
@@ -3468,7 +3468,7 @@ CONTAINS
     END IF
     
     !Generate zone list
-    CALL ZoneList%New(pZBudget%Header%iNData,pZBudget%Header%lFaceFlows_Defined,pZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)
+    CALL ZoneList%New(ModuleLogger,pZBudget%Header%iNData,pZBudget%Header%lFaceFlows_Defined,pZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)
     IF (iStat .NE. 0) RETURN
     
     !Retrieve data
@@ -3711,7 +3711,7 @@ CONTAINS
     END IF
     
     !Generate zone list
-    CALL ZoneList%New(pZBudget%Header%iNData,pZBudget%Header%lFaceFlows_Defined,pZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)
+    CALL ZoneList%New(ModuleLogger,pZBudget%Header%iNData,pZBudget%Header%lFaceFlows_Defined,pZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)
     IF (iStat .NE. 0) RETURN
     
     !Retrieve data

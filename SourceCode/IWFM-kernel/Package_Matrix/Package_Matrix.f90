@@ -671,16 +671,20 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- READ MATRIX DATA FROM BINARY FILE
   ! -------------------------------------------------------------
-  SUBROUTINE ReadPreprocessedData(Matrix,BinFile,iStat)
-    CLASS(MatrixType)     :: Matrix
-    TYPE(GenericFileType) :: BinFile
-    INTEGER,INTENT(OUT)   :: iStat
-    
+  SUBROUTINE ReadPreprocessedData(Matrix,Logger,BinFile,iStat)
+    CLASS(MatrixType)                         :: Matrix
+    TYPE(MessageLoggerType),TARGET,INTENT(IN) :: Logger
+    TYPE(GenericFileType)                     :: BinFile
+    INTEGER,INTENT(OUT)                       :: iStat
+
     !Local variables
     CHARACTER(LEN=ModNameLen+20) :: ThisProcedure = ModName // 'ReadPreprocessedData'
     INTEGER                      :: nComps,iDimJND,iDimNJD,ErrorCode
     CHARACTER                    :: cErrMessage*500
-    
+
+    !Set logger
+    Matrix%Logger => Logger
+
     !Initialize
     iStat = 0
     

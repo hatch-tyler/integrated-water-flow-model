@@ -335,11 +335,11 @@ CONTAINS
             CALL ModuleLogger%LogMessage(MessageArray(1:2),f_iInfo,ThisProcedure)
         ELSE 
             IF (IsForInquiry) THEN
-                CALL AppDiverBypass%DiverDetailsBudRawFile%New(TRIM(DiverDetailBudFileName),iStat)
+                CALL AppDiverBypass%DiverDetailsBudRawFile%New(ModuleLogger,TRIM(DiverDetailBudFileName),iStat)
                 IF (iStat .EQ. -1) RETURN
             ELSE
                 BudHeader = PrepareDiverDetailsBudgetHeader(AppDiverBypass%NDiver,TimeStep,NTIME,iElemIDs,iStrmNodeIDs,iSubregionIDs,AppDiverBypass%Diver,cVersionFull)
-                CALL AppDiverBypass%DiverDetailsBudRawFile%New(TRIM(DiverDetailBudFileName),BudHeader,iStat)
+                CALL AppDiverBypass%DiverDetailsBudRawFile%New(ModuleLogger,TRIM(DiverDetailBudFileName),BudHeader,iStat)
                 IF (iStat .EQ. -1) RETURN
                 CALL BudHeader%Kill()
             END IF

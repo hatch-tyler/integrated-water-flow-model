@@ -26,6 +26,7 @@ MODULE Util_RootZone_v40
                                      UpperCase                            
   USE TimeSeriesUtilities    , ONLY: TimeStepType                         , &
                                      IncrementTimeStamp                   
+  USE MessageLogger          , ONLY: MessageLoggerType
   USE Package_Budget         , ONLY: BudgetType                           , &
                                      BudgetHeaderType                     , &
                                      f_cVolumeUnitMarker                  , &
@@ -60,7 +61,10 @@ MODULE Util_RootZone_v40
             f_iNLWUseBudColumns            , &
             f_iNRootZoneBudColumns         , &
             f_iNAgLWUseBudColumns          , &
-            f_iNAgRootZoneBudColumns       
+            f_iNAgRootZoneBudColumns       , &
+            UtilRootZone_v40_SetModuleLogger
+
+  TYPE(MessageLoggerType),POINTER,PRIVATE :: ModuleLogger => NULL()       
             
   
   ! -------------------------------------------------------------
@@ -139,6 +143,11 @@ MODULE Util_RootZone_v40
 CONTAINS
 
 
+  SUBROUTINE UtilRootZone_v40_SetModuleLogger(Logger)
+    TYPE(MessageLoggerType),TARGET,INTENT(IN) :: Logger
+    ModuleLogger => Logger
+  END SUBROUTINE UtilRootZone_v40_SetModuleLogger
+
 
   ! -------------------------------------------------------------
   ! --- NEW BINARY LAND AND WATER USE BUDGET FILE FOR POST-PROCESSING
@@ -200,7 +209,7 @@ CONTAINS
 
     !Instantiate the land and water use raw file for when it is opened for inquiry
     IF (IsForInquiry) THEN
-        CALL RawFile%New(cFileName,iStat)
+        CALL RawFile%New(ModuleLogger,cFileName,iStat)
         RETURN
     END IF
        
@@ -312,7 +321,7 @@ CONTAINS
     END ASSOCIATE
                                              
     !Instantiate the land and water use raw file
-    CALL RawFile%New(cFileName,OutputData,iStat)
+    CALL RawFile%New(ModuleLogger,cFileName,OutputData,iStat)
     
   END SUBROUTINE LWUseBudRawFile_New
   
@@ -365,7 +374,7 @@ CONTAINS
     
     !Instantiate the land and water use raw file for when it is opened for inquiry
     IF (IsForInquiry) THEN
-        CALL RawFile%New(cFileName,iStat)
+        CALL RawFile%New(ModuleLogger,cFileName,iStat)
         RETURN
     END IF
     
@@ -476,7 +485,7 @@ CONTAINS
     END ASSOCIATE
                                              
     !Instantiate the land and water use raw file
-    CALL RawFile%New(cFileName,OutputData,iStat)
+    CALL RawFile%New(ModuleLogger,cFileName,OutputData,iStat)
     
   END SUBROUTINE AgLWUseBudRawFile_New
 
@@ -602,7 +611,7 @@ CONTAINS
                                                   
     !Instantiate the root zone budget raw file for when it is opened for inquiry
     IF (IsForInquiry) THEN
-        CALL RawFile%New(cFileName,iStat)
+        CALL RawFile%New(ModuleLogger,cFileName,iStat)
         RETURN
     END IF
     
@@ -787,7 +796,7 @@ CONTAINS
     END ASSOCIATE
                                              
     !Instantiate the root zone budget file
-    CALL RawFile%New(cFileName,OutputData,iStat)
+    CALL RawFile%New(ModuleLogger,cFileName,OutputData,iStat)
     
     !Free memory
     CALL OutputData%Kill()
@@ -857,7 +866,7 @@ CONTAINS
     
     !Instantiate the root zone budget raw file for when it is opened for inquiry
     IF (IsForInquiry) THEN
-        CALL RawFile%New(cFileName,iStat)
+        CALL RawFile%New(ModuleLogger,cFileName,iStat)
         RETURN
     END IF
 
@@ -982,7 +991,7 @@ CONTAINS
     END ASSOCIATE
                                              
     !Instantiate the root zone budget raw file
-    CALL RawFile%New(cFileName,OutputData,iStat)
+    CALL RawFile%New(ModuleLogger,cFileName,OutputData,iStat)
     
   END SUBROUTINE AgRootZoneBudRawFile_New
  

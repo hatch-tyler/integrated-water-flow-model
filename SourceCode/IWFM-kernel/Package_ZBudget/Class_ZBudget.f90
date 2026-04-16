@@ -192,20 +192,24 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- CREATE NEW Z-BUDGET
   ! -------------------------------------------------------------
-  SUBROUTINE Create_ZBudget(ZBudget,cFileName,NTimeSteps,TimeStep,Header,SystemData,iStat)  
-    CLASS(ZBudgetType)                 :: ZBudget
-    CHARACTER(LEN=*),INTENT(IN)        :: cFileName
-    INTEGER,INTENT(IN)                 :: NTimeSteps
-    TYPE(TimeStepType),INTENT(IN)      :: TimeStep
-    TYPE(ZBudgetHeaderType),INTENT(IN) :: Header
-    TYPE(SystemDataType),INTENT(IN)    :: SystemData
-    INTEGER,INTENT(OUT)                :: iStat
-    
+  SUBROUTINE Create_ZBudget(ZBudget,Logger,cFileName,NTimeSteps,TimeStep,Header,SystemData,iStat)
+    CLASS(ZBudgetType)                        :: ZBudget
+    TYPE(MessageLoggerType),TARGET,INTENT(IN) :: Logger
+    CHARACTER(LEN=*),INTENT(IN)               :: cFileName
+    INTEGER,INTENT(IN)                        :: NTimeSteps
+    TYPE(TimeStepType),INTENT(IN)             :: TimeStep
+    TYPE(ZBudgetHeaderType),INTENT(IN)        :: Header
+    TYPE(SystemDataType),INTENT(IN)           :: SystemData
+    INTEGER,INTENT(OUT)                       :: iStat
+
     !Local variables
     CHARACTER(LEN=ModNameLen+14),PARAMETER :: ThisProcedure = ModName // 'Create_ZBudget'
     INTEGER                                :: indxLayer,indxData,iCount,nDataColumns((Header%iNData+3)*SystemData%NLayers),NNodes,NElements,NLayers,NFaces
     CHARACTER(LEN=f_iMaxDatasetNameLen)    :: cDatasetNames((Header%iNData+3)*SystemData%NLayers)
-    
+
+    !Set logger
+    ZBudget%Logger => Logger
+
     !Initialize
     iStat     = 0
     NNodes    = SystemData%NNodes
@@ -299,14 +303,18 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- OPEN AN EXISTING Z-BUDGET DATASET
   ! -------------------------------------------------------------
-  SUBROUTINE Open_ZBudget(ZBudget,cFileName,iStat)  
-    CLASS(ZBudgetType)          :: ZBudget
-    CHARACTER(LEN=*),INTENT(IN) :: cFileName
-    INTEGER,INTENT(OUT)         :: iStat
-    
+  SUBROUTINE Open_ZBudget(ZBudget,Logger,cFileName,iStat)
+    CLASS(ZBudgetType)                        :: ZBudget
+    TYPE(MessageLoggerType),TARGET,INTENT(IN) :: Logger
+    CHARACTER(LEN=*),INTENT(IN)               :: cFileName
+    INTEGER,INTENT(OUT)                       :: iStat
+
     !Local variables
     CHARACTER(LEN=ModNameLen+12),PARAMETER :: ThisProcedure = ModName // 'Open_ZBudget'
-    
+
+    !Set logger
+    ZBudget%Logger => Logger
+
     !Initialize
     iStat = 0
     
@@ -322,11 +330,11 @@ CONTAINS
     IF (iStat .EQ. -1) RETURN
     
     !Read system data
-    CALL ZBudget%SystemData%ReadFromFile(ZBudget%File,iStat)
+    CALL ZBudget%SystemData%ReadFromFile(Logger,ZBudget%File,iStat)
     IF (iStat .EQ. -1) RETURN
-       
+
     !Read header
-    CALL ZBudget%Header%ReadFromFile(ZBudget%SystemData,ZBudget%File,iStat)  
+    CALL ZBudget%Header%ReadFromFile(Logger,ZBudget%SystemData,ZBudget%File,iStat)  
     
   END SUBROUTINE Open_ZBudget
  

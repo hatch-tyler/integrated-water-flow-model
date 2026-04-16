@@ -305,7 +305,7 @@ CONTAINS
     
     !Instantiate the land and water use raw file for when it is openned for inquiry
     IF (IsForInquiry) THEN
-        CALL RawFile%New(cFileName,iStat)
+        CALL RawFile%New(ModuleLogger,cFileName,iStat)
         RETURN
     END IF
     
@@ -418,7 +418,7 @@ CONTAINS
     END ASSOCIATE
                                              
     !Instantiate the land and water use raw file
-    CALL RawFile%New(cFileName,OutputData,iStat)
+    CALL RawFile%New(ModuleLogger,cFileName,OutputData,iStat)
     
   END SUBROUTINE LWUseBudRawFile_New
   
@@ -473,7 +473,7 @@ CONTAINS
     
     !Instantiate the land and water use raw file for when it is opened for inquiry
     IF (IsForInquiry) THEN
-        CALL RawFile%New(cFileName,iStat)
+        CALL RawFile%New(ModuleLogger,cFileName,iStat)
         RETURN
     END IF
        
@@ -586,7 +586,7 @@ CONTAINS
     END ASSOCIATE
                                              
     !Instantiate the land and water use raw file
-    CALL RawFile%New(cFileName,OutputData,iStat)
+    CALL RawFile%New(ModuleLogger,cFileName,OutputData,iStat)
     
   END SUBROUTINE AgLWUseBudRawFile_New
 
@@ -720,7 +720,7 @@ CONTAINS
     
     !Instantiate the root zone budget raw file for when it is opened for inquiry
     IF (IsForInquiry) THEN
-        CALL RawFile%New(cFileName,iStat)
+        CALL RawFile%New(ModuleLogger,cFileName,iStat)
         RETURN
     END IF
     
@@ -867,7 +867,7 @@ CONTAINS
     END ASSOCIATE
                                              
     !Instantiate the root zone budget raw file
-    CALL RawFile%New(cFileName,OutputData,iStat)
+    CALL RawFile%New(ModuleLogger,cFileName,OutputData,iStat)
     
     !Free memory
     CALL OutputData%Kill()
@@ -939,7 +939,7 @@ CONTAINS
     
     !Instantiate the root zone budget raw file for when it is opened for inquiry
     IF (IsForInquiry) THEN
-        CALL RawFile%New(cFileName,iStat)
+        CALL RawFile%New(ModuleLogger,cFileName,iStat)
         RETURN
     END IF
 
@@ -1066,7 +1066,7 @@ CONTAINS
     END ASSOCIATE
                                              
     !Instantiate the root zone budget raw file
-    CALL RawFile%New(cFileName,OutputData,iStat)
+    CALL RawFile%New(ModuleLogger,cFileName,OutputData,iStat)
     
   END SUBROUTINE AgRootZoneBudRawFile_New
   

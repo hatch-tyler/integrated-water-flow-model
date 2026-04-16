@@ -275,11 +275,11 @@ CONTAINS
         ALLOCATE (AppUnsatZone%BudRawFile)
         CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(ALine)),cWorkingDirectory,cAbsPathFileName)
         IF (IsForInquiry) THEN
-            CALL AppUnsatZone%BudRawFile%New(cAbsPathFileName,iStat)  
+            CALL AppUnsatZone%BudRawFile%New(ModuleLogger,cAbsPathFileName,iStat)
             IF (iStat .EQ. -1) RETURN
         ELSE
             BudHeader = PrepareBudgetHeader(AppGrid,NTIME,TimeStep)
-            CALL AppUnsatZone%BudRawFile%New(cAbsPathFileName,BudHeader,iStat)
+            CALL AppUnsatZone%BudRawFile%New(ModuleLogger,cAbsPathFileName,BudHeader,iStat)
             IF (iStat .EQ. -1) RETURN
             CALL BudHeader%Kill()
         END IF
@@ -379,7 +379,7 @@ CONTAINS
     
     !If this is for inquiry, open file for reading and return
     IF (IsForInquiry) THEN
-        IF (cFileName .NE. '') CALL ZBudFile%New(cFileName,iStat)
+        IF (cFileName .NE. '') CALL ZBudFile%New(ModuleLogger,cFileName,iStat)
         RETURN
     END IF
     
@@ -494,7 +494,7 @@ CONTAINS
                          'DEEP_PERC'          ]
                              
     !Instantiate Z-Budget file
-    CALL ZBudFile%New(cFileName,NTIME,TimeStepLocal,Header,SystemData,iStat)
+    CALL ZBudFile%New(ModuleLogger,cFileName,NTIME,TimeStepLocal,Header,SystemData,iStat)
     
   END SUBROUTINE UZZoneBudRawFile_New
 
@@ -1703,7 +1703,7 @@ CONTAINS
     !Retrieve data
     ASSOCIATE (pZBudget => AppUnsatZone%ZBudgetRawFile)
         !Generate zone list
-        CALL ZoneList%New(pZBudget%Header%iNData,pZBudget%Header%lFaceFlows_Defined,pZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)
+        CALL ZoneList%New(ModuleLogger,pZBudget%Header%iNData,pZBudget%Header%lFaceFlows_Defined,pZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)
         IF (iStat .NE. 0) RETURN
         
         !Retrieve data
@@ -1785,7 +1785,7 @@ CONTAINS
             
     ASSOCIATE (pZBudget => AppUnsatZone%ZBudgetRawFile)
         !Generate zone list
-        CALL ZoneList%New(pZBudget%Header%iNData,pZBudget%Header%lFaceFlows_Defined,pZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)  ;  IF (iStat .EQ. -1) RETURN
+        CALL ZoneList%New(ModuleLogger,pZBudget%Header%iNData,pZBudget%Header%lFaceFlows_Defined,pZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)  ;  IF (iStat .EQ. -1) RETURN
         
         !Read data
         CALL pZBudget%ReadData(ZoneList,iZoneID,iCols,cInterval,cBeginDate,cEndDate,rFactAR,rFactVL,iDataTypes,inActualOutput,rValues,iStat)  ;  IF (iStat .EQ. -1) RETURN

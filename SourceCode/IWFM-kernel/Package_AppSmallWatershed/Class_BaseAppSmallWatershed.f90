@@ -387,7 +387,7 @@ CONTAINS
 
     !Instantiate the small stream budget raw file and set the flag for when the file is opened for inquiry purposes
     IF (IsForInquiry) THEN
-        CALL AppSWShed%BudRawFile%New(TRIM(CFileName),iStat)  ;  IF (iStat .EQ. -1) RETURN
+        CALL AppSWShed%BudRawFile%New(ModuleLogger,TRIM(CFileName),iStat)  ;  IF (iStat .EQ. -1) RETURN
         AppSWShed%lBudRawFile_Defined = .TRUE.
         RETURN
     END IF
@@ -505,7 +505,7 @@ CONTAINS
     END ASSOCIATE
     
     !Instantiate the small stream budget raw file and set the flag
-    CALL AppSWShed%BudRawFile%New(TRIM(CFileName),Header,iStat)
+    CALL AppSWShed%BudRawFile%New(ModuleLogger,TRIM(CFileName),Header,iStat)
     IF (iStat .EQ. -1) RETURN
     AppSWShed%lBudRawFile_Defined = .TRUE.
     
