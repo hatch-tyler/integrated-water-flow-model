@@ -22,6 +22,7 @@
 !***********************************************************************
 MODULE Opening_screen
   USE MessageLogger     , ONLY: MessageLoggerType      , &
+                                DefaultLogger          , &
                                 f_iSCREEN              , &
                                 f_iMessage
   USE Class_Version     , ONLY: VersionType            
@@ -130,8 +131,12 @@ CONTAINS
     f_L(f_CopyrightLineNumber)(1:1)                                                 = CHAR(186)
     f_L(f_CopyrightLineNumber)(f_OPEN_SCREEN_LINE_LENGTH:f_OPEN_SCREEN_LINE_LENGTH) = CHAR(186)
     
-    !Display opening screen
-    CALL ModuleLogger%LogMessage(f_L,f_iMessage,'',iDestination=f_iSCREEN,cFmt='(8X,A)')
+    !Display opening screen (use DefaultLogger if ModuleLogger not yet set)
+    IF (ASSOCIATED(ModuleLogger)) THEN
+        CALL ModuleLogger%LogMessage(f_L,f_iMessage,'',iDestination=f_iSCREEN,cFmt='(8X,A)')
+    ELSE
+        CALL DefaultLogger%LogMessage(f_L,f_iMessage,'',iDestination=f_iSCREEN,cFmt='(8X,A)')
+    END IF
 
   END SUBROUTINE PRINT_SCREEN
 
@@ -152,8 +157,13 @@ CONTAINS
     SELECT CASE (NArguments)
       !No extra arguments are specified; ask for file name
       CASE (0)
-        CALL ModuleLogger%LogMessage(' ',f_iMessage,'',Destination=f_iSCREEN)
-        CALL ModuleLogger%LogMessage(cPrompt,f_iMessage,'',Destination=f_iSCREEN,Advance='NO')
+        IF (ASSOCIATED(ModuleLogger)) THEN
+            CALL ModuleLogger%LogMessage(' ',f_iMessage,'',Destination=f_iSCREEN)
+            CALL ModuleLogger%LogMessage(cPrompt,f_iMessage,'',Destination=f_iSCREEN,Advance='NO')
+        ELSE
+            CALL DefaultLogger%LogMessage(' ',f_iMessage,'',Destination=f_iSCREEN)
+            CALL DefaultLogger%LogMessage(cPrompt,f_iMessage,'',Destination=f_iSCREEN,Advance='NO')
+        END IF
         READ (*,*) MFILE
         CALL CleanSpecialCharacters(MFILE)
         MFILE = ADJUSTL(MFILE)

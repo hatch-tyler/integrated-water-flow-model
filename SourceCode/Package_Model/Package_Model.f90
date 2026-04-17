@@ -238,6 +238,7 @@ MODULE Package_Model
   PRIVATE
   PUBLIC :: ModelType                    , &
             PackageModel_SetModuleLogger , &
+            IWFM_InitAllModuleLoggers    , &
             nPP_InputFiles               , &
             PP_BinaryOutputFileID        , &    
             PP_ElementConfigFileID       , &    
@@ -646,6 +647,58 @@ CONTAINS
     TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
     ModuleLogger => Logger
   END SUBROUTINE PackageModel_SetModuleLogger
+
+
+  SUBROUTINE IWFM_InitAllModuleLoggers()
+    CALL PackageModel_SetModuleLogger(DefaultLogger)
+    CALL ModelForInquiry_SetModuleLogger(DefaultLogger)
+    CALL Grid_SetModuleLogger(DefaultLogger)
+    CALL AppGrid_SetModuleLogger(DefaultLogger)
+    CALL AppFace_SetModuleLogger(DefaultLogger)
+    CALL Stratigraphy_SetModuleLogger(DefaultLogger)
+    CALL BaseHydrograph_SetModuleLogger(DefaultLogger)
+    CALL TecplotOutput_SetModuleLogger(DefaultLogger)
+    CALL PairedData_SetModuleLogger(DefaultLogger)
+    CALL StrmLakeConnector_SetModuleLogger(DefaultLogger)
+    CALL LakeGWConnector_SetModuleLogger(DefaultLogger)
+    CALL SupplyDest_SetModuleLogger(DefaultLogger)
+    CALL AppLake_SetModuleLogger(DefaultLogger)
+    CALL BaseAppLake_SetModuleLogger(DefaultLogger)
+    CALL Lake_SetModuleLogger(DefaultLogger)
+    CALL AppLake_v40_SetModuleLogger(DefaultLogger)
+    CALL AppLake_v50_SetModuleLogger(DefaultLogger)
+    CALL AppSWShed_SetModuleLogger(DefaultLogger)
+    CALL BaseAppSWShed_SetModuleLogger(DefaultLogger)
+    CALL AppSWShed_v40_SetModuleLogger(DefaultLogger)
+    CALL AppSWShed_v41_SetModuleLogger(DefaultLogger)
+    CALL AppGW_SetAllModuleLoggers(DefaultLogger)
+    CALL AppStream_SetAllModuleLoggers(DefaultLogger)
+    CALL RootZone_SetAllModuleLoggers(DefaultLogger)
+    CALL BaseFile_SetModuleLogger(DefaultLogger)
+    CALL AsciiFile_SetModuleLogger(DefaultLogger)
+    CALL DSSFile_SetModuleLogger(DefaultLogger)
+    CALL FortBinFile_SetModuleLogger(DefaultLogger)
+    CALL HDF5File_SetModuleLogger(DefaultLogger)
+    CALL IOInterface_SetModuleLogger(DefaultLogger)
+    CALL TSDFileHandler_SetModuleLogger(DefaultLogger)
+    CALL Version_SetModuleLogger(DefaultLogger)
+    CALL GeneralUtils_SetModuleLogger(DefaultLogger)
+    CALL GenLinkedList_SetModuleLogger(DefaultLogger)
+    CALL TimeSeries_SetModuleLogger(DefaultLogger)
+    CALL Budget_SetModuleLogger(DefaultLogger)
+    CALL BudgetInputFile_SetModuleLogger(DefaultLogger)
+    CALL SystemData_SetModuleLogger(DefaultLogger)
+    CALL ZBudget_SetModuleLogger(DefaultLogger)
+    CALL ZBudgetHeader_SetModuleLogger(DefaultLogger)
+    CALL ZoneList_SetModuleLogger(DefaultLogger)
+    CALL Supply_SetModuleLogger(DefaultLogger)
+    CALL GWZBudget_SetModuleLogger(DefaultLogger)
+    CALL WSA_ANN_SetModuleLogger(DefaultLogger)
+    CALL AppUnsatZone_SetModuleLogger(DefaultLogger)
+    CALL ParametricGrid_SetModuleLogger(DefaultLogger)
+    CALL OpeningScreen_SetModuleLogger(DefaultLogger)
+    CALL Matrix_SetModuleLogger(DefaultLogger)
+  END SUBROUTINE IWFM_InitAllModuleLoggers
 
 
 

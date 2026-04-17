@@ -30,7 +30,8 @@ PROGRAM IWFM_F1
                                 LogLastMessage
   USE Package_Misc      , ONLY: Print_Screen     , &
                                 Get_Main_File
-  USE Package_Model     , ONLY: ModelType
+  USE Package_Model     , ONLY: ModelType                , &
+                                IWFM_InitAllModuleLoggers
   USE IWFM_Version      , ONLY: IWFMVersion
   IMPLICIT NONE
 
@@ -46,6 +47,9 @@ PROGRAM IWFM_F1
   !$ CALL OMP_SET_MAX_ACTIVE_LEVELS(2)                        !Maximum 2 levels of nested paralellization
   !$ CALL KMP_SET_STACKSIZE_S(16777216)                       !Set thread stack size to 16MB
 
+
+  !Initialize all module-level loggers before any I/O
+  CALL IWFM_InitAllModuleLoggers()
 
   !Start timer
   CALL DefaultTimer%Start()
