@@ -71,6 +71,7 @@ MODULE Class_Well
   ! --- WELL DATA TYPE
   ! -------------------------------------------------------------
   TYPE,EXTENDS(PumpingType) :: WellType
+    TYPE(MessageLoggerType),POINTER :: Logger => NULL()
     REAL(8)             :: X                 = 0.0    !x-coordinate of well location
     REAL(8)             :: Y                 = 0.0    !y-coordinate of well location
     REAL(8)             :: R                 = 0.0    !Well radius
@@ -121,7 +122,8 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- NEW WELL SET
   ! -------------------------------------------------------------
-  SUBROUTINE Well_New(cFileName,AppGrid,Stratigraphy,Wells,iStat)
+  SUBROUTINE Well_New(Logger,cFileName,AppGrid,Stratigraphy,Wells,iStat)
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
     CHARACTER(LEN=*),INTENT(IN)            :: cFileName
     TYPE(AppGridType),INTENT(IN)           :: AppGrid
     TYPE(StratigraphyType),INTENT(IN)      :: Stratigraphy
@@ -174,7 +176,12 @@ CONTAINS
         RETURN
     END IF
     
-    !Read structural and location-related well data 
+    !Assign Logger to each well
+    DO indxWell=1,NWell
+        Wells(indxWell)%Logger => Logger
+    END DO
+
+    !Read structural and location-related well data
     DO indxWell=1,NWell
         CALL WellDataFile%ReadData(DummyArray,iStat)  ;  IF (iStat .EQ. -1) RETURN
         iWellIDs(indxWell) = INT(DummyArray(1))

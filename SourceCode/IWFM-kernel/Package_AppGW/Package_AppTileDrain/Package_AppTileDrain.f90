@@ -85,6 +85,7 @@ MODULE Package_AppTileDrain
   ! -------------------------------------------------------------
   TYPE AppTileDrainType
     PRIVATE
+    TYPE(MessageLoggerType),POINTER     :: Logger => NULL()
     INTEGER                             :: NDrain              = 0
     INTEGER                             :: NSubIrig            = 0
     CHARACTER(LEN=6)                    :: TimeUnitConductance = ''
@@ -163,9 +164,10 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- NEW AppTileDrain DATA
   ! -------------------------------------------------------------
-  SUBROUTINE New(AppTileDrain,IsForInquiry,cFileName,cWorkingDirectory,iStrmNodeIDs,TimeStep,AppGrid,Stratigraphy,iStat) 
-    CLASS(AppTileDrainType),INTENT(OUT) :: AppTileDrain
-    LOGICAL,INTENT(IN)                  :: IsForInquiry
+  SUBROUTINE New(AppTileDrain,Logger,IsForInquiry,cFileName,cWorkingDirectory,iStrmNodeIDs,TimeStep,AppGrid,Stratigraphy,iStat)
+    CLASS(AppTileDrainType),INTENT(OUT)        :: AppTileDrain
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
+    LOGICAL,INTENT(IN)                         :: IsForInquiry
     CHARACTER(LEN=*),INTENT(IN)         :: cFileName,cWorkingDirectory
     INTEGER,INTENT(IN)                  :: iStrmNodeIDs(:)
     TYPE(TimeStepType),INTENT(IN)       :: TimeStep
@@ -181,6 +183,7 @@ CONTAINS
     CHARACTER(:),ALLOCATABLE :: cVersion
     
     !Initailize
+    AppTileDrain%Logger => Logger
     iStat = 0
 
     !If no FileName, return
@@ -225,7 +228,7 @@ CONTAINS
     END IF
        
     !Hydrograph print control data
-    CALL AppTileDrain%TileDrainHyd%New(IsForInquiry,cWorkingDirectory,AppGrid%AppNode%ID,AppTileDrain%SubIrigs%ID,AppTileDrain%TileDrains%ID,AppTileDrain%SubIrigs%iGWNode,AppTileDrain%TileDrains%iGWNode,TimeStep,TDFile,iStat)
+    CALL AppTileDrain%TileDrainHyd%New(AppTileDrain%Logger,IsForInquiry,cWorkingDirectory,AppGrid%AppNode%ID,AppTileDrain%SubIrigs%ID,AppTileDrain%TileDrains%ID,AppTileDrain%SubIrigs%iGWNode,AppTileDrain%TileDrains%iGWNode,TimeStep,TDFile,iStat)
     IF (iStat .EQ. -1) RETURN
   
     !Close file
@@ -846,11 +849,7 @@ CONTAINS
     INTEGER,PARAMETER :: iCompIDs(1) = [f_iGWComp]
 
     !Inform user
-    IF (ASSOCIATED(ModuleLogger)) THEN
-        CALL ModuleLogger%EchoProgress('Simulating tile drain/subsurface irrigation flows')
-    ELSE
-        CALL ModuleLogger%EchoProgress('Simulating tile drain/subsurface irrigation flows')
-    END IF
+    CALL AppTileDrain%Logger%EchoProgress('Simulating tile drain/subsurface irrigation flows')
 
     !Tile drains
     ASSOCIATE (pTileDrains => AppTileDrain%TileDrains)

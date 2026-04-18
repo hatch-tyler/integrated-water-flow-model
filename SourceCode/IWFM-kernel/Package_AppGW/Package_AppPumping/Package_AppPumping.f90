@@ -248,7 +248,7 @@ CONTAINS
     CALL CleanSpecialCharacters(ALine)
     IF (ALine .NE. '') THEN
         CALL EstablishAbsolutePathFileName(TRIM(ALine),cWorkingDirectory,cAbsPathFileName)
-        CALL Well_New(cAbsPathFileName,AppGrid,Stratigraphy,AppPumping%Wells,iStat)
+        CALL Well_New(ModuleLogger,cAbsPathFileName,AppGrid,Stratigraphy,AppPumping%Wells,iStat)
         IF (iStat .EQ. -1) RETURN
         AppPumping%NWells = SIZE(AppPumping%Wells)
     END IF
@@ -259,7 +259,7 @@ CONTAINS
     CALL CleanSpecialCharacters(ALine)
     IF (ALine .NE. '') THEN
         CALL EstablishAbsolutePathFileName(TRIM(ALine),cWorkingDirectory,cAbsPathFileName)
-        CALL ElemPump_New(cAbsPathFileName,AppGrid,Stratigraphy,AppPumping%ElemPumps,iStat)
+        CALL ElemPump_New(ModuleLogger,cAbsPathFileName,AppGrid,Stratigraphy,AppPumping%ElemPumps,iStat)
         IF (iStat .EQ. -1) RETURN
         AppPumping%NElemPumps = SIZE(AppPumping%ElemPumps)
     END IF

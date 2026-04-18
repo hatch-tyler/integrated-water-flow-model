@@ -143,8 +143,9 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- INSTANTIATE SUBSIDENCE COMPONENT
   ! -------------------------------------------------------------
-  SUBROUTINE AppSubsidence_v50_New(AppSubsidence,IsForInquiry,cFileName,cWorkingDirectory,iGWNodeIDs,AppGrid,Stratigraphy,StrmConnectivity,TimeStep,iStat,SubsICFile,NTIME) 
+  SUBROUTINE AppSubsidence_v50_New(AppSubsidence,Logger,IsForInquiry,cFileName,cWorkingDirectory,iGWNodeIDs,AppGrid,Stratigraphy,StrmConnectivity,TimeStep,iStat,SubsICFile,NTIME)
     CLASS(AppSubsidence_v50_Type),INTENT(OUT) :: AppSubsidence
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
     LOGICAL,INTENT(IN)                        :: IsForInquiry
     CHARACTER(LEN=*),INTENT(IN)               :: cFileName,cWorkingDirectory
     INTEGER,INTENT(IN)                        :: iGWNodeIDs(:)
@@ -162,12 +163,13 @@ CONTAINS
 
     !Initialize
     iStat = 0
+    AppSubsidence%Logger => Logger
 
     !Return if no filename is given
     IF (cFileName .EQ. '') RETURN
 
     !Inform user
-    CALL ModuleLogger%EchoProgress('   Instantiating subsidence component ...')
+    CALL AppSubsidence%Logger%EchoProgress('   Instantiating subsidence component ...')
 
     !Open file
     CALL SubsMainFile%New(FileName=cFileName,InputFile=.TRUE.,IsTSFile=.FALSE.,Descriptor='subsidence data main input',iStat=iStat)
@@ -810,12 +812,12 @@ CONTAINS
     NLayers = SIZE(AppSubs%Subsidence , DIM=2)
     
     !Print parameters
-    IF (ASSOCIATED(ModuleLogger)) THEN
-        CALL ModuleLogger%LogMessage('',f_iMessage,'',f_iFILE)
-        CALL ModuleLogger%LogMessage(REPEAT('-',100),f_iMessage,'',f_iFILE)
-        CALL ModuleLogger%LogMessage(REPEAT(' ',30)//'SUBSIDENCE PARAMETER VALUES FOR EACH NODE',f_iMessage,'',f_iFILE)
-        CALL ModuleLogger%LogMessage(REPEAT(' ',12)//'*** Note: Values Below are After Multiplication by Conversion Factors ***',f_iMessage,'',f_iFILE)
-        CALL ModuleLogger%LogMessage(REPEAT('-',100),f_iMessage,'',f_iFILE)
+    IF (ASSOCIATED(AppSubs%Logger)) THEN
+        CALL AppSubs%Logger%LogMessage('',f_iMessage,'',f_iFILE)
+        CALL AppSubs%Logger%LogMessage(REPEAT('-',100),f_iMessage,'',f_iFILE)
+        CALL AppSubs%Logger%LogMessage(REPEAT(' ',30)//'SUBSIDENCE PARAMETER VALUES FOR EACH NODE',f_iMessage,'',f_iFILE)
+        CALL AppSubs%Logger%LogMessage(REPEAT(' ',12)//'*** Note: Values Below are After Multiplication by Conversion Factors ***',f_iMessage,'',f_iFILE)
+        CALL AppSubs%Logger%LogMessage(REPEAT('-',100),f_iMessage,'',f_iFILE)
     ELSE
         CALL ModuleLogger%LogMessage('',f_iMessage,'',f_iFILE)
         CALL ModuleLogger%LogMessage(REPEAT('-',100),f_iMessage,'',f_iFILE)
@@ -831,8 +833,8 @@ CONTAINS
                ,'        HC              '   &
                ,'        KV              '   &
                ,'        NEQ             '
-    IF (ASSOCIATED(ModuleLogger)) THEN
-        CALL ModuleLogger%LogMessage(TRIM(Text),f_iMessage,'',f_iFILE)
+    IF (ASSOCIATED(AppSubs%Logger)) THEN
+        CALL AppSubs%Logger%LogMessage(TRIM(Text),f_iMessage,'',f_iFILE)
     ELSE
         CALL ModuleLogger%LogMessage(TRIM(Text),f_iMessage,'',f_iFILE)
     END IF
@@ -853,15 +855,15 @@ CONTAINS
                          AppSubs%PreCompactHead(indx_S)                              , AppSubs%Kvsub(indxNode,indxLayer)                             ,   &
                          AppSubs%rNEQ(indxNode,indxLayer)
         END IF
-        IF (ASSOCIATED(ModuleLogger)) THEN
-            CALL ModuleLogger%LogMessage(TRIM(Text),f_iMessage,'',f_iFILE)
+        IF (ASSOCIATED(AppSubs%Logger)) THEN
+            CALL AppSubs%Logger%LogMessage(TRIM(Text),f_iMessage,'',f_iFILE)
         ELSE
             CALL ModuleLogger%LogMessage(TRIM(Text),f_iMessage,'',f_iFILE)
         END IF
       END DO
     END DO
-    IF (ASSOCIATED(ModuleLogger)) THEN
-        CALL ModuleLogger%LogMessage('',f_iMessage,'',f_iFILE)
+    IF (ASSOCIATED(AppSubs%Logger)) THEN
+        CALL AppSubs%Logger%LogMessage('',f_iMessage,'',f_iFILE)
     ELSE
         CALL ModuleLogger%LogMessage('',f_iMessage,'',f_iFILE)
     END IF

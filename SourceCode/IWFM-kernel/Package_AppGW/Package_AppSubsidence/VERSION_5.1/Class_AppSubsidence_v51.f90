@@ -123,8 +123,9 @@ CONTAINS
   ! --- Reads AllSubsOut HDF5 filename first, then delegates to
   ! --- the shared v5.0 configuration reader for all remaining input.
   ! -------------------------------------------------------------
-  SUBROUTINE AppSubsidence_v51_New(AppSubsidence,IsForInquiry,cFileName,cWorkingDirectory,iGWNodeIDs,AppGrid,Stratigraphy,StrmConnectivity,TimeStep,iStat,SubsICFile,NTIME)
+  SUBROUTINE AppSubsidence_v51_New(AppSubsidence,Logger,IsForInquiry,cFileName,cWorkingDirectory,iGWNodeIDs,AppGrid,Stratigraphy,StrmConnectivity,TimeStep,iStat,SubsICFile,NTIME)
     CLASS(AppSubsidence_v51_Type),INTENT(OUT) :: AppSubsidence
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
     LOGICAL,INTENT(IN)                        :: IsForInquiry
     CHARACTER(LEN=*),INTENT(IN)               :: cFileName,cWorkingDirectory
     INTEGER,INTENT(IN)                        :: iGWNodeIDs(:)
@@ -145,12 +146,13 @@ CONTAINS
 
     !Initialize
     iStat = 0
+    AppSubsidence%Logger => Logger
 
     !Return if no filename is given
     IF (cFileName .EQ. '') RETURN
 
     !Inform user
-    CALL ModuleLogger%EchoProgress('   Instantiating subsidence component (v5.1) ...')
+    CALL AppSubsidence%Logger%EchoProgress('   Instantiating subsidence component (v5.1) ...')
 
     !Initialize
     NNodes  = AppGrid%NNodes
@@ -172,7 +174,7 @@ CONTAINS
         IF (.NOT. IsForInquiry) THEN
             ALLOCATE (AppSubsidence%AllSubsOutFile , STAT=ErrorCode , ERRMSG=cErrorMsg)
             IF (ErrorCode .NE. 0) THEN
-                CALL ModuleLogger%SetLastMessage('Error allocating memory for AllSubsOut file.'//NEW_LINE('x')//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
+                CALL AppSubsidence%Logger%SetLastMessage('Error allocating memory for AllSubsOut file.'//NEW_LINE('x')//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -182,14 +184,14 @@ CONTAINS
             !Make sure DSS file is used only if it is a time-tracking simulation
             IF (AppSubsidence%AllSubsOutFile%iGetFileType() .EQ. f_iDSS) THEN
                 IF (.NOT. TimeStep%TrackTime) THEN
-                    CALL ModuleLogger%SetLastMessage('DSS files for subsidence at all nodes can only be used for time-tracking simulations.',f_iFatal,ThisProcedure)
+                    CALL AppSubsidence%Logger%SetLastMessage('DSS files for subsidence at all nodes can only be used for time-tracking simulations.',f_iFatal,ThisProcedure)
                     iStat = -1
                     RETURN
                 END IF
             END IF
             !Use NTIME from caller
             IF (.NOT. PRESENT(NTIME)) THEN
-                CALL ModuleLogger%SetLastMessage('NTIME must be provided for subsidence v5.1 AllSubsOut output!',f_iFatal,ThisProcedure)
+                CALL AppSubsidence%Logger%SetLastMessage('NTIME must be provided for subsidence v5.1 AllSubsOut output!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF

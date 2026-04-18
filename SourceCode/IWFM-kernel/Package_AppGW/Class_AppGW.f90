@@ -495,7 +495,7 @@ CONTAINS
     AppGW%ElemTransmissivity = 0.0
        
     !Instantiate State data
-    CALL AppGW%State%New(NNodes,NLayers,iStat)  
+    CALL AppGW%State%New(ModuleLogger,NNodes,NLayers,iStat)
     IF (iStat .NE. 0) RETURN
 
     !Open file
@@ -533,7 +533,7 @@ CONTAINS
     cALine = StripTextUntilCharacter(cALine,f_cInlineCommentChar)  
     CALL CleanSpecialCharacters(cALine)
     CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(cALine)),cWorkingDirectory,cAbsPathFileName)
-    CALL AppGW%AppTileDrain%New(lIsForInquiry,cAbsPathFileName,cWorkingDirectory,iStrmNodeIDs,TimeStep,AppGrid,Stratigraphy,iStat)
+    CALL AppGW%AppTileDrain%New(ModuleLogger,lIsForInquiry,cAbsPathFileName,cWorkingDirectory,iStrmNodeIDs,TimeStep,AppGrid,Stratigraphy,iStat)
     IF (iStat .EQ. -1) RETURN
     IF (AppGW%AppTileDrain%GetNDrain() .GT. 0   .OR.   AppGW%AppTileDrain%GetNSubIrig() .GT. 0)  &
         AppGW%lTileDrain_Defined = .TRUE.
@@ -704,7 +704,7 @@ CONTAINS
 
     !Groundwater hydrographs
     CALL DATE_AND_TIME(VALUES=iPerfStart)
-    CALL AppGW%GWHyd%New(lIsForInquiry,AppGrid,Stratigraphy,cWorkingDirectory,iGWNodeIDs,iTecPlotFlag,AppGW%FactHead,AppGW%UnitHead,AppGW%UnitFlow,AppGW%UnitVelocity,TRIM(cAllHeadOutFileName),TRIM(cCellVelocityFileName),TRIM(cHeadTecplotFileName),TRIM(cVelTecplotFileName),TimeStep,NTIME,AppGWParamFile,iStat)
+    CALL AppGW%GWHyd%New(ModuleLogger,lIsForInquiry,AppGrid,Stratigraphy,cWorkingDirectory,iGWNodeIDs,iTecPlotFlag,AppGW%FactHead,AppGW%UnitHead,AppGW%UnitFlow,AppGW%UnitVelocity,TRIM(cAllHeadOutFileName),TRIM(cCellVelocityFileName),TRIM(cHeadTecplotFileName),TRIM(cVelTecplotFileName),TimeStep,NTIME,AppGWParamFile,iStat)
     IF (iStat .EQ. -1) RETURN
     
     IF (f_lLogPerfMarkers) THEN
@@ -759,7 +759,7 @@ CONTAINS
 
     !Instantiate the boundary conditions data and overwrite the initial conditions if necessary
     CALL DATE_AND_TIME(VALUES=iPerfStart)
-    CALL AppGW%AppBC%New(lIsForInquiry,ADJUSTL(cBCFileName),cWorkingDirectory,AppGrid,Stratigraphy,iGWNodeIDs,AppGW%UnitFlow,TimeStep,AppGW%State%Head,iStat)
+    CALL AppGW%AppBC%New(ModuleLogger,lIsForInquiry,ADJUSTL(cBCFileName),cWorkingDirectory,AppGrid,Stratigraphy,iGWNodeIDs,AppGW%UnitFlow,TimeStep,AppGW%State%Head,iStat)
     IF (iStat .EQ. -1) RETURN
     AppGW%lAppBC_Defined = AppGW%AppBC%IsDefined()
 
@@ -775,7 +775,7 @@ CONTAINS
 
     !Instantiate subsidence; this has to be done after AppGW initial conditions are processed
     CALL DATE_AND_TIME(VALUES=iPerfStart)
-    CALL AppGW%AppSubsidence%New(lIsForInquiry,cSubsidenceFileName,cWorkingDirectory,iGWNodeIDs,AppGrid,Stratigraphy,StrmConnectivity,TimeStep,iStat,SubsICFile,NTIME)
+    CALL AppGW%AppSubsidence%New(ModuleLogger,lIsForInquiry,cSubsidenceFileName,cWorkingDirectory,iGWNodeIDs,AppGrid,Stratigraphy,StrmConnectivity,TimeStep,iStat,SubsICFile,NTIME)
     IF (iStat .EQ. -1) RETURN
     AppGW%lSubsidence_Defined = AppGW%AppSubsidence%IsDefined()
     IF (f_lLogPerfMarkers) THEN
@@ -1869,7 +1869,7 @@ CONTAINS
     Nodes%Sy         = 0.0
     
     !Instantiate State data
-    CALL GWState%New(iNNodes,iNLayers,iStat)  
+    CALL GWState%New(ModuleLogger,iNNodes,iNLayers,iStat)
     IF (iStat .NE. 0) GOTO 10
 
     !Open file
@@ -1964,14 +1964,14 @@ CONTAINS
     GWState%Head = rHeads
 
     !Instantiate the boundary conditions data and overwrite the initial conditions if necessary
-    CALL AppBC%New(lIsForInquiry,cBCFileName,cWorkingDirectory,AppGrid,Stratigraphy,iGWNodeIDs,cUnitFlow,TimeStep,GWState%Head,iStat)
+    CALL AppBC%New(ModuleLogger,lIsForInquiry,cBCFileName,cWorkingDirectory,AppGrid,Stratigraphy,iGWNodeIDs,cUnitFlow,TimeStep,GWState%Head,iStat)
     IF (iStat .EQ. -1) GOTO 10
 
     !Assign previous head as current head
     GWState%Head_P = GWState%Head
     
     !Instantiate subsidence; this has to be done after AppGW initial conditions are processed
-    CALL AppSubsidence%New(lIsForInquiry,cSubsidenceFileName,cWorkingDirectory,iGWNodeIDs,AppGrid,Stratigraphy,StrmConnectivity,TimeStep,iStat)
+    CALL AppSubsidence%New(ModuleLogger,lIsForInquiry,cSubsidenceFileName,cWorkingDirectory,iGWNodeIDs,AppGrid,Stratigraphy,StrmConnectivity,TimeStep,iStat)
     IF (iStat .EQ. -1) GOTO 10
     lSubsidence_Defined = AppSubsidence%IsDefined()
 

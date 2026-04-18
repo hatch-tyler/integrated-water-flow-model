@@ -104,6 +104,7 @@ MODULE GWHydrograph
   ! -------------------------------------------------------------
   TYPE GWHydrographType
       PRIVATE
+      TYPE(MessageLoggerType),POINTER          :: Logger => NULL()
       LOGICAL                                  :: lTecPlot_PrintGWHeads         = .TRUE.     !What is going to be printed to TecPlot for gw heads?
       TYPE(HydOutputType),ALLOCATABLE          :: GWHydOutput                                !Groundwater hydrograph at user-defined locations print-out data 
       TYPE(GenericFileType),ALLOCATABLE        :: AllHeadOutFile                             !File to print heads at all nodes and layers
@@ -185,9 +186,10 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- NEW GW HYDROGRAPH DATA
   ! -------------------------------------------------------------
-  SUBROUTINE New(GWHydData,lIsForInquiry,AppGrid,Stratigraphy,cWorkingDirectory,iGWNodeIDs,iTecPlotFlag,rFACTLTOU,cUNITLTOU,cUNITVLOU,cUNITVROU,cAllHeadOutFileName,cCellVelocityFileName,cHeadTecplotFileName,cVelTecplotFileName,TimeStep,NTIME,InFile,iStat)
-    CLASS(GWHydrographType),INTENT(OUT) :: GWHydData
-    LOGICAL,INTENT(IN)                  :: lIsForInquiry
+  SUBROUTINE New(GWHydData,Logger,lIsForInquiry,AppGrid,Stratigraphy,cWorkingDirectory,iGWNodeIDs,iTecPlotFlag,rFACTLTOU,cUNITLTOU,cUNITVLOU,cUNITVROU,cAllHeadOutFileName,cCellVelocityFileName,cHeadTecplotFileName,cVelTecplotFileName,TimeStep,NTIME,InFile,iStat)
+    CLASS(GWHydrographType),INTENT(OUT)        :: GWHydData
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
+    LOGICAL,INTENT(IN)                         :: lIsForInquiry
     TYPE(AppGridType),INTENT(IN)        :: AppGrid
     TYPE(StratigraphyType),INTENT(IN)   :: Stratigraphy
     INTEGER,INTENT(IN)                  :: iGWNodeIDs(:),iTecPlotFlag,NTIME
@@ -203,10 +205,11 @@ CONTAINS
     CHARACTER                   :: cErrorMsg*300
     
     !Initialize
+    GWHydData%Logger => Logger
     iStat = 0
-    
+
     !Inform user
-    CALL ModuleLogger%EchoProgress('   Instantiating groundwater hydrograph print-out data...')
+    CALL GWHydData%Logger%EchoProgress('   Instantiating groundwater hydrograph print-out data...')
     
     !Initialize
     iNLayers   = Stratigraphy%NLayers
@@ -230,7 +233,7 @@ CONTAINS
                   GWHydData%ElemCentroid_Y(iNElements)  , &
                   STAT=iErrorCode ,ERRMSG=cErrorMsg     )
         IF (iErrorCode .NE. 0) THEN
-            CALL ModuleLogger%SetLastMessage('Error in allocating memory for the print-out of groundwater velocities at cell centroids!'//NEW_LINE('')//TRIM(cErrorMsg),f_iFatal,cThisProcedure)
+            CALL GWHydData%Logger%SetLastMessage('Error in allocating memory for the print-out of groundwater velocities at cell centroids!'//NEW_LINE('')//TRIM(cErrorMsg),f_iFatal,cThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -243,11 +246,11 @@ CONTAINS
     IF (cHeadTecplotFileName .NE. '') THEN
         ALLOCATE (GWHydData%HeadTecplotFile , STAT=iErrorCode ,ERRMSG=cErrorMsg)
         IF (iErrorCode .NE. 0) THEN
-            CALL ModuleLogger%SetLastMessage('Error in allocating memory for groundwater head print-out for TecPlot!'//NEW_LINE('')//TRIM(cErrorMsg),f_iFatal,cThisProcedure)
+            CALL GWHydData%Logger%SetLastMessage('Error in allocating memory for groundwater head print-out for TecPlot!'//NEW_LINE('')//TRIM(cErrorMsg),f_iFatal,cThisProcedure)
             iStat = -1
             RETURN
         END IF
-        CALL GWHydData%HeadTecplotFile%New(ModuleLogger,lIsForInquiry,cHeadTecplotFileName,'groundwater head print-out for TecPlot',iStat)  ;  IF (iStat .EQ. -1) RETURN
+        CALL GWHydData%HeadTecplotFile%New(GWHydData%Logger,lIsForInquiry,cHeadTecplotFileName,'groundwater head print-out for TecPlot',iStat)  ;  IF (iStat .EQ. -1) RETURN
         GWHydData%lHeadTecplotFile_Defined = .TRUE.
     END IF
     
@@ -264,11 +267,11 @@ CONTAINS
     IF (cVelTecplotFileName .NE. '') THEN
         ALLOCATE (GWHydData%VelocityTecplotFile , STAT=iErrorCode ,ERRMSG=cErrorMsg)
         IF (iErrorCode .NE. 0) THEN
-            CALL ModuleLogger%SetLastMessage('Error in allocating memory for groundwater velocities print-out for TecPlot!'//NEW_LINE('')//TRIM(cErrorMsg),f_iFatal,cThisProcedure)
+            CALL GWHydData%Logger%SetLastMessage('Error in allocating memory for groundwater velocities print-out for TecPlot!'//NEW_LINE('')//TRIM(cErrorMsg),f_iFatal,cThisProcedure)
             iStat = -1
             RETURN
         END IF
-        CALL GWHydData%VelocityTecplotFile%New(ModuleLogger,lIsForInquiry,cVelTecplotFileName,'groundwater velocities print-out for TecPlot',iStat=iStat)
+        CALL GWHydData%VelocityTecplotFile%New(GWHydData%Logger,lIsForInquiry,cVelTecplotFileName,'groundwater velocities print-out for TecPlot',iStat=iStat)
         IF (iStat .EQ. -1) RETURN
         GWHydData%lVelocityTecplotFile_Defined = .TRUE.
     END IF
@@ -276,11 +279,11 @@ CONTAINS
     !Instantiate the user-specified hydrographs output data
     ALLOCATE (GWHydData%GWHydOutput , STAT=iErrorCode ,ERRMSG=cErrorMsg)
     IF (iErrorCode .NE. 0) THEN
-        CALL ModuleLogger%SetLastMessage('Error in allocating memory for groundwater hydrograph printing at user-specified locations!'//NEW_LINE('')//TRIM(cErrorMsg),f_iFatal,cThisProcedure)
+        CALL GWHydData%Logger%SetLastMessage('Error in allocating memory for groundwater hydrograph printing at user-specified locations!'//NEW_LINE('')//TRIM(cErrorMsg),f_iFatal,cThisProcedure)
         iStat = -1
         RETURN
     END IF
-    CALL GWHydData%GWHydOutput%New(ModuleLogger,lIsForInquiry,InFile,cWorkingDirectory,AppGrid,Stratigraphy,iGWNodeIDs,f_iHyd_GWHead,cUNITLTOU,'HEAD',TimeStep,iStat)
+    CALL GWHydData%GWHydOutput%New(GWHydData%Logger,lIsForInquiry,InFile,cWorkingDirectory,AppGrid,Stratigraphy,iGWNodeIDs,f_iHyd_GWHead,cUNITLTOU,'HEAD',TimeStep,iStat)
     IF (iStat .EQ. -1) RETURN
     GWHydData%lGWHydOutput_Defined = GWHydData%GWHydOutput%IsDefined()
     IF (.NOT. GWHydData%lGWHydOutput_Defined) DEALLOCATE (GWHydData%GWHydOutput , STAT=iErrorCode)
@@ -288,7 +291,7 @@ CONTAINS
     !Instantiate face flow hydrographs output data
     ALLOCATE (GWHydData%FaceFlowOutput , STAT=iErrorCode ,ERRMSG=cErrorMsg)
     IF (iErrorCode .NE. 0) THEN
-        CALL ModuleLogger%SetLastMessage('Error in allocating memory for face flow hydrograph printing!'//NEW_LINE('')//TRIM(cErrorMsg),f_iFatal,cThisProcedure)
+        CALL GWHydData%Logger%SetLastMessage('Error in allocating memory for face flow hydrograph printing!'//NEW_LINE('')//TRIM(cErrorMsg),f_iFatal,cThisProcedure)
         iStat = -1
         RETURN
     END IF

@@ -131,8 +131,9 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- INSTANTIATE SUBSIDENCE COMPONENT
   ! -------------------------------------------------------------
-  SUBROUTINE AppSubsidence_v40_New(AppSubsidence,IsForInquiry,cFileName,cWorkingDirectory,iGWNodeIDs,AppGrid,Stratigraphy,StrmConnectivity,TimeStep,iStat,SubsICFile,NTIME) 
+  SUBROUTINE AppSubsidence_v40_New(AppSubsidence,Logger,IsForInquiry,cFileName,cWorkingDirectory,iGWNodeIDs,AppGrid,Stratigraphy,StrmConnectivity,TimeStep,iStat,SubsICFile,NTIME)
     CLASS(AppSubsidence_v40_Type),INTENT(OUT) :: AppSubsidence
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
     LOGICAL,INTENT(IN)                        :: IsForInquiry
     CHARACTER(LEN=*),INTENT(IN)               :: cFileName,cWorkingDirectory
     INTEGER,INTENT(IN)                        :: iGWNodeIDs(:)
@@ -154,12 +155,13 @@ CONTAINS
     
     !Initialize
     iStat = 0
-    
+    AppSubsidence%Logger => Logger
+
     !Return if no filename is given
     IF (cFileName .EQ. '') RETURN
-    
+
     !Inform user
-    CALL ModuleLogger%EchoProgress('   Instantiating subsidence component ...')
+    CALL AppSubsidence%Logger%EchoProgress('   Instantiating subsidence component ...')
     
     !Initialize
     NNodes  = AppGrid%NNodes
@@ -184,24 +186,24 @@ CONTAINS
               AppSubsidence%RegionalCumSubsidence_P(NRegn)   ,  &
               STAT=ErrorCode , ERRMSG=cErrorMsg              )
     IF (ErrorCode .NE. 0) THEN
-        CALL ModuleLogger%SetLastMessage('Error allocating memory for subsidence parameters!'//NEW_LINE('x')//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
+        CALL AppSubsidence%Logger%SetLastMessage('Error allocating memory for subsidence parameters!'//NEW_LINE('x')//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
-    
+
     !Initialize values
-    AppSubsidence%InterbedThick_P         = 0d0 
-    AppSubsidence%InterbedThick           = 0d0 
-    AppSubsidence%InterbedThickMin        = 0d0 
-    AppSubsidence%Subsidence              = 0d0 
+    AppSubsidence%InterbedThick_P         = 0d0
+    AppSubsidence%InterbedThick           = 0d0
+    AppSubsidence%InterbedThickMin        = 0d0
+    AppSubsidence%Subsidence              = 0d0
     AppSubsidence%CumSubsidence_P         = 0d0
     AppSubsidence%CumSubsidence           = 0d0
     AppSubsidence%PreCompactHead          = HUGE(0d0)
     AppSubsidence%RegionalCumSubsidence_P = 0d0
-    
+
     !Read away the version line
     CALL SubsMainFile%ReadData(ALine,iStat)  ;  IF (iStat .EQ. -1) RETURN
-    
+
     !Read configuration: IC file, output files, parameters, IC data
     CALL ReadSubsidenceConfig_v40(AppSubsidence,SubsMainFile,IsForInquiry,cWorkingDirectory,iGWNodeIDs,AppGrid,Stratigraphy,StrmConnectivity,TimeStep,iStat,SubsICFile)
     IF (iStat .EQ. -1) RETURN
@@ -650,12 +652,12 @@ CONTAINS
     NLayers = SIZE(AppSubs%Subsidence , DIM=2)
     
     !Print parameters
-    IF (ASSOCIATED(ModuleLogger)) THEN
-        CALL ModuleLogger%LogMessage('',f_iMessage,'',f_iFILE)
-        CALL ModuleLogger%LogMessage(REPEAT('-',100),f_iMessage,'',f_iFILE)
-        CALL ModuleLogger%LogMessage(REPEAT(' ',30)//'SUBSIDENCE PARAMETER VALUES FOR EACH NODE',f_iMessage,'',f_iFILE)
-        CALL ModuleLogger%LogMessage(REPEAT(' ',12)//'*** Note: Values Below are After Multiplication by Conversion Factors ***',f_iMessage,'',f_iFILE)
-        CALL ModuleLogger%LogMessage(REPEAT('-',100),f_iMessage,'',f_iFILE)
+    IF (ASSOCIATED(AppSubs%Logger)) THEN
+        CALL AppSubs%Logger%LogMessage('',f_iMessage,'',f_iFILE)
+        CALL AppSubs%Logger%LogMessage(REPEAT('-',100),f_iMessage,'',f_iFILE)
+        CALL AppSubs%Logger%LogMessage(REPEAT(' ',30)//'SUBSIDENCE PARAMETER VALUES FOR EACH NODE',f_iMessage,'',f_iFILE)
+        CALL AppSubs%Logger%LogMessage(REPEAT(' ',12)//'*** Note: Values Below are After Multiplication by Conversion Factors ***',f_iMessage,'',f_iFILE)
+        CALL AppSubs%Logger%LogMessage(REPEAT('-',100),f_iMessage,'',f_iFILE)
     ELSE
         CALL ModuleLogger%LogMessage('',f_iMessage,'',f_iFILE)
         CALL ModuleLogger%LogMessage(REPEAT('-',100),f_iMessage,'',f_iFILE)
@@ -669,8 +671,8 @@ CONTAINS
                ,'        DC              '   &
                ,'        DCMIN           '   &
                ,'        HC              '
-    IF (ASSOCIATED(ModuleLogger)) THEN
-        CALL ModuleLogger%LogMessage(TRIM(Text),f_iMessage,'',f_iFILE)
+    IF (ASSOCIATED(AppSubs%Logger)) THEN
+        CALL AppSubs%Logger%LogMessage(TRIM(Text),f_iMessage,'',f_iFILE)
     ELSE
         CALL ModuleLogger%LogMessage(TRIM(Text),f_iMessage,'',f_iFILE)
     END IF
@@ -688,15 +690,15 @@ CONTAINS
                          AppSubs%InterbedThick(indxNode,indxLayer)                   , AppSubs%interbedThickMin(indxNode,indxLayer)                  ,   &
                          AppSubs%PreCompactHead(indxNode,indxLayer)
         END IF
-        IF (ASSOCIATED(ModuleLogger)) THEN
-            CALL ModuleLogger%LogMessage(TRIM(Text),f_iMessage,'',f_iFILE)
+        IF (ASSOCIATED(AppSubs%Logger)) THEN
+            CALL AppSubs%Logger%LogMessage(TRIM(Text),f_iMessage,'',f_iFILE)
         ELSE
             CALL ModuleLogger%LogMessage(TRIM(Text),f_iMessage,'',f_iFILE)
         END IF
       END DO
     END DO
-    IF (ASSOCIATED(ModuleLogger)) THEN
-        CALL ModuleLogger%LogMessage('',f_iMessage,'',f_iFILE)
+    IF (ASSOCIATED(AppSubs%Logger)) THEN
+        CALL AppSubs%Logger%LogMessage('',f_iMessage,'',f_iFILE)
     ELSE
         CALL ModuleLogger%LogMessage('',f_iMessage,'',f_iFILE)
     END IF

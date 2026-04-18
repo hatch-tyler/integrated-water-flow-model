@@ -71,6 +71,7 @@ MODULE Class_ElementPumping
   ! --- ELEMENT PUMP DATA TYPE
   ! -------------------------------------------------------------
   TYPE,EXTENDS(PumpingType) :: ElemPumpType
+    TYPE(MessageLoggerType),POINTER :: Logger => NULL()
   END TYPE ElemPumpType
   
   
@@ -115,7 +116,8 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- NEW ELEMENT PUMPING SET
   ! -------------------------------------------------------------
-  SUBROUTINE ElemPump_New(cFileName,AppGrid,Stratigraphy,ElemPump,iStat)
+  SUBROUTINE ElemPump_New(Logger,cFileName,AppGrid,Stratigraphy,ElemPump,iStat)
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
     CHARACTER(LEN=*),INTENT(IN)                :: cFileName
     TYPE(AppGridType),TARGET,INTENT(IN)        :: AppGrid
     TYPE(StratigraphyType),INTENT(IN)          :: Stratigraphy
@@ -163,6 +165,11 @@ CONTAINS
         RETURN
     END IF
     
+    !Assign Logger to each element pump
+    DO indxSink=1,NSink
+        ElemPump(indxSink)%Logger => Logger
+    END DO
+
     !Process data
     DO indxSink=1,NSink
         !Read data

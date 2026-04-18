@@ -150,6 +150,7 @@ MODULE Class_LayerBC
   ! --- LAYER B.C. DATA TYPE
   ! -------------------------------------------------------------
   TYPE LayerBCType
+      TYPE(MessageLoggerType),POINTER       :: Logger => NULL()
       INTEGER                               :: NSpecFlowBC            = 0      !Number of specified flow b.c. at an aquifer layer
       INTEGER                               :: NSpecHeadBC            = 0      !Number of specified head b.c. at an aquifer layer
       INTEGER                               :: NGHBC                  = 0      !Number of general head b.c. at an aquifer layer
@@ -220,13 +221,14 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- INSTANTIATE SPECIFIED FLOW B.C. FOR ALL LAYERS
   ! -------------------------------------------------------------
-  SUBROUTINE LayerBC_InitSpecifiedFlowBC(cFileName,NNodes,NodeIDs,Stratigraphy,cTimeUnit,LayerBC,iStat)
-    CHARACTER(LEN=*),INTENT(IN)       :: cFileName
-    INTEGER,INTENT(IN)                :: NNodes,NodeIDs(NNodes)
-    TYPE(StratigraphyType),INTENT(IN) :: Stratigraphy
-    CHARACTER(LEN=6),INTENT(OUT)      :: cTimeUnit
-    TYPE(LayerBCType)                 :: LayerBC(:)
-    INTEGER,INTENT(OUT)               :: iStat
+  SUBROUTINE LayerBC_InitSpecifiedFlowBC(cFileName,NNodes,NodeIDs,Stratigraphy,cTimeUnit,LayerBC,Logger,iStat)
+    CHARACTER(LEN=*),INTENT(IN)                :: cFileName
+    INTEGER,INTENT(IN)                         :: NNodes,NodeIDs(NNodes)
+    TYPE(StratigraphyType),INTENT(IN)          :: Stratigraphy
+    CHARACTER(LEN=6),INTENT(OUT)               :: cTimeUnit
+    TYPE(LayerBCType)                          :: LayerBC(:)
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
+    INTEGER,INTENT(OUT)                        :: iStat
        
     !Local variables
     CHARACTER(LEN=ModNameLen+25)          :: ThisProcedure = ModName // 'LayerBC_InitSpecifiedFlowBC'
@@ -240,10 +242,13 @@ CONTAINS
     TYPE(SpecifiedFlowBCType),ALLOCATABLE :: TempFlowBCArray(:)
     TYPE(BCListType)                      :: BCList(Stratigraphy%NLayers)
     CLASS(*),POINTER                      :: pCurrentData
-    
+
     !Initialize
     iStat = 0
-    
+    DO indxLayer=1,SIZE(LayerBC)
+        LayerBC(indxLayer)%Logger => Logger
+    END DO
+
     !Open file
     CALL InFile%New(FileName=TRIM(cFileName),InputFile=.TRUE.,IsTSFile=.FALSE.,Descriptor='specified flow boundary conditions data',iStat=iStat)
     IF (iStat .EQ. -1) RETURN
@@ -358,13 +363,14 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- INSTANTIATE SPECIFIED HEAD B.C. FOR ALL LAYERS
   ! -------------------------------------------------------------
-  SUBROUTINE LayerBC_InitSpecifiedHeadBC(cFileName,NNodes,NodeIDs,Stratigraphy,GWHeads,LayerBC,iStat)
-    CHARACTER(LEN=*),INTENT(IN)       :: cFileName
-    INTEGER,INTENT(IN)                :: NNodes,NodeIDs(NNodes)
-    TYPE(StratigraphyType),INTENT(IN) :: Stratigraphy
-    REAL(8)                           :: GWHeads(:,:)
-    TYPE(LayerBCType)                 :: LayerBC(:)
-    INTEGER,INTENT(OUT)               :: iStat
+  SUBROUTINE LayerBC_InitSpecifiedHeadBC(cFileName,NNodes,NodeIDs,Stratigraphy,GWHeads,LayerBC,Logger,iStat)
+    CHARACTER(LEN=*),INTENT(IN)                :: cFileName
+    INTEGER,INTENT(IN)                         :: NNodes,NodeIDs(NNodes)
+    TYPE(StratigraphyType),INTENT(IN)          :: Stratigraphy
+    REAL(8)                                    :: GWHeads(:,:)
+    TYPE(LayerBCType)                          :: LayerBC(:)
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
+    INTEGER,INTENT(OUT)                        :: iStat
        
     !Local variables
     CHARACTER(LEN=ModNameLen+27)          :: ThisProcedure = ModName // 'LayerBC_InitSpecifiedHeadBC'
@@ -377,10 +383,13 @@ CONTAINS
     TYPE(SpecifiedHeadBCType),ALLOCATABLE :: TempHeadBCArray(:)
     TYPE(BCListType)                      :: BCList(Stratigraphy%NLayers)
     CLASS(*),POINTER                      :: pCurrentData
-    
+
     !Initialize
     iStat = 0
-    
+    DO indxLayer=1,SIZE(LayerBC)
+        LayerBC(indxLayer)%Logger => Logger
+    END DO
+
     !Open file
     CALL InFile%New(FileName=TRIM(cFileName),InputFile=.TRUE.,IsTSFile=.FALSE.,Descriptor='specified head boundary conditions data',iStat=iStat)
     IF (iStat .EQ. -1) RETURN
@@ -504,13 +513,14 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- INSTANTIATE GENERAL HEAD B.C. FOR ALL LAYERS
   ! -------------------------------------------------------------
-  SUBROUTINE LayerBC_InitGeneralHeadBC(cFileName,NNodes,NodeIDs,Stratigraphy,cTimeUnit,LayerBC,iStat)
-    CHARACTER(LEN=*),INTENT(IN)       :: cFileName
-    INTEGER,INTENT(IN)                :: NNodes,NodeIDs(NNodes)
-    TYPE(StratigraphyType),INTENT(IN) :: Stratigraphy
-    CHARACTER(LEN=6),INTENT(OUT)      :: cTimeUnit
-    TYPE(LayerBCType)                 :: LayerBC(:)
-    INTEGER,INTENT(OUT)               :: iStat
+  SUBROUTINE LayerBC_InitGeneralHeadBC(cFileName,NNodes,NodeIDs,Stratigraphy,cTimeUnit,LayerBC,Logger,iStat)
+    CHARACTER(LEN=*),INTENT(IN)                :: cFileName
+    INTEGER,INTENT(IN)                         :: NNodes,NodeIDs(NNodes)
+    TYPE(StratigraphyType),INTENT(IN)          :: Stratigraphy
+    CHARACTER(LEN=6),INTENT(OUT)               :: cTimeUnit
+    TYPE(LayerBCType)                          :: LayerBC(:)
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
+    INTEGER,INTENT(OUT)                        :: iStat
        
     !Local variables
     CHARACTER(LEN=ModNameLen+25) :: ThisProcedure = ModName // 'LayerBC_InitGeneralHeadBC'
@@ -523,10 +533,13 @@ CONTAINS
     TYPE(GHBCType),ALLOCATABLE   :: TempGHBCArray(:)
     TYPE(BCListType)             :: BCList(Stratigraphy%NLayers)
     CLASS(*),POINTER             :: pCurrentData
-    
+
     !Initialize
     iStat = 0
-    
+    DO indxLayer=1,SIZE(LayerBC)
+        LayerBC(indxLayer)%Logger => Logger
+    END DO
+
     !Open file
     CALL InFile%New(FileName=TRIM(cFileName),InputFile=.TRUE.,IsTSFile=.FALSE.,Descriptor='general head boundary conditions data',iStat=iStat)
     IF (iStat .EQ. -1) RETURN
@@ -637,13 +650,14 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- INSTANTIATE CONSTRAINED GENERAL HEAD B.C. FOR ALL LAYERS
   ! -------------------------------------------------------------
-  SUBROUTINE LayerBC_InitConstrainedGeneralHeadBC(cFileName,NNodes,NodeIDs,Stratigraphy,cTimeUnit,LayerBC,iStat)
-    CHARACTER(LEN=*),INTENT(IN)       :: cFileName
-    INTEGER,INTENT(IN)                :: NNodes,NodeIDs(NNodes)
-    TYPE(StratigraphyType),INTENT(IN) :: Stratigraphy
-    CHARACTER(LEN=6),INTENT(OUT)      :: cTimeUnit
-    TYPE(LayerBCType)                 :: LayerBC(:)
-    INTEGER,INTENT(OUT)               :: iStat
+  SUBROUTINE LayerBC_InitConstrainedGeneralHeadBC(cFileName,NNodes,NodeIDs,Stratigraphy,cTimeUnit,LayerBC,Logger,iStat)
+    CHARACTER(LEN=*),INTENT(IN)                :: cFileName
+    INTEGER,INTENT(IN)                         :: NNodes,NodeIDs(NNodes)
+    TYPE(StratigraphyType),INTENT(IN)          :: Stratigraphy
+    CHARACTER(LEN=6),INTENT(OUT)               :: cTimeUnit
+    TYPE(LayerBCType)                          :: LayerBC(:)
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
+    INTEGER,INTENT(OUT)                        :: iStat
        
     !Local variables
     CHARACTER(LEN=ModNameLen+36)          :: ThisProcedure = ModName // 'LayerBC_InitConstrainedGeneralHeadBC'
@@ -657,10 +671,13 @@ CONTAINS
     TYPE(ConstrainedGHBCType),ALLOCATABLE :: TempCGHBCArray(:)
     TYPE(BCListType)                      :: BCList(Stratigraphy%NLayers)
     CLASS(*),POINTER                      :: pCurrentData
-    
+
     !Initialize
     iStat = 0
-    
+    DO indxLayer=1,SIZE(LayerBC)
+        LayerBC(indxLayer)%Logger => Logger
+    END DO
+
     !Open file
     CALL InFile%New(FileName=TRIM(cFileName),InputFile=.TRUE.,IsTSFile=.FALSE.,Descriptor='constrained general head boundary conditions data',iStat=iStat)
     IF (iStat .EQ. -1) RETURN
@@ -1333,7 +1350,7 @@ CONTAINS
             !Do not allow setting head; this creates isues with storage calculations, etc.
             MessageArray(1) = 'Specified head boundary conditions for groundwater cannot be defined programmatically!'
             MessageArray(2) = 'Please use the input data files to define specified head b.c.'
-            CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+            CALL LayerBC%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
             

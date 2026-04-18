@@ -74,6 +74,7 @@ MODULE Package_AppSubsidence
   ! -------------------------------------------------------------
   TYPE AppSubsidenceType
       PRIVATE
+      TYPE(MessageLoggerType),POINTER          :: Logger => NULL()
       INTEGER                                  :: iComponentVersion = 0
       LOGICAL                                  :: lDefined          = .FALSE.
       CLASS(BaseAppSubsidenceType),ALLOCATABLE :: Me
@@ -145,8 +146,9 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- NEW SUBSIDENCE DATA
   ! -------------------------------------------------------------
-  SUBROUTINE New(AppSubsidence,IsForInquiry,cFileName,cWorkingDirectory,iGWNodeIDs,AppGrid,Stratigraphy,StrmConnectivity,TimeStep,iStat,SubsICFile,NTIME)
+  SUBROUTINE New(AppSubsidence,Logger,IsForInquiry,cFileName,cWorkingDirectory,iGWNodeIDs,AppGrid,Stratigraphy,StrmConnectivity,TimeStep,iStat,SubsICFile,NTIME)
     CLASS(AppSubsidenceType),INTENT(OUT) :: AppSubsidence
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
     LOGICAL,INTENT(IN)                   :: IsForInquiry
     CHARACTER(LEN=*),INTENT(IN)          :: cFileName,cWorkingDirectory
     INTEGER,INTENT(IN)                   :: iGWNodeIDs(:)
@@ -165,7 +167,8 @@ CONTAINS
     
     !Initialize
     iStat = 0
-    
+    AppSubsidence%Logger => Logger
+
     !Return if no filename is defined
     IF (cFileName .EQ. '') RETURN
     
@@ -195,13 +198,13 @@ CONTAINS
             ALLOCATE(AppSubsidence_v51_Type :: AppSubsidence%Me)
             AppSubsidence%iComponentVersion = 51
         CASE DEFAULT
-            CALL ModuleLogger%SetLastMessage('Subsidence Component version number is not recognized ('//TRIM(cVersion)//')!',f_iFatal,ThisProcedure)
+            CALL AppSubsidence%Logger%SetLastMessage('Subsidence Component version number is not recognized ('//TRIM(cVersion)//')!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
     END SELECT
         
     !Now, instantiate
-    CALL AppSubsidence%Me%New(IsForInquiry,cFileName,cWorkingDirectory,iGWNodeIDs,AppGrid,Stratigraphy,StrmConnectivity,TimeStep,iStat,SubsICFile,NTIME)
+    CALL AppSubsidence%Me%New(Logger,IsForInquiry,cFileName,cWorkingDirectory,iGWNodeIDs,AppGrid,Stratigraphy,StrmConnectivity,TimeStep,iStat,SubsICFile,NTIME)
     
     !Set flag
     IF (iStat .EQ. 0) AppSubsidence%lDefined = .TRUE.
