@@ -54,6 +54,7 @@ MODULE Class_LossDestination
   ! --- LOSS DESTINATION DATA TYPE
   ! -------------------------------------------------------------
   TYPE LossDestinationType
+    TYPE(MessageLoggerType),POINTER :: Logger => NULL()
     INTEGER             :: iNDest        = 0
     INTEGER,ALLOCATABLE :: iDestList(:)
     REAL(8),ALLOCATABLE :: rFracs(:)
@@ -99,13 +100,15 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- READ FROM FILE
   ! -------------------------------------------------------------
-  SUBROUTINE LossDestination_New(iNDiver,iDiverIDs,iDestIDs,cBypassOrDiver,cDestDescription,InFile,LossDestinations,iStat)
-    INTEGER,INTENT(IN)               :: iNDiver,iDiverIDs(iNDiver),iDestIDs(:)
-    CHARACTER(LEN=*),INTENT(IN)      :: cBypassOrDiver,cDestDescription
-    TYPE(GenericFileType)            :: InFile
-    TYPE(LossDestinationType),TARGET :: LossDestinations(iNDiver)
-    INTEGER,INTENT(OUT)              :: iStat
-    
+  SUBROUTINE LossDestination_New(iNDiver,Logger,iDiverIDs,iDestIDs,cBypassOrDiver,cDestDescription,InFile,LossDestinations,iStat)
+    INTEGER,INTENT(IN)                         :: iNDiver
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
+    INTEGER,INTENT(IN)                         :: iDiverIDs(iNDiver),iDestIDs(:)
+    CHARACTER(LEN=*),INTENT(IN)                :: cBypassOrDiver,cDestDescription
+    TYPE(GenericFileType)                       :: InFile
+    TYPE(LossDestinationType),TARGET           :: LossDestinations(iNDiver)
+    INTEGER,INTENT(OUT)                        :: iStat
+
     !Local variables
     CHARACTER(LEN=ModNameLen+19)      :: ThisProcedure = ModName // 'LossDestination_New'
     INTEGER                           :: iNDest,indxDiver,ID,indxDest,iErrorCode,iDiver
@@ -113,10 +116,15 @@ CONTAINS
     LOGICAL                           :: lProcessed(iNDiver)
     INTEGER,ALLOCATABLE               :: iDestList(:)
     TYPE(LossDestinationType),POINTER :: pDest
-    
+
     !Initialize
     iStat      = 0
     lProcessed = .FALSE.
+
+    !Set Logger on all instances
+    DO indxDiver=1,iNDiver
+        LossDestinations(indxDiver)%Logger => Logger
+    END DO
     
     !Iterate over diversions
     DO indxDiver=1,iNDiver

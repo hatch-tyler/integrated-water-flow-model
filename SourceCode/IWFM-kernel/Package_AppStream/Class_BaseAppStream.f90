@@ -123,6 +123,7 @@ MODULE Class_BaseAppStream
       INTEGER,ALLOCATABLE             :: iPrintReachBudgetOrder(:)                           !Reaches ordered w.r.t. ID numbers for budget printing  
       TYPE(StrmHydrographType)        :: StrmHyd                                             !Output for stream hydrograph
       TYPE(StrmEvapType)              :: StrmEvap
+      TYPE(MessageLoggerType),POINTER :: Logger => NULL()
   CONTAINS
       PROCEDURE(Abstract_SetStaticComponent),PASS,DEFERRED             :: SetStaticComponent
       PROCEDURE(Abstract_SetStaticComponentFromBinFile),PASS,DEFERRED  :: SetStaticComponentFromBinFile
@@ -768,11 +769,7 @@ CONTAINS
                 !Clear memory
                 DEALLOCATE (cColTitles_Local , STAT=iErrorCode)
             ELSE
-                IF (ASSOCIATED(ModuleLogger)) THEN
-                    CALL ModuleLogger%SetLastMessage('Stream reach budget is not defined to retrieve budget column titles!',f_iFatal,ThisProcedure)
-                ELSE
-                    CALL ModuleLogger%SetLastMessage('Stream reach budget is not defined to retrieve budget column titles!',f_iFatal,ThisProcedure)
-                END IF
+                CALL AppStream%Logger%SetLastMessage('Stream reach budget is not defined to retrieve budget column titles!',f_iFatal,ThisProcedure)
                 iStat = -1
             END IF    
             
@@ -811,21 +808,13 @@ CONTAINS
             IF (AppStream%StrmReachBudRawFile_Defined) THEN
                 CALL GetBudget_MonthlyFlows_GivenFile(AppStream%StrmReachBudRawFile,iBudgetType,iLocationIndex,AppStream%Reaches%ID,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
             ELSE
-                IF (ASSOCIATED(ModuleLogger)) THEN
-                    CALL ModuleLogger%SetLastMessage('Stream reach budget is not defined to retrieve monthly budget flows!',f_iFatal,ThisProcedure)
-                ELSE
-                    CALL ModuleLogger%SetLastMessage('Stream reach budget is not defined to retrieve monthly budget flows!',f_iFatal,ThisProcedure)
-                END IF
+                CALL AppStream%Logger%SetLastMessage('Stream reach budget is not defined to retrieve monthly budget flows!',f_iFatal,ThisProcedure)
                 ALLOCATE (rFlows(0,0) , cFlowNames(0))
                 iStat = -1
             END IF
             
         CASE (f_iBudgetType_DiverDetail)
-            IF (ASSOCIATED(ModuleLogger)) THEN
-                CALL ModuleLogger%SetLastMessage('Monthly budget values cannot be retrieved from Diversion Details file!',f_iWarn,ThisProcedure)
-            ELSE
-                CALL ModuleLogger%SetLastMessage('Monthly budget values cannot be retrieved from Diversion Details file!',f_iWarn,ThisProcedure)
-            END IF
+            CALL AppStream%Logger%SetLastMessage('Monthly budget values cannot be retrieved from Diversion Details file!',f_iWarn,ThisProcedure)
             ALLOCATE (rFlows(0,0) , cFlowNames(0))
             iStat = -1
     END SELECT
@@ -2114,11 +2103,7 @@ CONTAINS
     TYPE(StrmLakeConnectorType),INTENT(IN) :: StrmLakeConnector
   
     !Echo progress
-    IF (ASSOCIATED(ModuleLogger)) THEN
-        CALL ModuleLogger%EchoProgress('Printing results of stream simulation')
-    ELSE
-        CALL ModuleLogger%EchoProgress('Printing results of stream simulation')
-    END IF
+    CALL AppStream%Logger%EchoProgress('Printing results of stream simulation')
     
     !Print stream flow hydrographs
     IF (AppStream%StrmHyd%IsOutFileDefined()) &

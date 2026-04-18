@@ -125,6 +125,7 @@ MODULE Package_AppStream
   ! -------------------------------------------------------------
   TYPE AppStreamType
       PRIVATE
+      TYPE(MessageLoggerType),POINTER      :: Logger => NULL()
       INTEGER                              :: iComponentVersion = 0
       LOGICAL                              :: lDefined          = .FALSE.
       CLASS(BaseAppStreamType),ALLOCATABLE :: Me
@@ -317,16 +318,17 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- READ RAW STREAM DATA (GENERALLY CALLED IN PRE-PROCESSOR)
   ! -------------------------------------------------------------
-  SUBROUTINE SetStaticComponent(AppStream,cFileName,AppGrid,Stratigraphy,lRoutedStreams,lWSA,StrmGWConnector,StrmLakeConnector,iStat)
-    CLASS(AppStreamType),INTENT(OUT)      :: AppStream
-    CHARACTER(LEN=*),INTENT(IN)           :: cFileName
-    TYPE(AppGridType),INTENT(IN)          :: AppGrid
-    TYPE(StratigraphyType),INTENT(IN)     :: Stratigraphy
-    LOGICAL,INTENT(IN)                    :: lRoutedStreams,lWSA
-    TYPE(StrmGWConnectorType),INTENT(OUT) :: StrmGWConnector
-    TYPE(StrmLakeConnectorType)           :: StrmLakeConnector
-    INTEGER,INTENT(OUT)                   :: iStat
-    
+  SUBROUTINE SetStaticComponent(AppStream,Logger,cFileName,AppGrid,Stratigraphy,lRoutedStreams,lWSA,StrmGWConnector,StrmLakeConnector,iStat)
+    CLASS(AppStreamType),INTENT(OUT)           :: AppStream
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
+    CHARACTER(LEN=*),INTENT(IN)                :: cFileName
+    TYPE(AppGridType),INTENT(IN)               :: AppGrid
+    TYPE(StratigraphyType),INTENT(IN)          :: Stratigraphy
+    LOGICAL,INTENT(IN)                         :: lRoutedStreams,lWSA
+    TYPE(StrmGWConnectorType),INTENT(OUT)      :: StrmGWConnector
+    TYPE(StrmLakeConnectorType)                :: StrmLakeConnector
+    INTEGER,INTENT(OUT)                        :: iStat
+
     !Local variables
     CHARACTER(LEN=ModNameLen+18) :: ThisProcedure = ModName // 'SetStaticComponent'
     TYPE(GenericFileType)        :: AppStreamMainFile
@@ -337,6 +339,7 @@ CONTAINS
 
     !Initialize
     iStat = 0
+    AppStream%Logger => Logger
 
     !Return if no filename is defined
     IF (cFileName .EQ. '') RETURN
@@ -387,16 +390,17 @@ CONTAINS
             AppStream%iComponentVersion = 50
             AppStream%lDefined          = .TRUE.
         CASE DEFAULT
-            CALL ModuleLogger%SetLastMessage('Stream Component version number is not recognized ('//TRIM(cVersionLocal)//')!',f_iFatal,ThisProcedure)
+            CALL AppStream%Logger%SetLastMessage('Stream Component version number is not recognized ('//TRIM(cVersionLocal)//')!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
     END SELECT
+    IF (ALLOCATED(AppStream%Me)) AppStream%Me%Logger => AppStream%Logger
     IF (f_lLogPerfMarkers) THEN
         CALL DATE_AND_TIME(VALUES=iPerfEnd)
         rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) &
                  - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
         WRITE(cPerfMsg,'(A,F8.3,A)') '    [PERF] Stream Network: ', rPerfSec, ' sec'
-        CALL ModuleLogger%LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+        CALL AppStream%Logger%LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
     END IF
 
   END SUBROUTINE SetStaticComponent
@@ -431,14 +435,15 @@ CONTAINS
     
     !Initailize
     iStat = 0
-    
+    IF (.NOT. ASSOCIATED(AppStream%Logger)) AppStream%Logger => ModuleLogger
+
     !Return if no filename is defined
     IF (cFileName .EQ. '') THEN
         !If static component of streams are defined, dynamic component must be defined as well
         IF (AppStream%lDefined) THEN
             MessageArray(1) = 'For proper simulation of streams, relevant stream data files must'
             MessageArray(2) = 'be specified when stream nodes are defined in Pre-Processor.'
-            CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+            CALL AppStream%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         ELSE
@@ -450,10 +455,10 @@ CONTAINS
     CALL AppStreamMainFile%New(FileName=cFileName,InputFile=.TRUE.,IsTSFile=.FALSE.,iStat=iStat)  ;  IF (iStat .EQ. -1) RETURN
     CALL ReadVersion(AppStreamMainFile,'STREAM',cVersionSim,iStat)
     IF (iStat .EQ. -1) RETURN
-    
+
     !Close file to reset it
     CALL AppStreamMainFile%Kill()
-    
+
     !Make sure versions from static and dynamic components are the same
     ErrorCode   = 0
     SELECT CASE (TRIM(cVersionSim))
@@ -468,7 +473,7 @@ CONTAINS
         CASE ('5.0')
             IF (AppStream%iComponentVersion .NE. 50) ErrorCode = 1
         CASE DEFAULT
-            CALL ModuleLogger%SetLastMessage('Stream Component version number is not recognized ('//TRIM(cVersionSim)//')!',f_iFatal,ThisProcedure)
+            CALL AppStream%Logger%SetLastMessage('Stream Component version number is not recognized ('//TRIM(cVersionSim)//')!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
     END SELECT
@@ -488,20 +493,21 @@ CONTAINS
         MessageArray(1) = 'Stream Component versions used in Pre-Processor and Simulation must match!'
         MessageArray(2) = 'Version number in Pre-Processor = ' // TRIM(cVersionPre)
         MessageArray(3) = 'Version number in Simulation    = ' // TRIM(cVersionSim)
-        CALL ModuleLogger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+        CALL AppStream%Logger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
-    
+
     !Instantiate the dynamic component
     CALL DATE_AND_TIME(VALUES=iPerfStart)
     CALL AppStream%Me%New(IsForInquiry,cFileName,cWorkingDirectory,IWFMKernelVersion%GetVersion(),TimeStep,NTIME,iLakeIDs,AppGrid,Stratigraphy,ETData,StrmLakeConnector,StrmGWConnector,iStat)
+    IF (ALLOCATED(AppStream%Me)) AppStream%Me%Logger => AppStream%Logger
     IF (f_lLogPerfMarkers) THEN
         CALL DATE_AND_TIME(VALUES=iPerfEnd)
         rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) &
                  - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
         WRITE(cPerfMsg,'(A,F8.3,A)') '    [PERF] Stream DynInit: ', rPerfSec, ' sec'
-        CALL ModuleLogger%LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+        CALL AppStream%Logger%LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
     END IF
 
   END SUBROUTINE SetDynamicComponent
@@ -510,18 +516,22 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- READ PRE-PROCESSED STATIC COMPONENT FROM BINARY FILE 
   ! -------------------------------------------------------------
-  SUBROUTINE SetStaticComponentFromBinFile(AppStream,BinFile,lWSA,iStat)
-    CLASS(AppStreamType),INTENT(OUT) :: AppStream
-    TYPE(GenericFileType)            :: BinFile
-    LOGICAL,INTENT(IN)               :: lWSA
-    INTEGER,INTENT(OUT)              :: iStat
-    
+  SUBROUTINE SetStaticComponentFromBinFile(AppStream,Logger,BinFile,lWSA,iStat)
+    CLASS(AppStreamType),INTENT(OUT)           :: AppStream
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
+    TYPE(GenericFileType)                      :: BinFile
+    LOGICAL,INTENT(IN)                         :: lWSA
+    INTEGER,INTENT(OUT)                        :: iStat
+
     !Local variables
     CHARACTER(LEN=ModNameLen+29) :: ThisProcedure = ModName // 'SetStaticComponentFromBinFile'
     INTEGER                      :: iVersion
-    
+
+    !Initialize
+    AppStream%Logger => Logger
+
     !Read version number from binary file
-    CALL BinFile%ReadData(iVersion,iStat)  
+    CALL BinFile%ReadData(iVersion,iStat)
     IF (iStat .EQ. -1) RETURN
     
     !Return if version number is zero (streams are not simulated)
@@ -567,31 +577,33 @@ CONTAINS
             AppStream%iComponentVersion = 50
             AppStream%lDefined          = .TRUE.
         CASE DEFAULT
-            CALL ModuleLogger%SetLastMessage('Stream Component version number is not recognized ('//TRIM(IntToText(iVersion))//')!',f_iFatal,ThisProcedure)
+            CALL AppStream%Logger%SetLastMessage('Stream Component version number is not recognized ('//TRIM(IntToText(iVersion))//')!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
     END SELECT
-    
+    IF (ALLOCATED(AppStream%Me)) AppStream%Me%Logger => AppStream%Logger
+
   END SUBROUTINE SetStaticComponentFromBinFile
   
   
   ! -------------------------------------------------------------
   ! --- INSTANTIATE COMPLETE STREAM DATA
   ! -------------------------------------------------------------
-  SUBROUTINE SetAllComponents(AppStream,lForInquiry,lWSA,cFileName,cSimWorkingDirectory,TimeStep,NTIME,iLakeIDs,AppGrid,Stratigraphy,ETData,BinFile,StrmLakeConnector,StrmGWConnector,iStat)
-    CLASS(AppStreamType),INTENT(OUT)  :: AppStream
-    LOGICAL,INTENT(IN)                :: lForInquiry,lWSA
-    CHARACTER(LEN=*),INTENT(IN)       :: cFileName,cSimWorkingDirectory
-    TYPE(TimeStepType),INTENT(IN)     :: TimeStep
-    INTEGER,INTENT(IN)                :: NTIME,iLakeIDs(:)
-    TYPE(AppGridType),INTENT(IN)      :: AppGrid
-    TYPE(StratigraphyType),INTENT(IN) :: Stratigraphy
-    TYPE(ETType),INTENT(IN)           :: ETData
-    TYPE(GenericFileType)             :: BinFile
-    TYPE(StrmLakeConnectorType)       :: StrmLakeConnector
-    TYPE(StrmGWConnectorType)         :: StrmGWConnector
-    INTEGER,INTENT(OUT)               :: iStat
-    
+  SUBROUTINE SetAllComponents(AppStream,Logger,lForInquiry,lWSA,cFileName,cSimWorkingDirectory,TimeStep,NTIME,iLakeIDs,AppGrid,Stratigraphy,ETData,BinFile,StrmLakeConnector,StrmGWConnector,iStat)
+    CLASS(AppStreamType),INTENT(OUT)           :: AppStream
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
+    LOGICAL,INTENT(IN)                         :: lForInquiry,lWSA
+    CHARACTER(LEN=*),INTENT(IN)                :: cFileName,cSimWorkingDirectory
+    TYPE(TimeStepType),INTENT(IN)              :: TimeStep
+    INTEGER,INTENT(IN)                         :: NTIME,iLakeIDs(:)
+    TYPE(AppGridType),INTENT(IN)               :: AppGrid
+    TYPE(StratigraphyType),INTENT(IN)          :: Stratigraphy
+    TYPE(ETType),INTENT(IN)                    :: ETData
+    TYPE(GenericFileType)                      :: BinFile
+    TYPE(StrmLakeConnectorType)                :: StrmLakeConnector
+    TYPE(StrmGWConnectorType)                  :: StrmGWConnector
+    INTEGER,INTENT(OUT)                        :: iStat
+
     !Local variables
     CHARACTER(LEN=ModNameLen+16) :: ThisProcedure = ModName // 'SetAllComponents'
     INTEGER                      :: iVersion
@@ -600,6 +612,7 @@ CONTAINS
     CHARACTER(LEN=80)            :: cPerfMsg
 
     !Initialize
+    AppStream%Logger => Logger
     iStat = 0
 
     !If a binary file is supplied, read the flag to see if streams are simulated
@@ -653,16 +666,17 @@ CONTAINS
             AppStream%iComponentVersion = 50
             AppStream%lDefined          = .TRUE.
         CASE DEFAULT
-            CALL ModuleLogger%SetLastMessage('Stream Component version number is not recognized ('//TRIM(IntToText(iVersion))//')!',f_iFatal,ThisProcedure)
+            CALL AppStream%Logger%SetLastMessage('Stream Component version number is not recognized ('//TRIM(IntToText(iVersion))//')!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
     END SELECT
+    IF (ALLOCATED(AppStream%Me)) AppStream%Me%Logger => AppStream%Logger
     IF (f_lLogPerfMarkers) THEN
         CALL DATE_AND_TIME(VALUES=iPerfEnd)
         rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) &
                  - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
         WRITE(cPerfMsg,'(A,F8.3,A)') '    [PERF] Stream AllComponents: ', rPerfSec, ' sec'
-        CALL ModuleLogger%LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+        CALL AppStream%Logger%LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
     END IF
 
   END SUBROUTINE SetAllComponents
@@ -671,19 +685,20 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- INSTANTIATE COMPLETE STREAM DATA WITHOUT INTERMEDIATE BINARY FILE
   ! -------------------------------------------------------------
-  SUBROUTINE SetAllComponentsWithoutBinFile(AppStream,lForInquiry,lRoutedStreams,lWSA,cPPFileName,cSimFileName,cSimWorkingDirectory,AppGrid,Stratigraphy,ETData,TimeStep,NTIME,iLakeIDs,StrmLakeConnector,StrmGWConnector,iStat)
-    CLASS(AppStreamType),INTENT(OUT)      :: AppStream
-    LOGICAL,INTENT(IN)                    :: lForInquiry,lRoutedStreams,lWSA
-    CHARACTER(LEN=*),INTENT(IN)           :: cPPFileName,cSimFileName,cSimWorkingDirectory
-    TYPE(AppGridType),INTENT(IN)          :: AppGrid
-    TYPE(StratigraphyType),INTENT(IN)     :: Stratigraphy
-    TYPE(ETType),INTENT(IN)               :: ETData
-    TYPE(TimeStepType),INTENT(IN)         :: TimeStep
-    INTEGER,INTENT(IN)                    :: NTIME,iLakeIDs(:)
-    TYPE(StrmLakeConnectorType)           :: StrmLakeConnector
-    TYPE(StrmGWConnectorType),INTENT(OUT) :: StrmGWConnector
-    INTEGER,INTENT(OUT)                   :: iStat
-    
+  SUBROUTINE SetAllComponentsWithoutBinFile(AppStream,Logger,lForInquiry,lRoutedStreams,lWSA,cPPFileName,cSimFileName,cSimWorkingDirectory,AppGrid,Stratigraphy,ETData,TimeStep,NTIME,iLakeIDs,StrmLakeConnector,StrmGWConnector,iStat)
+    CLASS(AppStreamType),INTENT(OUT)           :: AppStream
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
+    LOGICAL,INTENT(IN)                         :: lForInquiry,lRoutedStreams,lWSA
+    CHARACTER(LEN=*),INTENT(IN)                :: cPPFileName,cSimFileName,cSimWorkingDirectory
+    TYPE(AppGridType),INTENT(IN)               :: AppGrid
+    TYPE(StratigraphyType),INTENT(IN)          :: Stratigraphy
+    TYPE(ETType),INTENT(IN)                    :: ETData
+    TYPE(TimeStepType),INTENT(IN)              :: TimeStep
+    INTEGER,INTENT(IN)                         :: NTIME,iLakeIDs(:)
+    TYPE(StrmLakeConnectorType)                :: StrmLakeConnector
+    TYPE(StrmGWConnectorType),INTENT(OUT)      :: StrmGWConnector
+    INTEGER,INTENT(OUT)                        :: iStat
+
     !Local variables
     CHARACTER(LEN=ModNameLen+30) :: ThisProcedure = ModName // 'SetAllComponentsWithoutBinFile'
     TYPE(GenericFileType)        :: MainFile
@@ -694,6 +709,7 @@ CONTAINS
 
     !Initialize
     iStat = 0
+    AppStream%Logger => Logger
 
     !Return if a Simulation filename is not specified
     IF (cSimFileName .EQ. ''  .OR.  cPPFileName .EQ. '') RETURN
@@ -744,16 +760,17 @@ CONTAINS
             AppStream%iComponentVersion = 50
             AppStream%lDefined          = .TRUE.
         CASE DEFAULT
-            CALL ModuleLogger%SetLastMessage('Stream Component version number is not recognized ('//TRIM(cVersionPre)//')!',f_iFatal,ThisProcedure)
+            CALL AppStream%Logger%SetLastMessage('Stream Component version number is not recognized ('//TRIM(cVersionPre)//')!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
     END SELECT
     IF (f_lLogPerfMarkers) THEN
+    IF (ALLOCATED(AppStream%Me)) AppStream%Me%Logger => AppStream%Logger
         CALL DATE_AND_TIME(VALUES=iPerfEnd)
         rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) &
                  - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
         WRITE(cPerfMsg,'(A,F8.3,A)') '    [PERF] Stream AllComponents: ', rPerfSec, ' sec'
-        CALL ModuleLogger%LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+        CALL AppStream%Logger%LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
     END IF
 
   END SUBROUTINE SetAllComponentsWithoutBinFile
@@ -1030,11 +1047,7 @@ CONTAINS
     
     !If filename is empty, return with error
     IF (LEN_TRIM(cFileName) .EQ. 0) THEN
-        IF (ASSOCIATED(ModuleLogger)) THEN
-            CALL ModuleLogger%SetLastMessage('Stream hydrographs are not part of model output!',f_iFatal,ThisProcedure)
-        ELSE
-            CALL ModuleLogger%SetLastMessage('Stream hydrographs are not part of model output!',f_iFatal,ThisProcedure)
-        END IF
+        CALL AppStream%Logger%SetLastMessage('Stream hydrographs are not part of model output!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -1674,11 +1687,7 @@ CONTAINS
     IF (AppStream%lDefined) THEN
         CALL AppStream%Me%GetReachStrmNodes(iReach,iStrmNodes,iStat)
     ELSE
-        IF (ASSOCIATED(ModuleLogger)) THEN
-            CALL ModuleLogger%SetLastMessage('Streams are not defined to retrieve stream node IDs for a given reach!',f_iFatal,ThisProcedure)
-        ELSE
-            CALL ModuleLogger%SetLastMessage('Streams are not defined to retrieve stream node IDs for a given reach!',f_iFatal,ThisProcedure)
-        END IF
+        CALL AppStream%Logger%SetLastMessage('Streams are not defined to retrieve stream node IDs for a given reach!',f_iFatal,ThisProcedure)
         iStat = -1
     END IF
     
@@ -1939,11 +1948,7 @@ CONTAINS
         IF (lModel_ForInquiry_Defined) THEN
             SELECT TYPE (p => AppStream%Me)
                 TYPE IS (AppStream_v50_Type)
-                    IF (ASSOCIATED(ModuleLogger)) THEN
-                        CALL ModuleLogger%SetLastMessage('Model is instantiated only partially. Stream bottom elevations for Stream Package Component v5.0 cannot be retrieved from a partially instantiated model.',f_iWarn,ThisProcedure)
-                    ELSE
-                        CALL ModuleLogger%SetLastMessage('Model is instantiated only partially. Stream bottom elevations for Stream Package Component v5.0 cannot be retrieved from a partially instantiated model.',f_iWarn,ThisProcedure)
-                    END IF
+                    CALL AppStream%Logger%SetLastMessage('Model is instantiated only partially. Stream bottom elevations for Stream Package Component v5.0 cannot be retrieved from a partially instantiated model.',f_iWarn,ThisProcedure)
                     BottomElev = 0.0
                     iStat      = -1
                 CLASS DEFAULT
@@ -2117,11 +2122,7 @@ CONTAINS
         IF (lModel_ForInquiry_Defined) THEN
             SELECT TYPE (p => AppStream%Me)
                 TYPE IS (AppStream_v50_Type)
-                    IF (ASSOCIATED(ModuleLogger)) THEN
-                        CALL ModuleLogger%SetLastMessage('Model is instantiated only partially. Stream stages for Stream Package Component v5.0 cannot be retrieved from a partially instantiated model.',f_iWarn,ThisProcedure)
-                    ELSE
-                        CALL ModuleLogger%SetLastMessage('Model is instantiated only partially. Stream stages for Stream Package Component v5.0 cannot be retrieved from a partially instantiated model.',f_iWarn,ThisProcedure)
-                    END IF
+                    CALL AppStream%Logger%SetLastMessage('Model is instantiated only partially. Stream stages for Stream Package Component v5.0 cannot be retrieved from a partially instantiated model.',f_iWarn,ThisProcedure)
                     Stages = 0.0
                     iStat  = -1
                 CLASS DEFAULT
@@ -2546,11 +2547,7 @@ CONTAINS
     IF (AppStream%lDefined) THEN
         !Make sure this is done only when streams are non-routed
         IF (AppStream%Me%lRouted) THEN
-            IF (ASSOCIATED(ModuleLogger)) THEN
-                CALL ModuleLogger%SetLastMessage('Stream flows can only be assigned when streams are simulated as non-routed streams!',f_iFatal,ThisProcedure)
-            ELSE
-                CALL ModuleLogger%SetLastMessage('Stream flows can only be assigned when streams are simulated as non-routed streams!',f_iFatal,ThisProcedure)
-            END IF
+            CALL AppStream%Logger%SetLastMessage('Stream flows can only be assigned when streams are simulated as non-routed streams!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -2994,11 +2991,7 @@ CONTAINS
     
     IF (AppStream%lDefined) THEN
         IF (AppStream%Me%lRouted) THEN
-            IF (ASSOCIATED(ModuleLogger)) THEN
-                CALL ModuleLogger%EchoProgress('Registering stream component with matrix...')
-            ELSE
-                CALL ModuleLogger%EchoProgress('Registering stream component with matrix...')
-            END IF
+            CALL AppStream%Logger%EchoProgress('Registering stream component with matrix...')
             CALL AppStream%Me%RegisterWithMatrix(Matrix,iStat)
         END IF
     END IF
@@ -3061,14 +3054,10 @@ CONTAINS
     IF (AppStream%lDefined) THEN
         CALL AppStream%Me%AddBypass(ID,iNode_Exp,iColBypass,cName,rFracRecvLoss,rFracNonRecvLoss,iNRechargeElems,iRechargeElems,rRechargeFractions,iDestType,iDest,StrmLakeConnector,iStat)
     ELSE
-        IF (ASSOCIATED(ModuleLogger)) THEN
-            CALL ModuleLogger%SetLastMessage('Streams not not defined to add bypass!',f_iFatal,ThisProcedure)
-        ELSE
-            CALL ModuleLogger%SetLastMessage('Streams not not defined to add bypass!',f_iFatal,ThisProcedure)
-        END IF
+        CALL AppStream%Logger%SetLastMessage('Streams not not defined to add bypass!',f_iFatal,ThisProcedure)
         iStat = -1
     END IF
-    
+
   END SUBROUTINE AddBypass
   
 END MODULE

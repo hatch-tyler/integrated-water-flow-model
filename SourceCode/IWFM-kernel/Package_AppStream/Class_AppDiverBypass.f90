@@ -102,6 +102,7 @@ MODULE Class_AppDiverBypass
   ! --- DIVERSIONS DATA TYPE
   ! -------------------------------------------------------------
   TYPE AppDiverBypassType
+    TYPE(MessageLoggerType),POINTER      :: Logger => NULL()
     INTEGER                              :: NDiver                         = 0
     INTEGER                              :: NBypass                        = 0
     TYPE(DiversionType),ALLOCATABLE      :: Diver(:)
@@ -219,8 +220,9 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- INSTANTIATE DIVERSIONS DATABASE
   ! -------------------------------------------------------------
-  SUBROUTINE New(AppDiverBypass,IsForInquiry,DiverSpecFileName,BypassSpecFileName,DiverFileName,DiverDetailBudFileName,cWorkingDirectory,cVersionFull,NTIME,TimeStep,NStrmNodes,iStrmNodeIDs,iLakeIDs,Reaches,AppGrid,StrmLakeConnector,iStat)
+  SUBROUTINE New(AppDiverBypass,Logger,IsForInquiry,DiverSpecFileName,BypassSpecFileName,DiverFileName,DiverDetailBudFileName,cWorkingDirectory,cVersionFull,NTIME,TimeStep,NStrmNodes,iStrmNodeIDs,iLakeIDs,Reaches,AppGrid,StrmLakeConnector,iStat)
     CLASS(AppDiverBypassType),INTENT(OUT) :: AppDiverBypass
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
     LOGICAL,INTENT(IN)                    :: IsForInquiry
     CHARACTER(LEN=*),INTENT(IN)           :: DiverSpecFileName,BypassSpecFileName,DiverFileName,DiverDetailBudFileName,cWorkingDirectory,cVersionFull
     INTEGER,INTENT(IN)                    :: NTIME,NStrmNodes,iStrmNodeIDs(NStrmNodes),iLakeIDs(:)
@@ -237,13 +239,14 @@ CONTAINS
 
     !Initialize
     iStat         = 0
+    AppDiverBypass%Logger => Logger
     NElements     = AppGrid%NElements
     NSubregions   = AppGrid%NSubregions
     iElemIDs      = AppGrid%AppElement%ID
     iSubregionIDs = AppGrid%AppSubregion%ID
-    
+
     !Instantiate the bypass database (Reaches may come back rearranged based on bypasses)
-    CALL Bypass_New(BypassSpecFileName,NStrmNodes,iStrmNodeIDs,iElemIDs,iLakeIDs,Reaches,StrmLakeConnector,AppDiverBypass%TimeUnitStrmFlow,AppDiverBypass%TimeUnitBypass,AppDiverBypass%Bypasses,iStat)
+    CALL Bypass_New(Logger,BypassSpecFileName,NStrmNodes,iStrmNodeIDs,iElemIDs,iLakeIDs,Reaches,StrmLakeConnector,AppDiverBypass%TimeUnitStrmFlow,AppDiverBypass%TimeUnitBypass,AppDiverBypass%Bypasses,iStat)
     IF (iStat .EQ. -1) RETURN
     AppDiverBypass%NBypass = SIZE(AppDiverBypass%Bypasses)
     
@@ -252,7 +255,7 @@ CONTAINS
         IF (SUM(AppDiverBypass%Bypasses%RechargeSpecs%iNDest) .GT. 0) THEN
             ALLOCATE (AppDiverBypass%ElemToBypassRecvLoss(NElements) ,STAT=ErrorCode)
             IF (ErrorCode .NE. 0) THEN
-                CALL ModuleLogger%SetLastMessage('Error in allocating memory for element-to-bypass-recoverable-loss pointers!',f_iFatal,ThisProcedure)
+                CALL AppDiverBypass%Logger%SetLastMessage('Error in allocating memory for element-to-bypass-recoverable-loss pointers!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -267,7 +270,7 @@ CONTAINS
     END IF
     
     !Instantiate the diversions and delivery database
-    CALL Diversion_New(DiverSpecFileName,AppGrid,iElemIDs,iStrmNodeIDs,iSubregionIDs,Reaches,AppDiverBypass%Diver,iStat)
+    CALL Diversion_New(Logger,DiverSpecFileName,AppGrid,iElemIDs,iStrmNodeIDs,iSubregionIDs,Reaches,AppDiverBypass%Diver,iStat)
     IF (iStat .EQ. -1) RETURN
     AppDiverBypass%NDiver = SIZE(AppDiverBypass%Diver) 
     
@@ -276,7 +279,7 @@ CONTAINS
         IF (SUM(AppDiverBypass%Diver%RechargeSpecs%iNDest) .GT. 0) THEN
            ALLOCATE (AppDiverBypass%ElemToDiverRecvLoss(NElements) ,STAT=ErrorCode)
            IF (ErrorCode .NE. 0) THEN
-               CALL ModuleLogger%SetLastMessage('Error in allocating memory for element-to-diversion-recoverable-loss pointers!',f_iFatal,ThisProcedure)
+               CALL AppDiverBypass%Logger%SetLastMessage('Error in allocating memory for element-to-diversion-recoverable-loss pointers!',f_iFatal,ThisProcedure)
                iStat = -1
                RETURN
            END IF
@@ -298,7 +301,7 @@ CONTAINS
         IF (AppDiverBypass%NDiver .GT. 0) THEN
             MessageArray(1) = 'Time-series diversions data file needs to be '
             MessageArray(2) = 'specified when there are diversions modeled!'
-            CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+            CALL AppDiverBypass%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -307,7 +310,7 @@ CONTAINS
         IF (ANY(AppDiverBypass%Bypasses%iColBypass.GT.0)) THEN
             MessageArray(1) = 'Time-series diversions data file needs to be specified'
             MessageArray(2) = 'when there are bypasses with pre-defined bypass rates!'
-            CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+            CALL AppDiverBypass%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -332,14 +335,14 @@ CONTAINS
         IF (AppDiverBypass%NDiver .EQ. 0) THEN
             MessageArray(1) = 'There are no diversions specified.'
             MessageArray(2) = 'Print-out of diversion details budget file is suppressed!'
-            CALL ModuleLogger%LogMessage(MessageArray(1:2),f_iInfo,ThisProcedure)
-        ELSE 
+            CALL AppDiverBypass%Logger%LogMessage(MessageArray(1:2),f_iInfo,ThisProcedure)
+        ELSE
             IF (IsForInquiry) THEN
-                CALL AppDiverBypass%DiverDetailsBudRawFile%New(ModuleLogger,TRIM(DiverDetailBudFileName),iStat)
+                CALL AppDiverBypass%DiverDetailsBudRawFile%New(AppDiverBypass%Logger,TRIM(DiverDetailBudFileName),iStat)
                 IF (iStat .EQ. -1) RETURN
             ELSE
                 BudHeader = PrepareDiverDetailsBudgetHeader(AppDiverBypass%NDiver,TimeStep,NTIME,iElemIDs,iStrmNodeIDs,iSubregionIDs,AppDiverBypass%Diver,cVersionFull)
-                CALL AppDiverBypass%DiverDetailsBudRawFile%New(ModuleLogger,TRIM(DiverDetailBudFileName),BudHeader,iStat)
+                CALL AppDiverBypass%DiverDetailsBudRawFile%New(AppDiverBypass%Logger,TRIM(DiverDetailBudFileName),BudHeader,iStat)
                 IF (iStat .EQ. -1) RETURN
                 CALL BudHeader%Kill()
             END IF
@@ -703,7 +706,7 @@ CONTAINS
     
     !Now read recharge zone data
     ALLOCATE (RechargeZones(iNDiver))
-    CALL LossDestination_New(iNDiver,iDiverIDs,iElemIDs,'diversion','recharge zone',vDiverSpecFile,RechargeZones,iStat)
+    CALL LossDestination_New(iNDiver,AppDiverBypass%Logger,iDiverIDs,iElemIDs,'diversion','recharge zone',vDiverSpecFile,RechargeZones,iStat)
     IF (iStat .NE. 0) GOTO 10
     ALLOCATE (iElems , SOURCE=RechargeZones(iDiver)%iDestList)
     ALLOCATE (rFracs , SOURCE=RechargeZones(iDiver)%rFracs)
@@ -872,11 +875,7 @@ CONTAINS
     
     !Make sure bypass ID is defined 
     IF (iBypass.LT.1  .OR.  iBypass.GT.AppDiverBypass%NBypass) THEN
-        IF (ASSOCIATED(ModuleLogger)) THEN
-            CALL ModuleLogger%SetLastMessage('Bypass '//TRIM(IntToText(iBypass))//' is not simulated!',f_iFatal,ThisProcedure)
-        ELSE
-            CALL ModuleLogger%SetLastMessage('Bypass '//TRIM(IntToText(iBypass))//' is not simulated!',f_iFatal,ThisProcedure)
-        END IF
+        CALL AppDiverBypass%Logger%SetLastMessage('Bypass '//TRIM(IntToText(iBypass))//' is not simulated!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -1441,11 +1440,7 @@ CONTAINS
         ID = AppDiverBypass%Diver(iDiver)%Deli%ID
         MessageArray(1) = 'Diversion rate at diversion ID '//TRIM(IntToText(ID))//' is larger than the maximum diversion rate!'
         MessageArray(2) = 'Scaling down the diversion rate to match the maximum diversion.'
-        IF (ASSOCIATED(ModuleLogger)) THEN
-            CALL ModuleLogger%LogMessage(MessageArray(1:2),f_iWarn,ThisProcedure)
-        ELSE
-            CALL ModuleLogger%LogMessage(MessageArray(1:2),f_iWarn,ThisProcedure)
-        END IF
+        CALL AppDiverBypass%Logger%LogMessage(MessageArray(1:2),f_iWarn,ThisProcedure)
         Factor                                           = AppDiverBypass%Diver(iDiver)%MaxDiver / AppDiverBypass%Diver(iDiver)%DiverRead
         AppDiverBypass%Diver(iDiver)%Deli%SupplyRequired = AppDiverBypass%Diver(iDiver)%Deli%SupplyRequired * Factor
         AppDiverBypass%Diver(iDiver)%Deli%DeliRead       = AppDiverBypass%Diver(iDiver)%Deli%SupplyRequired
@@ -1588,15 +1583,11 @@ CONTAINS
         IF (ANY(AppDiverBypass%DiverFile%rValues .LT. 0.0)) THEN
             MessageArray(1) = 'One or more diversions are less than zero.'
             MessageArray(2) = 'Diversions cannot be less than zero!'
-            IF (ASSOCIATED(ModuleLogger)) THEN
-                CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
-            ELSE
-                CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
-            END IF
+            CALL AppDiverBypass%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
-        
+
         !Diversions
         DO indx=1,AppDiverBypass%NDiver
             ASSOCIATE (pDiver => AppDiverBypass%Diver(indx))
@@ -2182,16 +2173,12 @@ CONTAINS
     !Check that bypass ID is not being used more than once
     IF (iNBypass .GT. 0) THEN
         IF (LocateInList(ID,AppDiverBypass%Bypasses%ID) .GT. 0) THEN
-            IF (ASSOCIATED(ModuleLogger)) THEN
-                CALL ModuleLogger%SetLastMessage('ID number ('//TRIM(IntToText(ID))//') of the bypass being added has already been used!',f_iFatal,ThisProcedure)
-            ELSE
-                CALL ModuleLogger%SetLastMessage('ID number ('//TRIM(IntToText(ID))//') of the bypass being added has already been used!',f_iFatal,ThisProcedure)
-            END IF
+            CALL AppDiverBypass%Logger%SetLastMessage('ID number ('//TRIM(IntToText(ID))//') of the bypass being added has already been used!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
     END IF
-    
+
     !Define recharge area
     ALLOCATE (Recharge%iDestList(iNRechargeElems) , Recharge%rFracs(iNRechargeElems))
     Recharge%iNDest    = iNRechargeElems
@@ -2213,15 +2200,11 @@ CONTAINS
     
     !Make sure destination type is recognized
     IF (.NOT. ANY(iDestType.EQ.f_iBypassDestTypes)) THEN
-        IF (ASSOCIATED(ModuleLogger)) THEN
-            CALL ModuleLogger%SetLastMessage('Destination type for bypass number '//TRIM(IntToText(ID))//' is not recognized!',f_iFatal,ThisProcedure)
-        ELSE
-            CALL ModuleLogger%SetLastMessage('Destination type for bypass number '//TRIM(IntToText(ID))//' is not recognized!',f_iFatal,ThisProcedure)
-        END IF
+        CALL AppDiverBypass%Logger%SetLastMessage('Destination type for bypass number '//TRIM(IntToText(ID))//' is not recognized!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
-           
+
     !Destination region
     SELECT CASE (TempBypass(iNBypass)%iDestType)
         CASE (f_iFlowDest_Outside)

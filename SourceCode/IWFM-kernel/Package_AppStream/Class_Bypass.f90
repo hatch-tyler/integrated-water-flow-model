@@ -74,6 +74,7 @@ MODULE Class_Bypass
   ! --- BYPASS DATA TYPE
   ! -------------------------------------------------------------
   TYPE,EXTENDS(FlowDestinationType) :: BypassType
+      TYPE(MessageLoggerType),POINTER :: Logger => NULL()
       INTEGER                   :: ID              = 0
       CHARACTER(LEN=20)         :: cName           = ''
       INTEGER                   :: iNode_Exp       = 0
@@ -130,7 +131,8 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- INSTANTIATE A SET OF BYPASSES FROM A FILE
   ! -------------------------------------------------------------
-  SUBROUTINE Bypass_New(cFileName,NStrmNodes,iStrmNodeIDs,iElemIDs,iLakeIDs,Reaches,StrmLakeConnector,TUnitStrmFlow,TUnitBypass,Bypasses,iStat)
+  SUBROUTINE Bypass_New(Logger,cFileName,NStrmNodes,iStrmNodeIDs,iElemIDs,iLakeIDs,Reaches,StrmLakeConnector,TUnitStrmFlow,TUnitBypass,Bypasses,iStat)
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
     CHARACTER(LEN=*),INTENT(IN)         :: cFileName
     INTEGER,INTENT(IN)                  :: NStrmNodes,iStrmNodeIDs(NStrmNodes),iElemIDs(:),iLakeIDs(:)
     TYPE(StrmReachType)                 :: Reaches(:)
@@ -204,6 +206,7 @@ CONTAINS
         IF (iStat .EQ. -1) RETURN
         
         pBypass             => Bypasses(indxBypass)
+        pBypass%Logger      => Logger
         pBypass%cName       =  ALine(1:20)
         ID                  =  INT(DummyArray(1))
         pBypass%ID          =  ID
@@ -395,7 +398,7 @@ CONTAINS
     
     !Read the recharge zones
     iBypassIDs = Bypasses%ID
-    CALL LossDestination_New(NBypass,iBypassIDs,iElemIDs,'Bypass','recharge zone',InFile,Bypasses%RechargeSpecs,iStat)
+    CALL LossDestination_New(NBypass,Logger,iBypassIDs,iElemIDs,'Bypass','recharge zone',InFile,Bypasses%RechargeSpecs,iStat)
     IF (iStat .EQ. -1) RETURN
 
     !Close file

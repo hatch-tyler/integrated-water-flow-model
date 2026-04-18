@@ -88,6 +88,7 @@ MODULE Class_Diversion
   ! --- DIVERSION DATA TYPE
   ! -------------------------------------------------------------
   TYPE DiversionType
+    TYPE(MessageLoggerType),POINTER :: Logger => NULL()
     !INTEGER                  :: ID                  = 0           !Diversion ID number is not used; instead delivery IDs are used as part of the "Deli" attribute
     CHARACTER(LEN=20)         :: cName               = ''          !Name of the diversion
     INTEGER                   :: iStrmNode           = 0           !Stream node that the diversion originates from (0 means from outisde model area)
@@ -156,7 +157,8 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- INSTANTIATE A SET OF DIVERSIONS FROM A FILE
   ! -------------------------------------------------------------
-  SUBROUTINE Diversion_New(cFileName,AppGrid,iElemIDs,iStrmNodeIDs,iSubregionIDs,Reaches,Diversions,iStat)
+  SUBROUTINE Diversion_New(Logger,cFileName,AppGrid,iElemIDs,iStrmNodeIDs,iSubregionIDs,Reaches,Diversions,iStat)
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
     CHARACTER(LEN=*),INTENT(IN)     :: cFileName
     TYPE(AppGridType),INTENT(IN)    :: AppGrid
     INTEGER,INTENT(IN)              :: iElemIDs(:),iStrmNodeIDs(:),iSubregionIDs(:)
@@ -234,6 +236,7 @@ CONTAINS
     
     !Read diversion spec data
     DO indxDiver=1,NDiver
+        Diversions(indxDiver)%Logger => Logger
         ASSOCIATE (pDiver    => Diversions(indxDiver)      , &
                    pDeli     => Diversions(indxDiver)%Deli , &
                    pDeliDest => DeliDest(indxDiver)        )
@@ -448,12 +451,12 @@ CONTAINS
     
     !Read the recharge zone data
     iDiverIDs = Diversions%Deli%ID
-    CALL LossDestination_New(NDiver,iDiverIDs,iElemIDs,'Diversion','recharge zone',InFile,Diversions%RechargeSpecs,iStat)
+    CALL LossDestination_New(NDiver,Logger,iDiverIDs,iElemIDs,'Diversion','recharge zone',InFile,Diversions%RechargeSpecs,iStat)
     IF (iStat .EQ. -1) RETURN
-    
+
     !If spills are defined, read them
     IF (lSpillsDefined) THEN
-        CALL LossDestination_New(NDiver,iDiverIDs,iStrmNodeIDs,'Diversion','spills',InFile,Diversions%SpillSpecs,iStat)
+        CALL LossDestination_New(NDiver,Logger,iDiverIDs,iStrmNodeIDs,'Diversion','spills',InFile,Diversions%SpillSpecs,iStat)
         IF (iStat .EQ. -1) RETURN
     END IF
     

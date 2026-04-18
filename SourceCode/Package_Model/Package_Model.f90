@@ -781,7 +781,7 @@ CONTAINS
     !Set the application streams
     lWSA = .FALSE.
     Model%StrmGWConnector%Logger => ModuleLogger
-    CALL Model%AppStream%New(ProjectFileNames(PP_StreamDataFileID),Model%AppGrid,Model%Stratigraphy,lRoutedStreams,lWSA,Model%StrmGWConnector,Model%StrmLakeConnector,iStat)
+    CALL Model%AppStream%New(ModuleLogger,ProjectFileNames(PP_StreamDataFileID),Model%AppGrid,Model%Stratigraphy,lRoutedStreams,lWSA,Model%StrmGWConnector,Model%StrmLakeConnector,iStat)
     IF (iStat .EQ. -1) RETURN
     NStrmNodes = Model%AppStream%GetNStrmNodes()
     ALLOCATE (iStrmNodeIDs(NStrmNodes))
@@ -892,7 +892,7 @@ CONTAINS
     !Set the application streams
     lWSA = .FALSE.
     Model%StrmGWConnector%Logger => ModuleLogger
-    CALL Model%AppStream%New(cPP_FileNames(PP_StreamDataFileID),Model%AppGrid,Model%Stratigraphy,lRoutedStreams,lWSA,Model%StrmGWConnector,Model%StrmLakeConnector,iStat)
+    CALL Model%AppStream%New(ModuleLogger,cPP_FileNames(PP_StreamDataFileID),Model%AppGrid,Model%Stratigraphy,lRoutedStreams,lWSA,Model%StrmGWConnector,Model%StrmLakeConnector,iStat)
     IF (iStat .EQ. -1) RETURN
     NStrmNodes = Model%AppStream%GetNStrmNodes()
     ALLOCATE (iStrmNodeIDs(NStrmNodes))
@@ -973,7 +973,7 @@ CONTAINS
   
     !Instantiate streams 
     lWSA = .FALSE.
-    CALL Model%AppStream%New(BinaryFile,lWSA,iStat)
+    CALL Model%AppStream%New(ModuleLogger,BinaryFile,lWSA,iStat)
     IF (iStat .EQ. -1) RETURN
     
     !Set module-level loggers for Batch 5 packages (Package_Model and Model_ForInquiry)
@@ -1254,7 +1254,7 @@ CONTAINS
             RETURN
         END IF
     END IF
-    CALL Model%AppStream%New(lForInquiry,lWSA,ProjectFileNames(SIM_StrmDataFileID),Model%cSIMWorkingDirectory,Model%TimeStep,Model%NTIME,iLakeIDs,Model%AppGrid,Model%Stratigraphy,Model%ETData,PPBinaryFile,Model%StrmLakeConnector,Model%StrmGWConnector,iStat)
+    CALL Model%AppStream%New(ModuleLogger,lForInquiry,lWSA,ProjectFileNames(SIM_StrmDataFileID),Model%cSIMWorkingDirectory,Model%TimeStep,Model%NTIME,iLakeIDs,Model%AppGrid,Model%Stratigraphy,Model%ETData,PPBinaryFile,Model%StrmLakeConnector,Model%StrmGWConnector,iStat)
     IF (iStat .EQ. -1) RETURN
     NStrmNodes          = Model%AppStream%GetNStrmNodes()
     lDiversions_Defined = Model%AppStream%IsDiversionsDefined()

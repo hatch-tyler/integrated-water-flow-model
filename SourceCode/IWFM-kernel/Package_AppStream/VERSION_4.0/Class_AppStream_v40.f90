@@ -297,7 +297,7 @@ CONTAINS
         ALine = StripTextUntilCharacter(ALine,f_cInlineCommentChar) 
         CALL CleanSpecialCharacters(ALine)
         CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(ALine)),cWorkingDirectory,cAbsPathFileName)
-        CALL AppStream%StrmInflowData%New(cAbsPathFileName,cWorkingDirectory,TimeStep,iNStrmNodes,iStrmNodeIDs,iStat)
+        CALL AppStream%StrmInflowData%New(AppStream%Logger,cAbsPathFileName,cWorkingDirectory,TimeStep,iNStrmNodes,iStrmNodeIDs,iStat)
         IF (iStat .EQ. -1) RETURN
     END IF
     
@@ -350,7 +350,7 @@ CONTAINS
     
     !Diversions and bypasses
     IF (lRoutedStreams) THEN
-        CALL AppStream%AppDiverBypass%New(IsForInquiry,DiverSpecFileName,BypassSpecFileName,DiverFileName,DiverDetailBudFileName,cWorkingDirectory,TRIM(cVersionFull),NTIME,TimeStep,AppStream%NStrmNodes,iStrmNodeIDs,iLakeIDs,AppStream%Reaches,AppGrid,StrmLakeConnector,iStat)
+        CALL AppStream%AppDiverBypass%New(AppStream%Logger,IsForInquiry,DiverSpecFileName,BypassSpecFileName,DiverFileName,DiverDetailBudFileName,cWorkingDirectory,TRIM(cVersionFull),NTIME,TimeStep,AppStream%NStrmNodes,iStrmNodeIDs,iLakeIDs,AppStream%Reaches,AppGrid,StrmLakeConnector,iStat)
         IF (iStat .EQ. -1) RETURN
     END IF
     
@@ -381,11 +381,11 @@ CONTAINS
     END IF
     
     !Hydrograph printing
-    CALL AppStream%StrmHyd%New(lRoutedStreams,IsForInquiry,cWorkingDirectory,iNStrmNodes,iStrmNodeIDs,TimeStep,MainFile,iStat)
+    CALL AppStream%StrmHyd%New(AppStream%Logger,lRoutedStreams,IsForInquiry,cWorkingDirectory,iNStrmNodes,iStrmNodeIDs,TimeStep,MainFile,iStat)
     IF (iStat .EQ. -1) RETURN
     
     !Stream budget at selected nodes
-    CALL AppStream%StrmNodeBudget%New(lRoutedStreams,IsForInquiry,cWorkingDirectory,iReachIDs,iStrmNodeIDs,NTIME,TimeStep,TRIM(cVersionFull),PrepareStreamBudgetHeader,MainFile,iStat)
+    CALL AppStream%StrmNodeBudget%New(AppStream%Logger,lRoutedStreams,IsForInquiry,cWorkingDirectory,iReachIDs,iStrmNodeIDs,NTIME,TimeStep,TRIM(cVersionFull),PrepareStreamBudgetHeader,MainFile,iStat)
     IF (iStat .EQ. -1) RETURN
     
     !Stream bed parameters for stream-gw connectivity, wetted perimeter and stream length for each node
@@ -400,7 +400,7 @@ CONTAINS
     END IF
     
     !Stream evaporation data
-    CALL AppStream%StrmEvap%New(MainFile,TimeStep,ETData,cWorkingDirectory,iNStrmNodes,iStrmNodeIDs,iStat)
+    CALL AppStream%StrmEvap%New(AppStream%Logger,MainFile,TimeStep,ETData,cWorkingDirectory,iNStrmNodes,iStrmNodeIDs,iStat)
     IF (iStat .EQ. -1) RETURN
     
     !Set the heads to the bottom elevation
@@ -825,7 +825,7 @@ CONTAINS
     IF (iStat .EQ. -1) RETURN
     
     !Read stream reach data
-    CALL StrmReach_New(AppStream%NReaches,BinFile,AppStream%Reaches,iStat) 
+    CALL StrmReach_New(AppStream%NReaches,AppStream%Logger,BinFile,AppStream%Reaches,iStat) 
     
   END SUBROUTINE ReadPreprocessedData
   

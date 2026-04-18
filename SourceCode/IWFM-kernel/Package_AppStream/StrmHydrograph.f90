@@ -85,6 +85,7 @@ MODULE StrmHydrograph
   ! --- STREAM HYDROGRAPH PRINT DATA TYPE
   ! -------------------------------------------------------------
   TYPE StrmHydrographType
+    TYPE(MessageLoggerType),POINTER   :: Logger => NULL()
     TYPE(GenericFileType)         :: HydFile
     TYPE(RealTSDataInFileType)    :: HydFile_ForInquiry
     LOGICAL                       :: HydFile_Defined    = .FALSE.
@@ -151,15 +152,16 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- INSTANTIATE STREAM HYDROGRAPH PRINT DATA
   ! -------------------------------------------------------------
-  SUBROUTINE New(StrmHyd,IsRoutedStreams,IsForInquiry,cWorkingDirectory,NStrmNodes,iStrmNodeIDs,TimeStep,InFile,iStat) 
-    CLASS(StrmHydrographType),INTENT(OUT) :: StrmHyd
-    LOGICAL,INTENT(IN)                    :: IsRoutedStreams,IsForInquiry
-    CHARACTER(LEN=*),INTENT(IN)           :: cWorkingDirectory
-    INTEGER,INTENT(IN)                    :: NStrmNodes,iStrmNodeIDs(NStrmNodes)
-    TYPE(TimeStepType),INTENT(IN)         :: TimeStep
-    TYPE(GenericFileType)                 :: InFile
-    INTEGER,INTENT(OUT)                   :: iStat
-    
+  SUBROUTINE New(StrmHyd,Logger,IsRoutedStreams,IsForInquiry,cWorkingDirectory,NStrmNodes,iStrmNodeIDs,TimeStep,InFile,iStat)
+    CLASS(StrmHydrographType),INTENT(OUT)      :: StrmHyd
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
+    LOGICAL,INTENT(IN)                         :: IsRoutedStreams,IsForInquiry
+    CHARACTER(LEN=*),INTENT(IN)                :: cWorkingDirectory
+    INTEGER,INTENT(IN)                         :: NStrmNodes,iStrmNodeIDs(NStrmNodes)
+    TYPE(TimeStepType),INTENT(IN)              :: TimeStep
+    TYPE(GenericFileType)                       :: InFile
+    INTEGER,INTENT(OUT)                        :: iStat
+
     !Local variables
     CHARACTER(LEN=ModNameLen+3) :: ThisProcedure = ModName // 'New'
     INTEGER                     :: NHyd,indx,ErrorCode,iNode
@@ -167,6 +169,9 @@ CONTAINS
     INTEGER,ALLOCATABLE         :: iHydNodeIDs(:)
     CHARACTER(:),ALLOCATABLE    :: cAbsPathFileName
     
+    !Set Logger
+    StrmHyd%Logger => Logger
+
     !Read data
     CALL InFile%ReadData(NHyd,iStat)  ;  IF (iStat .EQ. -1) RETURN  ;  StrmHyd%NHyd = NHyd
     IF (NHyd .EQ. 0) THEN
@@ -187,7 +192,7 @@ CONTAINS
     !Output file name
     CALL InFile%ReadData(cHydOutFile,iStat)  ;  IF (iStat .EQ. -1) RETURN ; cHydOutFile = StripTextUntilCharacter(cHydOutFile,f_cInlineCommentChar) ; CALL CleanSpecialCharacters(cHydOutFile)
     IF (cHydOutFile .EQ. '') THEN
-        IF (IsRoutedStreams) CALL ModuleLogger%LogMessage('Stream hydrograph printing is suppressed because an output file name is not specified!',f_iInfo,ThisProcedure)
+        IF (IsRoutedStreams) CALL StrmHyd%Logger%LogMessage('Stream hydrograph printing is suppressed because an output file name is not specified!',f_iInfo,ThisProcedure)
         DO indx=1,NHyd
             CALL InFile%ReadData(iNode,iStat)  
             IF (iStat .EQ. -1) RETURN
@@ -206,7 +211,7 @@ CONTAINS
         READ (ALine,*,IOSTAT=ErrorCode) iHydNodeIDs(indx)
         CALL ConvertID_To_Index(iHydNodeIDs(indx),iStrmNodeIDs,iNode)
         IF (iNode .EQ. 0) THEN
-            CALL ModuleLogger%SetLastMessage('Stream node ID '//TRIM(IntToText(iHydNodeIDs(indx)))//' listed for hydrograph printing is not in the model!',f_iFatal,ThisProcedure)
+            CALL StrmHyd%Logger%SetLastMessage('Stream node ID '//TRIM(IntToText(iHydNodeIDs(indx)))//' listed for hydrograph printing is not in the model!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -215,7 +220,7 @@ CONTAINS
         IF (ErrorCode .NE. 0) THEN
             MessageArray(1) = 'Error in reading stream hydrograph print data!'
             MessageArray(2) = TRIM(ALine)
-            CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+            CALL StrmHyd%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -404,11 +409,7 @@ CONTAINS
     !Convert node ID to hydrograph index
     iHydIndex = LocateInList(iNode,StrmHyd%iHydNodes)
     IF (iHydIndex .EQ. 0) THEN
-        IF (ASSOCIATED(ModuleLogger)) THEN
-            CALL ModuleLogger%SetLastMessage('Stream node ID '//TRIM(IntToText(iNodeID))//' does not have a hydrograph printed as model results!',f_iFatal,ThisProcedure)
-        ELSE
-            CALL ModuleLogger%SetLastMessage('Stream node ID '//TRIM(IntToText(iNodeID))//' does not have a hydrograph printed as model results!',f_iFatal,ThisProcedure)
-        END IF
+        CALL StrmHyd%Logger%SetLastMessage('Stream node ID '//TRIM(IntToText(iNodeID))//' does not have a hydrograph printed as model results!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF

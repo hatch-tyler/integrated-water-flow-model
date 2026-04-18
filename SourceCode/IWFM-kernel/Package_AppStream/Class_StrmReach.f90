@@ -66,6 +66,7 @@ MODULE Class_StrmReach
   ! --- REACH DATA TYPE
   ! -------------------------------------------------------------
   TYPE StrmReachType
+      TYPE(MessageLoggerType),POINTER :: Logger => NULL()
       INTEGER             :: ID              = 0
       CHARACTER(LEN=20)   :: cName           = ''
       INTEGER             :: UpstrmNode      = 0
@@ -124,16 +125,18 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- READ PREPROCESSED DATA
   ! -------------------------------------------------------------
-  SUBROUTINE StrmReach_ReadPreprocessedData(NReach,InFile,Reaches,iStat)
-    INTEGER,INTENT(IN)    :: NReach
-    TYPE(GenericFileType) :: InFile
-    TYPE(StrmReachType)   :: Reaches(NReach)
-    INTEGER,INTENT(OUT)   :: iStat
-    
+  SUBROUTINE StrmReach_ReadPreprocessedData(NReach,Logger,InFile,Reaches,iStat)
+    INTEGER,INTENT(IN)                        :: NReach
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
+    TYPE(GenericFileType)                      :: InFile
+    TYPE(StrmReachType)                        :: Reaches(NReach)
+    INTEGER,INTENT(OUT)                        :: iStat
+
     !Local variables
     INTEGER :: indxReach,NUpstrmReaches
-    
+
     DO indxReach=1,NReach
+      Reaches(indxReach)%Logger => Logger
       CALL InFile%ReadData(Reaches(indxReach)%ID,iStat)               ;  IF (iStat .EQ. -1) RETURN
       CALL InFile%ReadData(Reaches(indxReach)%cName,iStat)            ;  IF (iStat .EQ. -1) RETURN
       CALL InFile%ReadData(Reaches(indxReach)%UpstrmNode,iStat)       ;  IF (iStat .EQ. -1) RETURN

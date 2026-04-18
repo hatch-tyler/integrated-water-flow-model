@@ -58,6 +58,7 @@ MODULE Class_StrmInflow
   ! --- STREAM INFLOW DATA TYPE
   ! -------------------------------------------------------------
   TYPE,EXTENDS(RealTSDataInFileType) :: StrmInflowType
+    TYPE(MessageLoggerType),POINTER :: Logger => NULL()
     LOGICAL             :: lDefined            = .FALSE.   !Flag to check if stream inflows are specified
     REAL(8)             :: Fact                = 1.0       !Conversion factor for the stream inflows that are read from file
     INTEGER,ALLOCATABLE :: IDs(:)                          !Inflow ID numbers 
@@ -119,12 +120,13 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- INITIALIZE STREAM INFLOW TIME SERIES DATA FILE
   ! -------------------------------------------------------------
-  SUBROUTINE New(StrmInflow,FileName,cWorkingDirectory,TimeStep,NStrmNodes,iStrmNodeIDs,iStat)
-    CLASS(StrmInflowType),INTENT(OUT) :: StrmInflow
-    CHARACTER(LEN=*),INTENT(IN)       :: FileName,cWorkingDirectory
-    TYPE(TimeStepType),INTENT(IN)     :: TimeStep
-    INTEGER,INTENT(IN)                :: NStrmNodes,iStrmNodeIDs(NStrmNodes)
-    INTEGER,INTENT(OUT)               :: iStat
+  SUBROUTINE New(StrmInflow,Logger,FileName,cWorkingDirectory,TimeStep,NStrmNodes,iStrmNodeIDs,iStat)
+    CLASS(StrmInflowType),INTENT(OUT)          :: StrmInflow
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
+    CHARACTER(LEN=*),INTENT(IN)                :: FileName,cWorkingDirectory
+    TYPE(TimeStepType),INTENT(IN)              :: TimeStep
+    INTEGER,INTENT(IN)                         :: NStrmNodes,iStrmNodeIDs(NStrmNodes)
+    INTEGER,INTENT(OUT)                        :: iStat
 
     !Local variables
     CHARACTER(LEN=ModNameLen+3)     :: ThisProcedure = ModName // 'New'
@@ -132,9 +134,10 @@ CONTAINS
     REAL(8)                         :: Factor(1)
     LOGICAL                         :: lReadID_And_Node,DummyArray(1) = [.TRUE.]
     CHARACTER(LEN=1000),ALLOCATABLE :: cInflowNodes(:,:)
-    
+
     !Initialize
     iStat = 0
+    StrmInflow%Logger => Logger
     
     !Return if no file name is specified
     IF (FileName .EQ. '') RETURN
@@ -151,7 +154,7 @@ CONTAINS
               StrmInflow%Inflows(NStrmNodes)           , &
               STAT=ErrorCode                           )
     IF (ErrorCode .NE. 0) THEN
-        CALL ModuleLogger%SetLastMessage('Error in allocating memory for time series stream inflows!',f_iFatal,ThisProcedure)
+        CALL StrmInflow%Logger%SetLastMessage('Error in allocating memory for time series stream inflows!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -183,7 +186,7 @@ CONTAINS
         END IF
         CALL ConvertID_To_Index(iStrmNodeID,iStrmNodeIDs,StrmInflow%InflowNodes(indx))
         IF (StrmInflow%InflowNodes(indx) .EQ. 0) THEN
-            CALL ModuleLogger%SetLastMessage('Stream node ID '//TRIM(IntToText(iStrmNodeID))//' listed as receiving stream inflow is not in the model!',f_iFatal,ThisProcedure)
+            CALL StrmInflow%Logger%SetLastMessage('Stream node ID '//TRIM(IntToText(iStrmNodeID))//' listed as receiving stream inflow is not in the model!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -452,11 +455,7 @@ CONTAINS
                     ID = StrmInflow%IDs(indx)
                     MessageArray(1) = 'Stream inflows cannot be less than zero.'
                     MessageArray(2) = 'Inflow specified at inflow ID '//TRIM(IntToText(ID))//' is less than zero!'
-                    IF (ASSOCIATED(ModuleLogger)) THEN
-                        CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
-                    ELSE
-                        CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
-                    END IF
+                    CALL StrmInflow%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                     iStat = -1
                     RETURN
                 END IF

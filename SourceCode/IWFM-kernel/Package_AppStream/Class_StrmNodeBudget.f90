@@ -65,6 +65,7 @@ MODULE Class_StrmNodeBudget
   ! --- STREAM NODE BUDGET DATA TYPE
   ! -------------------------------------------------------------
   TYPE StrmNodeBudgetType
+    TYPE(MessageLoggerType),POINTER :: Logger => NULL()
     INTEGER             :: NBudNodes                      = 0        !Number of nodes for budget printing
     INTEGER,ALLOCATABLE :: iBudNodes(:)                              !Stream nodes for budget output
     LOGICAL             :: StrmNodeBudRawFile_Defined     = .FALSE.  !Flag to see if a budget output will be created
@@ -142,8 +143,9 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- NEW STREAM NODE BUDGET DATA
   ! -------------------------------------------------------------
-  SUBROUTINE StrmNodeBudget_New(StrmNodeBudget,IsRoutedStreams,IsForInquiry,cWorkingDirectory,iReachIDs,iStrmNodeIDs,NTIME,TimeStep,cVersion,pProcPrepareHeader,InFile,iStat) 
+  SUBROUTINE StrmNodeBudget_New(StrmNodeBudget,Logger,IsRoutedStreams,IsForInquiry,cWorkingDirectory,iReachIDs,iStrmNodeIDs,NTIME,TimeStep,cVersion,pProcPrepareHeader,InFile,iStat)
     CLASS(StrmNodeBudgetType),INTENT(OUT)             :: StrmNodeBudget
+    TYPE(MessageLoggerType),POINTER,INTENT(IN)        :: Logger
     LOGICAL,INTENT(IN)                                :: IsRoutedStreams,IsForInquiry
     CHARACTER(LEN=*),INTENT(IN)                       :: cWorkingDirectory
     INTEGER,INTENT(IN)                                :: iReachIDs(:),iStrmNodeIDs(:),NTIME
@@ -161,6 +163,9 @@ CONTAINS
     INTEGER,ALLOCATABLE                    :: iArrayOut(:)
     CHARACTER(:),ALLOCATABLE               :: cAbsPathFileName
     
+    !Set Logger
+    StrmNodeBudget%Logger => Logger
+
     !Number of nodes for which budget output is desired
     CALL InFile%ReadData(NBudNodes,iStat)  ;  IF (iStat .EQ. -1) RETURN
     IF (IsRoutedStreams) THEN
@@ -180,7 +185,7 @@ CONTAINS
            IF (iStat .EQ. -1) RETURN
            CALL ConvertID_To_Index(iStrmNodeID,iStrmNodeIDs,StrmNodeBudget%iBudNodes(indxNode))
            IF (StrmNodeBudget%iBudNodes(indxNode) .EQ. 0) THEN
-               CALL ModuleLogger%SetLastMessage('Stream node ID '//TRIM(IntToText(iStrmNodeID))//' listed for stream node budget printing is not in the model!',f_iFatal,ThisProcedure)
+               CALL StrmNodeBudget%Logger%SetLastMessage('Stream node ID '//TRIM(IntToText(iStrmNodeID))//' listed for stream node budget printing is not in the model!',f_iFatal,ThisProcedure)
                iStat = -1
                RETURN
            END IF
@@ -192,7 +197,7 @@ CONTAINS
             IF (SIZE(iArrayOut) .NE. NBudNodes) THEN
                 MessageArray(1) = "Some stream node numbers listed for stream node budget print-out are repeated!"
                 MessageArray(2) = "Make sure repeated node numbers are deleted."
-                CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                CALL StrmNodeBudget%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -217,11 +222,11 @@ CONTAINS
     IF (IsRoutedStreams) THEN
         CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(BudFileName)),cWorkingDirectory,cAbsPathFileName)
         IF (IsForInquiry) THEN
-            CALL StrmNodeBudget%StrmNodeBudRawFile%New(ModuleLogger,cAbsPathFileName,iStat)
+            CALL StrmNodeBudget%StrmNodeBudRawFile%New(StrmNodeBudget%Logger,cAbsPathFileName,iStat)
             IF (iStat .EQ. -1) RETURN
         ELSE
             BudHeader = pProcPrepareHeader(NBudNodes,iDummyArray,iReachIDs,iStrmNodeIDs,NTIME,TimeStep,cVersion,iBudNodes=StrmNodeBudget%iBudNodes)
-            CALL StrmNodeBudget%StrmNodeBudRawFile%New(ModuleLogger,cAbsPathFileName,BudHeader,iStat)
+            CALL StrmNodeBudget%StrmNodeBudRawFile%New(StrmNodeBudget%Logger,cAbsPathFileName,BudHeader,iStat)
             IF (iStat .EQ. -1) RETURN
             CALL BudHeader%Kill()
         END IF
@@ -306,11 +311,7 @@ CONTAINS
     
     !Check if a budget file is defined
     IF (.NOT. StrmNodeBudget%StrmNodeBudRawFile_Defined) THEN
-        IF (ASSOCIATED(ModuleLogger)) THEN
-            CALL ModuleLogger%SetLastMessage('Stream node budget file does not exist to retrieve the number of budget columns!',f_iFatal,ThisProcedure)
-        ELSE
-            CALL ModuleLogger%SetLastMessage('Stream node budget file does not exist to retrieve the number of budget columns!',f_iFatal,ThisProcedure)
-        END IF
+        CALL StrmNodeBudget%Logger%SetLastMessage('Stream node budget file does not exist to retrieve the number of budget columns!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -341,11 +342,7 @@ CONTAINS
     
     !Check if a budget file is defined
     IF (.NOT. StrmNodeBudget%StrmNodeBudRawFile_Defined) THEN
-        IF (ASSOCIATED(ModuleLogger)) THEN
-            CALL ModuleLogger%SetLastMessage('Stream node budget file does not exist to retrieve the budget column titles!',f_iFatal,ThisProcedure)
-        ELSE
-            CALL ModuleLogger%SetLastMessage('Stream node budget file does not exist to retrieve the budget column titles!',f_iFatal,ThisProcedure)
-        END IF
+        CALL StrmNodeBudget%Logger%SetLastMessage('Stream node budget file does not exist to retrieve the budget column titles!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -390,11 +387,7 @@ CONTAINS
     
     !Check if a budget file is defined
     IF (.NOT. StrmNodeBudget%StrmNodeBudRawFile_Defined) THEN
-        IF (ASSOCIATED(ModuleLogger)) THEN
-            CALL ModuleLogger%SetLastMessage('Stream node budget file does not exist to retrieve monthly budget flows!',f_iFatal,ThisProcedure)
-        ELSE
-            CALL ModuleLogger%SetLastMessage('Stream node budget file does not exist to retrieve monthly budget flows!',f_iFatal,ThisProcedure)
-        END IF
+        CALL StrmNodeBudget%Logger%SetLastMessage('Stream node budget file does not exist to retrieve monthly budget flows!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF

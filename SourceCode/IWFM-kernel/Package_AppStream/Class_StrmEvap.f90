@@ -61,6 +61,7 @@ MODULE Class_StrmEvap
   ! --- STREAM EVAPORATION DATA TYPE
   ! -------------------------------------------------------------
   TYPE StrmEvapType
+      TYPE(MessageLoggerType),POINTER :: Logger => NULL()
       LOGICAL                    :: lComputeEvap      = .FALSE.  !Flag to check if stream evaportaion will be computed
       LOGICAL                    :: lAreaFile_Defined = .FALSE.  !Flag to check if stream surface area file is defined 
       TYPE(RealTSDataInFileType) :: StrmAreaFile                 !Stream surface area file
@@ -114,10 +115,11 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- INSTANTIATE STREAM EVAPORATION DATA
   ! -------------------------------------------------------------
-  SUBROUTINE New(StrmEvap,InFile,TimeStep,ETData,cWorkingDirectory,iNStrmNodes,iStrmNodeIDs,iStat)
-    CLASS(StrmEvapType)           :: StrmEvap
-    TYPE(GenericFileType)         :: InFile
-    TYPE(TimeStepType),INTENT(IN) :: TimeStep
+  SUBROUTINE New(StrmEvap,Logger,InFile,TimeStep,ETData,cWorkingDirectory,iNStrmNodes,iStrmNodeIDs,iStat)
+    CLASS(StrmEvapType)                        :: StrmEvap
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
+    TYPE(GenericFileType)                       :: InFile
+    TYPE(TimeStepType),INTENT(IN)              :: TimeStep
     TYPE(ETType),INTENT(IN)       :: ETData
     CHARACTER(LEN=*),INTENT(IN)   :: cWorkingDirectory
     INTEGER,INTENT(IN)            :: iNStrmNodes,iStrmNodeIDs(iNStrmNodes)
@@ -132,9 +134,10 @@ CONTAINS
     CHARACTER(:),ALLOCATABLE    :: cAbsPathFileName
     
     !Initialize
+    StrmEvap%Logger => Logger
     iStat      = 0
     lProcessed = .FALSE.
-    
+
     !Allocate memory
     ALLOCATE (StrmEvap%iEvapCol(iNStrmNodes) , StrmEvap%iAreaCol(iNStrmNodes) , StrmEvap%rEvap(iNStrmNodes))
 
@@ -183,22 +186,14 @@ CONTAINS
         ID        = iDummyArray(1)
         iStrmNode = LocateInList(ID,iStrmNodeIDs)
         IF (iStrmNode .LT. 1) THEN
-            IF (ASSOCIATED(ModuleLogger)) THEN
-                CALL ModuleLogger%SetLastMessage('Stream node ID '//TRIM(IntToText(ID))//' listed for stream surface evaporation data is not in the model!',f_iFatal,ThisProcedure)
-            ELSE
-                CALL ModuleLogger%SetLastMessage('Stream node ID '//TRIM(IntToText(ID))//' listed for stream surface evaporation data is not in the model!',f_iFatal,ThisProcedure)
-            END IF
+            CALL StrmEvap%Logger%SetLastMessage('Stream node ID '//TRIM(IntToText(ID))//' listed for stream surface evaporation data is not in the model!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
         
         !Make sure same node is not entered more than once
         IF (lProcessed(iStrmNode)) THEN
-            IF (ASSOCIATED(ModuleLogger)) THEN
-                CALL ModuleLogger%SetLastMessage('Stream node ID '//TRIM(IntToText(ID))//' for stream surface evaporation data is listed more than once!',f_iFatal,ThisProcedure)
-            ELSE
-                CALL ModuleLogger%SetLastMessage('Stream node ID '//TRIM(IntToText(ID))//' for stream surface evaporation data is listed more than once!',f_iFatal,ThisProcedure)
-            END IF
+            CALL StrmEvap%Logger%SetLastMessage('Stream node ID '//TRIM(IntToText(ID))//' for stream surface evaporation data is listed more than once!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -220,11 +215,7 @@ CONTAINS
     
     !Make sure that ET data file is available
     IF (ETData%GetNDataColumns() .EQ. 0) THEN
-        IF (ASSOCIATED(ModuleLogger)) THEN
-            CALL ModuleLogger%SetLastMessage('Evapotranspiration rate input data file must be defined to simulate stream evaporation!',f_iFatal,ThisProcedure)
-        ELSE
-            CALL ModuleLogger%SetLastMessage('Evapotranspiration rate input data file must be defined to simulate stream evaporation!',f_iFatal,ThisProcedure)
-        END IF
+        CALL StrmEvap%Logger%SetLastMessage('Evapotranspiration rate input data file must be defined to simulate stream evaporation!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -237,11 +228,7 @@ CONTAINS
         MessageArray(2) = 'for the simulation of stream evaporation!'
         MessageArray(3) = 'Number of columns in file        = '//TRIM(IntToText(iMaxFileCol))
         MessageArray(4) = 'Highest column number referenced = '//TRIM(IntToText(iMaxPointer))
-        IF (ASSOCIATED(ModuleLogger)) THEN
-            CALL ModuleLogger%SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
-        ELSE
-            CALL ModuleLogger%SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
-        END IF
+        CALL StrmEvap%Logger%SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -251,11 +238,7 @@ CONTAINS
         IF (.NOT. StrmEvap%lAreaFile_Defined) THEN
             MessageArray(1) = 'Stream surface area file must be defined when one or more area column'
             MessageArray(2) = 'pointers are non-zero for the simulation of stream evaporation!'
-            IF (ASSOCIATED(ModuleLogger)) THEN
-                CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
-            ELSE
-                CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
-            END IF
+            CALL StrmEvap%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -270,11 +253,7 @@ CONTAINS
             MessageArray(2) = ' provided for the simulation of stream evaporation!'
             MessageArray(3) = 'Number of columns in file        = '//TRIM(IntToText(iMaxFileCol))
             MessageArray(4) = 'Highest column number referenced = '//TRIM(IntToText(iMaxPointer))
-            IF (ASSOCIATED(ModuleLogger)) THEN
-                CALL ModuleLogger%SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
-            ELSE
-                CALL ModuleLogger%SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
-            END IF
+            CALL StrmEvap%Logger%SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
