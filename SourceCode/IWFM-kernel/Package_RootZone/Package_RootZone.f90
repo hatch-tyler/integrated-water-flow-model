@@ -55,8 +55,6 @@ MODULE Package_RootZone
                                           f_iBudgetType_PondedCrop_RZ        , & 
                                           f_iZBudgetType_RootZone            , &
                                           f_iZBudgetType_LWU             
-  USE Class_LandUseDataFile      , ONLY : LandUseDataFile_SetModuleLogger
-  USE Class_GenericMoistureData  , ONLY : GenericMoistureData_SetModuleLogger
   USE RootZone_v40               , ONLY : RootZone_v40_Type                  , &
                                           RootZonev40_SetModuleLogger
   USE RootZone_v401              , ONLY : RootZone_v401_Type                 , &
@@ -99,8 +97,6 @@ MODULE Package_RootZone
             PackageRootZone_SetModuleLogger    , &
             BaseRootZone_SetModuleLogger       , &
             UtilPkgRootZone_SetModuleLogger    , &
-            LandUseDataFile_SetModuleLogger    , &
-            GenericMoistureData_SetModuleLogger, &
             RootZonev40_SetModuleLogger        , &
             RootZonev401_SetModuleLogger       , &
             RootZonev41_SetModuleLogger        , &
@@ -259,8 +255,6 @@ CONTAINS
     CALL PackageRootZone_SetModuleLogger(Logger)
     CALL BaseRootZone_SetModuleLogger(Logger)
     CALL UtilPkgRootZone_SetModuleLogger(Logger)
-    CALL LandUseDataFile_SetModuleLogger(Logger)
-    CALL GenericMoistureData_SetModuleLogger(Logger)
     CALL RootZonev40_SetModuleLogger(Logger)
     CALL RootZonev401_SetModuleLogger(Logger)
     CALL RootZonev41_SetModuleLogger(Logger)

@@ -83,7 +83,6 @@ MODULE Class_BaseAppSmallWatershed
   ! -------------------------------------------------------------
   PRIVATE
   PUBLIC :: BaseAppSmallWatershedType            , &
-            BaseAppSWShed_SetModuleLogger       , &
             f_iSWShedBaseFlowBCID               , &
             f_iSWShedPercFlowBCID               , &
             f_iBudgetType_SWShed                , &
@@ -262,12 +261,6 @@ MODULE Class_BaseAppSmallWatershed
   ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
-  ! -------------------------------------------------------------
-  ! --- MODULE-LEVEL LOGGER
-  ! -------------------------------------------------------------
-  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
-
-
   INTEGER,PARAMETER                      :: f_iModNameLen  = 29
   CHARACTER(LEN=f_iModNameLen),PARAMETER :: f_cModName     = 'Class_BaseAppSmallWatershed::'
   
@@ -322,16 +315,6 @@ MODULE Class_BaseAppSmallWatershed
   
   
 CONTAINS
-
-
-  ! -------------------------------------------------------------
-  ! --- SET MODULE-LEVEL LOGGER
-  ! -------------------------------------------------------------
-  SUBROUTINE BaseAppSWShed_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
-    ModuleLogger => Logger
-  END SUBROUTINE BaseAppSWShed_SetModuleLogger
-
 
 
 ! ******************************************************************
@@ -1954,11 +1937,7 @@ CONTAINS
     iStat = 0
    
     !Inform user
-    IF (ASSOCIATED(AppSWShed%Logger)) THEN
-        CALL AppSWShed%Logger%EchoProgress('Simulating small watershed b.c.')
-    ELSE
-        CALL ModuleLogger%EchoProgress('Simulating small watershed b.c.')
-    END IF
+    CALL AppSWShed%Logger%EchoProgress('Simulating small watershed b.c.')
     
     !Initialize
     rDeltaT = TimeStep%DeltaT
@@ -2012,11 +1991,7 @@ CONTAINS
                 MessageArray(2) =                   'Small watershed ID   = '//TRIM(IntToText(AppSWShed%SmallWatersheds(indxSWShed)%ID))
                 WRITE (MessageArray(3),'(A,F11.8)') 'Desired convergence  = ',rToler
                 WRITE (MessageArray(4),'(A,F11.8)') 'Achieved convergence = ',ABS(rAchievedConv)
-                IF (ASSOCIATED(AppSWShed%Logger)) THEN
-                    CALL AppSWShed%Logger%SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
-                ELSE
-                    CALL ModuleLogger%SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
-                END IF
+                CALL AppSWShed%Logger%SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF

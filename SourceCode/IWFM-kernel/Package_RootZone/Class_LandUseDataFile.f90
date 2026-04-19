@@ -48,8 +48,7 @@ MODULE Class_LandUseDataFile
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: LandUseDataFile_SetModuleLogger , &
-            LandUseDataFileType
+  PUBLIC :: LandUseDataFileType
 
 
   ! -------------------------------------------------------------
@@ -67,12 +66,6 @@ MODULE Class_LandUseDataFile
   
   
   ! -------------------------------------------------------------
-  ! --- MODULE-LEVEL LOGGER
-  ! -------------------------------------------------------------
-  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
-
-
-  ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
   INTEGER,PARAMETER                   :: ModNameLen = 23
@@ -82,15 +75,6 @@ MODULE Class_LandUseDataFile
   
   
 CONTAINS
-
-
-  ! -------------------------------------------------------------
-  ! --- SET MODULE-LEVEL LOGGER
-  ! -------------------------------------------------------------
-  SUBROUTINE LandUseDataFile_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
-    ModuleLogger => Logger
-  END SUBROUTINE LandUseDataFile_SetModuleLogger
 
 
   ! -------------------------------------------------------------
@@ -174,22 +158,14 @@ CONTAINS
         !Check that listed element/subregion is modeled
         CALL ConvertID_To_Index(iLocationID,iLocationIDs,iLocation)
         IF (iLocation .EQ. 0) THEN
-            IF (ASSOCIATED(LandUseDataFile%Logger)) THEN
-                CALL LandUseDataFile%Logger%SetLastMessage('Element or subregion number '//TRIM(IntToText(iLocationID))//' listed for '//TRIM(LowerCase(cDescriptor))//' is not in the model!',f_iFatal,ThisProcedure)
-            ELSE
-                CALL ModuleLogger%SetLastMessage('Element or subregion number '//TRIM(IntToText(iLocationID))//' listed for '//TRIM(LowerCase(cDescriptor))//' is not in the model!',f_iFatal,ThisProcedure)
-            END IF
+            CALL LandUseDataFile%Logger%SetLastMessage('Element or subregion number '//TRIM(IntToText(iLocationID))//' listed for '//TRIM(LowerCase(cDescriptor))//' is not in the model!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
 
         !Make sure location number is not listed more than once
         IF (lProcessed(iLocation)) THEN
-            IF (ASSOCIATED(LandUseDataFile%Logger)) THEN
-                CALL LandUseDataFile%Logger%SetLastMessage('Element or subregion number '//TRIM(IntToText(iLocationID))//' listed for '//TRIM(LowerCase(cDescriptor))//' is listed more than once!',f_iFatal,ThisProcedure)
-            ELSE
-                CALL ModuleLogger%SetLastMessage('Element or subregion number '//TRIM(IntToText(iLocationID))//' listed for '//TRIM(LowerCase(cDescriptor))//' is listed more than once!',f_iFatal,ThisProcedure)
-            END IF
+            CALL LandUseDataFile%Logger%SetLastMessage('Element or subregion number '//TRIM(IntToText(iLocationID))//' listed for '//TRIM(LowerCase(cDescriptor))//' is listed more than once!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF

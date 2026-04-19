@@ -44,8 +44,7 @@ MODULE Class_GenericMoistureData
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: GenericMoistureData_SetModuleLogger , &
-            GenericMoistureDataType
+  PUBLIC :: GenericMoistureDataType
   
   
   ! -------------------------------------------------------------
@@ -65,12 +64,6 @@ MODULE Class_GenericMoistureData
 
 
   ! -------------------------------------------------------------
-  ! --- MODULE-LEVEL LOGGER
-  ! -------------------------------------------------------------
-  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
-
-
-  ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
   INTEGER,PARAMETER                   :: ModNameLen = 27
@@ -79,15 +72,6 @@ MODULE Class_GenericMoistureData
 
   
 CONTAINS
-
-
-  ! -------------------------------------------------------------
-  ! --- SET MODULE-LEVEL LOGGER
-  ! -------------------------------------------------------------
-  SUBROUTINE GenericMoistureData_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
-    ModuleLogger => Logger
-  END SUBROUTINE GenericMoistureData_SetModuleLogger
 
 
 ! ******************************************************************
@@ -121,11 +105,7 @@ CONTAINS
     !Allocate memory for rGenericMoisture no matter what
     ALLOCATE (GenericMoistureData%rGenericMoisture(NSoils,NLocations) , STAT=ErrorCode)
     IF (ErrorCode .NE. 0) THEN
-        IF (ASSOCIATED(GenericMoistureData%Logger)) THEN
-            CALL GenericMoistureData%Logger%SetLastMessage('Error in allocating memory for generic moisture data!',f_iFatal,ThisProcedure)
-        ELSE
-            CALL ModuleLogger%SetLastMessage('Error in allocating memory for generic moisture data!',f_iFatal,ThisProcedure)
-        END IF
+        CALL GenericMoistureData%Logger%SetLastMessage('Error in allocating memory for generic moisture data!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -201,11 +181,7 @@ CONTAINS
     INTEGER :: FileReadCode,indxLocation
     
     !Inform user about progress
-    IF (ASSOCIATED(GenericMoistureData%Logger)) THEN
-        CALL GenericMoistureData%Logger%EchoProgress('Reading generic moisture time series data')
-    ELSE
-        CALL ModuleLogger%EchoProgress('Reading generic moisture time series data')
-    END IF
+    CALL GenericMoistureData%Logger%EchoProgress('Reading generic moisture time series data')
     
     !Read data
     CALL GenericMoistureData%ReadTSData(TimeStep,'Generic moisture data',FileReadCode,iStat)
