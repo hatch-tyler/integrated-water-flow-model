@@ -1295,7 +1295,7 @@ CONTAINS
 
     !Groundwater
     CALL Model%AppStream%GetStrmConnectivityInGWNodes(Model%StrmGWConnector,StrmConnectivity)
-    CALL Model%AppGW%New(lForInquiry,ProjectFileNames(SIM_GWDataFileID),Model%cSIMWorkingDirectory,Model%AppGrid,Model%Stratigraphy,StrmConnectivity,iStrmNodeIDs,Model%StrmGWConnector,iLakeIDs,Model%LakeGWConnector,Model%TimeStep,Model%NTIME,iStat)
+    CALL Model%AppGW%New(ModuleLogger,lForInquiry,ProjectFileNames(SIM_GWDataFileID),Model%cSIMWorkingDirectory,Model%AppGrid,Model%Stratigraphy,StrmConnectivity,iStrmNodeIDs,Model%StrmGWConnector,iLakeIDs,Model%LakeGWConnector,Model%TimeStep,Model%NTIME,iStat)
     IF (iStat .EQ. -1) RETURN
     ALLOCATE (Model%QERELS(NElements) , Model%QPERC(NElements) , Model%QDEEPPERC(NElements) , Model%DepthToGW(NElements) , Model%SyElem(NElements) , Model%GWToRZFlows(NElements) , Model%NetElemSource(NElements) , Model%FaceFlows(NFaces,NLayers) , Model%GWHeads(NNodes,NLayers))
     Model%QERELS      = 0.0
@@ -1669,7 +1669,7 @@ CONTAINS
     
     !Groundwater
     CALL Model%AppStream%GetStrmConnectivityInGWNodes(Model%StrmGWConnector,StrmConnectivity)
-    CALL Model%AppGW%New(lForInquiry,ProjectFileNames(SIM_GWDataFileID),Model%cSIMWorkingDirectory,Model%AppGrid,Model%Stratigraphy,StrmConnectivity,iStrmNodeIDs,Model%StrmGWConnector,iLakeIDs,Model%LakeGWConnector,Model%TimeStep,Model%NTIME,iStat)
+    CALL Model%AppGW%New(ModuleLogger,lForInquiry,ProjectFileNames(SIM_GWDataFileID),Model%cSIMWorkingDirectory,Model%AppGrid,Model%Stratigraphy,StrmConnectivity,iStrmNodeIDs,Model%StrmGWConnector,iLakeIDs,Model%LakeGWConnector,Model%TimeStep,Model%NTIME,iStat)
     IF (iStat .EQ. -1) RETURN
     NNodes    = Model%AppGrid%NNodes
     NElements = Model%AppGrid%NElements
@@ -2065,7 +2065,7 @@ CONTAINS
     
     !Groundwater
     CALL Model%AppStream%GetStrmConnectivityInGWNodes(Model%StrmGWConnector,StrmConnectivity)
-    CALL Model%AppGW%New(lForInquiry,cSIMFileNames(SIM_GWDataFileID),Model%cSIMWorkingDirectory,Model%AppGrid,Model%Stratigraphy,StrmConnectivity,iStrmNodeIDs,Model%StrmGWConnector,iLakeIDs,Model%LakeGWConnector,Model%TimeStep,Model%NTIME,iStat)
+    CALL Model%AppGW%New(ModuleLogger,lForInquiry,cSIMFileNames(SIM_GWDataFileID),Model%cSIMWorkingDirectory,Model%AppGrid,Model%Stratigraphy,StrmConnectivity,iStrmNodeIDs,Model%StrmGWConnector,iLakeIDs,Model%LakeGWConnector,Model%TimeStep,Model%NTIME,iStat)
     IF (iStat .EQ. -1) RETURN
     NNodes    = Model%AppGrid%NNodes
     NElements = Model%AppGrid%NElements

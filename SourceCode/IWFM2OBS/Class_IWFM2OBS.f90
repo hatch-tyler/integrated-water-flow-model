@@ -182,7 +182,7 @@ CONTAINS
            f_iFatal, cModName)
       iStat = -1; RETURN
     END IF
-    CALL This%Interp%Init(iDateSpec)
+    CALL This%Interp%Init(ModuleLogger, iDateSpec)
 
     ! ---- Read 4 hydrograph type blocks (6 lines each) ----
     DO iHyd = iGWHEAD, iSUBSID, -1
@@ -283,7 +283,7 @@ CONTAINS
 
     ! ---- Initialize head differences if requested ----
     IF (This%lHeadDiff) THEN
-      CALL This%HeadDiff%New(This%cHDiffFile, iStat)
+      CALL This%HeadDiff%New(ModuleLogger, This%cHDiffFile, iStat)
       IF (iStat /= 0) RETURN
     END IF
 

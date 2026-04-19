@@ -169,6 +169,7 @@ MODULE Class_AppGW
   ! -------------------------------------------------------------
   TYPE AppGWType
       PRIVATE
+      TYPE(MessageLoggerType),POINTER :: Logger => NULL()
       CHARACTER(LEN=6)              :: VarTimeUnit                  = ''       !Time unit for aquifer variables
       TYPE(GWNodeType)              :: Nodes                                   !Groundwater data at each (node,layer) combination
       TYPE(GWStateType)             :: State                                   !Data type that stores the state of the groundwater
@@ -202,6 +203,7 @@ MODULE Class_AppGW
       TYPE(GenericFileType)         :: FinalHeadsFile                          !Optional file to store final groundwater heads
       LOGICAL                       :: lFinalHeadsFile_Defined      = .FALSE.  !Flag to check if final heads output file is defined
   CONTAINS
+      PROCEDURE,PASS   :: SetLogger => AppGW_SetLogger
       PROCEDURE,PASS   :: New
       PROCEDURE,PASS   :: Kill
       PROCEDURE,PASS   :: GetBudget_List
@@ -399,6 +401,17 @@ CONTAINS
   END SUBROUTINE AppGW_SetModuleLogger
 
 
+  ! -------------------------------------------------------------
+  ! --- SET LOGGER
+  ! -------------------------------------------------------------
+  SUBROUTINE AppGW_SetLogger(AppGW,Logger)
+    CLASS(AppGWType)                          :: AppGW
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
+
+    AppGW%Logger => Logger
+
+  END SUBROUTINE AppGW_SetLogger
+
 
 ! ******************************************************************
 ! ******************************************************************
@@ -413,8 +426,9 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- INSTANTIATE GW COMPONENT
   ! -------------------------------------------------------------
-  SUBROUTINE New(AppGW,lIsForInquiry,cFileName,cWorkingDirectory,AppGrid,Stratigraphy,StrmConnectivity,iStrmNodeIDs,StrmGWConnector,iLakeIDs,LakeGWConnector,TimeStep,NTIME,iStat,GWHeadICFile,SubsICFile,lPrintParametersOverwrite) 
+  SUBROUTINE New(AppGW,Logger,lIsForInquiry,cFileName,cWorkingDirectory,AppGrid,Stratigraphy,StrmConnectivity,iStrmNodeIDs,StrmGWConnector,iLakeIDs,LakeGWConnector,TimeStep,NTIME,iStat,GWHeadICFile,SubsICFile,lPrintParametersOverwrite)
     CLASS(AppGWType),INTENT(OUT)         :: AppGW
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
     LOGICAL,INTENT(IN)                   :: lIsForInquiry
     CHARACTER(LEN=*),INTENT(IN)          :: cFileName,cWorkingDirectory
     TYPE(AppGridType),INTENT(IN)         :: AppGrid
@@ -450,14 +464,15 @@ CONTAINS
     CHARACTER(LEN=80) :: cPerfMsg
 
     !Initialize
+    AppGW%Logger => Logger
     iStat      = 0
     iGWNodeIDs = AppGrid%AppNode%ID
-    
+
     !Return if no filename is given
     IF (cFileName .EQ. '') RETURN
-    
+
     !Print progress
-    CALL ModuleLogger%EchoProgress('Instantiating groundwater component')
+    CALL AppGW%Logger%EchoProgress('Instantiating groundwater component')
     
     !Initialize
     NNodes    = AppGrid%GetNNodes()
@@ -482,7 +497,7 @@ CONTAINS
     IF (iErrorCode1 .NE. 0) THEN
         MessageArray(1) = 'Error in allocating memory for the groundwater component.'
         MessageArray(2) = cErrorMsg
-        CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+        CALL AppGW%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -542,7 +557,7 @@ CONTAINS
         CALL DATE_AND_TIME(VALUES=iPerfEnd)
         rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
         WRITE(cPerfMsg,'(A,F8.3,A)') '    [PERF] AppGW TileDrain: ', rPerfSec, ' sec'
-        CALL ModuleLogger%LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+        CALL AppGW%Logger%LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
     END IF
 
     !Pumping
@@ -559,7 +574,7 @@ CONTAINS
         CALL DATE_AND_TIME(VALUES=iPerfEnd)
         rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
         WRITE(cPerfMsg,'(A,F8.3,A)') '    [PERF] AppGW Pumping: ', rPerfSec, ' sec'
-        CALL ModuleLogger%LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+        CALL AppGW%Logger%LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
     END IF
 
     !Subsidence filename
@@ -642,7 +657,7 @@ CONTAINS
             IF (iErrorCode1 .NE. 0) THEN 
                 MessageArray(1) = 'Error in allocating memory for the regional storage values for groundwater budget.'
                 MessageArray(2) = cErrorMsg
-                CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                CALL AppGW%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -670,7 +685,7 @@ CONTAINS
         END IF
         IF (iStat .EQ. -1) RETURN
         IF (AppGW%FinalHeadsFile%iGetFileType() .NE. f_iTXT) THEN
-            CALL ModuleLogger%SetLastMessage('End-of-simulation groundwater heads output file must be a text file!',f_iFatal,ThisProcedure)
+            CALL AppGW%Logger%SetLastMessage('End-of-simulation groundwater heads output file must be a text file!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -699,7 +714,7 @@ CONTAINS
         CALL DATE_AND_TIME(VALUES=iPerfEnd)
         rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
         WRITE(cPerfMsg,'(A,F8.3,A)') '      [PERF] AppGW Budget+OutputFiles: ', rPerfSec, ' sec'
-        CALL ModuleLogger%LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+        CALL AppGW%Logger%LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
     END IF
 
     !Groundwater hydrographs
@@ -711,7 +726,7 @@ CONTAINS
         CALL DATE_AND_TIME(VALUES=iPerfEnd)
         rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
         WRITE(cPerfMsg,'(A,F8.3,A)') '      [PERF] AppGW GWHyd(54K hydrographs): ', rPerfSec, ' sec'
-        CALL ModuleLogger%LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+        CALL AppGW%Logger%LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
     END IF
 
     !Aquifer parameters
@@ -754,7 +769,7 @@ CONTAINS
         CALL DATE_AND_TIME(VALUES=iPerfEnd)
         rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
         WRITE(cPerfMsg,'(A,F8.3,A)') '    [PERF] AppGW Params+IC: ', rPerfSec, ' sec'
-        CALL ModuleLogger%LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+        CALL AppGW%Logger%LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
     END IF
 
     !Instantiate the boundary conditions data and overwrite the initial conditions if necessary
@@ -770,7 +785,7 @@ CONTAINS
         CALL DATE_AND_TIME(VALUES=iPerfEnd)
         rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
         WRITE(cPerfMsg,'(A,F8.3,A)') '    [PERF] AppGW BoundaryConditions: ', rPerfSec, ' sec'
-        CALL ModuleLogger%LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+        CALL AppGW%Logger%LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
     END IF
 
     !Instantiate subsidence; this has to be done after AppGW initial conditions are processed
@@ -782,7 +797,7 @@ CONTAINS
         CALL DATE_AND_TIME(VALUES=iPerfEnd)
         rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
         WRITE(cPerfMsg,'(A,F8.3,A)') '    [PERF] AppGW Subsidence: ', rPerfSec, ' sec'
-        CALL ModuleLogger%LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+        CALL AppGW%Logger%LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
     END IF
 
     !Aquifer overwrite parameters
@@ -1695,20 +1710,20 @@ CONTAINS
             MessageArray(1) = 'File '//cFileName//' cannot be found for data retrieval!'
             MessageArray(2) = 'Groundwater heads at a layer will be retrieved from the text output file.'
             MessageArray(3) = 'This may take a substantially long time.'
-            IF (ASSOCIATED(ModuleLogger)) THEN
-                CALL ModuleLogger%LogMessage(MessageArray(1:3),f_iWarn,ThisProcedure)
+            IF (ASSOCIATED(AppGW%Logger)) THEN
+                CALL AppGW%Logger%LogMessage(MessageArray(1:3),f_iWarn,ThisProcedure)
             ELSE
-                CALL ModuleLogger%LogMessage(MessageArray(1:3),f_iWarn,ThisProcedure)
+                CALL AppGW%Logger%LogMessage(MessageArray(1:3),f_iWarn,ThisProcedure)
             END IF
             CALL AppGW%GWHyd%ReadGWHeadsAll_ForALayer(iNNodes,iLayer,cOutputBeginDateAndTime,cOutputEndDateAndTime,AppGW%FactHead,rFact_LT,rOutputDates,rGWHeads,iStat)
         END IF
     ELSE
         MessageArray(1) = 'GW heads at all nodes for a layer cannot be retrieved '
         MessageArray(2) = 'this output file was not generated for the model!'
-        IF (ASSOCIATED(ModuleLogger)) THEN
-            CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+        IF (ASSOCIATED(AppGW%Logger)) THEN
+            CALL AppGW%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
         ELSE
-            CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+            CALL AppGW%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
         END IF
         iStat = -1
     END IF
@@ -2322,10 +2337,10 @@ CONTAINS
         
     !Return with error if filename is empty
     IF (LEN_TRIM(cFileName) .EQ. 0) THEN
-        IF (ASSOCIATED(ModuleLogger)) THEN
-            CALL ModuleLogger%SetLastMessage('Requested hydrograph data is not part of the model output!',f_iFatal,ThisProcedure)
+        IF (ASSOCIATED(AppGW%Logger)) THEN
+            CALL AppGW%Logger%SetLastMessage('Requested hydrograph data is not part of the model output!',f_iFatal,ThisProcedure)
         ELSE
-            CALL ModuleLogger%SetLastMessage('Requested hydrograph data is not part of the model output!',f_iFatal,ThisProcedure)
+            CALL AppGW%Logger%SetLastMessage('Requested hydrograph data is not part of the model output!',f_iFatal,ThisProcedure)
         END IF
         iStat = -1
         RETURN
@@ -3373,10 +3388,10 @@ CONTAINS
         CALL AppGW%AppPumping%GetPumpingPurpose(iPumpType,iPumps,iAgOrUrban,iStat)
     ELSE
         iStat = -1
-        IF (ASSOCIATED(ModuleLogger)) THEN
-            CALL ModuleLogger%SetLastMessage('Pumping is not simulated so purposes for pumping cannot be retrieved!',f_iFatal,ThisProcedure)
+        IF (ASSOCIATED(AppGW%Logger)) THEN
+            CALL AppGW%Logger%SetLastMessage('Pumping is not simulated so purposes for pumping cannot be retrieved!',f_iFatal,ThisProcedure)
         ELSE
-            CALL ModuleLogger%SetLastMessage('Pumping is not simulated so purposes for pumping cannot be retrieved!',f_iFatal,ThisProcedure)
+            CALL AppGW%Logger%SetLastMessage('Pumping is not simulated so purposes for pumping cannot be retrieved!',f_iFatal,ThisProcedure)
         END IF
     END IF
     
@@ -4948,10 +4963,10 @@ CONTAINS
     INTEGER,PARAMETER :: iCompIDs(1) = [f_iGWComp]
     
     !Inform user
-    IF (ASSOCIATED(ModuleLogger)) THEN
-        CALL ModuleLogger%EchoProgress('Simulating groundwater flows...')
+    IF (ASSOCIATED(AppGW%Logger)) THEN
+        CALL AppGW%Logger%EchoProgress('Simulating groundwater flows...')
     ELSE
-        CALL ModuleLogger%EchoProgress('Simulating groundwater flows...')
+        CALL AppGW%Logger%EchoProgress('Simulating groundwater flows...')
     END IF
     
     !Initialize

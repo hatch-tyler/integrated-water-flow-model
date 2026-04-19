@@ -45,6 +45,7 @@ MODULE Class_HeadDifference
   ! HeadDifferenceType - Manager for head difference pairs
   ! =====================================================================
   TYPE HeadDifferenceType
+    TYPE(MessageLoggerType),POINTER        :: Logger => NULL()
     INTEGER                                :: iNPairs   = 0
     TYPE(HeadDiffPairType), ALLOCATABLE    :: Pairs(:)
     LOGICAL                                :: lActive   = .FALSE.
@@ -72,8 +73,9 @@ CONTAINS
   ! =====================================================================
   ! New - Read head difference pairs file
   ! =====================================================================
-  SUBROUTINE New(This, cHDFile, iStat)
+  SUBROUTINE New(This, Logger, cHDFile, iStat)
     CLASS(HeadDifferenceType), INTENT(INOUT) :: This
+    TYPE(MessageLoggerType),TARGET,INTENT(IN) :: Logger
     CHARACTER(LEN=*),         INTENT(IN)     :: cHDFile
     INTEGER,                  INTENT(OUT)    :: iStat
 
@@ -82,11 +84,12 @@ CONTAINS
     CHARACTER(LEN=25)  :: cID1, cID2
 
     iStat = 0
+    This%Logger => Logger
 
     ! Count lines
     OPEN(UNIT=iUnit, FILE=cHDFile, STATUS='OLD', IOSTAT=iErr)
     IF (iErr /= 0) THEN
-      CALL ModuleLogger%SetLastMessage('Cannot open head difference file: '//TRIM(cHDFile), f_iFatal, cModName)
+      CALL This%Logger%SetLastMessage('Cannot open head difference file: '//TRIM(cHDFile), f_iFatal, cModName)
       iStat = -1
       RETURN
     END IF
@@ -99,7 +102,7 @@ CONTAINS
     END DO
 
     IF (iLine == 0) THEN
-      CALL ModuleLogger%SetLastMessage('No pairs in head difference file: '//TRIM(cHDFile), f_iFatal, cModName)
+      CALL This%Logger%SetLastMessage('No pairs in head difference file: '//TRIM(cHDFile), f_iFatal, cModName)
       CLOSE(iUnit)
       iStat = -1
       RETURN
@@ -108,7 +111,7 @@ CONTAINS
     This%iNPairs = iLine
     ALLOCATE(This%Pairs(iLine), STAT=iErr)
     IF (iErr /= 0) THEN
-      CALL ModuleLogger%SetLastMessage('Cannot allocate head difference pairs', f_iFatal, cModName)
+      CALL This%Logger%SetLastMessage('Cannot allocate head difference pairs', f_iFatal, cModName)
       CLOSE(iUnit)
       iStat = -1
       RETURN
@@ -119,7 +122,7 @@ CONTAINS
     DO n = 1, This%iNPairs
       READ(iUnit, *, IOSTAT=iErr) cID1, cID2
       IF (iErr /= 0) THEN
-        CALL ModuleLogger%SetLastMessage('Error reading line '//TRIM(IntToText(n))//' of '//TRIM(cHDFile), &
+        CALL This%Logger%SetLastMessage('Error reading line '//TRIM(IntToText(n))//' of '//TRIM(cHDFile), &
              f_iFatal, cModName)
         CLOSE(iUnit)
         iStat = -1
@@ -130,7 +133,7 @@ CONTAINS
 
       ! Validate: IDs must differ
       IF (This%Pairs(n)%cID1 == This%Pairs(n)%cID2) THEN
-        CALL ModuleLogger%SetLastMessage('Identical IDs in pair at line '//TRIM(IntToText(n))// &
+        CALL This%Logger%SetLastMessage('Identical IDs in pair at line '//TRIM(IntToText(n))// &
              ' of '//TRIM(cHDFile), f_iFatal, cModName)
         CLOSE(iUnit)
         iStat = -1
@@ -188,7 +191,7 @@ CONTAINS
         END IF
       END DO
       IF (.NOT. lFound) THEN
-        CALL ModuleLogger%SetLastMessage('Head difference ID '//TRIM(This%Pairs(n)%cID1)// &
+        CALL This%Logger%SetLastMessage('Head difference ID '//TRIM(This%Pairs(n)%cID1)// &
              ' not found in observation file', f_iFatal, cModName)
         iStat = -1
         RETURN
@@ -203,7 +206,7 @@ CONTAINS
         END IF
       END DO
       IF (.NOT. lFound) THEN
-        CALL ModuleLogger%SetLastMessage('Head difference ID '//TRIM(This%Pairs(n)%cID2)// &
+        CALL This%Logger%SetLastMessage('Head difference ID '//TRIM(This%Pairs(n)%cID2)// &
              ' not found in observation file', f_iFatal, cModName)
         iStat = -1
         RETURN

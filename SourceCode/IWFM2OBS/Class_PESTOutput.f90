@@ -21,6 +21,7 @@ MODULE Class_PESTOutput
   ! PESTOutputType - PEST instruction and PCF file writer
   ! =====================================================================
   TYPE PESTOutputType
+    TYPE(MessageLoggerType),POINTER :: Logger => NULL()
     INTEGER            :: iInsUnit = 0
     INTEGER            :: iPCFUnit = 0
     CHARACTER(LEN=500) :: cInsFile = ' '
@@ -50,8 +51,9 @@ CONTAINS
   ! =====================================================================
   ! New - Open instruction and PCF files, write header
   ! =====================================================================
-  SUBROUTINE New(This, cInsFile, iInsUnit, cPCFFile, iPCFUnit, iStat)
+  SUBROUTINE New(This, Logger, cInsFile, iInsUnit, cPCFFile, iPCFUnit, iStat)
     CLASS(PESTOutputType), INTENT(INOUT) :: This
+    TYPE(MessageLoggerType),TARGET,INTENT(IN) :: Logger
     CHARACTER(LEN=*),      INTENT(IN)    :: cInsFile, cPCFFile
     INTEGER,               INTENT(IN)    :: iInsUnit, iPCFUnit
     INTEGER,               INTENT(OUT)   :: iStat
@@ -59,6 +61,7 @@ CONTAINS
     INTEGER :: iErr
 
     iStat = 0
+    This%Logger => Logger
     This%cInsFile = cInsFile
     This%cPCFFile = cPCFFile
     This%iInsUnit = iInsUnit
@@ -66,7 +69,7 @@ CONTAINS
 
     OPEN(UNIT=iInsUnit, FILE=cInsFile, STATUS='REPLACE', IOSTAT=iErr)
     IF (iErr /= 0) THEN
-      CALL ModuleLogger%SetLastMessage('Cannot open instruction file: '//TRIM(cInsFile), f_iFatal, cModName)
+      CALL This%Logger%SetLastMessage('Cannot open instruction file: '//TRIM(cInsFile), f_iFatal, cModName)
       iStat = -1
       RETURN
     END IF
@@ -74,7 +77,7 @@ CONTAINS
 
     OPEN(UNIT=iPCFUnit, FILE=cPCFFile, STATUS='REPLACE', IOSTAT=iErr)
     IF (iErr /= 0) THEN
-      CALL ModuleLogger%SetLastMessage('Cannot open PCF file: '//TRIM(cPCFFile), f_iFatal, cModName)
+      CALL This%Logger%SetLastMessage('Cannot open PCF file: '//TRIM(cPCFFile), f_iFatal, cModName)
       CLOSE(iInsUnit)
       iStat = -1
       RETURN
