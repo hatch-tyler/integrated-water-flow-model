@@ -100,6 +100,7 @@ MODULE Class_UrbanLandUse_v41
   ! --- URBAN LAND DATABASE TYPE
   ! -------------------------------------------------------------
   TYPE UrbanLandUse_v41_Type
+      TYPE(MessageLoggerType),POINTER :: Logger => NULL()            !Pointer to the message logger
       TYPE(Urban_v41_Type)        :: UrbData                         !Urban data for each element
       REAL(8)                     :: RootDepth               = 0.0   !Urban root depth
       REAL(8)                     :: PerCapitaWaterUseFactor = 1.0   !Conversion factor for water demand
@@ -164,9 +165,10 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- NEW URBAN LAND USE DATA
   ! -------------------------------------------------------------
-  SUBROUTINE New(UrbLand,cFileName,cWorkingDirectory,FactCN,NElements,NSubregions,iElemIDs,TrackTime,iStat,iColUrbETCoeff,lIsForInquiry)
-    CLASS(UrbanLandUse_v41_Type) :: UrbLand
-    CHARACTER(LEN=*),INTENT(IN)  :: cFileName,cWorkingDirectory
+  SUBROUTINE New(UrbLand,Logger,cFileName,cWorkingDirectory,FactCN,NElements,NSubregions,iElemIDs,TrackTime,iStat,iColUrbETCoeff,lIsForInquiry)
+    CLASS(UrbanLandUse_v41_Type)               :: UrbLand
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
+    CHARACTER(LEN=*),INTENT(IN)                :: cFileName,cWorkingDirectory
     REAL(8),INTENT(IN)           :: FACTCN
     INTEGER,INTENT(IN)           :: NElements,NSubregions,iElemIDs(NElements)
     LOGICAL,INTENT(IN)           :: TrackTime
@@ -184,6 +186,9 @@ CONTAINS
     TYPE(GenericFileType)        :: UrbanDataFile
     CHARACTER(:),ALLOCATABLE     :: cAbsPathFileName
     
+    !Set Logger
+    UrbLand%Logger => Logger
+
     !Initialize
     iStat = 0
     lForInquiry_Local = .FALSE.
@@ -191,7 +196,7 @@ CONTAINS
 
     !Return if no file name is specified
     IF (cFileName .EQ. '') RETURN
-    
+
     !Open file
     CALL UrbanDataFile%New(FileName=ADJUSTL(cFileName),InputFile=.TRUE.,IsTSFile=.FALSE.,iStat=iStat)
     IF (iStat .EQ. -1) RETURN
@@ -214,7 +219,7 @@ CONTAINS
               UrbLand%RegionETPot(NSubregions)                    , &
               STAT=ErrorCode                                      )
     IF (ErrorCode+iStat .NE. 0) THEN
-        CALL ModuleLogger%SetLastMessage('Error in allocating memory for urban data!',f_iFatal,ThisProcedure)
+        CALL UrbLand%Logger%SetLastMessage('Error in allocating memory for urban data!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -296,7 +301,7 @@ CONTAINS
             iElem = INT(DummyArray(indxElem,1))
             IF (lProcessed(iElem)) THEN
                 ID = iElemIDs(iElem)
-                CALL ModuleLogger%SetLastMessage('Data for urban lands at element '//TRIM(IntToText(ID))//' is defined more than once!',f_iFatal,ThisProcedure)
+                CALL UrbLand%Logger%SetLastMessage('Data for urban lands at element '//TRIM(IntToText(ID))//' is defined more than once!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -326,7 +331,7 @@ CONTAINS
         IF (lError) THEN
             MessageArray(1) = 'FRACDM variable in urban main data file must be all specified '
             MessageArray(2) = 'as either -1.0 or greater than (or equal to) zero!'
-            CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+            CALL UrbLand%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -353,7 +358,7 @@ CONTAINS
         MAXVAL(DummyArray(:,2)) .GT. 1.0         ) THEN
         MessageArray(1) = 'Some fractions of initial soil moisture due to precipitation is less '
         MessageArray(2) = 'than 0.0 or greater than 1.0 for urban areas!'
-        CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)      
+        CALL UrbLand%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)      
         iStat = -1
         RETURN
     END IF
@@ -361,7 +366,7 @@ CONTAINS
         MAXVAL(DummyArray(:,3:)) .GT. 1.0          ) THEN
         MessageArray(1) = 'Some or all initial root zone moisture contents are less than'
         MessageArray(2) = '0.0 or greater than 1.0 for urban areas!'
-        CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)      
+        CALL UrbLand%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)      
         iStat = -1
         RETURN
     END IF
@@ -370,7 +375,7 @@ CONTAINS
         iElem = INT(DummyArray(indxElem,1))
         IF (lProcessed(iElem)) THEN
             ID = iElemIDs(iElem)
-            CALL ModuleLogger%SetLastMessage('initial conditions for urban lands at element '//TRIM(IntToText(ID))//' is defined more than once!',f_iFatal,ThisProcedure)
+            CALL UrbLand%Logger%SetLastMessage('initial conditions for urban lands at element '//TRIM(IntToText(ID))//' is defined more than once!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -690,10 +695,10 @@ CONTAINS
     iStat = 0
 
     !Echo progress
-    IF (ASSOCIATED(ModuleLogger)) THEN
-        CALL ModuleLogger%EchoProgress('Reading time series data for urban lands')
+    IF (ASSOCIATED(UrbanLand%Logger)) THEN
+        CALL UrbanLand%Logger%EchoProgress('Reading time series data for urban lands')
     ELSE
-        CALL ModuleLogger%EchoProgress('Reading time series data for urban lands')
+        CALL UrbanLand%Logger%EchoProgress('Reading time series data for urban lands')
     END IF
     
     !Land use areas
@@ -791,10 +796,10 @@ CONTAINS
     iStat = 0
   
     !Inform user
-    IF (ASSOCIATED(ModuleLogger)) THEN
-        CALL ModuleLogger%EchoProgress('Simulating flows at urban lands')
+    IF (ASSOCIATED(UrbanLand%Logger)) THEN
+        CALL UrbanLand%Logger%EchoProgress('Simulating flows at urban lands')
     ELSE
-        CALL ModuleLogger%EchoProgress('Simulating flows at urban lands')
+        CALL UrbanLand%Logger%EchoProgress('Simulating flows at urban lands')
     END IF
     
     !Initialize
@@ -905,10 +910,10 @@ CONTAINS
                 MessageArray(2) = 'Element              = '//TRIM(IntToText(iElemID))
                 WRITE (MessageArray(3),'(A,F11.8)') 'Desired convergence  = ',SolverData%Tolerance*TotalPorosityUrban
                 WRITE (MessageArray(4),'(A,F11.8)') 'Achieved convergence = ',ABS(AchievedConv)
-                IF (ASSOCIATED(ModuleLogger)) THEN
-                    CALL ModuleLogger%SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
+                IF (ASSOCIATED(UrbanLand%Logger)) THEN
+                    CALL UrbanLand%Logger%SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
                 ELSE
-                    CALL ModuleLogger%SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
+                    CALL UrbanLand%Logger%SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
                 END IF
                 iStat = -1
                 !$OMP END CRITICAL (CRIT_URBAN_CONV)
@@ -953,10 +958,10 @@ CONTAINS
                 MessageArray(2) = 'This may be due to a too high convergence criteria set for the iterative solution.'
                 MessageArray(3) = 'Try using a smaller value for RZCONV and a higher value for RZITERMX parameters'
                 MessageArray(4) = 'in the Root Zone Main Input File.'
-                IF (ASSOCIATED(ModuleLogger)) THEN
-                    CALL ModuleLogger%SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
+                IF (ASSOCIATED(UrbanLand%Logger)) THEN
+                    CALL UrbanLand%Logger%SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
                 ELSE
-                    CALL ModuleLogger%SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
+                    CALL UrbanLand%Logger%SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
                 END IF
                 iStat = -1
                 !$OMP END CRITICAL (CRIT_URBAN_SOILM)
@@ -1066,10 +1071,10 @@ CONTAINS
     ASSOCIATE (pUrbData => UrbanLand%UrbData) 
         DO indxElem=1,NElements
             IF ((pUrbData%SoilM_Precip(indxElem,1) + pUrbData%SoilM_AW(indxElem,1) + pUrbData%SoilM_Oth(indxElem,1)) .GT. TotalPorosity(indxElem)) THEN
-                IF (ASSOCIATED(ModuleLogger)) THEN
-                    CALL ModuleLogger%SetLastMessage('Initial moisture content for urban land at element ' // TRIM(IntToText(iElemIDs(indxElem))) // ' is greater than total porosity!',f_iFatal,ThisProcedure)
+                IF (ASSOCIATED(UrbanLand%Logger)) THEN
+                    CALL UrbanLand%Logger%SetLastMessage('Initial moisture content for urban land at element ' // TRIM(IntToText(iElemIDs(indxElem))) // ' is greater than total porosity!',f_iFatal,ThisProcedure)
                 ELSE
-                    CALL ModuleLogger%SetLastMessage('Initial moisture content for urban land at element ' // TRIM(IntToText(iElemIDs(indxElem))) // ' is greater than total porosity!',f_iFatal,ThisProcedure)
+                    CALL UrbanLand%Logger%SetLastMessage('Initial moisture content for urban land at element ' // TRIM(IntToText(iElemIDs(indxElem))) // ' is greater than total porosity!',f_iFatal,ThisProcedure)
                 END IF
                 iStat = -1
                 RETURN

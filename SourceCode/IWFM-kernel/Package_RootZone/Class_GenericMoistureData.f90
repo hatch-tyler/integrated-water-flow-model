@@ -52,6 +52,7 @@ MODULE Class_GenericMoistureData
   ! --- GENERIC MOISTURE DATA TYPE
   ! -------------------------------------------------------------
   TYPE,EXTENDS(RealTSDataInFileType) :: GenericMoistureDataType
+    TYPE(MessageLoggerType),POINTER :: Logger => NULL()
     REAL(8)             :: Fact  = 1.0               !Conversion factor for generic moisture
     INTEGER,ALLOCATABLE :: iColGenericMoisture(:,:)  !Column number in the generic moisture data file for each (soil,location) combination
     REAL(8),ALLOCATABLE :: rGenericMoisture(:,:)     !Generic moisture read from file for each (soil,location) combination
@@ -120,8 +121,8 @@ CONTAINS
     !Allocate memory for rGenericMoisture no matter what
     ALLOCATE (GenericMoistureData%rGenericMoisture(NSoils,NLocations) , STAT=ErrorCode)
     IF (ErrorCode .NE. 0) THEN
-        IF (ASSOCIATED(ModuleLogger)) THEN
-            CALL ModuleLogger%SetLastMessage('Error in allocating memory for generic moisture data!',f_iFatal,ThisProcedure)
+        IF (ASSOCIATED(GenericMoistureData%Logger)) THEN
+            CALL GenericMoistureData%Logger%SetLastMessage('Error in allocating memory for generic moisture data!',f_iFatal,ThisProcedure)
         ELSE
             CALL ModuleLogger%SetLastMessage('Error in allocating memory for generic moisture data!',f_iFatal,ThisProcedure)
         END IF
@@ -200,8 +201,8 @@ CONTAINS
     INTEGER :: FileReadCode,indxLocation
     
     !Inform user about progress
-    IF (ASSOCIATED(ModuleLogger)) THEN
-        CALL ModuleLogger%EchoProgress('Reading generic moisture time series data')
+    IF (ASSOCIATED(GenericMoistureData%Logger)) THEN
+        CALL GenericMoistureData%Logger%EchoProgress('Reading generic moisture time series data')
     ELSE
         CALL ModuleLogger%EchoProgress('Reading generic moisture time series data')
     END IF

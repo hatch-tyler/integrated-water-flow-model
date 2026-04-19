@@ -137,6 +137,7 @@ MODULE Class_BaseRootZone
   ! --- ABSTRACT BASE ROOT ZONE DATA TYPE
   ! -------------------------------------------------------------
   TYPE,ABSTRACT :: BaseRootZoneType
+      TYPE(MessageLoggerType),POINTER               :: Logger => NULL()
       CHARACTER(LEN=6)                              :: VarTimeUnit            = ''        !Time unit of rate-type variables
       TYPE(FlagsType)                               :: Flags                              !Flags that affect the simulation of root zone
       TYPE(ElemPrecipDataType),ALLOCATABLE          :: ElemPrecipData(:)                  !Precipitation data at each element
@@ -1280,8 +1281,8 @@ CONTAINS
                 rElemAgDemand  = -1.0
                 rElemUrbDemand = -1.0
                 iStat          = -1
-                IF (ASSOCIATED(ModuleLogger)) THEN
-                    CALL ModuleLogger%SetLastMessage('Future demands for '//TRIM(cFutureDemandDate)//' have not been computed!',f_iFatal,ThisProcedure)
+                IF (ASSOCIATED(RootZone%Logger)) THEN
+                    CALL RootZone%Logger%SetLastMessage('Future demands for '//TRIM(cFutureDemandDate)//' have not been computed!',f_iFatal,ThisProcedure)
                 ELSE
                     CALL ModuleLogger%SetLastMessage('Future demands for '//TRIM(cFutureDemandDate)//' have not been computed!',f_iFatal,ThisProcedure)
                 END IF
@@ -1289,13 +1290,13 @@ CONTAINS
             RETURN
         END IF
     END IF
-    
+
     !Future demand for the specified date is not computed
     rElemAgDemand  = -1.0
     rElemUrbDemand = -1.0
     iStat          = -1
-    IF (ASSOCIATED(ModuleLogger)) THEN
-        CALL ModuleLogger%SetLastMessage('Future demands for '//TRIM(cFutureDemandDate)//' have not been computed!',f_iFatal,ThisProcedure)
+    IF (ASSOCIATED(RootZone%Logger)) THEN
+        CALL RootZone%Logger%SetLastMessage('Future demands for '//TRIM(cFutureDemandDate)//' have not been computed!',f_iFatal,ThisProcedure)
     ELSE
         CALL ModuleLogger%SetLastMessage('Future demands for '//TRIM(cFutureDemandDate)//' have not been computed!',f_iFatal,ThisProcedure)
     END IF

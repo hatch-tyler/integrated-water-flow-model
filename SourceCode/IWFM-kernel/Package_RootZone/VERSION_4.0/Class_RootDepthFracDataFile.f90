@@ -52,7 +52,7 @@ MODULE Class_RootDepthFracDataFile
   ! --- ROOT DEPTH FRACTION DATA FILE TYPE
   ! -------------------------------------------------------------
   TYPE,EXTENDS(RealTSDataInFileType) :: RootDepthFracDataFileType
-    !No additional attributes
+    TYPE(MessageLoggerType),POINTER :: Logger => NULL()
   CONTAINS
       PROCEDURE,PASS :: New
       PROCEDURE,PASS :: Kill
@@ -91,17 +91,19 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- NEW ROOT DEPTH FRACTIONS DATA FILE
   ! -------------------------------------------------------------
-  SUBROUTINE New(RootDepthFracDataFile,cFileName,cWorkingDirectory,TrackTime,iStat)
-    CLASS(RootDepthFracDataFileType) :: RootDepthFracDataFile
-    CHARACTER(LEN=*),INTENT(IN)      :: cFileName,cWorkingDirectory
-    LOGICAL,INTENT(IN)               :: TrackTime
-    INTEGER,INTENT(OUT)              :: iStat
-    
+  SUBROUTINE New(RootDepthFracDataFile,Logger,cFileName,cWorkingDirectory,TrackTime,iStat)
+    CLASS(RootDepthFracDataFileType)             :: RootDepthFracDataFile
+    TYPE(MessageLoggerType),POINTER,INTENT(IN)   :: Logger
+    CHARACTER(LEN=*),INTENT(IN)                  :: cFileName,cWorkingDirectory
+    LOGICAL,INTENT(IN)                           :: TrackTime
+    INTEGER,INTENT(OUT)                          :: iStat
+
     !Local variables
     REAL(8) :: Factor(1)
-    
+
     !Initialize
     iStat = 0
+    RootDepthFracDataFile%Logger => Logger
     
     !Return if no file name is specified
     IF (cFileName .EQ. '') RETURN
@@ -147,20 +149,12 @@ CONTAINS
     
     !Make sure all values are between 0.0 and 1.0
     IF (ANY(RootDepthFracDataFile%rValues .LT. 0.0))  THEN
-        IF (ASSOCIATED(ModuleLogger)) THEN
-            CALL ModuleLogger%SetLastMessage('Root depth fractions cannot be less than zero!',f_iFatal,ThisProcedure)
-        ELSE
-            CALL ModuleLogger%SetLastMessage('Root depth fractions cannot be less than zero!',f_iFatal,ThisProcedure)
-        END IF
+        CALL RootDepthFracDataFile%Logger%SetLastMessage('Root depth fractions cannot be less than zero!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
     IF (ANY(RootDepthFracDataFile%rValues .GT. 1.0))  THEN
-        IF (ASSOCIATED(ModuleLogger)) THEN
-            CALL ModuleLogger%SetLastMessage('Root depth fractions cannot be greater than zero!',f_iFatal,ThisProcedure)
-        ELSE
-            CALL ModuleLogger%SetLastMessage('Root depth fractions cannot be greater than zero!',f_iFatal,ThisProcedure)
-        END IF
+        CALL RootDepthFracDataFile%Logger%SetLastMessage('Root depth fractions cannot be greater than zero!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF

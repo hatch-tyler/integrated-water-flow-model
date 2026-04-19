@@ -91,6 +91,7 @@ MODULE Class_UrbanLandUse_v50
   ! --- URBAN LAND DATABASE TYPE
   ! -------------------------------------------------------------
   TYPE UrbanDatabase_v50_Type
+      TYPE(MessageLoggerType),POINTER             :: Logger => NULL()                !Pointer to the message logger
       TYPE(UrbanType)                             :: UrbData                         !Urban data for each (soil,subregion) combination
       REAL(8)                                     :: RootDepth               = 0.0   !Urban root depth
       INTEGER,ALLOCATABLE                         :: iColReturnFrac(:)               !Column number in the return flow fraction data file defined for each (subregion)
@@ -163,8 +164,9 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- NEW URBAN LAND USE DATA
   ! -------------------------------------------------------------
-  SUBROUTINE New(UrbLand,cFileName,cWorkingDirectory,AppGrid,FactCN,NSoils,iElemIDs,iSubregionIDs,TrackTime,iStat,iStrmNodeIDs,iLakeIDs)
-    CLASS(UrbanDatabase_v50_Type) :: UrbLand
+  SUBROUTINE New(UrbLand,Logger,cFileName,cWorkingDirectory,AppGrid,FactCN,NSoils,iElemIDs,iSubregionIDs,TrackTime,iStat,iStrmNodeIDs,iLakeIDs)
+    CLASS(UrbanDatabase_v50_Type)              :: UrbLand
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
     CHARACTER(LEN=*),INTENT(IN)   :: cFileName,cWorkingDirectory
     TYPE(AppGridType),INTENT(IN)  :: AppGrid
     REAL(8),INTENT(IN)            :: FACTCN
@@ -172,7 +174,7 @@ CONTAINS
     LOGICAL,INTENT(IN)            :: TrackTime
     INTEGER,INTENT(OUT)           :: iStat
     INTEGER,OPTIONAL,INTENT(IN)   :: iStrmNodeIDs(:),iLakeIDs(:)
-    
+
     !Local variables
     CHARACTER(LEN=ModNameLen+3)                 :: ThisProcedure = ModName // 'New'
     CHARACTER                                   :: ALine*1000
@@ -185,8 +187,9 @@ CONTAINS
     TYPE(GenericFileType)                       :: UrbanDataFile
     TYPE(ElemSurfaceFlowToDestType),ALLOCATABLE :: ElemToGW(:),ElemToOutside(:)
     CHARACTER(:),ALLOCATABLE                    :: cAbsPathFileName
-    
+
     !Initialize
+    UrbLand%Logger => Logger
     iStat = 0
    
     !Return if no file name is specified
@@ -217,7 +220,7 @@ CONTAINS
               UrbLand%RegionETPot(NSubregions)                , &
               STAT=ErrorCode                                  )
     IF (ErrorCode+iStat .NE. 0) THEN
-        CALL ModuleLogger%SetLastMessage('Error in allocating memory for urban data!',f_iFatal,ThisProcedure)
+        CALL UrbLand%Logger%SetLastMessage('Error in allocating memory for urban data!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -257,7 +260,7 @@ CONTAINS
         iRegion = INT(DummyArray(indxRegion,1))
         IF (lProcessed(iRegion)) THEN
             ID = iSubregionIDs(iRegion)
-            CALL ModuleLogger%SetLastMessage('Curve numbers for urban lands for subregion '//TRIM(IntToText(ID))//' are defined more than once!',f_iFatal,ThisProcedure)
+            CALL UrbLand%Logger%SetLastMessage('Curve numbers for urban lands for subregion '//TRIM(IntToText(ID))//' are defined more than once!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -288,7 +291,7 @@ CONTAINS
         iRegion = INT(DummyArray(indxRegion,1))
         IF (lProcessed(iRegion)) THEN
             ID = iSubregionIDs(iRegion)
-            CALL ModuleLogger%SetLastMessage('Water use and management data for urban lands for subregion '//TRIM(IntToText(ID))//' are defined more than once!',f_iFatal,ThisProcedure)
+            CALL UrbLand%Logger%SetLastMessage('Water use and management data for urban lands for subregion '//TRIM(IntToText(ID))//' are defined more than once!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -308,7 +311,7 @@ CONTAINS
         iElem = INT(DummyArray(indxElem,1))
         ID    = iElemIDs(iElem)
         IF (lProcessed_Elem(iElem)) THEN
-            CALL ModuleLogger%SetLastMessage('Surface flow destination for urban lands for element '//TRIM(IntToText(ID))//' is defined more than once!',f_iFatal,ThisProcedure)
+            CALL UrbLand%Logger%SetLastMessage('Surface flow destination for urban lands for element '//TRIM(IntToText(ID))//' is defined more than once!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -322,7 +325,7 @@ CONTAINS
             SurfaceFlowDestType(iElem) .NE. f_iFlowDest_Lake       .AND.   &
             SurfaceFlowDestType(iElem) .NE. f_iFlowDest_Subregion  .AND.   &
             SurfaceFlowDestType(iElem) .NE. f_iFlowDest_GWElement       )  THEN
-            CALL ModuleLogger%SetLastMessage('Surface flow destination type for urban surface runoff at element ' // TRIM(IntToText(ID)) // ' is not recognized!',f_iFatal,ThisProcedure)
+            CALL UrbLand%Logger%SetLastMessage('Surface flow destination type for urban surface runoff at element ' // TRIM(IntToText(ID)) // ' is not recognized!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -332,7 +335,7 @@ CONTAINS
                 IF (PRESENT(iStrmNodeIDs)) THEN
                     CALL ConvertID_To_Index(SurfaceFlowDest(iElem),iStrmNodeIDs,iStrmNode)
                     IF (iStrmNode .EQ. 0) THEN
-                        CALL ModuleLogger%SetLastMessage('Urban surface flow from element '//TRIM(IntToText(ID))//' flows into a stream node ('//TRIM(IntToText(SurfaceFlowDest(iElem)))//') that is not modeled!',f_iFatal,ThisProcedure)
+                        CALL UrbLand%Logger%SetLastMessage('Urban surface flow from element '//TRIM(IntToText(ID))//' flows into a stream node ('//TRIM(IntToText(SurfaceFlowDest(iElem)))//') that is not modeled!',f_iFatal,ThisProcedure)
                         iStat = -1
                         RETURN
                     END IF
@@ -343,7 +346,7 @@ CONTAINS
                 IF (PRESENT(iLakeIDs)) THEN
                     CALL ConvertID_To_Index(SurfaceFlowDest(iElem),iLakeIDs,iLake)
                     IF (iStrmNode .EQ. 0) THEN
-                        CALL ModuleLogger%SetLastMessage('Urban surface flow from element '//TRIM(IntToText(ID))//' flows into a lake ('//TRIM(IntToText(SurfaceFlowDest(iElem)))//') that is not modeled!',f_iFatal,ThisProcedure)
+                        CALL UrbLand%Logger%SetLastMessage('Urban surface flow from element '//TRIM(IntToText(ID))//' flows into a lake ('//TRIM(IntToText(SurfaceFlowDest(iElem)))//') that is not modeled!',f_iFatal,ThisProcedure)
                         iStat = -1
                         RETURN
                     END IF
@@ -353,13 +356,13 @@ CONTAINS
             CASE (f_iFlowDest_Subregion)
                 CALL ConvertID_To_Index(SurfaceFlowDest(iElem),iSubregionIDs,iRegion)
                 IF (iRegion .EQ. 0) THEN
-                    CALL ModuleLogger%SetLastMessage('Urban surface flow from element '//TRIM(IntToText(ID))//' goes to a subregion ('//TRIM(IntToText(SurfaceFlowDest(iElem)))//') that is not modeled!',f_iFatal,ThisProcedure)
+                    CALL UrbLand%Logger%SetLastMessage('Urban surface flow from element '//TRIM(IntToText(ID))//' goes to a subregion ('//TRIM(IntToText(SurfaceFlowDest(iElem)))//') that is not modeled!',f_iFatal,ThisProcedure)
                     iStat = -1
                     RETURN
                 END IF
                 SurfaceFlowDest(iElem) = iRegion
                 IF (SurfaceFlowDest(iElem) .EQ. AppGrid%AppElement(iElem)%Subregion) THEN
-                    CALL ModuleLogger%SetLastMessage('Urban surface flow from element '//TRIM(IntToText(ID))//' cannot go to the same subregion which the element belongs to!',f_iFatal,ThisProcedure)
+                    CALL UrbLand%Logger%SetLastMessage('Urban surface flow from element '//TRIM(IntToText(ID))//' cannot go to the same subregion which the element belongs to!',f_iFatal,ThisProcedure)
                     iStat = -1
                     RETURN
                 END IF
@@ -397,7 +400,7 @@ CONTAINS
         MAXVAL(DummyArray(:,2::2)) .GT. 1.0         ) THEN
         MessageArray(1) = 'Some fractions of initial soil moisture due to precipitation is less '
         MessageArray(2) = 'than 0.0 or greater than 1.0 for urban areas!'
-        CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)      
+        CALL UrbLand%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)      
         iStat = -1
         RETURN
     END IF 
@@ -407,7 +410,7 @@ CONTAINS
         MAXVAL(DummyArray(:,3::2)) .GT. 1.0          ) THEN
         MessageArray(1) = 'Some or all initial root zone moisture contents are less than'
         MessageArray(2) = '0.0 or greater than 1.0 for urban areas!'
-        CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)      
+        CALL UrbLand%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)      
         iStat = -1
         RETURN
     END IF
@@ -418,7 +421,7 @@ CONTAINS
         iRegion = INT(DummyArray(indxRegion,1))
         IF (lProcessed(iRegion)) THEN
             ID = iSubregionIDs(iRegion)
-            CALL ModuleLogger%SetLastMessage('Initial conditions for urban lands for subregion '//TRIM(IntToText(ID))//' are defined more than once!',f_iFatal,ThisProcedure)
+            CALL UrbLand%Logger%SetLastMessage('Initial conditions for urban lands for subregion '//TRIM(IntToText(ID))//' are defined more than once!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -697,11 +700,7 @@ CONTAINS
     iStat = 0
 
     !Echo progress
-    IF (ASSOCIATED(ModuleLogger)) THEN
-        CALL ModuleLogger%EchoProgress('Reading time series data for urban lands')
-    ELSE
-        CALL ModuleLogger%EchoProgress('Reading time series data for urban lands')
-    END IF
+    CALL UrbanLand%Logger%EchoProgress('Reading time series data for urban lands')
     
     !Land use areas
     CALL UrbanLand%LandUseDataFile%ReadTSData('Urban areas',TimeStep,rRegionAreas,iSubregionIDs,iStat)  ;  IF (iStat .EQ. -1) RETURN
@@ -732,7 +731,7 @@ CONTAINS
                 IF (UrbanLand%SubregionalArea(indxRegion) .EQ. 0.0) THEN
                     MessageArray(1) = 'Urban area in subregion '//TRIM(IntTotext(iSubregionIDs(indxRegion)))// ' is zero.'
                     MessageArray(2) = 'Setting urban water demand at this subregion to zero!' 
-                    CALL ModuleLogger%LogMessage(MessageArray(1:2),f_iInfo,ThisProcedure)
+                    CALL UrbanLand%Logger%LogMessage(MessageArray(1:2),f_iInfo,ThisProcedure)
                     UrbanLand%Demand(indxRegion) = 0.0
                 END IF
             END If
@@ -749,11 +748,7 @@ CONTAINS
             IF (UrbanLand%WaterUseSpecsFile%rValues(iCol).GT.1.0   .OR.  UrbanLand%WaterUseSpecsFile%rValues(iCol).LT.0.0) THEN
                 WRITE(MessageArray(1),'(A,F4.1,A)') 'Urban indoor water use fraction at subregion '//TRIM(IntToText(iSubregionIDs(indxRegion)))//' is specified as ',UrbanLand%WaterUseSpecsFile%rValues(iCol),'!'
                 MessageArray(2) = 'It must be between 0.0 and 1.0.'
-                IF (ASSOCIATED(ModuleLogger)) THEN
-                    CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
-                ELSE
-                    CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
-                END IF
+                CALL UrbanLand%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -762,22 +757,14 @@ CONTAINS
                 IF (UrbanLand%WaterUseSpecsFile%rValues(iCol) .NE. 1.0) THEN
                     MessageArray(1) = 'Urban outdoors applied water fraction in subregion '//TRIM(IntToText(iSubregionIDs(indxRegion)))//' is not zero'
                     MessageArray(2) = 'when the urban outdoors area is zero. Adjusting the water use fraction accordingly!'
-                    IF (ASSOCIATED(ModuleLogger)) THEN
-                        CALL ModuleLogger%LogMessage(MessageArray(1:2),f_iInfo,ThisProcedure)
-                    ELSE
-                        CALL ModuleLogger%LogMessage(MessageArray(1:2),f_iInfo,ThisProcedure)
-                    END IF
+                    CALL UrbanLand%Logger%LogMessage(MessageArray(1:2),f_iInfo,ThisProcedure)
                     UrbanLand%WaterUseSpecsFile%rValues(iCol) = 1.0
                 END IF
             ELSEIF (UrbanLand%PerviousFrac(indxRegion) .EQ. 1.0) THEN
                 IF (UrbanLand%WaterUseSpecsFile%rValues(iCol) .NE. 0.0) THEN
                     MessageArray(1) = 'Urban indoors water fraction in subregion '//TRIM(IntToText(iSubregionIDs(indxRegion)))//' is not zero'
                     MessageArray(2) = 'when the urban indoors area is zero. Adjusting the water use fraction accordingly!'
-                    IF (ASSOCIATED(ModuleLogger)) THEN
-                        CALL ModuleLogger%LogMessage(MessageArray(1:2),f_iInfo,ThisProcedure)
-                    ELSE
-                        CALL ModuleLogger%LogMessage(MessageArray(1:2),f_iInfo,ThisProcedure)
-                    END IF
+                    CALL UrbanLand%Logger%LogMessage(MessageArray(1:2),f_iInfo,ThisProcedure)
                     UrbanLand%WaterUseSpecsFile%rValues(iCol) = 0.0
                 END IF
             END IF
@@ -863,11 +850,7 @@ CONTAINS
         DO indxRegion=1,NRegions
             DO indxSoil=1,NSoils
                 IF ((pUrbData%SoilM_Precip(indxSoil,indxRegion) + pUrbData%SoilM_AW(indxSoil,indxRegion) + pUrbData%SoilM_Oth(indxSoil,indxRegion)) .GT. TotalPorosity(indxSoil,indxRegion)) THEN
-                    IF (ASSOCIATED(ModuleLogger)) THEN
-                        CALL ModuleLogger%SetLastMessage('Initial moisture content for urban land with soil type ' // TRIM(IntToText(indxSoil)) // ' at subregion ' // TRIM(IntToText(iSubregionIDs(indxRegion))) // ' is greater than total porosity!',f_iFatal,ThisProcedure)
-                    ELSE
-                        CALL ModuleLogger%SetLastMessage('Initial moisture content for urban land with soil type ' // TRIM(IntToText(indxSoil)) // ' at subregion ' // TRIM(IntToText(iSubregionIDs(indxRegion))) // ' is greater than total porosity!',f_iFatal,ThisProcedure)
-                    END IF
+                    CALL UrbanLand%Logger%SetLastMessage('Initial moisture content for urban land with soil type ' // TRIM(IntToText(indxSoil)) // ' at subregion ' // TRIM(IntToText(iSubregionIDs(indxRegion))) // ' is greater than total porosity!',f_iFatal,ThisProcedure)
                     iStat = -1
                     RETURN
                 END IF
@@ -924,11 +907,7 @@ CONTAINS
     iNSubregions = SIZE(UrbanLand%UrbData%SMax , DIM=2)
     
     !Inform user
-    IF (ASSOCIATED(ModuleLogger)) THEN
-        CALL ModuleLogger%EchoProgress('Simulating flows at urban lands')
-    ELSE
-        CALL ModuleLogger%EchoProgress('Simulating flows at urban lands')
-    END IF
+    CALL UrbanLand%Logger%EchoProgress('Simulating flows at urban lands')
     
     !Initialize
     RootDepth = UrbanLand%RootDepth   
@@ -1021,11 +1000,7 @@ CONTAINS
                     MessageArray(3) =                   'Subregion            = '//TRIM(IntToText(iSubregionIDs(indxRegion)))
                     WRITE (MessageArray(4),'(A,F11.8)') 'Desired convergence  = ',SolverData%Tolerance*TotalPorosityUrban
                     WRITE (MessageArray(5),'(A,F11.8)') 'Achieved convergence = ',ABS(AchievedConv)
-                    IF (ASSOCIATED(ModuleLogger)) THEN
-                        CALL ModuleLogger%SetLastMessage(MessageArray(1:5),f_iFatal,ThisProcedure)
-                    ELSE
-                        CALL ModuleLogger%SetLastMessage(MessageArray(1:5),f_iFatal,ThisProcedure)
-                    END IF
+                    CALL UrbanLand%Logger%SetLastMessage(MessageArray(1:5),f_iFatal,ThisProcedure)
                     iStat = -1
                     RETURN
                 END IF
@@ -1068,11 +1043,7 @@ CONTAINS
                     MessageArray(2) = 'This may be due to a too high convergence criteria set for the iterative solution.'
                     MessageArray(3) = 'Try using a smaller value for RZCONV and a higher value for RZITERMX parameters'
                     MessageArray(4) = 'in the Root Zone Main Input File.'
-                    IF (ASSOCIATED(ModuleLogger)) THEN
-                        CALL ModuleLogger%SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
-                    ELSE
-                        CALL ModuleLogger%SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
-                    END IF
+                    CALL UrbanLand%Logger%SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
                     iStat = -1
                     RETURN
                 END IF

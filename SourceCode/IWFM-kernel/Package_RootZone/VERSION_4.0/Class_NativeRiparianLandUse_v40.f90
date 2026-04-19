@@ -79,6 +79,7 @@ MODULE Class_NativeRiparianLandUse_v40
   ! --- NATIVE/RIPARIAN LAND DATABASE TYPE
   ! -------------------------------------------------------------
   TYPE NativeRiparianLandUse_v40_Type
+      TYPE(MessageLoggerType),POINTER :: Logger => NULL()
       TYPE(NativeRiparian_v40_Type) :: NativeVeg
       TYPE(NativeRiparian_v40_Type) :: RiparianVeg
       REAL(8)                       :: RootDepth_Native         = 0.0     
@@ -139,14 +140,15 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- NEW NATIVE AND RIPARIAN LAND USE DATA
   ! -------------------------------------------------------------
-  SUBROUTINE New(NVRVLand,cFileName,cWorkingDirectory,FactCN,NElements,NSubregions,iElemIDs,TrackTime,iStat)
-    CLASS(NativeRiparianLandUse_v40_Type) :: NVRVLand
-    CHARACTER(LEN=*),INTENT(IN)           :: cFileName,cWorkingDirectory
-    REAL(8),INTENT(IN)                    :: FACTCN
-    INTEGER,INTENT(IN)                    :: NElements,NSubregions,iElemIDs(NElements)
-    LOGICAL,INTENT(IN)                    :: TrackTime
-    INTEGER,INTENT(OUT)                   :: iStat
-    
+  SUBROUTINE New(NVRVLand,Logger,cFileName,cWorkingDirectory,FactCN,NElements,NSubregions,iElemIDs,TrackTime,iStat)
+    CLASS(NativeRiparianLandUse_v40_Type)        :: NVRVLand
+    TYPE(MessageLoggerType),POINTER,INTENT(IN)   :: Logger
+    CHARACTER(LEN=*),INTENT(IN)                  :: cFileName,cWorkingDirectory
+    REAL(8),INTENT(IN)                           :: FACTCN
+    INTEGER,INTENT(IN)                           :: NElements,NSubregions,iElemIDs(NElements)
+    LOGICAL,INTENT(IN)                           :: TrackTime
+    INTEGER,INTENT(OUT)                          :: iStat
+
     !Local variables
     CHARACTER(LEN=ModNameLen+3) :: ThisProcedure = ModName // 'New'
     CHARACTER                   :: ALine*1000
@@ -159,10 +161,11 @@ CONTAINS
     
     !Initialize
     iStat = 0
-    
+    NVRVLand%Logger => Logger
+
     !Return if no file name is specified
     IF (cFileName .EQ. '') RETURN
-    
+
     !Open file
     CALL NVRVFile%New(FileName=ADJUSTL(cFileName),InputFile=.TRUE.,IsTSFile=.FALSE.,iStat=iStat)
     IF (iStat .EQ. -1) RETURN
@@ -174,7 +177,7 @@ CONTAINS
               NVRVLand%RegionETPot_RV(NSubregions) , &
               STAT=ErrorCode                       )
     IF (ErrorCode+iStat+iStat1 .NE. 0) THEN
-        CALL ModuleLogger%SetLastMessage('Error in allocating memory for native/riparian vegetation data!',f_iFatal,ThisProcedure)
+        CALL NVRVLand%Logger%SetLastMessage('Error in allocating memory for native/riparian vegetation data!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -203,7 +206,7 @@ CONTAINS
         iElem = INT(DummyArray(indxElem,1))
         IF (lProcessed(iElem)) THEN
             ID = iElemIDs(iElem)
-            CALL ModuleLogger%SetLastMessage('curve numbers and evapotranspiration column pointers for native and riparian vegetation at element '//TRIM(IntToText(ID))//' are defined more than once!',f_iFatal,ThisProcedure)
+            CALL NVRVLand%Logger%SetLastMessage('curve numbers and evapotranspiration column pointers for native and riparian vegetation at element '//TRIM(IntToText(ID))//' are defined more than once!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -220,7 +223,7 @@ CONTAINS
         MAXVAL(DummyArray(:,2:)) .GT. 1.0         ) THEN
       MessageArray(1) = 'Some or all initial root zone moisture contents are less than'
       MessageArray(2) = '0.0 or greater than 1.0 for native and riparian vegetation areas!'
-      CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure) 
+      CALL NVRVLand%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
       iStat = -1
       RETURN
     END IF
@@ -229,7 +232,7 @@ CONTAINS
         iElem = INT(DummyArray(indxElem,1))
         IF (lProcessed(iElem)) THEN
             ID = iElemIDs(iElem)
-            CALL ModuleLogger%SetLastMessage('Initial conditions for native and riparian vegetation at element '//TRIM(IntToText(ID))//' are defined more than once!',f_iFatal,ThisProcedure)
+            CALL NVRVLand%Logger%SetLastMessage('Initial conditions for native and riparian vegetation at element '//TRIM(IntToText(ID))//' are defined more than once!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -435,11 +438,7 @@ CONTAINS
     iStat = 0
     
     !Echo progress
-    IF (ASSOCIATED(ModuleLogger)) THEN
-        CALL ModuleLogger%EchoProgress('Reading time series data for native and riparian vegitation lands')
-    ELSE
-        CALL ModuleLogger%EchoProgress('Reading time series data for native and riparian vegitation lands')
-    END IF
+    CALL NVRVLand%Logger%EchoProgress('Reading time series data for native and riparian vegitation lands')
     
     !Land use areas
     CALL NVRVLand%LandUseDataFile%ReadTSData('Native and riparian veg. areas',TimeStep,rElemAreas,iElemIDs,iStat)
@@ -594,11 +593,7 @@ CONTAINS
     iStat = 0
   
     !Inform user
-    IF (ASSOCIATED(ModuleLogger)) THEN
-        CALL ModuleLogger%EchoProgress('Simulating flows at native and riparian vegetation lands')
-    ELSE
-        CALL ModuleLogger%EchoProgress('Simulating flows at native and riparian vegetation lands')
-    END IF
+    CALL NVRVLand%Logger%EchoProgress('Simulating flows at native and riparian vegetation lands')
     
     !Root depth 
     RootDepthNV = NVRVLand%RootDepth_Native 
@@ -689,11 +684,7 @@ CONTAINS
                     MessageArray(2) = 'Element              = '//TRIM(IntToText(iElemID))
                     WRITE (MessageArray(3),'(A,F11.8)') 'Desired convergence  = ',SolverData%Tolerance*TotalPorosityCrop
                     WRITE (MessageArray(4),'(A,F11.8)') 'Achieved convergence = ',ABS(AchievedConv)
-                    IF (ASSOCIATED(ModuleLogger)) THEN
-                        CALL ModuleLogger%SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
-                    ELSE
-                        CALL ModuleLogger%SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
-                    END IF
+                        CALL NVRVLand%Logger%SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
                     iStat = -1
                     !$OMP END CRITICAL
                     CYCLE
@@ -730,11 +721,7 @@ CONTAINS
                     MessageArray(2) = 'This may be due to a too high convergence criteria set for the iterative solution.'
                     MessageArray(3) = 'Try using a smaller value for RZCONV and a higher value for RZITERMX parameters'
                     MessageArray(4) = 'in the Root Zone Main Input File.'
-                    IF (ASSOCIATED(ModuleLogger)) THEN
-                        CALL ModuleLogger%SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
-                    ELSE
-                        CALL ModuleLogger%SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
-                    END IF
+                        CALL NVRVLand%Logger%SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
                     iStat = -1
                     !$OMP END CRITICAL
                     CYCLE
@@ -795,11 +782,7 @@ CONTAINS
                     MessageArray(2) = 'Element              = '//TRIM(IntToText(iElemID))
                     WRITE (MessageArray(3),'(A,F11.8)') 'Desired convergence  = ',SolverData%Tolerance*TotalPorosityCrop
                     WRITE (MessageArray(4),'(A,F11.8)') 'Achieved convergence = ',ABS(AchievedConv)
-                    IF (ASSOCIATED(ModuleLogger)) THEN
-                        CALL ModuleLogger%SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
-                    ELSE
-                        CALL ModuleLogger%SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
-                    END IF
+                        CALL NVRVLand%Logger%SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
                     iStat = -1
                     !$OMP END CRITICAL
                     CYCLE
@@ -836,11 +819,7 @@ CONTAINS
                     MessageArray(2) = 'This may be due to a too high convergence criteria set for the iterative solution.'
                     MessageArray(3) = 'Try using a smaller value for RZCONV and a higher value for RZITERMX parameters'
                     MessageArray(4) = 'in the Root Zone Main Input File.'
-                    IF (ASSOCIATED(ModuleLogger)) THEN
-                        CALL ModuleLogger%SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
-                    ELSE
-                        CALL ModuleLogger%SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
-                    END IF
+                        CALL NVRVLand%Logger%SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
                     iStat = -1
                     !$OMP END CRITICAL
                     CYCLE
@@ -911,20 +890,12 @@ CONTAINS
         DO indxElem=1,NElements
                      
             IF ((pNV%SoilM_Precip(indxElem,1) + pNV%SoilM_AW(indxElem,1) + pNV%SoilM_Oth(indxElem,1)) .GT. TotalPorosity(indxElem)) THEN
-                IF (ASSOCIATED(ModuleLogger)) THEN
-                    CALL ModuleLogger%SetLastMessage('Initial moisture content for native vegetation at element ' // TRIM(IntToText(iElemIDs(indxElem))) // ' is greater than total porosity!',f_iFatal,ThisProcedure)
-                ELSE
-                    CALL ModuleLogger%SetLastMessage('Initial moisture content for native vegetation at element ' // TRIM(IntToText(iElemIDs(indxElem))) // ' is greater than total porosity!',f_iFatal,ThisProcedure)
-                END IF
+                    CALL NVRVLand%Logger%SetLastMessage('Initial moisture content for native vegetation at element ' // TRIM(IntToText(iElemIDs(indxElem))) // ' is greater than total porosity!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
             IF ((pRV%SoilM_Precip(indxElem,1) + pRV%SoilM_AW(indxElem,1) + pRV%SoilM_Oth(indxElem,1)) .GT. TotalPorosity(indxElem)) THEN
-                IF (ASSOCIATED(ModuleLogger)) THEN
-                    CALL ModuleLogger%SetLastMessage('Initial moisture content for riparian vegetation at element ' // TRIM(IntToText(iElemIDs(indxElem))) // ' is greater than total porosity!',f_iFatal,ThisProcedure)
-                ELSE
-                    CALL ModuleLogger%SetLastMessage('Initial moisture content for riparian vegetation at element ' // TRIM(IntToText(iElemIDs(indxElem))) // ' is greater than total porosity!',f_iFatal,ThisProcedure)
-                END IF
+                    CALL NVRVLand%Logger%SetLastMessage('Initial moisture content for riparian vegetation at element ' // TRIM(IntToText(iElemIDs(indxElem))) // ' is greater than total porosity!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF

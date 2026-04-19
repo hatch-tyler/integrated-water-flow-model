@@ -1321,9 +1321,9 @@ CONTAINS
 
     !Root zone component (must be instantiated after gw and streams)
     IF (ProjectFileNames(SIM_RootZoneDataFileID) .NE. '') THEN
-        CALL Model%RootZone%New(lForInquiry,cProjectNameForDSS,ProjectFileNames(SIM_RootZoneDataFileID),ProjectFileNames(SIM_CropCoeffFileID),Model%cSIMWorkingDirectory,Model%AppGrid,Model%TimeStep,Model%NTIME,Model%ETData,Model%PrecipData,iStat,iStrmNodeIDs=iStrmNodeIDs,iLakeIDs=iLakeIDs)
+        CALL Model%RootZone%New(ModuleLogger,lForInquiry,cProjectNameForDSS,ProjectFileNames(SIM_RootZoneDataFileID),ProjectFileNames(SIM_CropCoeffFileID),Model%cSIMWorkingDirectory,Model%AppGrid,Model%TimeStep,Model%NTIME,Model%ETData,Model%PrecipData,iStat,iStrmNodeIDs=iStrmNodeIDs,iLakeIDs=iLakeIDs)
         IF (iStat .EQ. -1) RETURN
-    
+
         !Define the lake elements
         DO indxLake=1,NLakes
             CALL Model%AppLake%GetLakeElements(indxLake,LakeElems)
@@ -1704,9 +1704,9 @@ CONTAINS
     
     !Root zone component (must be instantiated after gw and streams)
     IF (ProjectFileNames(SIM_RootZoneDataFileID) .NE. '') THEN
-        CALL Model%RootZone%New(lForInquiry,cProjectNameForDSS,ProjectFileNames(SIM_RootZoneDataFileID),ProjectFileNames(SIM_CropCoeffFileID),Model%cSIMWorkingDirectory,Model%AppGrid,Model%TimeStep,Model%NTIME,Model%ETData,Model%PrecipData,iStat,iStrmNodeIDs=iStrmNodeIDs,iLakeIDs=iLakeIDs)
+        CALL Model%RootZone%New(ModuleLogger,lForInquiry,cProjectNameForDSS,ProjectFileNames(SIM_RootZoneDataFileID),ProjectFileNames(SIM_CropCoeffFileID),Model%cSIMWorkingDirectory,Model%AppGrid,Model%TimeStep,Model%NTIME,Model%ETData,Model%PrecipData,iStat,iStrmNodeIDs=iStrmNodeIDs,iLakeIDs=iLakeIDs)
         IF (iStat .EQ. -1) RETURN
-    
+
         !Define the lake elements
         DO indxLake=1,NLakes
             CALL Model%AppLake%GetLakeElements(indxLake,LakeElems)
@@ -2100,7 +2100,7 @@ CONTAINS
 
     !Root zone component (must be instantiated after gw and streams)
     IF (cSIMFileNames(SIM_RootZoneDataFileID) .NE. '') THEN
-        CALL Model%RootZone%New(lForInquiry,cProjectNameForDSS,cSIMFileNames(SIM_RootZoneDataFileID),cSimFileNames(SIM_CropCoeffFileID),Model%cSIMWorkingDirectory,Model%AppGrid,Model%TimeStep,Model%NTIME,Model%ETData,Model%PrecipData,iStat,iStrmNodeIDs=iStrmNodeIDs,iLakeIDs=iLakeIDs)
+        CALL Model%RootZone%New(ModuleLogger,lForInquiry,cProjectNameForDSS,cSIMFileNames(SIM_RootZoneDataFileID),cSimFileNames(SIM_CropCoeffFileID),Model%cSIMWorkingDirectory,Model%AppGrid,Model%TimeStep,Model%NTIME,Model%ETData,Model%PrecipData,iStat,iStrmNodeIDs=iStrmNodeIDs,iLakeIDs=iLakeIDs)
         IF (iStat .EQ. -1) RETURN
         
         !Define the lake elements

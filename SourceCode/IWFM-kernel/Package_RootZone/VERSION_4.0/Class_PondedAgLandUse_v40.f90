@@ -126,6 +126,7 @@ MODULE Class_PondedAgLandUse_v40
   ! --- PONDED LAND DATABASE TYPE
   ! -------------------------------------------------------------
   TYPE PondedAgLandUse_v40_Type
+      TYPE(MessageLoggerType),POINTER :: Logger => NULL()
       INTEGER                        :: NCrops                      = f_iNPondedCrops  !Number of ponded crops
       TYPE(PondedAg_v40_Type)        :: Crops                                          !Ponded crops for each (crop,element) combination
       CHARACTER(LEN=f_iLenCropCode)  :: CropCodes(f_iNPondedCrops)  = f_cCropCodes     !Ponded crop codes
@@ -205,17 +206,18 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- NEW PONDED AG LAND USE DATA
   ! -------------------------------------------------------------
-  SUBROUTINE New(PondLand,IsForInquiry,cProjectNameForDSS,cFileName,cWorkingDirectory,FactCN,AppGrid,iElemIDs,TimeStep,NTimeSteps,cVersion,iStat)
-    CLASS(PondedAgLandUse_v40_Type) :: PondLand
-    LOGICAL,INTENT(IN)              :: IsForInquiry
-    CHARACTER(LEN=*),INTENT(IN)     :: cProjectNameForDSS,cFileName,cWorkingDirectory
-    REAL(8),INTENT(IN)              :: FACTCN
-    TYPE(AppGridType),INTENT(IN)    :: AppGrid
-    TYPE(TimeStepType),INTENT(IN)   :: TimeStep
-    INTEGER,INTENT(IN)              :: NTimeSteps,iElemIDs(AppGrid%NElements)
-    CHARACTER(LEN=*),INTENT(IN)     :: cVersion
-    INTEGER,INTENT(OUT)             :: iStat
-    
+  SUBROUTINE New(PondLand,Logger,IsForInquiry,cProjectNameForDSS,cFileName,cWorkingDirectory,FactCN,AppGrid,iElemIDs,TimeStep,NTimeSteps,cVersion,iStat)
+    CLASS(PondedAgLandUse_v40_Type)              :: PondLand
+    TYPE(MessageLoggerType),POINTER,INTENT(IN)   :: Logger
+    LOGICAL,INTENT(IN)                           :: IsForInquiry
+    CHARACTER(LEN=*),INTENT(IN)                  :: cProjectNameForDSS,cFileName,cWorkingDirectory
+    REAL(8),INTENT(IN)                           :: FACTCN
+    TYPE(AppGridType),INTENT(IN)                 :: AppGrid
+    TYPE(TimeStepType),INTENT(IN)                :: TimeStep
+    INTEGER,INTENT(IN)                           :: NTimeSteps,iElemIDs(AppGrid%NElements)
+    CHARACTER(LEN=*),INTENT(IN)                  :: cVersion
+    INTEGER,INTENT(OUT)                          :: iStat
+
     !Local variables
     CHARACTER(LEN=ModNameLen+3)                      :: ThisProcedure = ModName // 'New'
     CHARACTER                                        :: ALine*1000,cBudgetCropCode*f_iLenCropCode
@@ -232,10 +234,11 @@ CONTAINS
     
     !Initialize
     iStat = 0
-    
+    PondLand%Logger => Logger
+
     !Return if no filename is specified
     IF (cFileName .EQ. '') RETURN
-   
+
     !Initialize
     NElements                 = AppGrid%NElements
     NRegions                  = AppGrid%NSubregions
@@ -272,11 +275,7 @@ CONTAINS
               PondLand%iColNonFloodRiceDecompAW(NElements)                 , &
               STAT=ErrorCode                                               )
     IF (ErrorCode+iStat .NE. 0) THEN
-        IF (ASSOCIATED(ModuleLogger)) THEN
             CALL ModuleLogger%SetLastMessage('Error in allocating memory for ponded agricultural data!',f_iFatal,ThisProcedure)
-        ELSE
-            CALL ModuleLogger%SetLastMessage('Error in allocating memory for ponded agricultural data!',f_iFatal,ThisProcedure)
-        END IF
         iStat = -1
         RETURN
     END IF
@@ -323,11 +322,7 @@ CONTAINS
                 RegionAreas(NBudgetRegions)           ,  &
                 STAT=ErrorCode                        )
       IF (ErrorCode .NE. 0) THEN
-          IF (ASSOCIATED(ModuleLogger)) THEN
               CALL ModuleLogger%SetLastMessage('Error in allocating memory for ponded crops budget output data!',f_iFatal,ThisProcedure)
-          ELSE
-              CALL ModuleLogger%SetLastMessage('Error in allocating memory for ponded crops budget output data!',f_iFatal,ThisProcedure)
-          END IF
           iStat = -1
           RETURN
       END IF
@@ -344,11 +339,7 @@ CONTAINS
           END IF
         END DO
         IF (.NOT. lCropFound) THEN
-            IF (ASSOCIATED(ModuleLogger)) THEN
                 CALL ModuleLogger%SetLastMessage(TRIM(cBudgetCropCode)//' for water budget output is not defined as a ponded crop!',f_iFatal,ThisProcedure)
-            ELSE
-                CALL ModuleLogger%SetLastMessage(TRIM(cBudgetCropCode)//' for water budget output is not defined as a ponded crop!',f_iFatal,ThisProcedure)
-            END IF
             iStat = -1
             RETURN
         END IF
@@ -403,11 +394,7 @@ CONTAINS
         iElem = INT(DummyRealArray(indxElem,1))
         IF (lProcessed(iElem)) THEN
             ID = iElemIDs(iElem)
-            IF (ASSOCIATED(ModuleLogger)) THEN
                 CALL ModuleLogger%SetLastMessage('Curve numbers for ponded crops at element '//TRIM(IntToText(ID))//' are defined more than once!',f_iFatal,ThisProcedure)
-            ELSE
-                CALL ModuleLogger%SetLastMessage('Curve numbers for ponded crops at element '//TRIM(IntToText(ID))//' are defined more than once!',f_iFatal,ThisProcedure)
-            END IF
             iStat = -1
             RETURN
         END IF
@@ -422,11 +409,7 @@ CONTAINS
         iElem = INT(DummyRealArray(indxElem,1))
         IF (lProcessed(iElem)) THEN
             ID = iElemIDs(iElem)
-            IF (ASSOCIATED(ModuleLogger)) THEN
                 CALL ModuleLogger%SetLastMessage('Evapotranspiration column pointers for ponded crops at element '//TRIM(IntToText(ID))//' are defined more than once!',f_iFatal,ThisProcedure)
-            ELSE
-                CALL ModuleLogger%SetLastMessage('Evapotranspiration column pointers for ponded crops at element '//TRIM(IntToText(ID))//' are defined more than once!',f_iFatal,ThisProcedure)
-            END IF
             iStat = -1
             RETURN
         END IF
@@ -442,11 +425,7 @@ CONTAINS
         iElem = DummyIntArray(indxElem,1)
         IF (lProcessed(iElem)) THEN
             ID = iElemIDs(iElem)
-            IF (ASSOCIATED(ModuleLogger)) THEN
                 CALL ModuleLogger%SetLastMessage('Water supply requirement column pointers for ponded crops at element '//TRIM(IntToText(ID))//' are defined more than once!',f_iFatal,ThisProcedure)
-            ELSE
-                CALL ModuleLogger%SetLastMessage('Water supply requirement column pointers for ponded crops at element '//TRIM(IntToText(ID))//' are defined more than once!',f_iFatal,ThisProcedure)
-            END IF
             iStat = -1
             RETURN
         END IF
@@ -461,11 +440,7 @@ CONTAINS
         iElem = DummyIntArray(indxElem,1)
         IF (lProcessed(iElem)) THEN
             ID = iElemIDs(iElem)
-            IF (ASSOCIATED(ModuleLogger)) THEN
                 CALL ModuleLogger%SetLastMessage('Irrigation period column pointers for ponded crops at element '//TRIM(IntToText(ID))//' are defined more than once!',f_iFatal,ThisProcedure)
-            ELSE
-                CALL ModuleLogger%SetLastMessage('Irrigation period column pointers for ponded crops at element '//TRIM(IntToText(ID))//' are defined more than once!',f_iFatal,ThisProcedure)
-            END IF
             iStat = -1
             RETURN
         END IF
@@ -496,11 +471,7 @@ CONTAINS
         iElem = DummyIntArray(indxElem,1)
         IF (lProcessed(iElem)) THEN
             ID = iElemIDs(iElem)
-            IF (ASSOCIATED(ModuleLogger)) THEN
                 CALL ModuleLogger%SetLastMessage('Ponding depth column pointers for ponded crops at element '//TRIM(IntToText(ID))//' are defined more than once!',f_iFatal,ThisProcedure)
-            ELSE
-                CALL ModuleLogger%SetLastMessage('Ponding depth column pointers for ponded crops at element '//TRIM(IntToText(ID))//' are defined more than once!',f_iFatal,ThisProcedure)
-            END IF
             iStat = -1
             RETURN
         END IF
@@ -519,11 +490,7 @@ CONTAINS
         iElem = DummyIntArray(indxElem,1)
         IF (lProcessed(iElem)) THEN
             ID = iElemIDs(iElem)
-            IF (ASSOCIATED(ModuleLogger)) THEN
                 CALL ModuleLogger%SetLastMessage('Non-flooded rice decomposition water column pointers for ponded crops at element '//TRIM(IntToText(ID))//' are defined more than once!',f_iFatal,ThisProcedure)
-            ELSE
-                CALL ModuleLogger%SetLastMessage('Non-flooded rice decomposition water column pointers for ponded crops at element '//TRIM(IntToText(ID))//' are defined more than once!',f_iFatal,ThisProcedure)
-            END IF
             iStat = -1
             RETURN
         END IF
@@ -538,11 +505,7 @@ CONTAINS
         iElem = DummyIntArray(indxElem,1)
         IF (lProcessed(iElem)) THEN
             ID = iElemIDs(iElem)
-            IF (ASSOCIATED(ModuleLogger)) THEN
                 CALL ModuleLogger%SetLastMessage('Return flow depth column pointers for ponded crops at element '//TRIM(IntToText(ID))//' are defined more than once!',f_iFatal,ThisProcedure)
-            ELSE
-                CALL ModuleLogger%SetLastMessage('Return flow depth column pointers for ponded crops at element '//TRIM(IntToText(ID))//' are defined more than once!',f_iFatal,ThisProcedure)
-            END IF
             iStat = -1
             RETURN
         END IF
@@ -557,11 +520,7 @@ CONTAINS
         iElem = DummyIntArray(indxElem,1)
         IF (lProcessed(iElem)) THEN
             ID = iElemIDs(iElem)
-            IF (ASSOCIATED(ModuleLogger)) THEN
                 CALL ModuleLogger%SetLastMessage('Re-use flow depth column pointers for ponded crops at element '//TRIM(IntToText(ID))//' are defined more than once!',f_iFatal,ThisProcedure)
-            ELSE
-                CALL ModuleLogger%SetLastMessage('Re-use flow depth column pointers for ponded crops at element '//TRIM(IntToText(ID))//' are defined more than once!',f_iFatal,ThisProcedure)
-            END IF
             iStat = -1
             RETURN
         END IF
@@ -584,22 +543,14 @@ CONTAINS
         MAXVAL(DummyRealArray(:,2)) .GT. 1.0         ) THEN
         MessageArray(1) = 'Some fractions of initial soil moisture due to precipitation is less '
         MessageArray(2) = 'than 0.0 or greater than 1.0 for ponded agricultural crops!'
-        IF (ASSOCIATED(ModuleLogger)) THEN
             CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
-        ELSE
-            CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
-        END IF
         iStat = -1
         RETURN
     END IF
     IF (MINVAL(DummyRealArray(:,3:)) .LT. 0.0) THEN
         MessageArray(1) = 'Some or all initial root zone moisture contents are less than'
         MessageArray(2) = '0.0 for ponded crops!'
-        IF (ASSOCIATED(ModuleLogger)) THEN
             CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
-        ELSE
-            CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
-        END IF
         iStat = -1
         RETURN
     END IF
@@ -608,11 +559,7 @@ CONTAINS
         iElem = INT(DummyRealArray(indxElem,1))
         IF (lProcessed(iElem)) THEN
             ID = iElemIDs(iElem)
-            IF (ASSOCIATED(ModuleLogger)) THEN
                 CALL ModuleLogger%SetLastMessage('Initial conditions for ponded crops at element '//TRIM(IntToText(ID))//' are defined more than once!',f_iFatal,ThisProcedure)
-            ELSE
-                CALL ModuleLogger%SetLastMessage('Initial conditions for ponded crops at element '//TRIM(IntToText(ID))//' are defined more than once!',f_iFatal,ThisProcedure)
-            END IF
             iStat = -1
             RETURN
         END IF
@@ -873,11 +820,7 @@ CONTAINS
     iStat = 0
     
     !Echo progress
-    IF (ASSOCIATED(ModuleLogger)) THEN
         CALL ModuleLogger%EchoProgress('Reading time series data for ponded agricultural crops')
-    ELSE
-        CALL ModuleLogger%EchoProgress('Reading time series data for ponded agricultural crops')
-    END IF
     
     !Land use areas
     CALL PondLand%LandUseDataFile%ReadTSData('Ponded crop areas',TimeStep,rElemAreas,iElemIDs,iStat)
@@ -906,11 +849,7 @@ CONTAINS
                     MessageArray(1) = 'Re-use depth for ' // TRIM(f_cCropCodes(indxCrop)) // ' at element ' // TRIM(IntToText(iElemIDs(indxElem)))//' is greater than return flow depth!'
                     WRITE (MessageArray(2),'(A,F5.3)') 'Re-use depth      = ',pPondOps(pCrops%iColReuse(indxCrop,indxElem))
                     WRITE (MessageArray(3),'(A,F5.3)') 'Return flow depth = ',pPondOps(pCrops%iColReturn(indxCrop,indxElem))
-                    IF (ASSOCIATED(ModuleLogger)) THEN
                         CALL ModuleLogger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
-                    ELSE
-                        CALL ModuleLogger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
-                    END IF
                     iStat = -1
                     RETURN
                 END IF
@@ -1243,11 +1182,7 @@ CONTAINS
     iStat = 0
                                     
     !Inform user
-    IF (ASSOCIATED(ModuleLogger)) THEN
         CALL ModuleLogger%EchoProgress('Simulating flows at ponded agricultural crop lands')
-    ELSE
-        CALL ModuleLogger%EchoProgress('Simulating flows at ponded agricultural crop lands')
-    END IF
     
     ASSOCIATE (pCrops => PondedAg%Crops)
         !$OMP PARALLEL DEFAULT(PRIVATE) SHARED(AppGrid,lLakeElem,SoilsData,HydCondPonded,ETData,Precip,GenericMoisture,    &
@@ -1337,11 +1272,7 @@ CONTAINS
                     MessageArray(3) = 'Crop type            = '//TRIM(f_cCropCodes(indxCrop))
                     WRITE (MessageArray(4),'(A,F11.8)') 'Desired convergence  = ',SolverData%Tolerance*TotalPorosityCrop
                     WRITE (MessageArray(5),'(A,F11.8)') 'Achieved convergence = ',ABS(AchievedConv)
-                    IF (ASSOCIATED(ModuleLogger)) THEN
                         CALL ModuleLogger%SetLastMessage(MessageArray(1:5),f_iFatal,ThisProcedure)
-                    ELSE
-                        CALL ModuleLogger%SetLastMessage(MessageArray(1:5),f_iFatal,ThisProcedure)
-                    END IF
                     iStat = -1
                     !$OMP END CRITICAL
                     EXIT
@@ -1408,11 +1339,7 @@ CONTAINS
                     MessageArray(2) = 'This may be due to a too high convergence criteria set for the iterative solution.'
                     MessageArray(3) = 'Try using a smaller value for RZCONV and a higher value for RZITERMX parameters'
                     MessageArray(4) = 'in the Root Zone Main Input File.'
-                    IF (ASSOCIATED(ModuleLogger)) THEN
                         CALL ModuleLogger%SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
-                    ELSE
-                        CALL ModuleLogger%SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
-                    END IF
                     iStat = -1
                     !$OMP END CRITICAL
                     EXIT

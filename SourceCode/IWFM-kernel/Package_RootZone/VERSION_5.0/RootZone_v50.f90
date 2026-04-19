@@ -368,13 +368,14 @@ CONTAINS
     CHARACTER(LEN=80)                           :: cPerfMsg
 
     !Initialize
+    RootZone%Logger => ModuleLogger
     iStat = 0
-    
+
     !Return if no filename is given
     IF (cFileName .EQ. '') RETURN
-    
+
     !Print progress
-    CALL ModuleLogger%EchoProgress('Instantiating root zone')
+    CALL RootZone%Logger%EchoProgress('Instantiating root zone')
     
     !Initialize
     cVersionFull           = 'v5.0-' // TRIM(IWFMKernelVersion%GetVersion())
@@ -413,7 +414,7 @@ CONTAINS
               RootZone%Flags%lLakeElems(NElements)         , &
               STAT=ErrorCode                               )
     IF (ErrorCode .NE. 0) THEN
-        CALL ModuleLogger%SetLastMessage('Error in allocating memory for root zone soils data!',f_iFatal,ThisProcedure)
+        CALL RootZone%Logger%SetLastMessage('Error in allocating memory for root zone soils data!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -430,7 +431,7 @@ CONTAINS
     AgDataFile = StripTextUntilCharacter(AgDataFile,f_cInlineCommentChar)
     CALL CleanSpecialCharacters(AgDataFile)
     CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(AgDataFile)),cWorkingDirectory,cAbsPathFileName)
-    CALL RootZone%AgRootZone%New(IsForInquiry,cAbsPathFileName,cWorkingDirectory,AppGrid,FactCN,NSoils,iSubregionIDs,TimeStep,iStat)
+    CALL RootZone%AgRootZone%New(RootZone%Logger,IsForInquiry,cAbsPathFileName,cWorkingDirectory,AppGrid,FactCN,NSoils,iSubregionIDs,TimeStep,iStat)
     IF (iStat .EQ. -1) RETURN
        
     !Urban data file
@@ -440,15 +441,15 @@ CONTAINS
     CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(UrbanDataFile)),cWorkingDirectory,cAbsPathFileName)
     IF (PRESENT(iStrmNodeIDs)) THEN
         IF (PRESENT(iLakeIDs)) THEN
-            CALL RootZone%UrbanRootZone%New(cAbsPathFileName,cWorkingDirectory,AppGrid,FactCN,NSoils,iElemIDs,iSubregionIDs,TrackTime,iStat,iStrmNodeIDs=iStrmNodeIDs,iLakeIDs=iLakeIDs)
+            CALL RootZone%UrbanRootZone%New(RootZone%Logger,cAbsPathFileName,cWorkingDirectory,AppGrid,FactCN,NSoils,iElemIDs,iSubregionIDs,TrackTime,iStat,iStrmNodeIDs=iStrmNodeIDs,iLakeIDs=iLakeIDs)
         ELSE
-            CALL RootZone%UrbanRootZone%New(cAbsPathFileName,cWorkingDirectory,AppGrid,FactCN,NSoils,iElemIDs,iSubregionIDs,TrackTime,iStat,iStrmNodeIDs=iStrmNodeIDs)
+            CALL RootZone%UrbanRootZone%New(RootZone%Logger,cAbsPathFileName,cWorkingDirectory,AppGrid,FactCN,NSoils,iElemIDs,iSubregionIDs,TrackTime,iStat,iStrmNodeIDs=iStrmNodeIDs)
         END IF
     ELSE
         IF (PRESENT(iLakeIDs)) THEN
-            CALL RootZone%UrbanRootZone%New(cAbsPathFileName,cWorkingDirectory,AppGrid,FactCN,NSoils,iElemIDs,iSubregionIDs,TrackTime,iStat,iLakeIDs=iLakeIDs)
+            CALL RootZone%UrbanRootZone%New(RootZone%Logger,cAbsPathFileName,cWorkingDirectory,AppGrid,FactCN,NSoils,iElemIDs,iSubregionIDs,TrackTime,iStat,iLakeIDs=iLakeIDs)
         ELSE
-            CALL RootZone%UrbanRootZone%New(cAbsPathFileName,cWorkingDirectory,AppGrid,FactCN,NSoils,iElemIDs,iSubregionIDs,TrackTime,iStat)
+            CALL RootZone%UrbanRootZone%New(RootZone%Logger,cAbsPathFileName,cWorkingDirectory,AppGrid,FactCN,NSoils,iElemIDs,iSubregionIDs,TrackTime,iStat)
         END IF    
     END IF
     IF (iStat .EQ. -1) RETURN
@@ -458,14 +459,14 @@ CONTAINS
     NVRVFile = StripTextUntilCharacter(NVRVFile,f_cInlineCommentChar) 
     CALL CleanSpecialCharacters(NVRVFile)
     CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(NVRVFile)),cWorkingDirectory,cAbsPathFileName)
-    CALL RootZone%NVRVRootZone%New(cAbsPathFileName,cWorkingDirectory,FactCN,NSoils,NElements,NRegion,iSubregionIDs,TrackTime,iStat)
+    CALL RootZone%NVRVRootZone%New(RootZone%Logger,cAbsPathFileName,cWorkingDirectory,FactCN,NSoils,NElements,NRegion,iSubregionIDs,TrackTime,iStat)
     IF (iStat .EQ. -1) RETURN
     IF (f_lLogPerfMarkers) THEN
         CALL DATE_AND_TIME(VALUES=iPerfEnd)
         rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) &
                  - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
         WRITE(cPerfMsg,'(A,F8.3,A)') '    [PERF] RZ LandUse: ', rPerfSec, ' sec'
-        CALL ModuleLogger%LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+        CALL RootZone%Logger%LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
     END IF
 
     !Check if at least one type of land use is specified
@@ -474,7 +475,7 @@ CONTAINS
          NVRVFile          .EQ. ''           )  THEN
       MessageArray(1) = 'At least one type of land use and related data should '
       MessageArray(2) = 'be specified for the simulation of root zone processes!' 
-      CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+      CALL RootZone%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
       iStat = -1
       RETURN
     END IF
@@ -493,7 +494,7 @@ CONTAINS
     CALL CleanSpecialCharacters(ALine)
     IF (ALine .EQ. '') THEN
         IF (RootZone%Flags%lAg_Defined  .OR.  RootZone%Flags%lUrban_Defined) THEN
-            CALL ModuleLogger%SetLastMessage('Missing return flow fractions data file!',f_iFatal,ThisProcedure)
+            CALL RootZone%Logger%SetLastMessage('Missing return flow fractions data file!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -509,7 +510,7 @@ CONTAINS
     CALL CleanSpecialCharacters(ALine)
     IF (ALine .EQ. '') THEN
         IF (RootZone%Flags%lAg_Defined  .OR.  RootZone%Flags%lUrban_Defined) THEN
-            CALL ModuleLogger%SetLastMessage('Missing irrigation water re-use factors data file!',f_iFatal,ThisProcedure)
+            CALL RootZone%Logger%SetLastMessage('Missing irrigation water re-use factors data file!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -534,7 +535,7 @@ CONTAINS
         rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) &
                  - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
         WRITE(cPerfMsg,'(A,F8.3,A)') '    [PERF] RZ SoilParams: ', rPerfSec, ' sec'
-        CALL ModuleLogger%LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+        CALL RootZone%Logger%LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
     END IF
 
     !Land and water use budget HDF5 output file
@@ -593,7 +594,7 @@ CONTAINS
         rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) &
                  - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
         WRITE(cPerfMsg,'(A,F8.3,A)') '    [PERF] RZ Budget+ZBudget: ', rPerfSec, ' sec'
-        CALL ModuleLogger%LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+        CALL RootZone%Logger%LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
     END IF
 
     !End-of-simulation moisture results output
@@ -628,14 +629,14 @@ CONTAINS
             !Region ID to region index
             CALL ConvertID_To_Index(iRegionID,iSubregionIDs,iRegion)
             IF (iRegion .EQ. 0) THEN
-                CALL ModuleLogger%SetLastMessage('Subregion '//TRIM(IntToText(iRegionID))//' listed for soil parameter definition is not in the model!',f_iFatal,ThisProcedure)
+                CALL RootZone%Logger%SetLastMessage('Subregion '//TRIM(IntToText(iRegionID))//' listed for soil parameter definition is not in the model!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
             
             !Make sure same subregion is not entered more than once
             IF (lProcessed(iRegion)) THEN
-                CALL ModuleLogger%SetLastMessage('Subregion '//TRIM(IntToText(iRegionID))//' is listed more than once for soil parameter definitions!',f_iFatal,ThisProcedure)
+                CALL RootZone%Logger%SetLastMessage('Subregion '//TRIM(IntToText(iRegionID))//' is listed more than once for soil parameter definitions!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -654,28 +655,28 @@ CONTAINS
             DO indxSoil=1,NSoils
                 !Method to compute Kunsat must be recognized
                 IF (LocateInList(pSoilsData(indxSoil,iRegion)%KunsatMethod,f_iKunsatMethodList) .LT. 1) THEN
-                    CALL ModuleLogger%SetLastMessage('Method to compute unsaturated hydraulic conductivity for soil type ' // TRIM(IntTotext(indxSoil)) //' at subregion ' // TRIM(IntToText(iRegionID)) // ' is not recognized!',f_iFatal,ThisProcedure)
+                    CALL RootZone%Logger%SetLastMessage('Method to compute unsaturated hydraulic conductivity for soil type ' // TRIM(IntTotext(indxSoil)) //' at subregion ' // TRIM(IntToText(iRegionID)) // ' is not recognized!',f_iFatal,ThisProcedure)
                     iStat = -1
                     RETURN
                 END IF
         
                 !Make sure hydraulic conductivity is greater than zero
                 IF (pSoilsData(indxSoil,iRegion)%HydCond .LT. 0.0) THEN
-                    CALL ModuleLogger%SetLastMessage('Root zone hydraulic conductivity for soil type ' // TRIM(IntTotext(indxSoil)) //' at subregion ' // TRIM(IntToText(iRegionID)) // ' is less than zero!',f_iFatal,ThisProcedure)
+                    CALL RootZone%Logger%SetLastMessage('Root zone hydraulic conductivity for soil type ' // TRIM(IntTotext(indxSoil)) //' at subregion ' // TRIM(IntToText(iRegionID)) // ' is less than zero!',f_iFatal,ThisProcedure)
                     iStat = -1
                     RETURN
                 END IF
             
                 !Wilting point should be less than field capacity
                 IF (pSoilsData(indxSoil,iRegion)%WiltingPoint .GE. pSoilsData(indxSoil,iRegion)%FieldCapacity) THEN
-                    CALL ModuleLogger%SetLastMessage('For soil type ' // TRIM(IntToText(indxSoil)) // ' at subregion ' // TRIM(IntToText(iRegionID)) // ' wilting point is greater than or equal to field capacity!',f_iFatal,ThisProcedure)
+                    CALL RootZone%Logger%SetLastMessage('For soil type ' // TRIM(IntToText(indxSoil)) // ' at subregion ' // TRIM(IntToText(iRegionID)) // ' wilting point is greater than or equal to field capacity!',f_iFatal,ThisProcedure)
                     iStat = -1
                     RETURN
                 END IF
         
                 !Field capacity should be less than or equal to total porosity
                 IF (pSoilsData(indxSoil,iRegion)%FieldCapacity .GT. pSoilsData(indxSoil,iRegion)%TotalPorosity) THEN
-                    CALL ModuleLogger%SetLastMessage('For soil type ' // TRIM(IntToText(indxSoil)) // ' at subregion ' // TRIM(IntToText(iRegionID)) // ' field capacity is greater than total porosity!',f_iFatal,ThisProcedure)
+                    CALL RootZone%Logger%SetLastMessage('For soil type ' // TRIM(IntToText(indxSoil)) // ' at subregion ' // TRIM(IntToText(iRegionID)) // ' field capacity is greater than total porosity!',f_iFatal,ThisProcedure)
                     iStat = -1
                     RETURN
                 END IF
@@ -702,14 +703,14 @@ CONTAINS
             !Check if element is in the model
             CALL ConvertID_To_Index(iElemID,iElemIDs,iElem)
             IF (iElem .EQ. 0) THEN
-                CALL ModuleLogger%SetLastMessage('Element '//TRIM(IntToText(iElemID))//' listed for soil type, precipitation, etc. is not in the model!',f_iFatal,ThisProcedure)
+                CALL RootZone%Logger%SetLastMessage('Element '//TRIM(IntToText(iElemID))//' listed for soil type, precipitation, etc. is not in the model!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
             
             !Check if it was defined before
             IF (lProcessed_Elem(iElem)) THEN
-                CALL ModuleLogger%SetLastMessage('Element '//TRIM(IntToText(iElemID))//' is listed more than once for soil type, precipitation, etc. definitions!',f_iFatal,ThisProcedure)
+                CALL RootZone%Logger%SetLastMessage('Element '//TRIM(IntToText(iElemID))//' is listed more than once for soil type, precipitation, etc. definitions!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -727,7 +728,7 @@ CONTAINS
             ASSOCIATE (pDestType => SurfaceFlowDestType(iElem))
                 !Make sure soil type is modeled
                 IF (iSoilType.LT.1  .OR.  iSoilType.GT.NSoils) THEN
-                    CALL ModuleLogger%SetLastMessage('Soil type at element ' // TRIM(IntToText(iElemID)) // ' is not recognized!',f_iFatal,ThisProcedure)
+                    CALL RootZone%Logger%SetLastMessage('Soil type at element ' // TRIM(IntToText(iElemID)) // ' is not recognized!',f_iFatal,ThisProcedure)
                     iStat = -1
                     RETURN
                 END IF
@@ -737,7 +738,7 @@ CONTAINS
                     pDestType .NE. f_iFlowDest_StrmNode   .AND.   &
                     pDestType .NE. f_iFlowDest_Lake       .AND.   &
                     pDestType .NE. f_iFlowDest_GWElement       )  THEN
-                    CALL ModuleLogger%SetLastMessage('Surface flow destination type for element ' // TRIM(IntToText(iElemID)) // ' is not recognized!',f_iFatal,ThisProcedure)
+                    CALL RootZone%Logger%SetLastMessage('Surface flow destination type for element ' // TRIM(IntToText(iElemID)) // ' is not recognized!',f_iFatal,ThisProcedure)
                     iStat = -1
                     RETURN
                 END IF
@@ -748,7 +749,7 @@ CONTAINS
                         IF (PRESENT(iStrmNodeIDs)) THEN
                             CALL ConvertID_To_Index(SurfaceFlowDest(iElem),iStrmNodeIDs,iFeatureIndex)
                             IF (iFeatureIndex .EQ. 0) THEN
-                                CALL ModuleLogger%SetLastMessage('Surface flow from element '//TRIM(IntToText(iElemID))//' flows into a stream node ('//TRIM(IntToText(SurfaceFlowDest(iElem)))//') that is not in the model!',f_iFatal,ThisProcedure)
+                                CALL RootZone%Logger%SetLastMessage('Surface flow from element '//TRIM(IntToText(iElemID))//' flows into a stream node ('//TRIM(IntToText(SurfaceFlowDest(iElem)))//') that is not in the model!',f_iFatal,ThisProcedure)
                                 iStat = -1
                                 RETURN
                             END IF
@@ -759,7 +760,7 @@ CONTAINS
                         IF (PRESENT(iLakeIDs)) THEN
                             CALL ConvertID_To_Index(SurfaceFlowDest(iElem),iLakeIDs,iFeatureIndex)
                             IF (iFeatureIndex .EQ. 0) THEN
-                                CALL ModuleLogger%SetLastMessage('Surface flow from element '//TRIM(IntToText(iElemID))//' flows into a lake ('//TRIM(IntToText(SurfaceFlowDest(iElem)))//') that is not in the model!',f_iFatal,ThisProcedure)
+                                CALL RootZone%Logger%SetLastMessage('Surface flow from element '//TRIM(IntToText(iElemID))//' flows into a lake ('//TRIM(IntToText(SurfaceFlowDest(iElem)))//') that is not in the model!',f_iFatal,ThisProcedure)
                                 iStat = -1
                                 RETURN
                             END IF
@@ -769,13 +770,13 @@ CONTAINS
                     CASE (f_iFlowDest_Subregion)
                         CALL ConvertID_To_Index(SurfaceFlowDest(iElem),iSubregionIDs,iFeatureIndex)
                         IF (iFeatureIndex .EQ. 0) THEN
-                            CALL ModuleLogger%SetLastMessage('Surface flow from element '//TRIM(IntToText(iElemID))//' goes to a subregion ('//TRIM(IntToText(SurfaceFlowDest(iElem)))//') that is not in the model!',f_iFatal,ThisProcedure)
+                            CALL RootZone%Logger%SetLastMessage('Surface flow from element '//TRIM(IntToText(iElemID))//' goes to a subregion ('//TRIM(IntToText(SurfaceFlowDest(iElem)))//') that is not in the model!',f_iFatal,ThisProcedure)
                             iStat = -1
                             RETURN
                         END IF
                         SurfaceFlowDest(iElem) = iFeatureIndex
                         IF (SurfaceFlowDest(iElem) .EQ. AppGrid%AppElement(iElem)%Subregion) THEN
-                            CALL ModuleLogger%SetLastMessage('Surface flow from element '//TRIM(IntToText(iElemID))//' cannot go to the same subregion which the element belongs to!',f_iFatal,ThisProcedure)
+                            CALL RootZone%Logger%SetLastMessage('Surface flow from element '//TRIM(IntToText(iElemID))//' cannot go to the same subregion which the element belongs to!',f_iFatal,ThisProcedure)
                             iStat = -1
                             RETURN
                         END IF
@@ -823,7 +824,7 @@ CONTAINS
         rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) &
                  - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
         WRITE(cPerfMsg,'(A,F8.3,A)') '    [PERF] RZ GenericMoisture+Rest: ', rPerfSec, ' sec'
-        CALL ModuleLogger%LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+        CALL RootZone%Logger%LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
     END IF
 
     !Close file
@@ -2466,7 +2467,7 @@ CONTAINS
     END IF
     
     !Generate zone list
-    CALL ZoneList%New(ModuleLogger,pZBudget%Header%iNData,pZBudget%Header%lFaceFlows_Defined,pZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)
+    CALL ZoneList%New(RootZone%Logger,pZBudget%Header%iNData,pZBudget%Header%lFaceFlows_Defined,pZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)
     IF (iStat .NE. 0) RETURN
     
     !Retrieve data
@@ -2648,7 +2649,7 @@ CONTAINS
     END IF
     
     !Generate zone list
-    CALL ZoneList%New(ModuleLogger,pZBudget%Header%iNData,pZBudget%Header%lFaceFlows_Defined,pZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)
+    CALL ZoneList%New(RootZone%Logger,pZBudget%Header%iNData,pZBudget%Header%lFaceFlows_Defined,pZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)
     IF (iStat .NE. 0) RETURN
     
     !Retrieve data
@@ -2818,7 +2819,7 @@ CONTAINS
     SELECT CASE (iZBudgetType)
         CASE (f_iZBudgetType_LWU)
             IF (.NOT. RootZone%Flags%LWUseZoneBudRawFile_Defined) THEN
-                CALL ModuleLogger%SetLastMessage('Land and Water Use zone budget is not part of the model output to retrieve data!',f_iFatal,ThisProcedure)
+                CALL RootZone%Logger%SetLastMessage('Land and Water Use zone budget is not part of the model output to retrieve data!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -2826,7 +2827,7 @@ CONTAINS
             
         CASE (f_iZBudgetType_RootZone)
             IF (.NOT. RootZone%Flags%RootZoneZoneBudRawFile_Defined) THEN
-                CALL ModuleLogger%SetLastMessage('Root Zone zone budget is not part of the model output to retrieve data!',f_iFatal,ThisProcedure)
+                CALL RootZone%Logger%SetLastMessage('Root Zone zone budget is not part of the model output to retrieve data!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -2834,7 +2835,7 @@ CONTAINS
     END SELECT
             
     !Generate zone list
-    CALL ZoneList%New(ModuleLogger,pZBudget%Header%iNData,pZBudget%Header%lFaceFlows_Defined,pZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    CALL ZoneList%New(RootZone%Logger,pZBudget%Header%iNData,pZBudget%Header%lFaceFlows_Defined,pZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)  ;  IF (iStat .EQ. -1) RETURN
     
     !Read data
     CALL pZBudget%ReadData(ZoneList,iZoneID,iCols,cInterval,cBeginDate,cEndDate,rFactAR,rFactVL,iDataTypes,inActualOutput,rValues,iStat)  ;  IF (iStat .EQ. -1) RETURN
@@ -3456,25 +3457,17 @@ CONTAINS
     
     IF (iDemandFor .EQ. f_iLandUse_Ag) THEN
         IF (RootZone%Flags%lAg_Defined) THEN
-            IF (ASSOCIATED(ModuleLogger)) THEN
-                CALL ModuleLogger%EchoProgress('Retrieving subregional agricultural water demand ... ',lAdvance=.FALSE.)
-            ELSE
-                CALL ModuleLogger%EchoProgress('Retrieving subregional agricultural water demand ... ',lAdvance=.FALSE.)
-            END IF
+            CALL RootZone%Logger%EchoProgress('Retrieving subregional agricultural water demand ... ',lAdvance=.FALSE.)
             rDemand = RootZone%AgRootZone%SubregionalDemand
-            CALL ModuleLogger%EchoProgress('DONE')
+            CALL RootZone%Logger%EchoProgress('DONE')
         ELSE
             rDemand = 0.0
         END IF
     ELSE
         IF (RootZone%Flags%lUrban_Defined) THEN
-            IF (ASSOCIATED(ModuleLogger)) THEN
-                CALL ModuleLogger%EchoProgress('Retrieving subregional urban water demand ... ',lAdvance=.FALSE.)
-            ELSE
-                CALL ModuleLogger%EchoProgress('Retrieving subregional urban water demand ... ',lAdvance=.FALSE.)
-            END IF
+            CALL RootZone%Logger%EchoProgress('Retrieving subregional urban water demand ... ',lAdvance=.FALSE.)
             rDemand = RootZone%UrbanRootZone%Demand
-            CALL ModuleLogger%EchoProgress('DONE')
+            CALL RootZone%Logger%EchoProgress('DONE')
         ELSE
             rDemand = 0.0
         END IF
@@ -3503,7 +3496,7 @@ CONTAINS
     SELECT CASE (iDemandFor)
         CASE (f_iLandUse_Ag)
             !Inform user
-            CALL ModuleLogger%EchoProgress('Retrieving agricultural water demand at specified locations...')
+            CALL RootZone%Logger%EchoProgress('Retrieving agricultural water demand at specified locations...')
             !Return if no agricultural area is simulated
             IF (.NOT. RootZone%Flags%lAg_Defined) THEN
                 rDemand = 0.0
@@ -3516,14 +3509,14 @@ CONTAINS
                     rDemand = RootZone%AgRootZone%SubregionalDemand(iLocationList)
                     
                 CASE DEFAULT
-                    CALL ModuleLogger%SetLastMessage('Agricultural water demand cannot be retrieved at the specified location type.',f_iFatal,ThisProcedure)
+                    CALL RootZone%Logger%SetLastMessage('Agricultural water demand cannot be retrieved at the specified location type.',f_iFatal,ThisProcedure)
                     iStat = -1
                     RETURN
             END SELECT
                 
         CASE (f_iLandUse_Urb)
             !Inform user
-            CALL ModuleLogger%EchoProgress('Retrieving urban water demand at specified locations...')
+            CALL RootZone%Logger%EchoProgress('Retrieving urban water demand at specified locations...')
             !Return if no urban area is simulated
             IF (.NOT. RootZone%Flags%lUrban_Defined) THEN
                 rDemand = 0.0
@@ -3536,7 +3529,7 @@ CONTAINS
                     rDemand = RootZone%UrbanRootZone%Demand(iLocationList)
                     
                 CASE DEFAULT
-                    CALL ModuleLogger%SetLastMessage('Urban water demand cannot be retrieved at the specified location type.',f_iFatal,ThisProcedure)
+                    CALL RootZone%Logger%SetLastMessage('Urban water demand cannot be retrieved at the specified location type.',f_iFatal,ThisProcedure)
                     iStat = -1
                     RETURN
             END SELECT
@@ -3556,17 +3549,17 @@ CONTAINS
     
     IF (iSupplyFor .EQ. f_iLandUse_Ag) THEN
         IF (RootZone%Flags%lAg_Defined) THEN
-            CALL ModuleLogger%EchoProgress('Retrieving subregional agricultural water supplies ... ',lAdvance=.FALSE.)
+            CALL RootZone%Logger%EchoProgress('Retrieving subregional agricultural water supplies ... ',lAdvance=.FALSE.)
             rSupply = RootZone%WaterSupply%Diversion_Ag + RootZone%WaterSupply%Pumping_Ag + UpstrmRunoffToLandUse(RootZone,AppGrid,f_iLandUse_Ag)
-            CALL ModuleLogger%EchoProgress('DONE')
+            CALL RootZone%Logger%EchoProgress('DONE')
         ELSE
             rSupply = 0.0
         END IF
     ELSE
         IF (RootZone%Flags%lUrban_Defined) THEN
-            CALL ModuleLogger%EchoProgress('Retrieving subregional urban water supplies ... ',lAdvance=.FALSE.)
+            CALL RootZone%Logger%EchoProgress('Retrieving subregional urban water supplies ... ',lAdvance=.FALSE.)
             rSupply = RootZone%WaterSupply%Diversion_Urb + RootZone%WaterSupply%Pumping_Urb + UpstrmRunoffToLandUse(RootZone,AppGrid,f_iLandUse_Urb)
-            CALL ModuleLogger%EchoProgress('DONE')
+            CALL RootZone%Logger%EchoProgress('DONE')
         ELSE
             rSupply = 0.0
         END IF
@@ -3920,7 +3913,7 @@ CONTAINS
     INTEGER,INTENT(IN)       :: iSupplyType,iSupplyFor
 
     !Inform user
-    CALL ModuleLogger%EchoProgress('Setting supply to subregions ... ',lAdvance=.FALSE.)
+    CALL RootZone%Logger%EchoProgress('Setting supply to subregions ... ',lAdvance=.FALSE.)
     
     !Set supply
     SELECT CASE(iSupplyType)
@@ -3943,7 +3936,7 @@ CONTAINS
 
     END SELECT
       
-    CALL ModuleLogger%EchoProgress('DONE')
+    CALL RootZone%Logger%EchoProgress('DONE')
    
   END SUBROUTINE RootZone_v50_SetSupplyToSubregion
 
@@ -4145,7 +4138,7 @@ CONTAINS
                   MessageArray(1) = 'Agricultural re-use fraction for subregion ' //TRIM(IntTotext(iSubregionIDs(indxRegion)))//' is greater than return flow fraction!'
                   WRITE (MessageArray(2),'(A,F5.3)') 'Re-use fraction      = ',pReuseFrac(pAg%iColReuseFrac(indxRegion))
                   WRITE (MessageArray(3),'(A,F5.3)') 'Return flow fraction = ',pReturnFrac(pAg%iColReturnFrac(indxRegion))
-                  CALL ModuleLogger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+                  CALL RootZone%Logger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
                   iStat = -1
                   RETURN
               END IF
@@ -4159,7 +4152,7 @@ CONTAINS
                     MessageArray(1) = 'Urban re-use fraction at subregion '//TRIM(IntToText(iSubregionIDs(indxRegion)))//' is greater than return flow fraction!'
                     WRITE (MessageArray(2),'(A,F5.3)') 'Re-use fraction      = ',pReuseFrac(pUrban%iColReuseFrac(indxRegion))
                     WRITE (MessageArray(3),'(A,F5.3)') 'Return flow fraction = ',pReturnFrac(pUrban%iColReturnFrac(indxRegion))
-                    CALL ModuleLogger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+                    CALL RootZone%Logger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
                     iStat = -1
                     RETURN
                   END IF
@@ -4338,7 +4331,7 @@ CONTAINS
                                                 RGenericMoist_NV,RDemand_Urb
                                                 
     !Echo progress
-    CALL ModuleLogger%EchoProgress('Printing results of root zone simulation')
+    CALL RootZone%Logger%EchoProgress('Printing results of root zone simulation')
     
     !Initialize
     NRegions = AppGrid%NSubregions
@@ -5066,7 +5059,7 @@ CONTAINS
     
     !Compute ag water demand
     IF (RootZone%Flags%lAg_Defined) THEN
-        CALL ModuleLogger%EchoProgress('Computing agricultural water demand...',lAdvance=.FALSE.)
+        CALL RootZone%Logger%EchoProgress('Computing agricultural water demand...',lAdvance=.FALSE.)
         iSubregionIDs = AppGrid%AppSubregion%ID
         CALL RootZone%AgRootZone%ComputeWaterDemand(iSubregionIDs                                 , &
                                                     TimeStep%DeltaT                               , &
@@ -5078,7 +5071,7 @@ CONTAINS
                                                     RootZone%SolverData                           , &
                                                     iStat                                         )
         IF (iStat .EQ. -1) RETURN
-        CALL ModuleLogger%EchoProgress('DONE')
+        CALL RootZone%Logger%EchoProgress('DONE')
     END IF
 
   END SUBROUTINE RootZone_v50_ComputeWaterDemand
@@ -5115,7 +5108,7 @@ CONTAINS
     END IF
     
     !Echo progress
-    CALL ModuleLogger%EchoProgress('Computing future water demand')
+    CALL RootZone%Logger%EchoProgress('Computing future water demand')
     
     !Initialize the working RootZone and TimeStep objects
     RootZone_Work = RootZone
@@ -5221,7 +5214,7 @@ CONTAINS
               !Check ag area vs. ag water supply
               IF (IrigSupply_Ag(indxRegion) .GT. 0.0) THEN
                   IF (pAgLand%SubregionalArea(indxRegion) .EQ. 0.0) THEN
-                      CALL ModuleLogger%SetLastMessage('Agricultural applied water in subregion '//TRIM(IntToText(iSubregionIDs(indxRegion)))// 'cannot be non-zero when agricultural area is zero!',f_iFatal,ThisProcedure)
+                      CALL RootZone%Logger%SetLastMessage('Agricultural applied water in subregion '//TRIM(IntToText(iSubregionIDs(indxRegion)))// 'cannot be non-zero when agricultural area is zero!',f_iFatal,ThisProcedure)
                       iStat = -1
                       RETURN
                   END IF
@@ -5234,7 +5227,7 @@ CONTAINS
           DO indxRegion=1,AppGrid%NSubregions
               IF (IrigSupply_Urb(indxRegion) .GT. 0.0) THEN
                   IF (pUrbanLand%SubregionalArea(indxRegion) .EQ. 0.0) THEN
-                      CALL ModuleLogger%SetLastMessage('Urban applied water in subregion '//TRIM(IntToText(iSubregionIDs(indxRegion)))//' cannot be non-zero when urban area is zero!',f_iFatal,ThisProcedure)
+                      CALL RootZone%Logger%SetLastMessage('Urban applied water in subregion '//TRIM(IntToText(iSubregionIDs(indxRegion)))//' cannot be non-zero when urban area is zero!',f_iFatal,ThisProcedure)
                       iStat = -1
                       RETURN
                   END IF
@@ -6215,7 +6208,7 @@ CONTAINS
     CLASS(RootZone_v50_Type) :: RootZone
     
     !Inform user
-    CALL ModuleLogger%EchoProgress('Resetting rainfall runoff and return flow from elements')
+    CALL RootZone%Logger%EchoProgress('Resetting rainfall runoff and return flow from elements')
     
     !Zero out surface flows from ag lands
     IF (RootZone%Flags%lAg_Defined) THEN

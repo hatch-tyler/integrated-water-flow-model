@@ -143,6 +143,7 @@ MODULE Package_RootZone
   ! -------------------------------------------------------------
   TYPE RootZoneType
       PRIVATE
+      TYPE(MessageLoggerType),POINTER     :: Logger => NULL()
       INTEGER                             :: iComponentVersion   =  0
       CLASS(BaseRootZoneType),ALLOCATABLE :: Me
   CONTAINS
@@ -307,8 +308,9 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- NEW ROOT ZONE DATA
   ! -------------------------------------------------------------
-  SUBROUTINE New(RootZone,IsForInquiry,cProjectNameForDSS,cFileName,cCropCoeffFileName,cWorkingDirectory,AppGrid,TimeStep,NTIME,ET,Precip,iStat,iStrmNodeIDs,iLakeIDs)
-    CLASS(RootZoneType),INTENT(OUT)    :: RootZone
+  SUBROUTINE New(RootZone,Logger,IsForInquiry,cProjectNameForDSS,cFileName,cCropCoeffFileName,cWorkingDirectory,AppGrid,TimeStep,NTIME,ET,Precip,iStat,iStrmNodeIDs,iLakeIDs)
+    CLASS(RootZoneType),INTENT(OUT)              :: RootZone
+    TYPE(MessageLoggerType),POINTER,INTENT(IN)   :: Logger
     LOGICAL,INTENT(IN)                 :: IsForInquiry
     CHARACTER(LEN=*),INTENT(IN)        :: cProjectNameForDSS,cFileName,cCropCoeffFileName,cWorkingDirectory
     TYPE(AppGridType),INTENT(IN)       :: AppGrid
@@ -318,13 +320,14 @@ CONTAINS
     TYPE(PrecipitationType),INTENT(IN) :: Precip
     INTEGER,INTENT(OUT)                :: iStat
     INTEGER,OPTIONAL,INTENT(IN)        :: iStrmNodeIDs(:),iLakeIDs(:)
-    
+
     !Local variables
     CHARACTER(LEN=ModNameLen+3) :: ThisProcedure = ModName // 'New'
     TYPE(GenericFileType)       :: RootZoneParamFile
     CHARACTER(:),ALLOCATABLE    :: cVersion
-    
+
     !Initialize
+    RootZone%Logger => Logger
     iStat = 0
     
     !Return if no filename is defined
@@ -365,18 +368,21 @@ CONTAINS
             ALLOCATE(RootZone_v50_Type :: RootZone%Me)
             RootZone%iComponentVersion = 50
         CASE DEFAULT
-            IF (ASSOCIATED(ModuleLogger)) THEN
-                CALL ModuleLogger%SetLastMessage('Root Zone Component version number is not recognized ('//TRIM(cVersion)//')!',f_iFatal,ThisProcedure)
+            IF (ASSOCIATED(RootZone%Logger)) THEN
+                CALL RootZone%Logger%SetLastMessage('Root Zone Component version number is not recognized ('//TRIM(cVersion)//')!',f_iFatal,ThisProcedure)
             ELSE
                 CALL ModuleLogger%SetLastMessage('Root Zone Component version number is not recognized ('//TRIM(cVersion)//')!',f_iFatal,ThisProcedure)
             END IF
             iStat = -1
             RETURN
     END SELECT
-        
+
+    !Propagate Logger to the version-specific type
+    IF (ALLOCATED(RootZone%Me)) RootZone%Me%Logger => RootZone%Logger
+
     !Now, instantiate
     CALL RootZone%Me%New(IsForInquiry,cProjectNameForDSS,cFileName,cCropCoeffFileName,cWorkingDirectory,AppGrid,TimeStep,NTIME,ET,Precip,iStat,iStrmNodeIDs=iStrmNodeIDs,iLakeIDs=iLakeIDs)
-    
+
   END SUBROUTINE New
   
   
@@ -1819,12 +1825,12 @@ CONTAINS
     IF (RootZone%iComponentVersion .EQ. 0) RETURN
     
     !Print progress
-    IF (ASSOCIATED(ModuleLogger)) THEN
-        CALL ModuleLogger%EchoProgress('Retrieving percolation at all elements')
+    IF (ASSOCIATED(RootZone%Logger)) THEN
+        CALL RootZone%Logger%EchoProgress('Retrieving percolation at all elements')
     ELSE
         CALL ModuleLogger%EchoProgress('Retrieving percolation at all elements')
     END IF
-        
+
     CALL RootZone%Me%GetElementPerc(iElemRegions,rPerc)
     
   END SUBROUTINE GetElementPerc
@@ -1842,12 +1848,12 @@ CONTAINS
     IF (RootZone%iComponentVersion .EQ. 0) RETURN
 
     !Print progress
-    IF (ASSOCIATED(ModuleLogger)) THEN
-        CALL ModuleLogger%EchoProgress('Retrieving percolation at a specified element')
+    IF (ASSOCIATED(RootZone%Logger)) THEN
+        CALL RootZone%Logger%EchoProgress('Retrieving percolation at a specified element')
     ELSE
         CALL ModuleLogger%EchoProgress('Retrieving percolation at a specified element')
     END IF
-    
+
     Perc = RootZone%Me%GetPercElement(iLocation)
     
   END FUNCTION GetPercElement

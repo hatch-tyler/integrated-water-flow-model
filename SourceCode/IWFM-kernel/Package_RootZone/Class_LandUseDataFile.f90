@@ -56,6 +56,7 @@ MODULE Class_LandUseDataFile
   ! --- LAND USE DATA FILE TYPE
   ! -------------------------------------------------------------
   TYPE,EXTENDS(Real2DTSDataInFileType) :: LandUseDataFileType
+    TYPE(MessageLoggerType),POINTER :: Logger => NULL()
     REAL(8) :: Fact  = 1.0     !Conversion factor for land use areas
   CONTAINS
     PROCEDURE,PASS :: New        
@@ -173,8 +174,8 @@ CONTAINS
         !Check that listed element/subregion is modeled
         CALL ConvertID_To_Index(iLocationID,iLocationIDs,iLocation)
         IF (iLocation .EQ. 0) THEN
-            IF (ASSOCIATED(ModuleLogger)) THEN
-                CALL ModuleLogger%SetLastMessage('Element or subregion number '//TRIM(IntToText(iLocationID))//' listed for '//TRIM(LowerCase(cDescriptor))//' is not in the model!',f_iFatal,ThisProcedure)
+            IF (ASSOCIATED(LandUseDataFile%Logger)) THEN
+                CALL LandUseDataFile%Logger%SetLastMessage('Element or subregion number '//TRIM(IntToText(iLocationID))//' listed for '//TRIM(LowerCase(cDescriptor))//' is not in the model!',f_iFatal,ThisProcedure)
             ELSE
                 CALL ModuleLogger%SetLastMessage('Element or subregion number '//TRIM(IntToText(iLocationID))//' listed for '//TRIM(LowerCase(cDescriptor))//' is not in the model!',f_iFatal,ThisProcedure)
             END IF
@@ -184,8 +185,8 @@ CONTAINS
 
         !Make sure location number is not listed more than once
         IF (lProcessed(iLocation)) THEN
-            IF (ASSOCIATED(ModuleLogger)) THEN
-                CALL ModuleLogger%SetLastMessage('Element or subregion number '//TRIM(IntToText(iLocationID))//' listed for '//TRIM(LowerCase(cDescriptor))//' is listed more than once!',f_iFatal,ThisProcedure)
+            IF (ASSOCIATED(LandUseDataFile%Logger)) THEN
+                CALL LandUseDataFile%Logger%SetLastMessage('Element or subregion number '//TRIM(IntToText(iLocationID))//' listed for '//TRIM(LowerCase(cDescriptor))//' is listed more than once!',f_iFatal,ThisProcedure)
             ELSE
                 CALL ModuleLogger%SetLastMessage('Element or subregion number '//TRIM(IntToText(iLocationID))//' listed for '//TRIM(LowerCase(cDescriptor))//' is listed more than once!',f_iFatal,ThisProcedure)
             END IF
