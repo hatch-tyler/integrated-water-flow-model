@@ -614,7 +614,7 @@ CONTAINS
     CALL CleanSpecialCharacters(cALine) 
     cALine = ADJUSTL(StripTextUntilCharacter(cALine,f_cInlineCommentChar))
     CALL EstablishAbsolutePathFileName(TRIM(cALine),cWorkingDirectory,cAbsPathFileName)
-    CALL VerticalFlowOutput_New(lIsForInquiry,TimeStep,NLayers,NRegions,AppGW%UnitFlow,cAbsPathFileName,AppGW%VerticalFlowOutput,iStat)
+    CALL VerticalFlowOutput_New(lIsForInquiry,TimeStep,NLayers,NRegions,AppGW%UnitFlow,cAbsPathFileName,AppGW%VerticalFlowOutput,iStat,Logger)
     IF (iStat .EQ. -1) RETURN
     
     !Output file for heads at all nodes and layers

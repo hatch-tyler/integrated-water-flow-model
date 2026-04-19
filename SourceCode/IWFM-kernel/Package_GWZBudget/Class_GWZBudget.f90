@@ -891,7 +891,7 @@ CONTAINS
     Header%lComputeError = .TRUE.
     
     !Compile the flow types
-    CALL ProcessFlowTypes(TimeStep%DeltaT,lDeepPerc,lRootZone_Defined,AppGW,AppStream,AppLake,AppSWShed,StrmGWConnector,AppGrid,Stratigraphy,Header,ModelFlowTypes,iStat)
+    CALL ProcessFlowTypes(TimeStep%DeltaT,lDeepPerc,lRootZone_Defined,AppGW,AppStream,AppLake,AppSWShed,StrmGWConnector,AppGrid,Stratigraphy,Header,ModelFlowTypes,iStat,ModuleLogger)
     IF (iStat .EQ. -1) RETURN
         
     !Number of all flow types and flow names
@@ -944,7 +944,7 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- FIGURE OUT WHICH FLOW PROCESSES (W.R.T. GW) ARE BEING MODELED 
   ! -------------------------------------------------------------
-  SUBROUTINE ProcessFlowTypes(DeltaT,lDeepPerc,lRootZone_Defined,AppGW,AppStream,AppLake,AppSWShed,StrmGWConnector,AppGrid,Stratigraphy,Header,ModelFlowTypes,iStat)
+  SUBROUTINE ProcessFlowTypes(DeltaT,lDeepPerc,lRootZone_Defined,AppGW,AppStream,AppLake,AppSWShed,StrmGWConnector,AppGrid,Stratigraphy,Header,ModelFlowTypes,iStat,Logger)
     REAL(8),INTENT(IN)                     :: DeltaT
     LOGICAL,INTENT(IN)                     :: lDeepPerc,lRootZone_Defined
     TYPE(AppGWType),INTENT(IN)             :: AppGW
@@ -957,6 +957,7 @@ CONTAINS
     TYPE(ZBudgetHeaderType)                :: Header
     INTEGER,ALLOCATABLE                    :: ModelFlowTypes(:)
     INTEGER,INTENT(OUT)                    :: iStat
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
     
     !Local variables
     CHARACTER(LEN=ModNameLen+16) :: ThisProcedure = ModName // 'ProcessFlowTypes'
@@ -1057,7 +1058,7 @@ CONTAINS
     !Compile flow id numbers simulated in the model
     ALLOCATE (ModelFlowTypes(NFlowTypes) , STAT=ErrorCode)
     IF (ErrorCode.NE.0) THEN
-        CALL ModuleLogger%SetLastMessage('Error in allocating memory for groundwater Z-Budget flow types',f_iFatal,ThisProcedure)
+        CALL Logger%SetLastMessage('Error in allocating memory for groundwater Z-Budget flow types',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF

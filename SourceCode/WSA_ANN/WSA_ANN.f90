@@ -1686,7 +1686,7 @@ CONTAINS
         END DO
         
         !Convert linked-list location list to array
-        CALL LocationList%GetArray(aVarAggregation%iLocations,iStat)  ;  IF (iStat .NE. 0) RETURN 
+        CALL LocationList%GetArray(WSA%Logger,aVarAggregation%iLocations,iStat)  ;  IF (iStat .NE. 0) RETURN
         aVarAggregation%iNLocations = SIZE(aVarAggregation%iLocations)
         
         !Check consistency b/w variable type and location type for aggregation

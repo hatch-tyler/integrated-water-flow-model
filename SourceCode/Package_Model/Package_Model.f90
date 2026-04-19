@@ -85,13 +85,10 @@ MODULE Package_Model
   USE TSDFileHandler              , ONLY: TSDFileHandler_SetModuleLogger
   USE Class_Version               , ONLY: Version_SetModuleLogger
   USE GeneralUtilities            , ONLY: GeneralUtils_SetModuleLogger
-  USE GenericLinkedList            , ONLY: GenLinkedList_SetModuleLogger
   USE TimeSeriesUtilities         , ONLY: TimeSeries_SetModuleLogger
   USE Class_Budget                , ONLY: Budget_SetModuleLogger
   USE Class_BudgetInputFile       , ONLY: BudgetInputFile_SetModuleLogger
-  USE Class_ZBudget               , ONLY: ZBudget_SetModuleLogger
   USE Class_ZoneList              , ONLY: ZoneList_SetModuleLogger
-  USE Package_Supply              , ONLY: Supply_SetModuleLogger
   USE Package_AppUnsatZone        , ONLY: AppUnsatZone_SetModuleLogger
   USE ParametricGrid              , ONLY: ParametricGrid_SetModuleLogger
   USE Opening_screen              , ONLY: OpeningScreen_SetModuleLogger
@@ -670,15 +667,11 @@ CONTAINS
     CALL TSDFileHandler_SetModuleLogger(DefaultLogger)
     CALL Version_SetModuleLogger(DefaultLogger)
     CALL GeneralUtils_SetModuleLogger(DefaultLogger)
-    CALL GenLinkedList_SetModuleLogger(DefaultLogger)
     CALL TimeSeries_SetModuleLogger(DefaultLogger)
     CALL Budget_SetModuleLogger(DefaultLogger)
     CALL BudgetInputFile_SetModuleLogger(DefaultLogger)
 
-    CALL ZBudget_SetModuleLogger(DefaultLogger)
-
     CALL ZoneList_SetModuleLogger(DefaultLogger)
-    CALL Supply_SetModuleLogger(DefaultLogger)
     CALL GWZBudget_SetModuleLogger(DefaultLogger)
     CALL WSA_ANN_SetModuleLogger(DefaultLogger)
     CALL AppUnsatZone_SetModuleLogger(DefaultLogger)
@@ -998,15 +991,11 @@ CONTAINS
     CALL TSDFileHandler_SetModuleLogger(DefaultLogger)
     CALL Version_SetModuleLogger(DefaultLogger)
     CALL GeneralUtils_SetModuleLogger(DefaultLogger)
-    CALL GenLinkedList_SetModuleLogger(DefaultLogger)
     CALL TimeSeries_SetModuleLogger(DefaultLogger)
     CALL Budget_SetModuleLogger(DefaultLogger)
     CALL BudgetInputFile_SetModuleLogger(DefaultLogger)
 
-    CALL ZBudget_SetModuleLogger(DefaultLogger)
-
     CALL ZoneList_SetModuleLogger(DefaultLogger)
-    CALL Supply_SetModuleLogger(DefaultLogger)
     CALL GWZBudget_SetModuleLogger(DefaultLogger)
     CALL WSA_ANN_SetModuleLogger(DefaultLogger)
     CALL AppUnsatZone_SetModuleLogger(DefaultLogger)
@@ -1151,15 +1140,11 @@ CONTAINS
     CALL TSDFileHandler_SetModuleLogger(DefaultLogger)
     CALL Version_SetModuleLogger(DefaultLogger)
     CALL GeneralUtils_SetModuleLogger(DefaultLogger)
-    CALL GenLinkedList_SetModuleLogger(DefaultLogger)
     CALL TimeSeries_SetModuleLogger(DefaultLogger)
     CALL Budget_SetModuleLogger(DefaultLogger)
     CALL BudgetInputFile_SetModuleLogger(DefaultLogger)
 
-    CALL ZBudget_SetModuleLogger(DefaultLogger)
-
     CALL ZoneList_SetModuleLogger(DefaultLogger)
-    CALL Supply_SetModuleLogger(DefaultLogger)
     CALL GWZBudget_SetModuleLogger(DefaultLogger)
     CALL WSA_ANN_SetModuleLogger(DefaultLogger)
     CALL AppUnsatZone_SetModuleLogger(DefaultLogger)
@@ -1558,15 +1543,11 @@ CONTAINS
     CALL TSDFileHandler_SetModuleLogger(DefaultLogger)
     CALL Version_SetModuleLogger(DefaultLogger)
     CALL GeneralUtils_SetModuleLogger(DefaultLogger)
-    CALL GenLinkedList_SetModuleLogger(DefaultLogger)
     CALL TimeSeries_SetModuleLogger(DefaultLogger)
     CALL Budget_SetModuleLogger(DefaultLogger)
     CALL BudgetInputFile_SetModuleLogger(DefaultLogger)
 
-    CALL ZBudget_SetModuleLogger(DefaultLogger)
-
     CALL ZoneList_SetModuleLogger(DefaultLogger)
-    CALL Supply_SetModuleLogger(DefaultLogger)
     CALL GWZBudget_SetModuleLogger(DefaultLogger)
     CALL WSA_ANN_SetModuleLogger(DefaultLogger)
     CALL AppUnsatZone_SetModuleLogger(DefaultLogger)
@@ -1952,15 +1933,11 @@ CONTAINS
     CALL TSDFileHandler_SetModuleLogger(DefaultLogger)
     CALL Version_SetModuleLogger(DefaultLogger)
     CALL GeneralUtils_SetModuleLogger(DefaultLogger)
-    CALL GenLinkedList_SetModuleLogger(DefaultLogger)
     CALL TimeSeries_SetModuleLogger(DefaultLogger)
     CALL Budget_SetModuleLogger(DefaultLogger)
     CALL BudgetInputFile_SetModuleLogger(DefaultLogger)
 
-    CALL ZBudget_SetModuleLogger(DefaultLogger)
-
     CALL ZoneList_SetModuleLogger(DefaultLogger)
-    CALL Supply_SetModuleLogger(DefaultLogger)
     CALL GWZBudget_SetModuleLogger(DefaultLogger)
     CALL WSA_ANN_SetModuleLogger(DefaultLogger)
     CALL AppUnsatZone_SetModuleLogger(DefaultLogger)
@@ -8169,7 +8146,7 @@ CONTAINS
                      
             IF (Model%lRootZone_Defined) THEN      
 ! ***** COMPUTE THE ACTUAL WATER SUPPLY TO AGRICULTURAL AND URBAN LANDS
-                CALL Supply(Model%AppGrid,Model%AppGW,Model%AppStream,Model%DiverDestinationConnector,Model%WellDestinationConnector,Model%ElemPumpDestinationConnector,Model%RootZone)
+                CALL Supply(Model%AppGrid,Model%AppGW,Model%AppStream,Model%DiverDestinationConnector,Model%WellDestinationConnector,Model%ElemPumpDestinationConnector,Model%RootZone,ModuleLogger)
 
 ! ***** SIMULATE ROOT ZONE AND LAND SURFACE FLOW PROCESSES
                 CALL Model%RootZone%SetActualRiparianET_AtStrmNodes(Model%QRVETFRAC)
@@ -8945,7 +8922,7 @@ CONTAINS
                      
     IF (Model%lRootZone_Defined) THEN      
 ! ***** COMPUTE THE ACTUAL WATER SUPPLY TO AGRICULTURAL AND URBAN LANDS
-        CALL Supply(Model%AppGrid,Model%AppGW,Model%AppStream,Model%DiverDestinationConnector,Model%WellDestinationConnector,Model%ElemPumpDestinationConnector,Model%RootZone)
+        CALL Supply(Model%AppGrid,Model%AppGW,Model%AppStream,Model%DiverDestinationConnector,Model%WellDestinationConnector,Model%ElemPumpDestinationConnector,Model%RootZone,ModuleLogger)
 
 ! ***** SIMULATE ROOT ZONE AND LAND SURFACE FLOW PROCESSES
         CALL Model%RootZone%SetActualRiparianET_AtStrmNodes(Model%QRVETFRAC)

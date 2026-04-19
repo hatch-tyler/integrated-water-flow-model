@@ -85,11 +85,9 @@ MODULE Class_ZBudget
                                          f_iVLE
   IMPLICIT NONE
 
-  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
-  
-  
 
-  
+
+
 ! ******************************************************************
 ! ******************************************************************
 ! ******************************************************************
@@ -105,8 +103,7 @@ MODULE Class_ZBudget
   ! -------------------------------------------------------------
   PRIVATE
   PUBLIC :: ZBudgetType          , &
-            Abstract_CallbackFun , &
-            ZBudget_SetModuleLogger
+            Abstract_CallbackFun
   
   
   ! -------------------------------------------------------------
@@ -709,8 +706,8 @@ CONTAINS
     CALL ZBudget%GetTimeStepRelatedData(NTimeSteps,TimeStep)
     
     !Calculate the number of intervals between output dates
-    iNOutputIntervals = OutputIntervals(TimeStep%DeltaT_InMinutes,cOutputBeginDateAndTime,cOutputInterval,ZBudget%Header%cDescriptor)
-    
+    iNOutputIntervals = OutputIntervals(TimeStep%DeltaT_InMinutes,cOutputBeginDateAndTime,cOutputInterval,ZBudget%Header%cDescriptor,ZBudget%Logger)
+
     !Final time stamp to julian
     rJulian = TimeStampToJulian(IncrementTimeStamp(IncrementTimeStamp(cOutputBeginDateAndTime,TimeStep%DeltaT_InMinutes,-1),TimeStep%DeltaT_InMinutes,iNOutputIntervals))
 
@@ -803,8 +800,8 @@ CONTAINS
     CALL AdjustPrintDates(TimeStep,NTimeSteps,cOutputBeginDateAndTime,cOutputEndDateAndTime,cAdjPrintBeginDateAndTime,cAdjPrintEndDateAndTime)
 
     !Calculate the number of intervals between output dates
-    iNOutputIntervals = OutputIntervals(TimeStep%DeltaT_InMinutes,TimeStep%CurrentDateAndTime,cOutputInterval,ZBudget%Header%cDescriptor)
-    
+    iNOutputIntervals = OutputIntervals(TimeStep%DeltaT_InMinutes,TimeStep%CurrentDateAndTime,cOutputInterval,ZBudget%Header%cDescriptor,ZBudget%Logger)
+
     !Does the zone budget output have a storage column
     IF (ZBudget%Header%lStorages_Defined) THEN
         NStorageCol = 1
@@ -872,7 +869,7 @@ CONTAINS
         IF (iStat .EQ. -1) RETURN
         
         !Is this the last time for printing?
-        iNOutputIntervals = OutputIntervals(TimeStep%DeltaT_InMinutes,IncrementTimeStamp(cPrintDateAndTime,TimeStep%DeltaT_InMinutes,1),cOutputInterval,ZBudget%Header%cDescriptor)
+        iNOutputIntervals = OutputIntervals(TimeStep%DeltaT_InMinutes,IncrementTimeStamp(cPrintDateAndTime,TimeStep%DeltaT_InMinutes,1),cOutputInterval,ZBudget%Header%cDescriptor,ZBudget%Logger)
         IF (IncrementTimeStamp(cPrintDateAndTime,TimeStep%DeltaT_InMinutes,iNOutputIntervals) .TSGT. cAdjPrintEndDateAndTime) THEN
             lFinalTime = .TRUE.
         ELSE
@@ -899,9 +896,9 @@ CONTAINS
         
         !Move in time
         cCurrentDateAndTime = IncrementTimeStamp(cPrintDateAndTime,TimeStep%DeltaT_InMinutes,1)
-        iNOutputIntervals   = OutputIntervals(TimeStep%DeltaT_InMinutes,cCurrentDateAndTime,cOutputInterval,ZBudget%Header%cDescriptor)
+        iNOutputIntervals   = OutputIntervals(TimeStep%DeltaT_InMinutes,cCurrentDateAndTime,cOutputInterval,ZBudget%Header%cDescriptor,ZBudget%Logger)
         cPrintDateAndTime   = IncrementTimeStamp(cCurrentDateAndTime,TimeStep%DeltaT_InMinutes,iNOutputIntervals-1)
-        
+
     END DO
 
   END SUBROUTINE ReadData_SelectedColumns_ForAZone
@@ -942,8 +939,8 @@ CONTAINS
     CALL AdjustPrintDates(TimeStep,NTimeSteps,cPrintBeginDateAndTime,cPrintEndDateAndTime,cAdjPrintBeginDateAndTime,cAdjPrintEndDateAndTime)
           
     !Calculate the number of intervals between output dates
-    iNOutputIntervals = OutputIntervals(TimeStep%DeltaT_InMinutes,TimeStep%CurrentDateAndTime,cPrintInterval,ZBudget%Header%cDescriptor)
-    
+    iNOutputIntervals = OutputIntervals(TimeStep%DeltaT_InMinutes,TimeStep%CurrentDateAndTime,cPrintInterval,ZBudget%Header%cDescriptor,ZBudget%Logger)
+
     !Does the zone budget output have a storage column
     IF (ZBudget%Header%lStorages_Defined) THEN
         NStorageCol = 1
@@ -1032,7 +1029,7 @@ CONTAINS
         IF (iStat .EQ. -1) RETURN
         
         !Is this the last time for printing?
-        iNOutputIntervals = OutputIntervals(TimeStep%DeltaT_InMinutes,IncrementTimeStamp(cPrintDateAndTime,TimeStep%DeltaT_InMinutes,1),cPrintInterval,ZBudget%Header%cDescriptor)
+        iNOutputIntervals = OutputIntervals(TimeStep%DeltaT_InMinutes,IncrementTimeStamp(cPrintDateAndTime,TimeStep%DeltaT_InMinutes,1),cPrintInterval,ZBudget%Header%cDescriptor,ZBudget%Logger)
         IF (IncrementTimeStamp(cPrintDateAndTime,TimeStep%DeltaT_InMinutes,iNOutputIntervals) .TSGT. cAdjPrintEndDateAndTime) THEN
             lFinalPrint = .TRUE.
         ELSE
@@ -1058,9 +1055,9 @@ CONTAINS
         
         !Move in time
         cCurrentDateAndTime = IncrementTimeStamp(cPrintDateAndTime,TimeStep%DeltaT_InMinutes,1)
-        iNOutputIntervals   = OutputIntervals(TimeStep%DeltaT_InMinutes,cCurrentDateAndTime,cPrintInterval,ZBudget%Header%cDescriptor)
+        iNOutputIntervals   = OutputIntervals(TimeStep%DeltaT_InMinutes,cCurrentDateAndTime,cPrintInterval,ZBudget%Header%cDescriptor,ZBudget%Logger)
         cPrintDateAndTime   = IncrementTimeStamp(cCurrentDateAndTime,TimeStep%DeltaT_InMinutes,iNOutputIntervals-1)
-        
+
     END DO
     
     !If the output is to text file, merge temp files
@@ -1863,10 +1860,11 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- CALCULATE INTERVALS BETWEEN TWO PRINT-OUT DATES 
   ! -------------------------------------------------------------
-  FUNCTION OutputIntervals(DeltaT_InMinutes,cCurrentDateAndTime,cPrintInterval,cDescriptor) RESULT(iNIntervals)
-    INTEGER,INTENT(IN)            :: DeltaT_InMinutes
-    CHARACTER(LEN=*),INTENT(IN)   :: cCurrentDateAndTime,cPrintInterval,cDescriptor
-    INTEGER                       :: iNIntervals
+  FUNCTION OutputIntervals(DeltaT_InMinutes,cCurrentDateAndTime,cPrintInterval,cDescriptor,Logger) RESULT(iNIntervals)
+    INTEGER,INTENT(IN)                         :: DeltaT_InMinutes
+    CHARACTER(LEN=*),INTENT(IN)                :: cCurrentDateAndTime,cPrintInterval,cDescriptor
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
+    INTEGER                                    :: iNIntervals
   
     !LOcal variables
     CHARACTER(LEN=ModNameLen+15),PARAMETER :: ThisProcedure = ModName // 'OutputIntervals'
@@ -1882,7 +1880,7 @@ CONTAINS
         IF (iPrintDeltaT_InMinutes .LT. DeltaT_InMinutes) THEN
             MessageArray(1) = 'Z-Budget output interval cannot be less than the simulation timestep!'
             MessageArray(2) = 'Adjusting the output interval to be equal to the simulation timestep for '//TRIM(cDescriptor)//'.'
-            CALL ModuleLogger%LogMessage(MessageArray(1:2),f_iWarn,ThisProcedure)
+            CALL Logger%LogMessage(MessageArray(1:2),f_iWarn,ThisProcedure)
             iPrintDeltaT_InMinutes = DeltaT_InMinutes
         END IF
         cDateZero    = IncrementTimeStamp(cCurrentDateAndTime,DeltaT_InMinutes,-1)  ! This method of calculation includes the cCurrentDateandTime in
@@ -1951,10 +1949,5 @@ CONTAINS
     
   END SUBROUTINE ReplaceMarkers
 
-
-  SUBROUTINE ZBudget_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
-    ModuleLogger => Logger
-  END SUBROUTINE ZBudget_SetModuleLogger
 
 END MODULE

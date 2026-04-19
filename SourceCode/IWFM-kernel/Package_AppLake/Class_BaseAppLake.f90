@@ -698,10 +698,11 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET LAKE ELEMENTS FROM FILE
   ! -------------------------------------------------------------
-  SUBROUTINE GetLakeElements_FromFile(cFileName,iListElems,iStat)
-    CHARACTER(LEN=*),INTENT(IN) :: cFileName
-    INTEGER,ALLOCATABLE         :: iListElems(:)
-    INTEGER,INTENT(OUT)         :: iStat
+  SUBROUTINE GetLakeElements_FromFile(cFileName,Logger,iListElems,iStat)
+    CHARACTER(LEN=*),INTENT(IN)                :: cFileName
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
+    INTEGER,ALLOCATABLE                        :: iListElems(:)
+    INTEGER,INTENT(OUT)                        :: iStat
 
     !Local data type
     TYPE,EXTENDS(GenericLinkedListType)  :: ElemListType
@@ -753,14 +754,14 @@ CONTAINS
     END DO
     
     !Retrieve the lake elements as a whole
-    CALL ElemList%GetArray(iListElems,iStat)   ;  IF (iStat .EQ. -1) RETURN
+    CALL ElemList%GetArray(Logger,iListElems,iStat)   ;  IF (iStat .EQ. -1) RETURN
     
     !Make sure lake elements are not listed more than once
     DO indxElem=1,SIZE(iListElems)-1
         iElem =  iListElems(indxElem)
         DO indxElem1=indxElem+1,SIZE(iListElems)
             IF (iElem .EQ. iListElems(indxElem1)) THEN
-                CALL ModuleLogger%SetLastMessage('Element '//TRIM(IntToText(iElem))//' is listed more than once as a lake element!' ,f_iFatal,ThisProcedure)
+                CALL Logger%SetLastMessage('Element '//TRIM(IntToText(iElem))//' is listed more than once as a lake element!' ,f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF

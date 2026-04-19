@@ -44,12 +44,9 @@ MODULE Package_Supply
   USE Package_ComponentConnectors , ONLY: SupplyDestinationConnectorType
   IMPLICIT NONE
 
-  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
-  
   PRIVATE
   PUBLIC :: Supply                                     ,  &
-            Supply_SetModuleLogger                    ,  &
-                                                       
+
             IrigFracFileType                           ,  &
             
             SupplyAdjustmentType                       ,  &
@@ -72,12 +69,13 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- DEFINE WATER SUPPLY TO EACH DEMAND LOCATION
   ! -------------------------------------------------------------
-  SUBROUTINE Supply(AppGrid,AppGW,AppStream,DiverDestConnector,WellDestConnector,ElemPumpDestConnector,RootZone)
+  SUBROUTINE Supply(AppGrid,AppGW,AppStream,DiverDestConnector,WellDestConnector,ElemPumpDestConnector,RootZone,Logger)
     TYPE(AppGridType),INTENT(IN)                    :: AppGrid
     TYPE(AppGWType),INTENT(IN)                      :: AppGW
     TYPE(AppStreamType),INTENT(IN)                  :: AppStream
     TYPE(SupplyDestinationConnectorType),INTENT(IN) :: DiverDestConnector,WellDestConnector,ElemPumpDestConnector
     TYPE(RootZoneType)                              :: RootZone
+    TYPE(MessageLoggerType),POINTER,INTENT(IN)      :: Logger
   
     !Local variables
     INTEGER                                       :: iDemandCalcLocation
@@ -88,7 +86,7 @@ CONTAINS
     REAL(8),POINTER                               :: pDiver_Ag(:),pDiver_Urb(:),pPump_Ag(:),pPump_Urb(:)
     
     !Inform user
-    CALL ModuleLogger%EchoProgress('Compiling water supply')
+    CALL Logger%EchoProgress('Compiling water supply')
 
     !Initialize 
     iDemandCalcLocation = RootZone%GetDemandCalcLocation()
@@ -123,10 +121,5 @@ CONTAINS
   
   END SUBROUTINE Supply
 
-
-  SUBROUTINE Supply_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
-    ModuleLogger => Logger
-  END SUBROUTINE Supply_SetModuleLogger
 
 END MODULE

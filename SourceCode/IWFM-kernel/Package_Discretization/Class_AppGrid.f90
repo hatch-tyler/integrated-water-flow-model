@@ -2283,7 +2283,7 @@ CONTAINS
     END IF
 
     !Transfer unique,ordered data to return argument
-    CALL BndNodeList%GetArray(iWorkArray,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    CALL BndNodeList%GetArray(ModuleLogger,iWorkArray,iStat)  ;  IF (iStat .EQ. -1) RETURN
     CALL GetUniqueArrayComponents(iWorkArray,NodeList)
     CALL ShellSort(NodeList)
     
@@ -2319,7 +2319,7 @@ CONTAINS
     END DO
 
     !Save the ordered face list in the return array
-    CALL FaceList%GetArray(TheList,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    CALL FaceList%GetArray(ModuleLogger,TheList,iStat)  ;  IF (iStat .EQ. -1) RETURN
     CALL ShellSort(TheList)
 
     !Free memory
@@ -2613,7 +2613,7 @@ CONTAINS
       pAppSubregion                  => AppGrid%AppSubregion(indxRegion)
       NNeighborRegions               =  NeighborRegionList(indxRegion)%GetNNodes()
       ALLOCATE (pAppSubregion%NeighborRegions(NNeighborRegions) , iWorkArray(NNeighborRegions))
-      CALL NeighborRegionList(indxRegion)%GetArray(iWorkArray,iStat)  ;  IF (iStat .EQ. -1) RETURN
+      CALL NeighborRegionList(indxRegion)%GetArray(ModuleLogger,iWorkArray,iStat)  ;  IF (iStat .EQ. -1) RETURN
       CALL ShellSort(iWorkArray)
       pAppSubregion%NNeighborRegions         = NNeighborRegions
       pAppSubregion%NeighborRegions%RegionNo = iWorkArray
@@ -2622,7 +2622,7 @@ CONTAINS
         RegionNo                    =  pNeighborRegion%RegionNo
         NFace                       =  FaceBetweenRegionsList(indxRegion,RegionNo)%GetNNodes()
         pNeighborRegion%NRegBndFace =  NFace
-        CALL FaceBetweenRegionsList(indxRegion,RegionNo)%GetArray(pNeighborRegion%RegBndFace,iStat)  
+        CALL FaceBetweenRegionsList(indxRegion,RegionNo)%GetArray(ModuleLogger,pNeighborRegion%RegBndFace,iStat)  
         IF (iStat .EQ. -1) RETURN
       END DO
     END DO
@@ -2653,7 +2653,7 @@ CONTAINS
       !Initialize
       iStat = 0
       DEALLOCATE (iArray , STAT=iErr)
-      CALL NeighborRegionList(ToRegID)%GetArray(iArray,iStat)
+      CALL NeighborRegionList(ToRegID)%GetArray(ModuleLogger,iArray,iStat)
       IF (iStat .EQ. -1) RETURN
            
       !Check

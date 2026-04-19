@@ -875,11 +875,11 @@ CONTAINS
             CALL AppUnsatZone%GetBudget_MonthlyFlows(Budget,iLocationIndex,cAdjustedBeginDate,cAdjustedEndDate,rFactVL,rFlowsWork,cFlowNames,iStat)
             
         CASE (f_iLakeComp)
-            CALL AppLake%GetBudget_MonthlyFlows(Budget,iLocationIndex,cAdjustedBeginDate,cAdjustedEndDate,rFactVL,rFlowsWork,cFlowNames,iStat)
-            
+            CALL AppLake%GetBudget_MonthlyFlows(Budget,iLocationIndex,cAdjustedBeginDate,cAdjustedEndDate,rFactVL,rFlowsWork,cFlowNames,iStat,Model%Logger)
+
         CASE (f_iSWShedComp)
             CALL AppSWShed%GetBudget_MonthlyFlows(Budget,iSWShedBudType,iLocationIndex,cAdjustedBeginDate,cAdjustedEndDate,rFactVL,rFlowsWork,cFlowNames,iStat)
-            
+
     END SELECT
     IF (iStat .NE. 0) RETURN
         
@@ -970,8 +970,8 @@ CONTAINS
             CALL AppStream%GetBudget_MonthlyFlows(Budget,iBudgetType,iLocationIndex,Model%iStrmReachIDs,cAdjustedBeginDate,cAdjustedEndDate,rFactVL,rFlowsWork,cFlowNames,iStat)
             
         CASE (f_iLakeComp)
-            CALL AppLake%GetBudget_MonthlyFlows(Budget,iLocationIndex,cAdjustedBeginDate,cAdjustedEndDate,rFactVL,rFlowsWork,cFlowNames,iStat)
-                        
+            CALL AppLake%GetBudget_MonthlyFlows(Budget,iLocationIndex,cAdjustedBeginDate,cAdjustedEndDate,rFactVL,rFlowsWork,cFlowNames,iStat,Model%Logger)
+
         !For RootZone get the annual values directly to avoid double-counting LWU budget flows
         CASE (f_iRootZoneComp)
             CALL RootZone%GetBudget_AnnualFlows(Budget,iBudgetType,iLUType,iLocationIndex,cAdjustedBeginDate,cAdjustedEndDate,rFactVL,rFlows,cFlowNames,iStat)

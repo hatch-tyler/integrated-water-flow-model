@@ -25,10 +25,8 @@ MODULE GenericLinkedList
                              f_iFatal
   IMPLICIT NONE
 
-  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
-  
-  
-  
+
+
   
 ! ******************************************************************
 ! ******************************************************************
@@ -44,8 +42,7 @@ MODULE GenericLinkedList
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: GenericLinkedListType  , &
-            GenLinkedList_SetModuleLogger  
+  PUBLIC :: GenericLinkedListType
   
   
   ! -------------------------------------------------------------
@@ -189,8 +186,9 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- CONVERT AN INTEGER LINKED-LIST TO ARRAY
   ! -------------------------------------------------------------
-  SUBROUTINE GenericLinkedList_ConvertToIntegerArray(List,iArray,iStat)
+  SUBROUTINE GenericLinkedList_ConvertToIntegerArray(List,Logger,iArray,iStat)
     CLASS(GenericLinkedListType),TARGET,INTENT(IN) :: List
+    TYPE(MessageLoggerType),POINTER,INTENT(IN)     :: Logger
     INTEGER,ALLOCATABLE,INTENT(INOUT)              :: iArray(:)
     INTEGER,INTENT(OUT)                            :: iStat
     
@@ -214,7 +212,7 @@ CONTAINS
     !Allocate return array
     ALLOCATE (iArray(List%iNNodes) , STAT=iErrorCode , ERRMSG=cErrorMsg)
     IF (iErrorCode .NE. 0) THEN
-        CALL ModuleLogger%SetLastMessage('Error in allocating memory to convert a linked list to an integer array.'//NEW_LINE('x')//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
+        CALL Logger%SetLastMessage('Error in allocating memory to convert a linked list to an integer array.'//NEW_LINE('x')//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -281,10 +279,5 @@ CONTAINS
     
   END SUBROUTINE Next
 
-
-  SUBROUTINE GenLinkedList_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
-    ModuleLogger => Logger
-  END SUBROUTINE GenLinkedList_SetModuleLogger
 
 END MODULE

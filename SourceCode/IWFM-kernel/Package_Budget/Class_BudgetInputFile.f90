@@ -384,7 +384,7 @@ CONTAINS
     INTEGER,INTENT(OUT)                :: iStat
     
     IF (InputFile%iGetFileType() .EQ. f_iHDF) THEN
-        CALL ReadHeader_FromHDFFile(InputFile,Header,iStat)
+        CALL ReadHeader_FromHDFFile(InputFile,Header,iStat,ModuleLogger)
     ELSE
         CALL ReadHeader_FromBinFile(InputFile,Header,iStat)
     END IF
@@ -395,10 +395,11 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- READ HEADER DATA FROM HDF5 FILE
   ! -------------------------------------------------------------
-  SUBROUTINE ReadHeader_FromHDFFile(InputFile,Header,iStat)
-    CLASS(GenericFileType)             :: InputFile
-    TYPE(BudgetHeaderType),INTENT(OUT) :: Header
-    INTEGER,INTENT(OUT)                :: iStat
+  SUBROUTINE ReadHeader_FromHDFFile(InputFile,Header,iStat,Logger)
+    CLASS(GenericFileType)                     :: InputFile
+    TYPE(BudgetHeaderType),INTENT(OUT)        :: Header
+    INTEGER,INTENT(OUT)                       :: iStat
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
     
     !Local variables
     CHARACTER(LEN=ModNameLen+22) :: ThisProcedure = ModName // 'ReadHeader_FromHDFFile'
@@ -423,7 +424,7 @@ CONTAINS
       !Make sure that this is inded a Budget file
       IF (.NOT. InputFile%DoesHDFObjectExist(cAttributesDir//'/DSSOutput%cPathNames')) THEN
           CALL InputFile%GetName(cFileName)
-          CALL ModuleLogger%SetLastMessage('File '//TRIM(cFileName)//' is not a Budget file type!',f_iFatal,ThisProcedure)
+          CALL Logger%SetLastMessage('File '//TRIM(cFileName)//' is not a Budget file type!',f_iFatal,ThisProcedure)
           iStat = -1
           RETURN
       END IF

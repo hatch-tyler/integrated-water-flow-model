@@ -354,7 +354,7 @@ CONTAINS
     END DO
 
     !Transfer unique connected node data to permanent data type
-    CALL NodeList%GetArray(iWorkArray,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    CALL NodeList%GetArray(Grid%Logger,iWorkArray,iStat)  ;  IF (iStat .EQ. -1) RETURN
     CALL GetUniqueArrayComponents(iWorkArray,TheList)
     CALL ShellSort(TheList)
 
@@ -389,7 +389,7 @@ CONTAINS
     END DO
 
     !Transfer data to permanent data type
-    CALL SurElemList%GetArray(TheList,iStat)
+    CALL SurElemList%GetArray(Grid%Logger,TheList,iStat)
     IF (iStat .EQ. -1) RETURN
 
     !Free memory from the linked-list
