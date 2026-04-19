@@ -141,6 +141,7 @@ MODULE Class_Model_ForInquiry
   ! --- SIMPLIFIED MODEL DATA TYPE FOR INQUIRY
   ! -------------------------------------------------------------
   TYPE Model_ForInquiry_Type
+      TYPE(MessageLoggerType),POINTER                  :: Logger => NULL()
       !AppGrid, Stratigraphy and TimeStep properties are stored in the Model object
       !AppStream and AppLake properties are stored in Model object
       !AppStream Reach IDs redefined here because they may be reordered differently than listed in Model object (Model object reads it from PP bin file, but that list can be reordered in Simulation)
@@ -273,21 +274,25 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- NEW MODEL FROM DATA FILE
   ! -------------------------------------------------------------
-  SUBROUTINE New(Model,cSIMWorkingDirectory,cGWMainInputFileName,cStrmSimMainInputFileName,cRootZoneMainInputFileName,TimeStep,NTIME,iStat)
-    CLASS(Model_ForInquiry_Type)   :: Model
-    CHARACTER(LEN=*),INTENT(IN)    :: cSIMWorkingDirectory
-    CHARACTER(LEN=*),INTENT(OUT)   :: cGWMainInputFileName,cStrmSimMainInputFileName,cRootZoneMainInputFileName
-    TYPE(TimeStepType),INTENT(OUT) :: TimeStep
-    INTEGER,INTENT(OUT)            :: NTIME,iStat
+  SUBROUTINE New(Model,Logger,cSIMWorkingDirectory,cGWMainInputFileName,cStrmSimMainInputFileName,cRootZoneMainInputFileName,TimeStep,NTIME,iStat)
+    CLASS(Model_ForInquiry_Type)                    :: Model
+    TYPE(MessageLoggerType),POINTER,INTENT(IN)      :: Logger
+    CHARACTER(LEN=*),INTENT(IN)                     :: cSIMWorkingDirectory
+    CHARACTER(LEN=*),INTENT(OUT)                    :: cGWMainInputFileName,cStrmSimMainInputFileName,cRootZoneMainInputFileName
+    TYPE(TimeStepType),INTENT(OUT)                  :: TimeStep
+    INTEGER,INTENT(OUT)                             :: NTIME,iStat
     
     !Local variables
     INTEGER                  :: iNStrmNodes,iNZBudgets,iNBudgets,iNHydTypes,indx,iNElems 
     CHARACTER(:),ALLOCATABLE :: cFileName
     TYPE(GenericFileType)    :: ModelDataFile
     
+    !Store Logger
+    Model%Logger => Logger
+
     !Initialize
     iStat = 0
-    
+
     !Open file to read model data for inquiry
     CALL EstablishAbsolutePathFileName(cModelDataFileName,cSIMWorkingDirectory,cFileName)
     CALL ModelDataFile%New(cFileName,InputFile=.TRUE.,IsTSFile=.FALSE.,Descriptor='data file for simplified model for inquiry',iStat=iStat)
@@ -672,10 +677,10 @@ CONTAINS
     !Find the hydrograph information
     iLoc = LocateInList(iLocationType,Model%iHydrographLocationTypeList)
     IF (iLoc .LT. 1) THEN
-        IF (ASSOCIATED(ModuleLogger)) THEN
-            CALL ModuleLogger%SetLastMessage('Requested hydrograph data is not part of the model output!',f_iFatal,ThisProcedure)
+        IF (ASSOCIATED(Model%Logger)) THEN
+            CALL Model%Logger%SetLastMessage('Requested hydrograph data is not part of the model output!',f_iFatal,ThisProcedure)
         ELSE
-            CALL ModuleLogger%SetLastMessage('Requested hydrograph data is not part of the model output!',f_iFatal,ThisProcedure)
+            CALL Model%Logger%SetLastMessage('Requested hydrograph data is not part of the model output!',f_iFatal,ThisProcedure)
         END IF
         iStat = -1
         RETURN
@@ -747,17 +752,17 @@ CONTAINS
     !Locate budget in list
     iLoc = LocateInList(iBudgetType,Model%iBudgetTypeList)
     IF (iLoc .LT. 1) THEN
-        IF (ASSOCIATED(ModuleLogger)) THEN
-            CALL ModuleLogger%SetLastMessage('Specified budget is not part of the model output!',f_iFatal,ThisProcedure)
+        IF (ASSOCIATED(Model%Logger)) THEN
+            CALL Model%Logger%SetLastMessage('Specified budget is not part of the model output!',f_iFatal,ThisProcedure)
         ELSE
-            CALL ModuleLogger%SetLastMessage('Specified budget is not part of the model output!',f_iFatal,ThisProcedure)
+            CALL Model%Logger%SetLastMessage('Specified budget is not part of the model output!',f_iFatal,ThisProcedure)
         END IF
         iStat = -1
         RETURN
     END IF
     
     !Open file
-    CALL Budget%New(ModuleLogger,Model%cBudgetFiles(iLoc),iStat)
+    CALL Budget%New(Model%Logger,Model%cBudgetFiles(iLoc),iStat)
     IF (iStat .NE. 0) RETURN
     
     !Number of columns (includes Time column)
@@ -792,17 +797,17 @@ CONTAINS
     !Locate budget in list
     iLoc = LocateInList(iBudgetType,Model%iBudgetTypeList)
     IF (iLoc .LT. 1) THEN
-        IF (ASSOCIATED(ModuleLogger)) THEN
-            CALL ModuleLogger%SetLastMessage('Specified budget is not part of the model output!',f_iFatal,ThisProcedure)
+        IF (ASSOCIATED(Model%Logger)) THEN
+            CALL Model%Logger%SetLastMessage('Specified budget is not part of the model output!',f_iFatal,ThisProcedure)
         ELSE
-            CALL ModuleLogger%SetLastMessage('Specified budget is not part of the model output!',f_iFatal,ThisProcedure)
+            CALL Model%Logger%SetLastMessage('Specified budget is not part of the model output!',f_iFatal,ThisProcedure)
         END IF
         iStat = -1
         RETURN
     END IF
     
     !Open file
-    CALL Budget%New(ModuleLogger,Model%cBudgetFiles(iLoc),iStat)
+    CALL Budget%New(Model%Logger,Model%cBudgetFiles(iLoc),iStat)
     IF (iStat .NE. 0) RETURN
     
     !Number of columns (includes Time column)
@@ -858,17 +863,17 @@ CONTAINS
     !Locate budget in list
     iLoc = LocateInList(iBudgetType,Model%iBudgetTypeList)
     IF (iLoc .LT. 1) THEN
-        IF (ASSOCIATED(ModuleLogger)) THEN
-            CALL ModuleLogger%SetLastMessage('Specified budget is not part of the model output!',f_iFatal,ThisProcedure)
+        IF (ASSOCIATED(Model%Logger)) THEN
+            CALL Model%Logger%SetLastMessage('Specified budget is not part of the model output!',f_iFatal,ThisProcedure)
         ELSE
-            CALL ModuleLogger%SetLastMessage('Specified budget is not part of the model output!',f_iFatal,ThisProcedure)
+            CALL Model%Logger%SetLastMessage('Specified budget is not part of the model output!',f_iFatal,ThisProcedure)
         END IF
         iStat = -1
         RETURN
     END IF
     
     !Open file
-    CALL Budget%New(ModuleLogger,Model%cBudgetFiles(iLoc),iStat)
+    CALL Budget%New(Model%Logger,Model%cBudgetFiles(iLoc),iStat)
     IF (iStat .NE. 0) RETURN
             
     !Get monthly budget flows
@@ -959,17 +964,17 @@ CONTAINS
     !Locate budget in list
     iLoc = LocateInList(iBudgetType,Model%iBudgetTypeList)
     IF (iLoc .LT. 1) THEN
-        IF (ASSOCIATED(ModuleLogger)) THEN
-            CALL ModuleLogger%SetLastMessage('Specified budget is not part of the model output!',f_iFatal,ThisProcedure)
+        IF (ASSOCIATED(Model%Logger)) THEN
+            CALL Model%Logger%SetLastMessage('Specified budget is not part of the model output!',f_iFatal,ThisProcedure)
         ELSE
-            CALL ModuleLogger%SetLastMessage('Specified budget is not part of the model output!',f_iFatal,ThisProcedure)
+            CALL Model%Logger%SetLastMessage('Specified budget is not part of the model output!',f_iFatal,ThisProcedure)
         END IF
         iStat = -1
         RETURN
     END IF
     
     !Open file
-    CALL Budget%New(ModuleLogger,Model%cBudgetFiles(iLoc),iStat)
+    CALL Budget%New(Model%Logger,Model%cBudgetFiles(iLoc),iStat)
     IF (iStat .NE. 0) RETURN
     
     !Get monthly budget flows
@@ -1041,17 +1046,17 @@ CONTAINS
     !Locate budget in list
     iLoc = LocateInList(iBudgetType,Model%iBudgetTypeList)
     IF (iLoc .LT. 1) THEN
-        IF (ASSOCIATED(ModuleLogger)) THEN
-            CALL ModuleLogger%SetLastMessage('Specified budget is not part of the model output to retrieve data from!',f_iFatal,ThisProcedure)
+        IF (ASSOCIATED(Model%Logger)) THEN
+            CALL Model%Logger%SetLastMessage('Specified budget is not part of the model output to retrieve data from!',f_iFatal,ThisProcedure)
         ELSE
-            CALL ModuleLogger%SetLastMessage('Specified budget is not part of the model output to retrieve data from!',f_iFatal,ThisProcedure)
+            CALL Model%Logger%SetLastMessage('Specified budget is not part of the model output to retrieve data from!',f_iFatal,ThisProcedure)
         END IF
         iStat = -1
         RETURN
     END IF
     
     !Open file
-    CALL Budget%New(ModuleLogger,Model%cBudgetFiles(iLoc),iStat)
+    CALL Budget%New(Model%Logger,Model%cBudgetFiles(iLoc),iStat)
     IF (iStat .NE. 0) RETURN
     
     !Read data based on budget type
@@ -1100,17 +1105,17 @@ CONTAINS
     !Locate budget in list
     iLoc = LocateInList(f_iBudgetType_GW,Model%iBudgetTypeList)
     IF (iLoc .LT. 1) THEN
-        IF (ASSOCIATED(ModuleLogger)) THEN
-            CALL ModuleLogger%SetLastMessage('Groundwater budget is not part of the model output to retrieve cumulative chnage in storage!',f_iFatal,ThisProcedure)
+        IF (ASSOCIATED(Model%Logger)) THEN
+            CALL Model%Logger%SetLastMessage('Groundwater budget is not part of the model output to retrieve cumulative chnage in storage!',f_iFatal,ThisProcedure)
         ELSE
-            CALL ModuleLogger%SetLastMessage('Groundwater budget is not part of the model output to retrieve cumulative chnage in storage!',f_iFatal,ThisProcedure)
+            CALL Model%Logger%SetLastMessage('Groundwater budget is not part of the model output to retrieve cumulative chnage in storage!',f_iFatal,ThisProcedure)
         END IF
         iStat = -1
         RETURN
     END IF
     
     !Open file
-    CALL Budget%New(ModuleLogger,Model%cBudgetFiles(iLoc),iStat)
+    CALL Budget%New(Model%Logger,Model%cBudgetFiles(iLoc),iStat)
     IF (iStat .NE. 0) RETURN
         
     !Get the data
@@ -1144,17 +1149,17 @@ CONTAINS
     !Locate budget in list
     iLoc = LocateInList(f_iBudgetType_GW,Model%iBudgetTypeList)
     IF (iLoc .LT. 1) THEN
-        IF (ASSOCIATED(ModuleLogger)) THEN
-            CALL ModuleLogger%SetLastMessage('Groundwater budget is not part of the model output to retrieve cumulative chnage in storage!',f_iFatal,ThisProcedure)
+        IF (ASSOCIATED(Model%Logger)) THEN
+            CALL Model%Logger%SetLastMessage('Groundwater budget is not part of the model output to retrieve cumulative chnage in storage!',f_iFatal,ThisProcedure)
         ELSE
-            CALL ModuleLogger%SetLastMessage('Groundwater budget is not part of the model output to retrieve cumulative chnage in storage!',f_iFatal,ThisProcedure)
+            CALL Model%Logger%SetLastMessage('Groundwater budget is not part of the model output to retrieve cumulative chnage in storage!',f_iFatal,ThisProcedure)
         END IF
         iStat = -1
         RETURN
     END IF
     
     !Open file
-    CALL Budget%New(ModuleLogger,Model%cBudgetFiles(iLoc),iStat)
+    CALL Budget%New(Model%Logger,Model%cBudgetFiles(iLoc),iStat)
     IF (iStat .NE. 0) RETURN
     
     !Get the data
@@ -1217,21 +1222,21 @@ CONTAINS
     !Find the index of the ZBudget in the list
     iLoc = LocateInList(iZBudgetType,Model%iZBudgetTypeList)    
     IF (iLoc .EQ. 0) THEN
-        IF (ASSOCIATED(ModuleLogger)) THEN
-            CALL ModuleLogger%SetLastMessage('Specified zone budget type is not found as part of the model output!',f_iFatal,ThisProcedure)
+        IF (ASSOCIATED(Model%Logger)) THEN
+            CALL Model%Logger%SetLastMessage('Specified zone budget type is not found as part of the model output!',f_iFatal,ThisProcedure)
         ELSE
-            CALL ModuleLogger%SetLastMessage('Specified zone budget type is not found as part of the model output!',f_iFatal,ThisProcedure)
+            CALL Model%Logger%SetLastMessage('Specified zone budget type is not found as part of the model output!',f_iFatal,ThisProcedure)
         END IF
         iStat = -1
         RETURN
     END IF
     
     !Open file
-    CALL ZBudget%New(ModuleLogger,Model%cZBudgetFiles(iLoc),iStat)
+    CALL ZBudget%New(Model%Logger,Model%cZBudgetFiles(iLoc),iStat)
     IF (iStat .NE. 0) GOTO 10
     
     !Generate zone list
-    CALL ZoneList%New(ModuleLogger,ZBudget%Header%iNData,ZBudget%Header%lFaceFlows_Defined,ZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)
+    CALL ZoneList%New(Model%Logger,ZBudget%Header%iNData,ZBudget%Header%lFaceFlows_Defined,ZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)
     IF (iStat .NE. 0) GOTO 10
     
     !Get the number of non-diversified columns; first column will be Time so that will be eliminated later
@@ -1278,21 +1283,21 @@ CONTAINS
     !Get the index for the Z-Budget
     iLoc = LocateInList(iZBudgetType,Model%iZBudgetTypeList)
     IF (iLoc .EQ. 0) THEN
-        IF (ASSOCIATED(ModuleLogger)) THEN
-            CALL ModuleLogger%SetLastMessage('Specified zone budget is not part of the model output!',f_iFatal,ThisProcedure)
+        IF (ASSOCIATED(Model%Logger)) THEN
+            CALL Model%Logger%SetLastMessage('Specified zone budget is not part of the model output!',f_iFatal,ThisProcedure)
         ELSE
-            CALL ModuleLogger%SetLastMessage('Specified zone budget is not part of the model output!',f_iFatal,ThisProcedure)
+            CALL Model%Logger%SetLastMessage('Specified zone budget is not part of the model output!',f_iFatal,ThisProcedure)
         END IF
         iStat = -1
         RETURN
     END IF
     
     !Open file
-    CALL ZBudget%New(ModuleLogger,Model%cZBudgetFiles(iLoc),iStat)
+    CALL ZBudget%New(Model%Logger,Model%cZBudgetFiles(iLoc),iStat)
     IF (iStat .NE. 0) GOTO 10
     
     !Generate zone list
-    CALL ZoneList%New(ModuleLogger,ZBudget%Header%iNData,ZBudget%Header%lFaceFlows_Defined,ZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)
+    CALL ZoneList%New(Model%Logger,ZBudget%Header%iNData,ZBudget%Header%lFaceFlows_Defined,ZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)
     IF (iStat .NE. 0) GOTO 10
     
     !Get the non-diversified column titles; first column will be Time so that will be eliminated later
@@ -1345,21 +1350,21 @@ CONTAINS
     !Get the index for the Z-Budget
     iLoc = LocateInList(iZBudgetType,Model%iZBudgetTypeList)
     IF (iLoc .EQ. 0) THEN
-        IF (ASSOCIATED(ModuleLogger)) THEN
-            CALL ModuleLogger%SetLastMessage('Specified zone budget is not part of the model output!',f_iFatal,ThisProcedure)
+        IF (ASSOCIATED(Model%Logger)) THEN
+            CALL Model%Logger%SetLastMessage('Specified zone budget is not part of the model output!',f_iFatal,ThisProcedure)
         ELSE
-            CALL ModuleLogger%SetLastMessage('Specified zone budget is not part of the model output!',f_iFatal,ThisProcedure)
+            CALL Model%Logger%SetLastMessage('Specified zone budget is not part of the model output!',f_iFatal,ThisProcedure)
         END IF
         iStat = -1
         RETURN
     END IF
     
     !Open file
-    CALL ZBudget%New(ModuleLogger,Model%cZBudgetFiles(iLoc),iStat)
+    CALL ZBudget%New(Model%Logger,Model%cZBudgetFiles(iLoc),iStat)
     IF (iStat .NE. 0) GOTO 10
     
     !Generate zone list
-    CALL ZoneList%New(ModuleLogger,ZBudget%Header%iNData,ZBudget%Header%lFaceFlows_Defined,ZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)
+    CALL ZoneList%New(Model%Logger,ZBudget%Header%iNData,ZBudget%Header%lFaceFlows_Defined,ZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)
     IF (iStat .NE. 0) GOTO 10
     
     !Get the inflow/outflow columns depending on the ZBudget 
@@ -1445,21 +1450,21 @@ CONTAINS
     !Get the index for the Z-Budget
     iLoc = LocateInList(iZBudgetType,Model%iZBudgetTypeList)
     IF (iLoc .EQ. 0) THEN
-        IF (ASSOCIATED(ModuleLogger)) THEN
-            CALL ModuleLogger%SetLastMessage('Specified zone budget is not part of the model output!',f_iFatal,ThisProcedure)
+        IF (ASSOCIATED(Model%Logger)) THEN
+            CALL Model%Logger%SetLastMessage('Specified zone budget is not part of the model output!',f_iFatal,ThisProcedure)
         ELSE
-            CALL ModuleLogger%SetLastMessage('Specified zone budget is not part of the model output!',f_iFatal,ThisProcedure)
+            CALL Model%Logger%SetLastMessage('Specified zone budget is not part of the model output!',f_iFatal,ThisProcedure)
         END IF
         iStat = -1
         RETURN
     END IF
     
     !Open file
-    CALL ZBudget%New(ModuleLogger,Model%cZBudgetFiles(iLoc),iStat)
+    CALL ZBudget%New(Model%Logger,Model%cZBudgetFiles(iLoc),iStat)
     IF (iStat .NE. 0) GOTO 10
     
     !Generate zone list
-    CALL ZoneList%New(ModuleLogger,ZBudget%Header%iNData,ZBudget%Header%lFaceFlows_Defined,ZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)
+    CALL ZoneList%New(Model%Logger,ZBudget%Header%iNData,ZBudget%Header%lFaceFlows_Defined,ZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)
     IF (iStat .NE. 0) GOTO 10
     
     !Get the inflow/outflow columns depending on the ZBudget 
@@ -1528,21 +1533,21 @@ CONTAINS
     !Get the index for the Z-Budget
     iLoc = LocateInList(iZBudgetType,Model%iZBudgetTypeList)
     IF (iLoc .EQ. 0) THEN
-        IF (ASSOCIATED(ModuleLogger)) THEN
-            CALL ModuleLogger%SetLastMessage('Specified zone budget is not part of the model output!',f_iFatal,ThisProcedure)
+        IF (ASSOCIATED(Model%Logger)) THEN
+            CALL Model%Logger%SetLastMessage('Specified zone budget is not part of the model output!',f_iFatal,ThisProcedure)
         ELSE
-            CALL ModuleLogger%SetLastMessage('Specified zone budget is not part of the model output!',f_iFatal,ThisProcedure)
+            CALL Model%Logger%SetLastMessage('Specified zone budget is not part of the model output!',f_iFatal,ThisProcedure)
         END IF
         iStat = -1
         RETURN
     END IF
     
     !Open file
-    CALL ZBudget%New(ModuleLogger,Model%cZBudgetFiles(iLoc),iStat)
+    CALL ZBudget%New(Model%Logger,Model%cZBudgetFiles(iLoc),iStat)
     IF (iStat .EQ. -1) GOTO 10
     
     !Generate zone list
-    CALL ZoneList%New(ModuleLogger,ZBudget%Header%iNData,ZBudget%Header%lFaceFlows_Defined,ZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)  ;  IF (iStat .EQ. -1) GOTO 10
+    CALL ZoneList%New(Model%Logger,ZBudget%Header%iNData,ZBudget%Header%lFaceFlows_Defined,ZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)  ;  IF (iStat .EQ. -1) GOTO 10
     
     !Read data
     CALL ZBudget%ReadData(ZoneList,iZoneID,iCols,cInterval,cBeginDate,cEndDate,rFactAR,rFactVL,iDataTypes,inActualOutput,rValues,iStat)  ;  IF (iStat .EQ. -1) GOTO 10
@@ -1582,21 +1587,21 @@ CONTAINS
     !Get the index for the GW Z-Budget
     iLoc = LocateInList(f_iZBudgetType_GW,Model%iZBudgetTypeList)
     IF (iLoc .EQ. 0) THEN
-        IF (ASSOCIATED(ModuleLogger)) THEN
-            CALL ModuleLogger%SetLastMessage('Groundwater zone budget is not part of the model output!',f_iFatal,ThisProcedure)
+        IF (ASSOCIATED(Model%Logger)) THEN
+            CALL Model%Logger%SetLastMessage('Groundwater zone budget is not part of the model output!',f_iFatal,ThisProcedure)
         ELSE
-            CALL ModuleLogger%SetLastMessage('Groundwater zone budget is not part of the model output!',f_iFatal,ThisProcedure)
+            CALL Model%Logger%SetLastMessage('Groundwater zone budget is not part of the model output!',f_iFatal,ThisProcedure)
         END IF
         iStat = -1
         RETURN
     END IF
     
     !Open file
-    CALL ZBudget%New(ModuleLogger,Model%cZBudgetFiles(iLoc),iStat)
+    CALL ZBudget%New(Model%Logger,Model%cZBudgetFiles(iLoc),iStat)
     IF (iStat .EQ. -1) GOTO 10
     
     !Generate zone list
-    CALL ZoneList%New(ModuleLogger,ZBudget%Header%iNData,ZBudget%Header%lFaceFlows_Defined,ZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)
+    CALL ZoneList%New(Model%Logger,ZBudget%Header%iNData,ZBudget%Header%lFaceFlows_Defined,ZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)
     IF (iStat .NE. 0) GOTO 10
     
     !Retrieve data
@@ -1634,21 +1639,21 @@ CONTAINS
     !Get the index for the GW Z-Budget
     iLoc = LocateInList(f_iZBudgetType_GW,Model%iZBudgetTypeList)
     IF (iLoc .EQ. 0) THEN
-        IF (ASSOCIATED(ModuleLogger)) THEN
-            CALL ModuleLogger%SetLastMessage('Groundwater zone budget is not part of the model output!',f_iFatal,ThisProcedure)
+        IF (ASSOCIATED(Model%Logger)) THEN
+            CALL Model%Logger%SetLastMessage('Groundwater zone budget is not part of the model output!',f_iFatal,ThisProcedure)
         ELSE
-            CALL ModuleLogger%SetLastMessage('Groundwater zone budget is not part of the model output!',f_iFatal,ThisProcedure)
+            CALL Model%Logger%SetLastMessage('Groundwater zone budget is not part of the model output!',f_iFatal,ThisProcedure)
         END IF
         iStat = -1
         RETURN
     END IF
     
     !Open file
-    CALL ZBudget%New(ModuleLogger,Model%cZBudgetFiles(iLoc),iStat)
+    CALL ZBudget%New(Model%Logger,Model%cZBudgetFiles(iLoc),iStat)
     IF (iStat .EQ. -1) GOTO 10
     
     !Generate zone list
-    CALL ZoneList%New(ModuleLogger,ZBudget%Header%iNData,ZBudget%Header%lFaceFlows_Defined,ZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)
+    CALL ZoneList%New(Model%Logger,ZBudget%Header%iNData,ZBudget%Header%lFaceFlows_Defined,ZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)
     IF (iStat .NE. 0) GOTO 10
     
     !Retrieve data
@@ -1692,10 +1697,10 @@ CONTAINS
     END DO
     
     !If here, the data was not found
-    IF (ASSOCIATED(ModuleLogger)) THEN
-        CALL ModuleLogger%SetLastMessage('An output file for GWHeadsAll cannot be found to retrieve gw heads at all nodes and layers!',f_iFatal,ThisProcedure)
+    IF (ASSOCIATED(Model%Logger)) THEN
+        CALL Model%Logger%SetLastMessage('An output file for GWHeadsAll cannot be found to retrieve gw heads at all nodes and layers!',f_iFatal,ThisProcedure)
     ELSE
-        CALL ModuleLogger%SetLastMessage('An output file for GWHeadsAll cannot be found to retrieve gw heads at all nodes and layers!',f_iFatal,ThisProcedure)
+        CALL Model%Logger%SetLastMessage('An output file for GWHeadsAll cannot be found to retrieve gw heads at all nodes and layers!',f_iFatal,ThisProcedure)
     END IF
     iStat = -1
     

@@ -60,6 +60,7 @@ MODULE Class_Lake
   ! --- LAKE DATA TYPE
   ! -------------------------------------------------------------
   TYPE LakeType
+      TYPE(MessageLoggerType), POINTER :: Logger => NULL()
       CHARACTER(LEN=200)   :: cName           = ''       !Name of the lake
       INTEGER              :: ID              = 0        !Lake ID
       INTEGER              :: NElements       = 0        !Number of lake elements

@@ -79,6 +79,7 @@ MODULE Package_AppSmallWatershed
   ! -------------------------------------------------------------
   TYPE AppSmallWatershedType
       PRIVATE
+      TYPE(MessageLoggerType),POINTER              :: Logger => NULL()
       INTEGER                                      :: iComponentVersion = 0
       LOGICAL                                      :: lDefined          = .FALSE. !Flag to check if small watersheds are simulated
       CLASS(BaseAppSmallWatershedType),ALLOCATABLE :: Me
@@ -169,9 +170,10 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- NEW SMALL WATERSHED DATABASE
   ! -------------------------------------------------------------
-  SUBROUTINE New(AppSWShed,IsForInquiry,cFileName,cCropCoeffFileName,cWorkingDirectory,TimeStep,NTIME,NStrmNodes,iStrmNodeIDs,AppGrid,Stratigraphy,Precip,ET,iStat,cVersionOverride) 
-    CLASS(AppSmallWatershedType),INTENT(OUT) :: AppSWShed
-    LOGICAL,INTENT(IN)                       :: IsForInquiry
+  SUBROUTINE New(AppSWShed,Logger,IsForInquiry,cFileName,cCropCoeffFileName,cWorkingDirectory,TimeStep,NTIME,NStrmNodes,iStrmNodeIDs,AppGrid,Stratigraphy,Precip,ET,iStat,cVersionOverride)
+    CLASS(AppSmallWatershedType),INTENT(OUT)   :: AppSWShed
+    TYPE(MessageLoggerType),TARGET,INTENT(IN)  :: Logger
+    LOGICAL,INTENT(IN)                         :: IsForInquiry
     CHARACTER(LEN=*),INTENT(IN)              :: cFileName,cCropCoeffFileName,cWorkingDirectory
     TYPE(TimeStepType),INTENT(IN)            :: TimeStep
     INTEGER,INTENT(IN)                       :: NStrmNodes,iStrmNodeIDs(NStrmNodes),NTIME
@@ -188,15 +190,18 @@ CONTAINS
     INTEGER                        :: iGWNodeIDs(AppGrid%NNodes),iErrorCode
     CHARACTER(:),ALLOCATABLE       :: cVersion
     
+    !Set logger
+    AppSWShed%Logger => Logger
+
     !Initialize
     iStat      = 0
     iGWNodeIDs = AppGrid%AppNode%ID
-    
+
     !Return if no filename is specified
     IF (cFileName .EQ. '') RETURN
     
     !Inform user
-    CALL ModuleLogger%EchoProgress('Instantiating small watershed component...')
+    CALL AppSWShed%Logger%EchoProgress('Instantiating small watershed component...')
     
     !Open main input file and retrive AppSmallWatershed version number
     CALL MainFile%New(FileName=cFileName,InputFile=.TRUE.,IsTSFile=.FALSE.,Descriptor='small watershed parameters',iStat=iStat) 
@@ -222,11 +227,14 @@ CONTAINS
             ALLOCATE(AppSmallWatershed_v41_Type :: AppSWShed%Me)
             AppSWShed%iComponentVersion = 41
         CASE DEFAULT
-            CALL ModuleLogger%SetLastMessage('Small Watershed Component version number is not recognized ('//TRIM(cVersion)//')!',f_iFatal,ThisProcedure)
+            CALL AppSWShed%Logger%SetLastMessage('Small Watershed Component version number is not recognized ('//TRIM(cVersion)//')!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
     END SELECT
-        
+
+    !Propagate logger to Me
+    AppSWShed%Me%Logger => AppSWShed%Logger
+
     !Now, instantiate
     CALL AppSWShed%Me%New(IsForInquiry,cFileName,cCropCoeffFileName,cWorkingDirectory,TimeStep,NTIME,NStrmNodes,iStrmNodeIDs,AppGrid,Stratigraphy,Precip,ET,iStat,cVersionOverride)
     IF (iStat .NE. 0) RETURN

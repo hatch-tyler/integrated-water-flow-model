@@ -166,16 +166,19 @@ CONTAINS
     iStat    = 0
     iElemIDs = AppGrid%AppElement%ID
 
+    !Set Logger (INTENT(OUT) resets pointer, restore from module-level)
+    AppLake%Logger => ModuleLogger
+
     !Return if filename is empty
     IF (cFileName .EQ. '') RETURN
-    
+
     !Echo progress
-    CALL ModuleLogger%EchoProgress('Instantiating static component of application lakes')
-    
+    CALL AppLake%Logger%EchoProgress('Instantiating static component of application lakes')
+
     !Open file
     CALL InFile%New(FileName=cFileName,InputFile=.TRUE.,IsTSFile=.FALSE.,Descriptor='pre-processor lake data file',iStat=iStat)
     IF (iStat .EQ. -1) RETURN
-    
+
     !Read the first line that holds version number
     CALL ReadVersion(InFile,'LAKE',cVersion,iStat)
     IF (iStat .EQ. -1) RETURN
@@ -183,11 +186,11 @@ CONTAINS
     !Number of lakes
     CALL InFile%ReadData(NLakes,iStat)  ;  IF(iStat .EQ. -1) RETURN
     AppLake%NLakes = NLakes
-    
+
     !Allocate memory
     ALLOCATE (AppLake%Lakes(NLakes) , STAT=ErrorCode)
     IF (ErrorCode .NE. 0) THEN
-        CALL ModuleLogger%SetLastMessage('Error in allocating memory for lakes!',f_iFatal,ThisProcedure)
+        CALL AppLake%Logger%SetLastMessage('Error in allocating memory for lakes!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -204,7 +207,7 @@ CONTAINS
         !Make sure lake ID is not used more than once
         DO indxLake1=1,indxLake-1
             IF (ID .EQ. AppLake%Lakes(indxLake1)%ID) THEN
-                CALL ModuleLogger%SetLastMessage('Lake ID '//TRIM(IntToText(ID))//' is used more than once!',f_iFatal,ThisProcedure)
+                CALL AppLake%Logger%SetLastMessage('Lake ID '//TRIM(IntToText(ID))//' is used more than once!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -213,7 +216,7 @@ CONTAINS
         !Outflow destination type
         iDestType = DummyArray(2)
         IF (.NOT. ANY(iDestType.EQ.f_iDestTypes)) THEN
-            CALL ModuleLogger%SetLastMessage('Outflow destination type for lake '//TRIM(IntToText(ID))//' is not recognized!',f_iFatal,ThisProcedure)
+            CALL AppLake%Logger%SetLastMessage('Outflow destination type for lake '//TRIM(IntToText(ID))//' is not recognized!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -234,7 +237,7 @@ CONTAINS
         END DO
         CALL ConvertID_To_Index(iElems_Work,iElemIDs,AppLake%Lakes(indxLake)%Elements)
         IF (ANY(AppLake%Lakes(indxLake)%Elements.EQ.0)) THEN
-            CALL ModuleLogger%SetLastMessage('One or more elements listed for lake '//TRIM(IntToText(ID))//' are not in the model!',f_iFatal,ThisProcedure)
+            CALL AppLake%Logger%SetLastMessage('One or more elements listed for lake '//TRIM(IntToText(ID))//' are not in the model!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -245,7 +248,7 @@ CONTAINS
             iElem = AppLake%Lakes(indxLake)%Elements(indxElem)
             DO indxLake1=1,indxLake-1
                 IF (ANY(iElem .EQ. AppLake%Lakes(indxLake1)%Elements)) THEN
-                    CALL ModuleLogger%SetLastMessage('Element '//TRIM(IntToText(iElemIDs(iElem)))//' listed for lake '//TRIM(IntToText(ID))//' is also listed for lake '//TRIM(IntToText(AppLake%Lakes(indxLake1)%ID))//'!',f_iFatal,ThisProcedure)
+                    CALL AppLake%Logger%SetLastMessage('Element '//TRIM(IntToText(iElemIDs(iElem)))//' listed for lake '//TRIM(IntToText(ID))//' is also listed for lake '//TRIM(IntToText(AppLake%Lakes(indxLake1)%ID))//'!',f_iFatal,ThisProcedure)
                     iStat = -1
                     RETURN
                 END IF
@@ -283,13 +286,13 @@ CONTAINS
             !If flow to lake, make sure downstream lake is modeled
             CASE (f_iFlowDest_Lake)
                 IF (iDestID .EQ. ID) THEN
-                    CALL ModuleLogger%SetLastMessage('Outflow from lake '//TRIM(IntToText(ID))//' cannot flow into itself!',f_iFatal,ThisProcedure)
+                    CALL AppLake%Logger%SetLastMessage('Outflow from lake '//TRIM(IntToText(ID))//' cannot flow into itself!',f_iFatal,ThisProcedure)
                     iStat = -1
                     RETURN
                 END IF
                 iDest = LocateInList(iDestID,iLakeIDs)
                 IF (iDest .EQ. 0) THEN
-                    CALL ModuleLogger%SetLastMessage('Lake '//TRIM(IntToText(iDestID))//' as outflow destination for lake '//TRIM(IntToText(ID))//' is not in the model!',f_iFatal,ThisProcedure) 
+                    CALL AppLake%Logger%SetLastMessage('Lake '//TRIM(IntToText(iDestID))//' as outflow destination for lake '//TRIM(IntToText(ID))//' is not in the model!',f_iFatal,ThisProcedure)
                     iStat = -1
                     RETURN
                 END IF
@@ -310,10 +313,13 @@ CONTAINS
     CLASS(AppLake_v40_Type),INTENT(OUT) :: AppLake
     TYPE(GenericFileType)               :: BinFile
     INTEGER,INTENT(OUT)                 :: iStat
-    
+
     !Initialize
     iStat = 0
-  
+
+    !Set Logger (INTENT(OUT) resets pointer, restore from module-level)
+    AppLake%Logger => ModuleLogger
+
     !Read the preprocessed data for lakes
     CALL AppLake%ReadPreprocessedData(BinFile,iStat)
     
@@ -352,7 +358,7 @@ CONTAINS
     IF (cFileName .EQ. '') RETURN
     
     !Echo progress
-    CALL ModuleLogger%EchoProgress('Instantiating dynamic component of application lakes')
+    CALL AppLake%Logger%EchoProgress('Instantiating dynamic component of application lakes')
     
     !Open lake data file
     CALL LakeDataFile%New(cFileName,InputFile=.TRUE.,iStat=iStat)
@@ -365,7 +371,7 @@ CONTAINS
         MessageArray(1) = 'Lake Component versions used in Pre-Processor and Simulation must match!'
         MessageArray(2) = 'Version number in Pre-Processor = 4.0' 
         MessageArray(3) = 'Version number in Simulation    = ' // TRIM(cVersionSim)
-        CALL ModuleLogger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+        CALL AppLake%Logger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -375,7 +381,7 @@ CONTAINS
     ALine = StripTextUntilCharacter(ALine,f_cInlineCommentChar) 
     CALL CleanSpecialCharacters(ALine)
     IF (ALine .EQ. '') THEN
-        CALL ModuleLogger%SetLastMessage('Maximum lake elevations file must be specified when lakes are simulated!',f_iFatal,ThisProcedure)
+        CALL AppLake%Logger%SetLastMessage('Maximum lake elevations file must be specified when lakes are simulated!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -423,14 +429,14 @@ CONTAINS
         ID = INT(DummyArray(1))
         CALL ConvertID_To_Index(ID,iLakeIDs,iLake)
         IF (iLake .EQ. 0) THEN 
-            CALL ModuleLogger%SetLastMessage('Lake ID '//TRIM(IntToText(ID))//' listed for lake parameters is not recognized!',f_iFatal,ThisProcedure)
+            CALL AppLake%Logger%SetLastMessage('Lake ID '//TRIM(IntToText(ID))//' listed for lake parameters is not recognized!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
         
         !Make sure lake data was not entered previously
         IF (lProcessed(iLake)) THEN
-            CALL ModuleLogger%SetLastMessage('Parameters for lake '//TRIM(IntToText(ID))//' are entered more than once!',f_iFatal,ThisProcedure)
+            CALL AppLake%Logger%SetLastMessage('Parameters for lake '//TRIM(IntToText(ID))//' are entered more than once!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -452,7 +458,7 @@ CONTAINS
         IF (AppLake%iColMaxElev(iLake) .GT. AppLake%MaxLakeElevFile%iSize) THEN
             MessageArray(1) = 'Maximum lake elevation data column for lake '//TRIM(IntToText(ID))//' is greater than the'
             MessageArray(2) = 'available data columns in the Maximum Lake Elevations Data File!'
-            CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+            CALL AppLake%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -472,12 +478,12 @@ CONTAINS
     IF (cLakeBudgetFileName .NE. '') THEN
         ALLOCATE (AppLake%LakeBudRawFile)
         IF (IsForInquiry) THEN
-            CALL AppLake%LakeBudRawFile%New(ModuleLogger,TRIM(cLakeBudgetFileName),iStat)
+            CALL AppLake%LakeBudRawFile%New(AppLake%Logger,TRIM(cLakeBudgetFileName),iStat)
             IF (iStat .EQ. -1) RETURN
         ELSE
             cComponentVersion = '4.0-' // TRIM(cPackageVersion)
             BudHeader = PrepareLakeBudgetHeader(AppLake%Lakes,NTIME,TimeStep,TRIM(cComponentVersion))
-            CALL AppLake%LakeBudRawFile%New(ModuleLogger,TRIM(cLakeBudgetFileName),BudHeader,iStat)
+            CALL AppLake%LakeBudRawFile%New(AppLake%Logger,TRIM(cLakeBudgetFileName),BudHeader,iStat)
             IF (iStat .EQ. -1) RETURN
             CALL BudHeader%Kill()
         END IF
@@ -512,13 +518,16 @@ CONTAINS
     TYPE(PrecipitationType),INTENT(IN)  :: Precip
     TYPE(ETType),INTENT(IN)             :: ET
     INTEGER,INTENT(OUT)                 :: iStat
-    
+
     !Local variables
     CHARACTER(LEN=ModNameLen+28) :: ThisProcedure = ModName // 'AppLake_v40_SetAllComponents'
-    
+
     !Initialize
     iStat = 0
-    
+
+    !Set Logger (INTENT(OUT) resets pointer, restore from module-level)
+    AppLake%Logger => ModuleLogger
+
     !Read the preprocessed data for lakes
     CALL AppLake%ReadPreprocessedData(BinFile,iStat)
     IF (iStat .EQ. -1) RETURN
@@ -535,7 +544,7 @@ CONTAINS
         IF (cFileName .EQ. '') THEN
             MessageArray(1) = 'For proper simulation of lakes, relevant lake data files must'
             MessageArray(2) = 'be specified when lakes are defined in Pre-Processor.'
-            CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+            CALL AppLake%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -560,13 +569,16 @@ CONTAINS
     TYPE(PrecipitationType),INTENT(IN)    :: Precip
     TYPE(ETType),INTENT(IN)               :: ET
     INTEGER,INTENT(OUT)                   :: iStat
-    
+
     !Local variables
     CHARACTER(LEN=ModNameLen+43) :: ThisProcedure = ModName // 'AppLake_v40_SetAllComponentsWithoutBinFile'
-    
+
     !Initialize
     iStat = 0
-    
+
+    !Set Logger (INTENT(OUT) resets pointer, restore from module-level)
+    AppLake%Logger => ModuleLogger
+
     !Instantiate the static components of the AppLake data
     CALL AppLake%SetStaticComponent(cPPFileName,Stratigraphy,AppGrid,StrmLakeConnector,LakeGWConnector,iStat)
     IF (iStat .EQ. -1) RETURN
@@ -580,7 +592,7 @@ CONTAINS
         IF (AppLake%MaxLakeElevFile%iSize .EQ. 0) THEN
             MessageArray(1) = 'For proper simulation of lakes, relevant lake data files must'
             MessageArray(2) = 'be specified when lakes are defined in Pre-Processor.'
-            CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+            CALL AppLake%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -672,7 +684,7 @@ CONTAINS
                 MessageArray(1) = 'Maximum lake elevation at lake '//TRIM(IntToText(ID))//' is lower than lake bottom!'
                 WRITE (MessageArray(2),'(A,F6.2)') 'Maximum lake elevation = ',rMaxElev
                 WRITE (MessageArray(3),'(A,F6.2)') 'Lake bottom elevation  = ',rLowGSElev
-                CALL ModuleLogger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+                CALL AppLake%Logger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF

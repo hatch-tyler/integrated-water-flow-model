@@ -224,6 +224,7 @@ MODULE WSA_ANN
   ! -------------------------------------------------------------
   TYPE WSA_ANN_Type
       PRIVATE
+      TYPE(MessageLoggerType),POINTER          :: Logger => NULL()
       INTEGER                                  :: iRunMode             = f_iHistoricalRun !Model run mode (historical for training purposes or ANN mode for scenrio runs)
       INTEGER                                  :: iNWSA                = 0                !Number of WSAs to be calculated
       INTEGER,ALLOCATABLE                      :: IDs(:)                                  !ID number for each (WSA)
@@ -291,9 +292,10 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- INITIALIZE WSA ANN
   ! -------------------------------------------------------------
-  SUBROUTINE New(WSA,cFileName,cSIMWorkingDirectory,TimeStep,AppGrid,AppStream,iStat)
-    CLASS(WSA_ANN_Type)            :: WSA
-    CHARACTER(LEN=*),INTENT(IN)    :: cFileName,cSIMWorkingDirectory
+  SUBROUTINE New(WSA,Logger,cFileName,cSIMWorkingDirectory,TimeStep,AppGrid,AppStream,iStat)
+    CLASS(WSA_ANN_Type)                      :: WSA
+    TYPE(MessageLoggerType),TARGET,INTENT(IN) :: Logger
+    CHARACTER(LEN=*),INTENT(IN)              :: cFileName,cSIMWorkingDirectory
     TYPE(TImeStepType),INTENT(IN)  :: TimeStep 
     TYPE(AppGridType),INTENT(IN)   :: AppGrid
     TYPE(AppStreamType),INTENT(IN) :: AppStream
@@ -309,11 +311,14 @@ CONTAINS
     INTEGER,ALLOCATABLE                   :: iStrmNodeIDs(:)
     CHARACTER(:),ALLOCATABLE              :: cAbsPathFileName
     
+    !Set logger
+    WSA%Logger => Logger
+
     !Make sure that streams are simulated
     IF (.NOT. AppStream%IsDefined()) THEN
         MessageArray(1) = 'There are no streams simulated in this model.'
         MessageArray(2) = 'Water Supply Adjustment (WSA) can only be applied to stream nodes!'
-        CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+        CALL WSA%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -352,7 +357,7 @@ CONTAINS
         CALL ReplaceString(ALine,',',' ',iStat)  ;  IF (iStat .NE. 0) RETURN
         READ(ALine,*,IOSTAT=ErrorCode,IOMSG=cErrorMsg) ID,iStrmNodeID,WSA%StrmFlowTSInFile%iStrmFlowCols(indx),cName
         IF (ErrorCode .NE. 0) THEN
-            CALL ModuleLogger%SetLastMessage('An error occurred reading WSA application location and WSA name!'//f_cLineFeed//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
+            CALL WSA%Logger%SetLastMessage('An error occurred reading WSA application location and WSA name!'//f_cLineFeed//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -361,7 +366,7 @@ CONTAINS
                
         !Check that WSA ID is not a repeat
         IF (LocateInList(ID,WSA%IDs(1:indx-1)) .GT. 0) THEN
-            CALL ModuleLogger%SetLastMessage('WSA ID '//TRIM(IntToText(ID))//' is used more than once!',f_iFatal,ThisProcedure)
+            CALL WSA%Logger%SetLastMessage('WSA ID '//TRIM(IntToText(ID))//' is used more than once!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -369,14 +374,14 @@ CONTAINS
         !Make sure stream node is legit
         WSA%iStrmNodes(indx) = LocateInList(iStrmNodeID,iStrmNodeIDs)
         IF (WSA%iStrmNodes(indx) .EQ. 0) THEN
-            CALL ModuleLogger%SetLastMessage('Stream node '//TRIM(IntToText(iStrmNodeID))//' listed for WSA application is not in the model!',f_iFatal,ThisProcedure)
+            CALL WSA%Logger%SetLastMessage('Stream node '//TRIM(IntToText(iStrmNodeID))//' listed for WSA application is not in the model!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
         
         !Make sure more than one WSA is not applied to the same stream node
         IF (LocateInList(WSA%iStrmNodes(indx),WSA%iStrmNodes(1:indx-1)) .GT. 0) THEN
-            CALL ModuleLogger%SetLastMessage('Stream node '//TRIM(IntToText(iStrmNodeID))//' is listed for more than one WSA!',f_iFatal,ThisProcedure)
+            CALL WSA%Logger%SetLastMessage('Stream node '//TRIM(IntToText(iStrmNodeID))//' is listed for more than one WSA!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -387,13 +392,13 @@ CONTAINS
                 MessageArray(1) = 'Historical stream flow column numbers (IFWCOL) must be'
                 MessageArray(2) = ' greater than zero when historical flow filename is'
                 MessageArray(3) = ' specified for the computation of historical WSAs!'
-                CALL ModuleLogger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+                CALL WSA%Logger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
         END IF
     END DO
-    
+
     !ANN parameter file
     CALL MainInputFile%ReadData(cANNParamFile,iStat)  ;  IF (iStat .NE. 0) RETURN
     CALL CleanSpecialCharacters(cANNParamFile)
@@ -405,7 +410,7 @@ CONTAINS
             MessageArray(1) = 'Either historical stream flows file or ANN parameter file must be specified!'
             MessageArray(2) = 'To generate historical WSAs for ANN training purposes, specify historical stream flow file.'
             MessageArray(3) = 'To use trained ANNs to calculate predicted WSAs, specify ANN parameter file.'
-            CALL ModuleLogger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+            CALL WSA%Logger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         ELSE
@@ -458,7 +463,7 @@ CONTAINS
         
         !Make sure variable ID is not repeated
         IF (LocateInList(WSA%iVarIDs(indx),WSA%iVarIDs(1:indx-1)) .GT. 0) THEN
-            CALL ModuleLogger%SetLastMessage('Variable ID number '//TRIM(IntToText(WSA%iVarIDs(indx)))//' for WSA calculations is defined more than once!',f_iFatal,ThisProcedure)
+            CALL WSA%Logger%SetLastMessage('Variable ID number '//TRIM(IntToText(WSA%iVarIDs(indx)))//' for WSA calculations is defined more than once!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -473,7 +478,7 @@ CONTAINS
                     IF (ErrorCode .NE. 0) THEN
                         MessageArray(1) = 'A column number from the generic timeseries variable file must be'
                         MessageArray(2) = 'specified when variable type for WSA calculation is defined as '//TRIM(IntToText(f_iVarType_GenericTS))//'!'
-                        CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                        CALL WSA%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                         iStat = -1
                         RETURN
                     ELSE
@@ -508,7 +513,7 @@ CONTAINS
 
         !Make sure variable type is recognized
         IF (LocateInList(WSA%iVarTypes(indx),f_iVarTypeList) .EQ. 0) THEN
-            CALL ModuleLogger%SetLastMessage('Variable type '//TRIM(IntToText(WSA%iVarTypes(indx)))//' listed for the calculation of WSA is not recognized!',f_iFatal,ThisProcedure)
+            CALL WSA%Logger%SetLastMessage('Variable type '//TRIM(IntToText(WSA%iVarTypes(indx)))//' listed for the calculation of WSA is not recognized!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -518,7 +523,7 @@ CONTAINS
     !Make sure that generic variable timeseries input file is defined if such variable type is used
     IF (ANY(WSA%iVarTypes .EQ. f_iVarType_GenericTS)) THEN
         IF (.NOT. WSA%lGenericVarTSInFile_Defined) THEN
-            CALL ModuleLogger%SetLastMessage('Generic timeseries input file must be specified when variable type '//TRIM(IntToText(f_iVarType_GenericTS))//' is used!',f_iFatal,ThisProcedure)
+            CALL WSA%Logger%SetLastMessage('Generic timeseries input file must be specified when variable type '//TRIM(IntToText(f_iVarType_GenericTS))//' is used!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -548,7 +553,7 @@ CONTAINS
         IF (LEN_TRIM(cANNParamFile) .EQ. 0  .AND.  LEN_TRIM(cStrmFlowTSInFile) .EQ. 0) THEN
             MessageArray(1) = 'WSA output file can only be generated when either ANN '
             MessageArray(2) = ' parameters or historical stream flows are defined!'
-            CALL ModuleLogger%LogMessage(MessageArray(1:2),f_iWarn,ThisProcedure,iDestination=f_iSCREEN_FILE)
+            CALL WSA%Logger%LogMessage(MessageArray(1:2),f_iWarn,ThisProcedure,iDestination=f_iSCREEN_FILE)
         ELSE
             CALL WSAOutFile_New(WSA,cWSAOutFileName,cSIMWorkingDirectory,TimeStep,iStat)
         END IF

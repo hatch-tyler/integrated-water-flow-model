@@ -111,6 +111,7 @@ MODULE Package_AppUnsatZone
   ! -------------------------------------------------------------
   TYPE AppUnsatZoneType
       PRIVATE
+      TYPE(MessageLoggerType),POINTER   :: Logger => NULL()
       CHARACTER(LEN=6)                  :: VarTimeUnit         = ''        !Time unit of variables used in the component
       LOGICAL                           :: lDefined            = .FALSE.   !Flag to check if unsat zone is simulated
       LOGICAL                           :: lThicknessUpdated   = .FALSE.   !Flag to check if the unsat zone thicknesses are updated based on previous time gw heads
@@ -217,9 +218,10 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- INSTANTIATE AppUnsatZone OBJECT
   ! -------------------------------------------------------------
-  SUBROUTINE New(AppUnsatZone,IsForInquiry,cFileName,cWorkingDirectory,AppGrid,Stratigraphy,TimeStep,NTIME,DepthToGW,iStat,ICFile) 
-    CLASS(AppUnsatZoneType),INTENT(OUT) :: AppUnsatZone
-    LOGICAL,INTENT(IN)                  :: IsForInquiry
+  SUBROUTINE New(AppUnsatZone,Logger,IsForInquiry,cFileName,cWorkingDirectory,AppGrid,Stratigraphy,TimeStep,NTIME,DepthToGW,iStat,ICFile)
+    CLASS(AppUnsatZoneType),INTENT(OUT)          :: AppUnsatZone
+    TYPE(MessageLoggerType),TARGET,INTENT(IN)    :: Logger
+    LOGICAL,INTENT(IN)                           :: IsForInquiry
     CHARACTER(LEN=*),INTENT(IN)         :: cFileName,cWorkingDirectory
     TYPE(AppGridType),INTENT(IN)        :: AppGrid
     TYPE(StratigraphyType),INTENT(IN)   :: Stratigraphy
@@ -237,14 +239,17 @@ CONTAINS
     CHARACTER(:),ALLOCATABLE    :: cAbsPathFileName
     TYPE(BudgetHeaderType)      :: BudHeader
     
+    !Set logger
+    AppUnsatZone%Logger => Logger
+
     !Initialize
     iStat = 0
-    
+
     !Return if cFileName is empty
     IF (cFileName .EQ. '') RETURN
-    
+
     !Inform user
-    CALL ModuleLogger%EchoProgress('Instantiating unsaturated zone component...')
+    CALL AppUnsatZone%Logger%EchoProgress('Instantiating unsaturated zone component...')
     
     !Initialize
     NElements   = AppGrid%NElements
@@ -275,11 +280,11 @@ CONTAINS
         ALLOCATE (AppUnsatZone%BudRawFile)
         CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(ALine)),cWorkingDirectory,cAbsPathFileName)
         IF (IsForInquiry) THEN
-            CALL AppUnsatZone%BudRawFile%New(ModuleLogger,cAbsPathFileName,iStat)
+            CALL AppUnsatZone%BudRawFile%New(AppUnsatZone%Logger,cAbsPathFileName,iStat)
             IF (iStat .EQ. -1) RETURN
         ELSE
             BudHeader = PrepareBudgetHeader(AppGrid,NTIME,TimeStep)
-            CALL AppUnsatZone%BudRawFile%New(ModuleLogger,cAbsPathFileName,BudHeader,iStat)
+            CALL AppUnsatZone%BudRawFile%New(AppUnsatZone%Logger,cAbsPathFileName,BudHeader,iStat)
             IF (iStat .EQ. -1) RETURN
             CALL BudHeader%Kill()
         END IF
@@ -306,7 +311,7 @@ CONTAINS
         END IF
         IF (iStat .EQ. -1) RETURN
         IF (AppUnsatZone%FinSimResultsFile%iGetFileType() .NE. f_iTXT) THEN
-            CALL ModuleLogger%SetLastMessage('End-of-simulation unsaturated zone moisture output file must be a text file!',f_iFatal,ThisProcedure)
+            CALL AppUnsatZone%Logger%SetLastMessage('End-of-simulation unsaturated zone moisture output file must be a text file!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -319,7 +324,7 @@ CONTAINS
               AppUnsatZone%RegionalStorage_P(NSubregions+1),  &
               STAT=ErrorCode ,ERRMSG=cErrorMsg             )
     IF (ErrorCode .NE. 0) THEN
-        CALL ModuleLogger%SetLastMessage('Error allocating memory for unsaturated zone component!'//NEW_LINE('x')//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
+        CALL AppUnsatZone%Logger%SetLastMessage('Error allocating memory for unsaturated zone component!'//NEW_LINE('x')//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -1376,7 +1381,7 @@ CONTAINS
     IF (.NOT. AppUnsatZone%lDefined) RETURN
     
     !Inform user
-    CALL ModuleLogger%EchoProgress('Simulating unsaturated zone...')
+    CALL AppUnsatZone%Logger%EchoProgress('Simulating unsaturated zone...')
     
     !Initailize
     NUZLayers = AppUnsatZone%NUnsatLayers
@@ -1424,7 +1429,7 @@ CONTAINS
                         MessageArray(1) = 'Convergence error in routing moisture through unsaturated zone at element '//TRIM(IntToText(iElemID))//', layer '//TRIM(IntToText(indxLayer))//'!'
                         WRITE (MessageArray(2),'(A,F11.8)') 'Desired convergence  = ',Toler
                         WRITE (MessageArray(3),'(A,F11.8)') 'Achieved convergence = ',ABS(AchievedConv)
-                        CALL ModuleLogger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+                        CALL AppUnsatZone%Logger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
                         iStat = -1
                     END IF
                     pUnsatElems(indxLayer,indxElem)%SoilM   = pUnsatElems(indxLayer,indxElem)%SoilM / D  !Convert moisture depth back to moisture content
@@ -1703,14 +1708,14 @@ CONTAINS
     !Retrieve data
     ASSOCIATE (pZBudget => AppUnsatZone%ZBudgetRawFile)
         !Generate zone list
-        CALL ZoneList%New(ModuleLogger,pZBudget%Header%iNData,pZBudget%Header%lFaceFlows_Defined,pZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)
+        CALL ZoneList%New(AppUnsatZone%Logger,pZBudget%Header%iNData,pZBudget%Header%lFaceFlows_Defined,pZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)
         IF (iStat .NE. 0) RETURN
-        
+
         !Retrieve data
         CALL GetZBudget_MonthlyFlows_GivenFile(pZBudget,ZoneList,iZoneID,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
     END ASSOCIATE
 
-    
+
   END SUBROUTINE GetZBudget_MonthlyFlows_GivenAppUnsatZone
 
 
@@ -1778,14 +1783,14 @@ CONTAINS
     TYPE(ZoneListType)           :: ZoneList
 
     IF (.NOT. ALLOCATED(AppUnsatZone%ZBudgetRawFile)) THEN
-        CALL ModuleLogger%SetLastMessage('Unsaturated zone zone budget is not part of the model output to retrieve data!',f_iFatal,ThisProcedure)
+        CALL AppUnsatZone%Logger%SetLastMessage('Unsaturated zone zone budget is not part of the model output to retrieve data!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
             
     ASSOCIATE (pZBudget => AppUnsatZone%ZBudgetRawFile)
         !Generate zone list
-        CALL ZoneList%New(ModuleLogger,pZBudget%Header%iNData,pZBudget%Header%lFaceFlows_Defined,pZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)  ;  IF (iStat .EQ. -1) RETURN
+        CALL ZoneList%New(AppUnsatZone%Logger,pZBudget%Header%iNData,pZBudget%Header%lFaceFlows_Defined,pZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)  ;  IF (iStat .EQ. -1) RETURN
         
         !Read data
         CALL pZBudget%ReadData(ZoneList,iZoneID,iCols,cInterval,cBeginDate,cEndDate,rFactAR,rFactVL,iDataTypes,inActualOutput,rValues,iStat)  ;  IF (iStat .EQ. -1) RETURN

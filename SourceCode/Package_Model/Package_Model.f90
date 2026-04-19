@@ -1090,7 +1090,7 @@ CONTAINS
     !If the model is instantiated for inquiry, check if it can be instantiated from a previously generated data file
     IF (lForInquiry) THEN
         IF (Model%Model_ForInquiry%IsInstantiableFromFile(Model%cSIMWorkingDirectory)) THEN
-            CALL Model%Model_ForInquiry%New(Model%cSIMWorkingDirectory,Model%cGWMainInputFileName,Model%cStrmSIMMainInputFileName,Model%cRootZoneMainInputFileName,Model%TimeStep,Model%NTIME,iStat)
+            CALL Model%Model_ForInquiry%New(DefaultLogger,Model%cSIMWorkingDirectory,Model%cGWMainInputFileName,Model%cStrmSIMMainInputFileName,Model%cRootZoneMainInputFileName,Model%TimeStep,Model%NTIME,iStat)
             IF (iStat .EQ. -1) THEN
                 CALL Model%Model_ForInquiry%Kill()
                 RETURN
@@ -1311,12 +1311,12 @@ CONTAINS
 
     !Unsaturated zone
     CALL DATE_AND_TIME(VALUES=iTimerStart)
-    CALL Model%AppUnsatZone%New(lForInquiry,ProjectFileNames(SIM_UnsatZoneDataFileID),Model%cSIMWorkingDirectory,Model%AppGrid,Model%Stratigraphy,Model%TimeStep,Model%NTIME,Model%DepthToGW,iStat)
+    CALL Model%AppUnsatZone%New(ModuleLogger,lForInquiry,ProjectFileNames(SIM_UnsatZoneDataFileID),Model%cSIMWorkingDirectory,Model%AppGrid,Model%Stratigraphy,Model%TimeStep,Model%NTIME,Model%DepthToGW,iStat)
     IF (iStat .EQ. -1) RETURN
     Model%lAppUnsatZone_Defined = Model%AppUnsatZone%IsDefined()
 
     !Small watersheds
-    CALL Model%AppSWShed%New(lForInquiry,ProjectFileNames(SIM_SmallWatershedDataFileID),ProjectFileNames(SIM_CropCoeffFileID),Model%cSIMWorkingDirectory,Model%TimeStep,Model%NTIME,NStrmNodes,iStrmNodeIDs,Model%AppGrid,Model%Stratigraphy,Model%PrecipData,Model%ETData,iStat)
+    CALL Model%AppSWShed%New(ModuleLogger,lForInquiry,ProjectFileNames(SIM_SmallWatershedDataFileID),ProjectFileNames(SIM_CropCoeffFileID),Model%cSIMWorkingDirectory,Model%TimeStep,Model%NTIME,NStrmNodes,iStrmNodeIDs,Model%AppGrid,Model%Stratigraphy,Model%PrecipData,Model%ETData,iStat)
     IF (iStat .EQ. -1) RETURN
 
     !Root zone component (must be instantiated after gw and streams)
@@ -1435,7 +1435,7 @@ CONTAINS
     
     !Initialize WSA
     IF (lWSA)  &
-        CALL Model%WSA%New(cWSAFileName,Model%cSIMWorkingDirectory,Model%TimeStep,Model%AppGrid,Model%AppStream,iStat)
+        CALL Model%WSA%New(ModuleLogger,cWSAFileName,Model%cSIMWorkingDirectory,Model%TimeStep,Model%AppGrid,Model%AppStream,iStat)
 
     !Clear memory
     DEALLOCATE (StrmConnectivity , LakeElems , SupplyDest , cZBudRawFileName , STAT=ErrorCode)
@@ -1495,7 +1495,7 @@ CONTAINS
     !If the model is instantiated for inquiry, check if it can be instantiated from a previously generated data file
     IF (lForInquiry) THEN
         IF (Model%Model_ForInquiry%IsInstantiableFromFile(Model%cSIMWorkingDirectory)) THEN
-            CALL Model%Model_ForInquiry%New(Model%cSIMWorkingDirectory,Model%cGWMainInputFileName,Model%cStrmSIMMainInputFileName,Model%cRootZoneMainInputFileName,Model%TimeStep,Model%NTIME,iStat)
+            CALL Model%Model_ForInquiry%New(DefaultLogger,Model%cSIMWorkingDirectory,Model%cGWMainInputFileName,Model%cStrmSIMMainInputFileName,Model%cRootZoneMainInputFileName,Model%TimeStep,Model%NTIME,iStat)
             IF (iStat .EQ. -1) THEN
                 CALL Model%Model_ForInquiry%Kill()
                 RETURN
@@ -1694,12 +1694,12 @@ CONTAINS
     Model%cGWMainInputFileName = TRIM(ProjectFileNames(SIM_GWDataFileID))
     
     !Unsaturated zone
-    CALL Model%AppUnsatZone%New(lForInquiry,ProjectFileNames(SIM_UnsatZoneDataFileID),Model%cSIMWorkingDirectory,Model%AppGrid,Model%Stratigraphy,Model%TimeStep,Model%NTIME,Model%DepthToGW,iStat)
+    CALL Model%AppUnsatZone%New(ModuleLogger,lForInquiry,ProjectFileNames(SIM_UnsatZoneDataFileID),Model%cSIMWorkingDirectory,Model%AppGrid,Model%Stratigraphy,Model%TimeStep,Model%NTIME,Model%DepthToGW,iStat)
     IF (iStat .EQ. -1) RETURN
     Model%lAppUnsatZone_Defined = Model%AppUnsatZone%IsDefined()
     
     !Small watersheds
-    CALL Model%AppSWShed%New(lForInquiry,ProjectFileNames(SIM_SmallWatershedDataFileID),ProjectFileNames(SIM_CropCoeffFileID),Model%cSIMWorkingDirectory,Model%TimeStep,Model%NTIME,NStrmNodes,iStrmNodeIDs,Model%AppGrid,Model%Stratigraphy,Model%PrecipData,Model%ETData,iStat)
+    CALL Model%AppSWShed%New(ModuleLogger,lForInquiry,ProjectFileNames(SIM_SmallWatershedDataFileID),ProjectFileNames(SIM_CropCoeffFileID),Model%cSIMWorkingDirectory,Model%TimeStep,Model%NTIME,NStrmNodes,iStrmNodeIDs,Model%AppGrid,Model%Stratigraphy,Model%PrecipData,Model%ETData,iStat)
     IF (iStat .EQ. -1) RETURN
     
     !Root zone component (must be instantiated after gw and streams)
@@ -1855,7 +1855,7 @@ CONTAINS
     !If being instantiated for inquiry, check if the inquiry model data file exists; if it does instantiate from that file
     IF (lForInquiry) THEN
         IF (Model%Model_ForInquiry%IsInstantiableFromFile(cSIM_WorkingDirectory)) THEN
-            CALL Model%Model_ForInquiry%New(cSIM_WorkingDirectory,Model%cGWMainInputFileName,Model%cStrmSimMainInputFileName,Model%cRootZoneMainInputFileName,Model%TimeStep,Model%NTIME,iStat)
+            CALL Model%Model_ForInquiry%New(DefaultLogger,cSIM_WorkingDirectory,Model%cGWMainInputFileName,Model%cStrmSimMainInputFileName,Model%cRootZoneMainInputFileName,Model%TimeStep,Model%NTIME,iStat)
             IF (iStat .EQ. -1) THEN
                 CALL Model%Model_ForInquiry%Kill()
             ELSE
@@ -2090,12 +2090,12 @@ CONTAINS
     Model%cGWMainInputFileName = TRIM(cSIMFileNames(SIM_GWDataFileID))
     
     !Unsaturated zone
-    CALL Model%AppUnsatZone%New(lForInquiry,cSIMFileNames(SIM_UnsatZoneDataFileID),Model%cSIMWorkingDirectory,Model%AppGrid,Model%Stratigraphy,Model%TimeStep,Model%NTIME,Model%DepthToGW,iStat)
+    CALL Model%AppUnsatZone%New(ModuleLogger,lForInquiry,cSIMFileNames(SIM_UnsatZoneDataFileID),Model%cSIMWorkingDirectory,Model%AppGrid,Model%Stratigraphy,Model%TimeStep,Model%NTIME,Model%DepthToGW,iStat)
     IF (iStat .EQ. -1) RETURN
     Model%lAppUnsatZone_Defined = Model%AppUnsatZone%IsDefined()
     
     !Small watersheds
-    CALL Model%AppSWShed%New(lForInquiry,cSIMFileNames(SIM_SmallWatershedDataFileID),cSIMFileNames(SIM_CropCoeffFileID),Model%cSIMWorkingDirectory,Model%TimeStep,Model%NTIME,NStrmNodes,iStrmNodeIDs,Model%AppGrid,Model%Stratigraphy,Model%PrecipData,Model%ETData,iStat)
+    CALL Model%AppSWShed%New(ModuleLogger,lForInquiry,cSIMFileNames(SIM_SmallWatershedDataFileID),cSIMFileNames(SIM_CropCoeffFileID),Model%cSIMWorkingDirectory,Model%TimeStep,Model%NTIME,NStrmNodes,iStrmNodeIDs,Model%AppGrid,Model%Stratigraphy,Model%PrecipData,Model%ETData,iStat)
     IF (iStat .EQ. -1) RETURN
 
     !Root zone component (must be instantiated after gw and streams)
