@@ -28,20 +28,13 @@ MODULE Package_AppGW
   USE Package_AppPumping   , ONLY: f_iPump_Well                      , &
                                    f_iPump_ElemPump                  , &
                                    AppPumping_SetModuleLogger
-  USE Package_AppSubsidence, ONLY: AppSubsidence_SetModuleLogger     , &
-                                   BaseAppSubsidence_SetModuleLogger , &
-                                   AppSubsidence_v40_SetModuleLogger , &
-                                   AppSubsidence_v41_SetModuleLogger , &
-                                   AppSubsidence_v50_SetModuleLogger , &
-                                   AppSubsidence_v51_SetModuleLogger
+  USE Class_AppSubsidence_v40, ONLY: AppSubsidence_v40_SetModuleLogger
+  USE Class_AppSubsidence_v50, ONLY: AppSubsidence_v50_SetModuleLogger
   USE Class_AppGW   ! Re-export all public entities (AppGWType, constants, etc.)
-  USE Class_GWState        , ONLY: GWState_SetModuleLogger
   USE GWHydrograph         , ONLY: GWHydrograph_SetModuleLogger
   USE VerticalFlow         , ONLY: VerticalFlow_SetModuleLogger
   USE Class_AppBC          , ONLY: AppBC_SetModuleLogger
   USE Class_LayerBC        , ONLY: LayerBC_SetModuleLogger
-  USE Class_TSBCDataFile   , ONLY: TSBCDataFile_SetModuleLogger
-  USE TileDrainHydrograph  , ONLY: TDHydrograph_SetModuleLogger
   USE Class_Well           , ONLY: Well_SetModuleLogger
   USE Class_ElementPumping , ONLY: ElemPump_SetModuleLogger
   IMPLICIT NONE
@@ -61,15 +54,13 @@ CONTAINS
     !Main orchestrator
     CALL AppGW_SetModuleLogger(Logger)
 
-    !State and hydrograph
-    CALL GWState_SetModuleLogger(Logger)
+    !Hydrograph
     CALL GWHydrograph_SetModuleLogger(Logger)
     CALL VerticalFlow_SetModuleLogger(Logger)
 
     !Boundary conditions
     CALL AppBC_SetModuleLogger(Logger)
     CALL LayerBC_SetModuleLogger(Logger)
-    CALL TSBCDataFile_SetModuleLogger(Logger)
 
     !Pumping
     CALL AppPumping_SetModuleLogger(Logger)
@@ -78,15 +69,10 @@ CONTAINS
 
     !Tile drain
     CALL AppTileDrain_SetModuleLogger(Logger)
-    CALL TDHydrograph_SetModuleLogger(Logger)
 
     !Subsidence
-    CALL AppSubsidence_SetModuleLogger(Logger)
-    CALL BaseAppSubsidence_SetModuleLogger(Logger)
     CALL AppSubsidence_v40_SetModuleLogger(Logger)
-    CALL AppSubsidence_v41_SetModuleLogger(Logger)
     CALL AppSubsidence_v50_SetModuleLogger(Logger)
-    CALL AppSubsidence_v51_SetModuleLogger(Logger)
 
   END SUBROUTINE AppGW_SetAllModuleLoggers
 

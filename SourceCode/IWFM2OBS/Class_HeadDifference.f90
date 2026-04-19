@@ -15,10 +15,8 @@ MODULE Class_HeadDifference
 
   PRIVATE
   PUBLIC :: HeadDifferenceType, HeadDiffPairType
-  PUBLIC :: HeadDifference_SetModuleLogger
 
   CHARACTER(LEN=25), PARAMETER :: cModName = 'Class_HeadDifference'
-  TYPE(MessageLoggerType),POINTER,PRIVATE :: ModuleLogger => NULL()
 
   ! =====================================================================
   ! HeadDiffPairType - One pair of well IDs for head differencing
@@ -57,17 +55,6 @@ MODULE Class_HeadDifference
   END TYPE HeadDifferenceType
 
 CONTAINS
-
-
-  ! -------------------------------------------------------------
-  ! --- SET MODULE LOGGER
-  ! -------------------------------------------------------------
-  SUBROUTINE HeadDifference_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType),TARGET,INTENT(IN) :: Logger
-
-    ModuleLogger => Logger
-
-  END SUBROUTINE HeadDifference_SetModuleLogger
 
 
   ! =====================================================================

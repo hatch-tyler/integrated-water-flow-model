@@ -82,7 +82,6 @@ MODULE Class_PondedAgLandUse_v41
   ! -------------------------------------------------------------
   PRIVATE
   PUBLIC :: PondedAgLandUse_v41_Type
-  PUBLIC :: PondedAgLandUsev41_SetModuleLogger
             
   
   
@@ -175,21 +174,12 @@ MODULE Class_PondedAgLandUse_v41
   ! -------------------------------------------------------------
   INTEGER,PARAMETER                   :: ModNameLen = 27
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'Class_PondedAgLandUse_v41::'
-  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
 
 
 
 
 CONTAINS
 
-
-  ! -------------------------------------------------------------
-  ! --- SET MODULE LOGGER
-  ! -------------------------------------------------------------
-  SUBROUTINE PondedAgLandUsev41_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
-    ModuleLogger => Logger
-  END SUBROUTINE PondedAgLandUsev41_SetModuleLogger
 
 
 ! ******************************************************************

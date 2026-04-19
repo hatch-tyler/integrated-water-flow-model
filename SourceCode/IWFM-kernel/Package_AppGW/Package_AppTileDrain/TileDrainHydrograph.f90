@@ -59,8 +59,7 @@ MODULE TileDrainHydrograph
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: TileDrainHydrographType       , &
-            TDHydrograph_SetModuleLogger
+  PUBLIC :: TileDrainHydrographType
 
 
   ! -------------------------------------------------------------
@@ -96,12 +95,6 @@ MODULE TileDrainHydrograph
   ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
-  ! -------------------------------------------------------------
-  ! --- MODULE-LEVEL LOGGER
-  ! -------------------------------------------------------------
-  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
-
-
   INTEGER,PARAMETER                   :: ModNameLen    = 21
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName       = 'TileDrainHydrograph::'
 
@@ -111,13 +104,6 @@ MODULE TileDrainHydrograph
 CONTAINS
 
 
-  ! -------------------------------------------------------------
-  ! --- SET MODULE-LEVEL LOGGER
-  ! -------------------------------------------------------------
-  SUBROUTINE TDHydrograph_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
-    ModuleLogger => Logger
-  END SUBROUTINE TDHydrograph_SetModuleLogger
 
 
 

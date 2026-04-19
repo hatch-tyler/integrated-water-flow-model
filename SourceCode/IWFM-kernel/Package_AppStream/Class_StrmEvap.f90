@@ -53,8 +53,7 @@ MODULE Class_StrmEvap
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: StrmEvapType              , &
-            StrmEvap_SetModuleLogger
+  PUBLIC :: StrmEvapType
  
   
   ! -------------------------------------------------------------
@@ -78,11 +77,6 @@ MODULE Class_StrmEvap
   ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
-  ! -------------------------------------------------------------
-  ! --- MODULE-LEVEL LOGGER
-  ! -------------------------------------------------------------
-  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
-
   INTEGER,PARAMETER                   :: ModNameLen      = 16
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName         = 'Class_StrmEvap::'
 
@@ -92,13 +86,6 @@ MODULE Class_StrmEvap
 CONTAINS
 
 
-  ! -------------------------------------------------------------
-  ! --- SET MODULE-LEVEL LOGGER
-  ! -------------------------------------------------------------
-  SUBROUTINE StrmEvap_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
-    ModuleLogger => Logger
-  END SUBROUTINE StrmEvap_SetModuleLogger
 
 
 

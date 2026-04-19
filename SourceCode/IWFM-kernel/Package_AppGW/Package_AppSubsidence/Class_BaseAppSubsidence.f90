@@ -55,7 +55,6 @@ MODULE Class_BaseAppSubsidence
   ! -------------------------------------------------------------
   PRIVATE
   PUBLIC :: BaseAppSubsidenceType             , &
-            BaseAppSubsidence_SetModuleLogger , &
             ComputeRegionalCumSubsidence      , &
             f_cDescription_SubsHyd
 
@@ -124,12 +123,6 @@ MODULE Class_BaseAppSubsidence
   ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
-  ! -------------------------------------------------------------
-  ! --- MODULE-LEVEL LOGGER
-  ! -------------------------------------------------------------
-  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
-
-
   INTEGER,PARAMETER                   :: ModNameLen = 25
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'Class_BaseAppSubsidence::'
 
@@ -239,15 +232,6 @@ MODULE Class_BaseAppSubsidence
   
   
 CONTAINS
-
-
-  ! -------------------------------------------------------------
-  ! --- SET MODULE-LEVEL LOGGER
-  ! -------------------------------------------------------------
-  SUBROUTINE BaseAppSubsidence_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
-    ModuleLogger => Logger
-  END SUBROUTINE BaseAppSubsidence_SetModuleLogger
 
 
 

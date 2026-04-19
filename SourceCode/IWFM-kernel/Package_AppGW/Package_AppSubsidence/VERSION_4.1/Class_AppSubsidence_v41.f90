@@ -69,8 +69,7 @@ MODULE Class_AppSubsidence_v41
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: AppSubsidence_v41_Type          , &
-            AppSubsidence_v41_SetModuleLogger
+  PUBLIC :: AppSubsidence_v41_Type
 
 
   ! -------------------------------------------------------------
@@ -85,27 +84,12 @@ MODULE Class_AppSubsidence_v41
   ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
-  ! -------------------------------------------------------------
-  ! --- MODULE-LEVEL LOGGER
-  ! -------------------------------------------------------------
-  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
-
-
   INTEGER,PARAMETER                   :: ModNameLen = 25
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'Class_AppSubsidence_v41::'
 
 
 
 CONTAINS
-
-
-  ! -------------------------------------------------------------
-  ! --- SET MODULE-LEVEL LOGGER
-  ! -------------------------------------------------------------
-  SUBROUTINE AppSubsidence_v41_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
-    ModuleLogger => Logger
-  END SUBROUTINE AppSubsidence_v41_SetModuleLogger
 
 
 

@@ -53,8 +53,7 @@ MODULE Package_AppStream
                                           SupplyToDestinationType                          , &
                                           SupplyDestinationConnectorType                   , &
                                           Supply_GetDestination                            
-  USE StrmHydrograph              , ONLY: iHydFlow                                         , &
-                                          StrmHydrograph_SetModuleLogger
+  USE StrmHydrograph              , ONLY: iHydFlow
   USE Class_BaseAppStream         , ONLY: BaseAppStreamType                                , &
                                           RoutingOrderedReachIndex_To_IDOrderedReachIndex  , &
                                           BaseAppStream_SetModuleLogger                    , &
@@ -80,14 +79,11 @@ MODULE Package_AppStream
   USE Class_Diversion             , ONLY: DiversionType                                    , &
                                           DeliveryType                                     , &
                                           Diversion_SetModuleLogger
-  USE Class_StrmNodeBudget        , ONLY: StrmNodeBudgetType                               , &
-                                          StrmNodeBudget_SetModuleLogger
+  USE Class_StrmNodeBudget        , ONLY: StrmNodeBudgetType
   USE Package_Matrix              , ONLY: MatrixType                                       , &
                                           ConnectivityListType
   USE Package_Budget              , ONLY: BudgetType
   USE Class_StrmReach             , ONLY: StrmReach_SetModuleLogger
-  USE Class_StrmInflow            , ONLY: StrmInflow_SetModuleLogger
-  USE Class_StrmEvap              , ONLY: StrmEvap_SetModuleLogger
   USE Class_Bypass                , ONLY: Bypass_SetModuleLogger
   USE Class_LossDestination       , ONLY: LossDestination_SetModuleLogger
   IMPLICIT NONE
@@ -297,10 +293,6 @@ CONTAINS
     CALL Diversion_SetModuleLogger(Logger)
     CALL Bypass_SetModuleLogger(Logger)
     CALL StrmReach_SetModuleLogger(Logger)
-    CALL StrmInflow_SetModuleLogger(Logger)
-    CALL StrmEvap_SetModuleLogger(Logger)
-    CALL StrmNodeBudget_SetModuleLogger(Logger)
-    CALL StrmHydrograph_SetModuleLogger(Logger)
     CALL LossDestination_SetModuleLogger(Logger)
   END SUBROUTINE AppStream_SetAllModuleLoggers
 

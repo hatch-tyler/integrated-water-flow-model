@@ -45,8 +45,7 @@ MODULE Class_TSBCDataFile
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: TSBCDataFileType              , &
-            TSBCDataFile_SetModuleLogger
+  PUBLIC :: TSBCDataFileType
   
   
   ! -------------------------------------------------------------
@@ -71,12 +70,6 @@ MODULE Class_TSBCDataFile
   ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
-  ! -------------------------------------------------------------
-  ! --- MODULE-LEVEL LOGGER
-  ! -------------------------------------------------------------
-  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
-
-
   INTEGER,PARAMETER                   :: ModNameLen = 20
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'Class_TSBCDataFile::'
 
@@ -85,17 +78,8 @@ MODULE Class_TSBCDataFile
 CONTAINS
 
 
-  ! -------------------------------------------------------------
-  ! --- SET MODULE-LEVEL LOGGER
-  ! -------------------------------------------------------------
-  SUBROUTINE TSBCDataFile_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
-    ModuleLogger => Logger
-  END SUBROUTINE TSBCDataFile_SetModuleLogger
-    
-    
 
-    
+
 ! ******************************************************************
 ! ******************************************************************
 ! ******************************************************************

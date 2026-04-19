@@ -47,7 +47,6 @@ MODULE StrmLakeConnector
   ! -------------------------------------------------------------
   PRIVATE
   PUBLIC :: StrmLakeConnectorType            , &
-            StrmLakeConnector_SetModuleLogger , &
             f_iStrmToLakeFlow               , &
             f_iBypassToLakeFlow             , &
             f_iLakeToStrmFlow
@@ -102,26 +101,12 @@ MODULE StrmLakeConnector
   ! -------------------------------------------------------------
   ! --- MISC. DATA
   ! -------------------------------------------------------------
-  ! -------------------------------------------------------------
-  ! --- MODULE-LEVEL LOGGER
-  ! -------------------------------------------------------------
-  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
-
-
   INTEGER,PARAMETER                   :: ModNameLen = 19
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'StrmLakeConnector::'
 
 
 CONTAINS
 
-
-  ! -------------------------------------------------------------
-  ! --- SET MODULE-LEVEL LOGGER
-  ! -------------------------------------------------------------
-  SUBROUTINE StrmLakeConnector_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
-    ModuleLogger => Logger
-  END SUBROUTINE StrmLakeConnector_SetModuleLogger
 
 
 ! ******************************************************************

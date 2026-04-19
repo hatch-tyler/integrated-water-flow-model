@@ -63,7 +63,6 @@ MODULE Class_NativeRiparianLandUse_v50
   ! -------------------------------------------------------------
   PRIVATE
   PUBLIC :: NativeRiparianDatabase_v50_Type
-  PUBLIC :: NativeRiparianLandUsev50_SetModuleLogger
   
   
   ! -------------------------------------------------------------
@@ -111,7 +110,6 @@ MODULE Class_NativeRiparianLandUse_v50
   ! -------------------------------------------------------------
   INTEGER,PARAMETER                   :: ModNameLen = 33
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'Class_NativeRiparianLandUse_v50::'
-  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
 
 
 
@@ -119,13 +117,6 @@ MODULE Class_NativeRiparianLandUse_v50
 CONTAINS
 
 
-  ! -------------------------------------------------------------
-  ! --- SET MODULE LOGGER
-  ! -------------------------------------------------------------
-  SUBROUTINE NativeRiparianLandUsev50_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
-    ModuleLogger => Logger
-  END SUBROUTINE NativeRiparianLandUsev50_SetModuleLogger
 
 
 

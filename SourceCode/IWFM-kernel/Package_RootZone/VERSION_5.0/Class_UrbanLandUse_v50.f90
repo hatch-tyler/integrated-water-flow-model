@@ -74,7 +74,6 @@ MODULE Class_UrbanLandUse_v50
   ! -------------------------------------------------------------
   PRIVATE
   PUBLIC :: UrbanDatabase_v50_Type
-  PUBLIC :: UrbanLandUsev50_SetModuleLogger
 
 
   ! -------------------------------------------------------------
@@ -134,21 +133,12 @@ MODULE Class_UrbanLandUse_v50
   ! -------------------------------------------------------------
   INTEGER,PARAMETER                   :: ModNameLen = 24
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'Class_UrbanLandUse_v50::'
-  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
   
   
   
   
 CONTAINS
 
-
-  ! -------------------------------------------------------------
-  ! --- SET MODULE LOGGER
-  ! -------------------------------------------------------------
-  SUBROUTINE UrbanLandUsev50_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
-    ModuleLogger => Logger
-  END SUBROUTINE UrbanLandUsev50_SetModuleLogger
 
 
 ! ******************************************************************

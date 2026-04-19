@@ -32,11 +32,7 @@ MODULE Class_ZBudgetHeader
   USE Class_SystemData    , ONLY: SystemDataType
   IMPLICIT NONE
 
-  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
-  
-  
 
-  
 ! ******************************************************************
 ! ******************************************************************
 ! ******************************************************************
@@ -51,8 +47,7 @@ MODULE Class_ZBudgetHeader
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: ZBudgetHeaderType         , &
-            ZBudgetHeader_SetModuleLogger
+  PUBLIC :: ZBudgetHeaderType
   
   
   ! -------------------------------------------------------------
@@ -311,11 +306,5 @@ CONTAINS
     CALL OutFile%WriteData(f_iGroup,f_cAttributesDir,'DSSFParts',ArrayAttrData=Header%cDSSFParts)
     
   END SUBROUTINE WriteToFile
-
-
-  SUBROUTINE ZBudgetHeader_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
-    ModuleLogger => Logger
-  END SUBROUTINE ZBudgetHeader_SetModuleLogger
 
 END MODULE

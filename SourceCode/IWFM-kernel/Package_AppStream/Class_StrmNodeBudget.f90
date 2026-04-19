@@ -57,8 +57,7 @@ MODULE Class_StrmNodeBudget
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: StrmNodeBudgetType                     , &
-            StrmNodeBudget_SetModuleLogger
+  PUBLIC :: StrmNodeBudgetType
 
 
   ! -------------------------------------------------------------
@@ -105,11 +104,6 @@ MODULE Class_StrmNodeBudget
   ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
-  ! -------------------------------------------------------------
-  ! --- MODULE-LEVEL LOGGER
-  ! -------------------------------------------------------------
-  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
-
   INTEGER,PARAMETER                   :: ModNameLen = 22
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'Class_StrmNodeBudget::'
   
@@ -119,13 +113,6 @@ MODULE Class_StrmNodeBudget
 CONTAINS
 
 
-  ! -------------------------------------------------------------
-  ! --- SET MODULE-LEVEL LOGGER
-  ! -------------------------------------------------------------
-  SUBROUTINE StrmNodeBudget_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
-    ModuleLogger => Logger
-  END SUBROUTINE StrmNodeBudget_SetModuleLogger
 
 
 

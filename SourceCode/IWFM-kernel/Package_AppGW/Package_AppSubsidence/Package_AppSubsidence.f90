@@ -30,16 +30,11 @@ MODULE Package_AppSubsidence
                                       StratigraphyType
   USE Package_Matrix          , ONLY: MatrixType
   USE Class_BaseAppSubsidence , ONLY: BaseAppSubsidenceType             , &
-                                      BaseAppSubsidence_SetModuleLogger , &
                                       f_cDescription_SubsHyd
-  USE Class_AppSubsidence_v40 , ONLY: AppSubsidence_v40_Type            , &
-                                      AppSubsidence_v40_SetModuleLogger
-  USE Class_AppSubsidence_v41 , ONLY: AppSubsidence_v41_Type            , &
-                                      AppSubsidence_v41_SetModuleLogger
-  USE Class_AppSubsidence_v50 , ONLY: AppSubsidence_v50_Type            , &
-                                      AppSubsidence_v50_SetModuleLogger
-  USE Class_AppSubsidence_v51 , ONLY: AppSubsidence_v51_Type            , &
-                                      AppSubsidence_v51_SetModuleLogger
+  USE Class_AppSubsidence_v40 , ONLY: AppSubsidence_v40_Type
+  USE Class_AppSubsidence_v41 , ONLY: AppSubsidence_v41_Type
+  USE Class_AppSubsidence_v50 , ONLY: AppSubsidence_v50_Type
+  USE Class_AppSubsidence_v51 , ONLY: AppSubsidence_v51_Type
   IMPLICIT NONE
 
   
@@ -60,12 +55,6 @@ MODULE Package_AppSubsidence
   ! -------------------------------------------------------------
   PRIVATE
   PUBLIC :: AppSubsidenceType                    , &
-            AppSubsidence_SetModuleLogger       , &
-            BaseAppSubsidence_SetModuleLogger   , &
-            AppSubsidence_v40_SetModuleLogger   , &
-            AppSubsidence_v41_SetModuleLogger   , &
-            AppSubsidence_v50_SetModuleLogger   , &
-            AppSubsidence_v51_SetModuleLogger   , &
             f_cDescription_SubsHyd
   
   
@@ -108,12 +97,6 @@ MODULE Package_AppSubsidence
   ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
-  ! -------------------------------------------------------------
-  ! --- MODULE-LEVEL LOGGER
-  ! -------------------------------------------------------------
-  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
-
-
   INTEGER,PARAMETER                   :: ModNameLen = 23
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'Package_AppSubsidence::'
 
@@ -123,13 +106,6 @@ MODULE Package_AppSubsidence
 CONTAINS
 
 
-  ! -------------------------------------------------------------
-  ! --- SET MODULE-LEVEL LOGGER
-  ! -------------------------------------------------------------
-  SUBROUTINE AppSubsidence_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
-    ModuleLogger => Logger
-  END SUBROUTINE AppSubsidence_SetModuleLogger
 
 
 

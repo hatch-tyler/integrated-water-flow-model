@@ -46,7 +46,6 @@ MODULE Class_TecplotOutput
   ! -------------------------------------------------------------
   PRIVATE
   PUBLIC :: TecplotOutputType
-  PUBLIC :: TecplotOutput_SetModuleLogger
   
   
   ! -------------------------------------------------------------
@@ -66,22 +65,8 @@ MODULE Class_TecplotOutput
   
   
   
-  ! -------------------------------------------------------------
-  ! --- MODULE-LEVEL LOGGER (preserves type binary layout)
-  ! -------------------------------------------------------------
-  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
-
-
 CONTAINS
 
-
-  ! -------------------------------------------------------------
-  ! --- SET MODULE-LEVEL LOGGER
-  ! -------------------------------------------------------------
-  SUBROUTINE TecplotOutput_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
-    ModuleLogger => Logger
-  END SUBROUTINE TecplotOutput_SetModuleLogger
 
 
 ! ******************************************************************

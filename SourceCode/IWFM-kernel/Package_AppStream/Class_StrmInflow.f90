@@ -50,8 +50,7 @@ MODULE Class_StrmInflow
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: StrmInflowType              , &
-            StrmInflow_SetModuleLogger
+  PUBLIC :: StrmInflowType
   
   
   ! -------------------------------------------------------------
@@ -83,11 +82,6 @@ MODULE Class_StrmInflow
   ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
-  ! -------------------------------------------------------------
-  ! --- MODULE-LEVEL LOGGER
-  ! -------------------------------------------------------------
-  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
-
   INTEGER,PARAMETER                   :: ModNameLen = 18
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'Class_StrmInflow::'
 
@@ -97,13 +91,6 @@ MODULE Class_StrmInflow
 CONTAINS
 
 
-  ! -------------------------------------------------------------
-  ! --- SET MODULE-LEVEL LOGGER
-  ! -------------------------------------------------------------
-  SUBROUTINE StrmInflow_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
-    ModuleLogger => Logger
-  END SUBROUTINE StrmInflow_SetModuleLogger
 
 
 

@@ -71,14 +71,6 @@ MODULE Package_RootZone
                                           RootZonev413_SetModuleLogger
   USE RootZone_v50               , ONLY : RootZone_v50_Type                  , &
                                           RootZonev50_SetModuleLogger
-  USE Class_NativeRiparianLandUse_v40, ONLY : NativeRiparianLandUsev40_SetModuleLogger
-  USE Class_NonPondedAgLandUse_v41   , ONLY : NonPondedAgLandUsev41_SetModuleLogger
-  USE Class_PondedAgLandUse_v41      , ONLY : PondedAgLandUsev41_SetModuleLogger
-  USE Class_UrbanLandUse_v41         , ONLY : UrbanLandUsev41_SetModuleLogger
-  USE Class_NativeRiparianLandUse_v41, ONLY : NativeRiparianLandUsev41_SetModuleLogger
-  USE Class_AgLandUse_v50            , ONLY : AgLandUsev50_SetModuleLogger
-  USE Class_UrbanLandUse_v50         , ONLY : UrbanLandUsev50_SetModuleLogger
-  USE Class_NativeRiparianLandUse_v50, ONLY : NativeRiparianLandUsev50_SetModuleLogger
   USE Package_PrecipitationET    , ONLY : PrecipitationType                  ,  &
                                           ETType
   USE Package_ComponentConnectors, ONLY : SupplyDestinationConnectorType
@@ -116,14 +108,6 @@ MODULE Package_RootZone
             RootZonev412_SetModuleLogger       , &
             RootZonev413_SetModuleLogger       , &
             RootZonev50_SetModuleLogger        , &
-            NativeRiparianLandUsev40_SetModuleLogger, &
-            NonPondedAgLandUsev41_SetModuleLogger   , &
-            PondedAgLandUsev41_SetModuleLogger      , &
-            UrbanLandUsev41_SetModuleLogger         , &
-            NativeRiparianLandUsev41_SetModuleLogger, &
-            AgLandUsev50_SetModuleLogger            , &
-            UrbanLandUsev50_SetModuleLogger         , &
-            NativeRiparianLandUsev50_SetModuleLogger, &
             RootZone_SetAllModuleLoggers       , &
             ElementLU_InterpolateExtrapolate   , &
             f_iMeasuredLUDataForSubregion      , &
@@ -284,14 +268,6 @@ CONTAINS
     CALL RootZonev412_SetModuleLogger(Logger)
     CALL RootZonev413_SetModuleLogger(Logger)
     CALL RootZonev50_SetModuleLogger(Logger)
-    CALL NativeRiparianLandUsev40_SetModuleLogger(Logger)
-    CALL NonPondedAgLandUsev41_SetModuleLogger(Logger)
-    CALL PondedAgLandUsev41_SetModuleLogger(Logger)
-    CALL UrbanLandUsev41_SetModuleLogger(Logger)
-    CALL NativeRiparianLandUsev41_SetModuleLogger(Logger)
-    CALL AgLandUsev50_SetModuleLogger(Logger)
-    CALL UrbanLandUsev50_SetModuleLogger(Logger)
-    CALL NativeRiparianLandUsev50_SetModuleLogger(Logger)
   END SUBROUTINE RootZone_SetAllModuleLoggers
 
 

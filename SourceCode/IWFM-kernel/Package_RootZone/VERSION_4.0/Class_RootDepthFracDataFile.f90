@@ -44,8 +44,7 @@ MODULE Class_RootDepthFracDataFile
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: RootDepthFracDataFile_SetModuleLogger , &
-            RootDepthFracDataFileType
+  PUBLIC :: RootDepthFracDataFileType
 
 
   ! -------------------------------------------------------------
@@ -64,12 +63,6 @@ MODULE Class_RootDepthFracDataFile
   ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
-  ! -------------------------------------------------------------
-  ! --- MODULE-LEVEL LOGGER
-  ! -------------------------------------------------------------
-  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
-
-
   INTEGER,PARAMETER                   :: ModNameLen = 29
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'Class_RootDepthFracDataFile::'
 
@@ -77,15 +70,6 @@ MODULE Class_RootDepthFracDataFile
 
 
 CONTAINS
-
-
-  ! -------------------------------------------------------------
-  ! --- SET MODULE-LEVEL LOGGER
-  ! -------------------------------------------------------------
-  SUBROUTINE RootDepthFracDataFile_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
-    ModuleLogger => Logger
-  END SUBROUTINE RootDepthFracDataFile_SetModuleLogger
 
 
   ! -------------------------------------------------------------

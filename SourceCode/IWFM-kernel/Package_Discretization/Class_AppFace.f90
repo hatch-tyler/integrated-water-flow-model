@@ -47,7 +47,6 @@ MODULE Class_AppFace
   ! -------------------------------------------------------------
   PRIVATE
   PUBLIC :: AppFaceType
-  PUBLIC :: AppFace_SetModuleLogger
     
     
   ! -------------------------------------------------------------
@@ -72,12 +71,6 @@ MODULE Class_AppFace
   
   
   ! -------------------------------------------------------------
-  ! --- MODULE-LEVEL LOGGER (preserves type binary layout)
-  ! -------------------------------------------------------------
-  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
-
-
-  ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
   INTEGER,PARAMETER                   :: ModNameLen = 15
@@ -90,13 +83,6 @@ MODULE Class_AppFace
 CONTAINS
 
 
-  ! -------------------------------------------------------------
-  ! --- SET MODULE-LEVEL LOGGER
-  ! -------------------------------------------------------------
-  SUBROUTINE AppFace_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
-    ModuleLogger => Logger
-  END SUBROUTINE AppFace_SetModuleLogger
 
 
 

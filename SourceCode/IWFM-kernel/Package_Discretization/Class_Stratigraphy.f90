@@ -47,7 +47,6 @@ MODULE Class_Stratigraphy
   ! -------------------------------------------------------------
   PRIVATE
   PUBLIC :: StratigraphyType
-  PUBLIC :: Stratigraphy_SetModuleLogger
 
 
   ! -------------------------------------------------------------
@@ -89,12 +88,6 @@ MODULE Class_Stratigraphy
   
    
   ! -------------------------------------------------------------
-  ! --- MODULE-LEVEL LOGGER (preserves type binary layout)
-  ! -------------------------------------------------------------
-  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
-
-
-  ! -------------------------------------------------------------
   ! --- MISC. DATA
   ! -------------------------------------------------------------
   CHARACTER(LEN=20),PARAMETER :: ModName    = 'Class_Stratigraphy::'
@@ -104,15 +97,6 @@ MODULE Class_Stratigraphy
 
 
 CONTAINS
-
-
-  ! -------------------------------------------------------------
-  ! --- SET MODULE-LEVEL LOGGER
-  ! -------------------------------------------------------------
-  SUBROUTINE Stratigraphy_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
-    ModuleLogger => Logger
-  END SUBROUTINE Stratigraphy_SetModuleLogger
 
 
 

@@ -43,8 +43,7 @@ MODULE Class_GWState
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: GWStateType              , &
-            GWState_SetModuleLogger
+  PUBLIC :: GWStateType
   
   
   ! -------------------------------------------------------------
@@ -67,27 +66,11 @@ MODULE Class_GWState
   ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
-  ! -------------------------------------------------------------
-  ! --- MODULE-LEVEL LOGGER
-  ! -------------------------------------------------------------
-  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
-
-
   INTEGER,PARAMETER                   :: ModNameLen = 15
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'Class_GWState::'
   
   
 CONTAINS
-
-
-  ! -------------------------------------------------------------
-  ! --- SET MODULE-LEVEL LOGGER
-  ! -------------------------------------------------------------
-  SUBROUTINE GWState_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
-    ModuleLogger => Logger
-  END SUBROUTINE GWState_SetModuleLogger
-
 
 
 

@@ -76,8 +76,6 @@ MODULE Package_Model
   USE IWFM_Kernel_Version         , ONLY: IWFMKernelVersion
   USE IWFM_Version                , ONLY: IWFMVersion
   USE Class_BaseHydrograph        , ONLY: BaseHydrograph_SetModuleLogger
-  USE Class_TecplotOutput         , ONLY: TecplotOutput_SetModuleLogger
-  USE Class_PairedData            , ONLY: PairedData_SetModuleLogger
   USE Class_BaseFileType          , ONLY: BaseFile_SetModuleLogger
   USE Class_AsciiFileType         , ONLY: AsciiFile_SetModuleLogger
   USE Class_DSSFileType           , ONLY: DSSFile_SetModuleLogger
@@ -91,9 +89,7 @@ MODULE Package_Model
   USE TimeSeriesUtilities         , ONLY: TimeSeries_SetModuleLogger
   USE Class_Budget                , ONLY: Budget_SetModuleLogger
   USE Class_BudgetInputFile       , ONLY: BudgetInputFile_SetModuleLogger
-  USE Class_SystemData            , ONLY: SystemData_SetModuleLogger
   USE Class_ZBudget               , ONLY: ZBudget_SetModuleLogger
-  USE Class_ZBudgetHeader         , ONLY: ZBudgetHeader_SetModuleLogger
   USE Class_ZoneList              , ONLY: ZoneList_SetModuleLogger
   USE Package_Supply              , ONLY: Supply_SetModuleLogger
   USE Package_AppUnsatZone        , ONLY: AppUnsatZone_SetModuleLogger
@@ -143,9 +139,7 @@ MODULE Package_Model
                                           StratigraphyType                            , &
                                           Discretization_GetNodeLayer                 , &
                                           Grid_SetModuleLogger                        , &
-                                          AppGrid_SetModuleLogger                     , &
-                                          AppFace_SetModuleLogger                     , &
-                                          Stratigraphy_SetModuleLogger
+                                          AppGrid_SetModuleLogger
   USE Package_AppGW               , ONLY: AppGWType                                   , &
                                           AppGW_SetAllModuleLoggers                   , &
                                           f_iSpFlowBCID                               , &
@@ -184,17 +178,13 @@ MODULE Package_Model
                                           f_iBudgetType_UnsatZone                     , &
                                           f_iZBudgetType_UnsatZone             
   USE Package_AppSmallWatershed   , ONLY: AppSmallWatershedType                       , &
-                                          AppSWShed_SetModuleLogger                   , &
-                                          BaseAppSWShed_SetModuleLogger               , &
-                                          AppSWShed_v40_SetModuleLogger               , &
-                                          AppSWShed_v41_SetModuleLogger               , &
                                           f_iBudgetType_SWShed
+  USE Class_AppSmallWatershed_v40 , ONLY: AppSWShed_v40_SetModuleLogger
+  USE Class_AppSmallWatershed_v41 , ONLY: AppSWShed_v41_SetModuleLogger
   USE Package_ComponentConnectors , ONLY: StrmLakeConnectorType                       , &
                                           StrmGWConnectorType                         , &
                                           LakeGWConnectorType                         , &
                                           SupplyDestinationConnectorType              , &
-                                          StrmLakeConnector_SetModuleLogger           , &
-                                          LakeGWConnector_SetModuleLogger             , &
                                           SupplyDest_SetModuleLogger                  , &
                                           f_iLakeToStrmFlow
   USE Package_PrecipitationET     , ONLY: PrecipitationType                           , &
@@ -213,7 +203,6 @@ MODULE Package_Model
   USE Package_ZBudget             , ONLY: ZBudgetType                                 , &
                                           ZoneListType                                          
   USE Class_Model_ForInquiry      , ONLY: Model_ForInquiry_Type                       , &
-                                          ModelForInquiry_SetModuleLogger              , &
                                           f_iFilePathLen                              , &
                                           f_iDataDescriptionLen
   USE WSA_ANN                     , ONLY: WSA_ANN_Type
@@ -651,24 +640,22 @@ CONTAINS
 
   SUBROUTINE IWFM_InitAllModuleLoggers()
     CALL PackageModel_SetModuleLogger(DefaultLogger)
-    CALL ModelForInquiry_SetModuleLogger(DefaultLogger)
+
     CALL Grid_SetModuleLogger(DefaultLogger)
     CALL AppGrid_SetModuleLogger(DefaultLogger)
-    CALL AppFace_SetModuleLogger(DefaultLogger)
-    CALL Stratigraphy_SetModuleLogger(DefaultLogger)
+
+
     CALL BaseHydrograph_SetModuleLogger(DefaultLogger)
-    CALL TecplotOutput_SetModuleLogger(DefaultLogger)
-    CALL PairedData_SetModuleLogger(DefaultLogger)
-    CALL StrmLakeConnector_SetModuleLogger(DefaultLogger)
-    CALL LakeGWConnector_SetModuleLogger(DefaultLogger)
+
+
+
+
     CALL SupplyDest_SetModuleLogger(DefaultLogger)
     CALL AppLake_SetModuleLogger(DefaultLogger)
     CALL BaseAppLake_SetModuleLogger(DefaultLogger)
     CALL Lake_SetModuleLogger(DefaultLogger)
     CALL AppLake_v40_SetModuleLogger(DefaultLogger)
     CALL AppLake_v50_SetModuleLogger(DefaultLogger)
-    CALL AppSWShed_SetModuleLogger(DefaultLogger)
-    CALL BaseAppSWShed_SetModuleLogger(DefaultLogger)
     CALL AppSWShed_v40_SetModuleLogger(DefaultLogger)
     CALL AppSWShed_v41_SetModuleLogger(DefaultLogger)
     CALL AppGW_SetAllModuleLoggers(DefaultLogger)
@@ -687,9 +674,9 @@ CONTAINS
     CALL TimeSeries_SetModuleLogger(DefaultLogger)
     CALL Budget_SetModuleLogger(DefaultLogger)
     CALL BudgetInputFile_SetModuleLogger(DefaultLogger)
-    CALL SystemData_SetModuleLogger(DefaultLogger)
+
     CALL ZBudget_SetModuleLogger(DefaultLogger)
-    CALL ZBudgetHeader_SetModuleLogger(DefaultLogger)
+
     CALL ZoneList_SetModuleLogger(DefaultLogger)
     CALL Supply_SetModuleLogger(DefaultLogger)
     CALL GWZBudget_SetModuleLogger(DefaultLogger)
@@ -978,27 +965,25 @@ CONTAINS
     
     !Set module-level loggers for Batch 5 packages (Package_Model and Model_ForInquiry)
     CALL PackageModel_SetModuleLogger(DefaultLogger)
-    CALL ModelForInquiry_SetModuleLogger(DefaultLogger)
+
     !Set module-level loggers for Batch 2 packages
     CALL Grid_SetModuleLogger(DefaultLogger)
     CALL AppGrid_SetModuleLogger(DefaultLogger)
-    CALL AppFace_SetModuleLogger(DefaultLogger)
-    CALL Stratigraphy_SetModuleLogger(DefaultLogger)
+
+
     CALL BaseHydrograph_SetModuleLogger(DefaultLogger)
-    CALL TecplotOutput_SetModuleLogger(DefaultLogger)
-    CALL PairedData_SetModuleLogger(DefaultLogger)
+
+
 
     !Set module-level loggers for Batch 3 packages
-    CALL StrmLakeConnector_SetModuleLogger(DefaultLogger)
-    CALL LakeGWConnector_SetModuleLogger(DefaultLogger)
+
+
     CALL SupplyDest_SetModuleLogger(DefaultLogger)
     CALL AppLake_SetModuleLogger(DefaultLogger)
     CALL BaseAppLake_SetModuleLogger(DefaultLogger)
     CALL Lake_SetModuleLogger(DefaultLogger)
     CALL AppLake_v40_SetModuleLogger(DefaultLogger)
     CALL AppLake_v50_SetModuleLogger(DefaultLogger)
-    CALL AppSWShed_SetModuleLogger(DefaultLogger)
-    CALL BaseAppSWShed_SetModuleLogger(DefaultLogger)
     CALL AppSWShed_v40_SetModuleLogger(DefaultLogger)
     CALL AppSWShed_v41_SetModuleLogger(DefaultLogger)
     CALL AppGW_SetAllModuleLoggers(DefaultLogger)
@@ -1017,9 +1002,9 @@ CONTAINS
     CALL TimeSeries_SetModuleLogger(DefaultLogger)
     CALL Budget_SetModuleLogger(DefaultLogger)
     CALL BudgetInputFile_SetModuleLogger(DefaultLogger)
-    CALL SystemData_SetModuleLogger(DefaultLogger)
+
     CALL ZBudget_SetModuleLogger(DefaultLogger)
-    CALL ZBudgetHeader_SetModuleLogger(DefaultLogger)
+
     CALL ZoneList_SetModuleLogger(DefaultLogger)
     CALL Supply_SetModuleLogger(DefaultLogger)
     CALL GWZBudget_SetModuleLogger(DefaultLogger)
@@ -1141,18 +1126,18 @@ CONTAINS
 
     !Set module-level loggers for Batch 5 packages (Package_Model and Model_ForInquiry)
     CALL PackageModel_SetModuleLogger(DefaultLogger)
-    CALL ModelForInquiry_SetModuleLogger(DefaultLogger)
+
     !Set logger for components
     CALL Model%SupplyAdjust%SetLogger(DefaultLogger)
     CALL Model%IrigFracFile%SetLogger(DefaultLogger)
     CALL Model%GWZBudget%SetLogger(DefaultLogger)
     CALL Grid_SetModuleLogger(DefaultLogger)
     CALL AppGrid_SetModuleLogger(DefaultLogger)
-    CALL AppFace_SetModuleLogger(DefaultLogger)
-    CALL Stratigraphy_SetModuleLogger(DefaultLogger)
+
+
     CALL BaseHydrograph_SetModuleLogger(DefaultLogger)
-    CALL TecplotOutput_SetModuleLogger(DefaultLogger)
-    CALL PairedData_SetModuleLogger(DefaultLogger)
+
+
 
     CALL AppGW_SetAllModuleLoggers(DefaultLogger)
     CALL AppStream_SetAllModuleLoggers(DefaultLogger)
@@ -1170,9 +1155,9 @@ CONTAINS
     CALL TimeSeries_SetModuleLogger(DefaultLogger)
     CALL Budget_SetModuleLogger(DefaultLogger)
     CALL BudgetInputFile_SetModuleLogger(DefaultLogger)
-    CALL SystemData_SetModuleLogger(DefaultLogger)
+
     CALL ZBudget_SetModuleLogger(DefaultLogger)
-    CALL ZBudgetHeader_SetModuleLogger(DefaultLogger)
+
     CALL ZoneList_SetModuleLogger(DefaultLogger)
     CALL Supply_SetModuleLogger(DefaultLogger)
     CALL GWZBudget_SetModuleLogger(DefaultLogger)
@@ -1548,18 +1533,18 @@ CONTAINS
     
     !Set module-level loggers for Batch 5 packages (Package_Model and Model_ForInquiry)
     CALL PackageModel_SetModuleLogger(DefaultLogger)
-    CALL ModelForInquiry_SetModuleLogger(DefaultLogger)
+
     !Set logger for components
     CALL Model%SupplyAdjust%SetLogger(DefaultLogger)
     CALL Model%IrigFracFile%SetLogger(DefaultLogger)
     CALL Model%GWZBudget%SetLogger(DefaultLogger)
     CALL Grid_SetModuleLogger(DefaultLogger)
     CALL AppGrid_SetModuleLogger(DefaultLogger)
-    CALL AppFace_SetModuleLogger(DefaultLogger)
-    CALL Stratigraphy_SetModuleLogger(DefaultLogger)
+
+
     CALL BaseHydrograph_SetModuleLogger(DefaultLogger)
-    CALL TecplotOutput_SetModuleLogger(DefaultLogger)
-    CALL PairedData_SetModuleLogger(DefaultLogger)
+
+
 
     CALL AppGW_SetAllModuleLoggers(DefaultLogger)
     CALL AppStream_SetAllModuleLoggers(DefaultLogger)
@@ -1577,9 +1562,9 @@ CONTAINS
     CALL TimeSeries_SetModuleLogger(DefaultLogger)
     CALL Budget_SetModuleLogger(DefaultLogger)
     CALL BudgetInputFile_SetModuleLogger(DefaultLogger)
-    CALL SystemData_SetModuleLogger(DefaultLogger)
+
     CALL ZBudget_SetModuleLogger(DefaultLogger)
-    CALL ZBudgetHeader_SetModuleLogger(DefaultLogger)
+
     CALL ZoneList_SetModuleLogger(DefaultLogger)
     CALL Supply_SetModuleLogger(DefaultLogger)
     CALL GWZBudget_SetModuleLogger(DefaultLogger)
@@ -1942,18 +1927,18 @@ CONTAINS
     
     !Set module-level loggers for Batch 5 packages (Package_Model and Model_ForInquiry)
     CALL PackageModel_SetModuleLogger(DefaultLogger)
-    CALL ModelForInquiry_SetModuleLogger(DefaultLogger)
+
     !Set logger for components
     CALL Model%SupplyAdjust%SetLogger(DefaultLogger)
     CALL Model%IrigFracFile%SetLogger(DefaultLogger)
     CALL Model%GWZBudget%SetLogger(DefaultLogger)
     CALL Grid_SetModuleLogger(DefaultLogger)
     CALL AppGrid_SetModuleLogger(DefaultLogger)
-    CALL AppFace_SetModuleLogger(DefaultLogger)
-    CALL Stratigraphy_SetModuleLogger(DefaultLogger)
+
+
     CALL BaseHydrograph_SetModuleLogger(DefaultLogger)
-    CALL TecplotOutput_SetModuleLogger(DefaultLogger)
-    CALL PairedData_SetModuleLogger(DefaultLogger)
+
+
 
     CALL AppGW_SetAllModuleLoggers(DefaultLogger)
     CALL AppStream_SetAllModuleLoggers(DefaultLogger)
@@ -1971,9 +1956,9 @@ CONTAINS
     CALL TimeSeries_SetModuleLogger(DefaultLogger)
     CALL Budget_SetModuleLogger(DefaultLogger)
     CALL BudgetInputFile_SetModuleLogger(DefaultLogger)
-    CALL SystemData_SetModuleLogger(DefaultLogger)
+
     CALL ZBudget_SetModuleLogger(DefaultLogger)
-    CALL ZBudgetHeader_SetModuleLogger(DefaultLogger)
+
     CALL ZoneList_SetModuleLogger(DefaultLogger)
     CALL Supply_SetModuleLogger(DefaultLogger)
     CALL GWZBudget_SetModuleLogger(DefaultLogger)

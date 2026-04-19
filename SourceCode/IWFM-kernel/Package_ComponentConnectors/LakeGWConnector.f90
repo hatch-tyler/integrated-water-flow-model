@@ -52,8 +52,7 @@ MODULE LakeGWConnector
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: LakeGWConnectorType                     , &
-            LakeGWConnector_SetModuleLogger
+  PUBLIC :: LakeGWConnectorType
   
   
   ! -------------------------------------------------------------
@@ -113,12 +112,6 @@ MODULE LakeGWConnector
   ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
-  ! -------------------------------------------------------------
-  ! --- MODULE-LEVEL LOGGER
-  ! -------------------------------------------------------------
-  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
-
-
   INTEGER,PARAMETER                   :: ModNameLen = 17
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'LakeGWConnector::'
 
@@ -128,13 +121,6 @@ MODULE LakeGWConnector
 CONTAINS
 
 
-  ! -------------------------------------------------------------
-  ! --- SET MODULE-LEVEL LOGGER
-  ! -------------------------------------------------------------
-  SUBROUTINE LakeGWConnector_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
-    ModuleLogger => Logger
-  END SUBROUTINE LakeGWConnector_SetModuleLogger
 
 
 

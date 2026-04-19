@@ -69,8 +69,7 @@ MODULE StrmHydrograph
   PUBLIC :: StrmHydrographType        , &
             iHydFlow                  , &
             iHydStage                 , &
-            iHydBoth                  , &
-            StrmHydrograph_SetModuleLogger
+            iHydBoth
   
   
   ! -------------------------------------------------------------
@@ -116,11 +115,6 @@ MODULE StrmHydrograph
   ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
-  ! -------------------------------------------------------------
-  ! --- MODULE-LEVEL LOGGER
-  ! -------------------------------------------------------------
-  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
-
   INTEGER,PARAMETER                   :: ModNameLen    = 16
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName       = 'StrmHydrograph::'
 
@@ -129,14 +123,6 @@ MODULE StrmHydrograph
   
 CONTAINS
 
-
-  ! -------------------------------------------------------------
-  ! --- SET MODULE-LEVEL LOGGER
-  ! -------------------------------------------------------------
-  SUBROUTINE StrmHydrograph_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
-    ModuleLogger => Logger
-  END SUBROUTINE StrmHydrograph_SetModuleLogger
 
 
 ! ******************************************************************

@@ -43,8 +43,7 @@ MODULE Class_RVETFromStrm
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: RVETFromStrm_SetModuleLogger , &
-            RVETFromStrmType
+  PUBLIC :: RVETFromStrmType
 
 
   ! -------------------------------------------------------------
@@ -97,12 +96,6 @@ MODULE Class_RVETFromStrm
   ! -------------------------------------------------------------
   ! --- MISC VARIABLES
   ! -------------------------------------------------------------
-  ! -------------------------------------------------------------
-  ! --- MODULE-LEVEL LOGGER
-  ! -------------------------------------------------------------
-  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
-
-
   INTEGER,PARAMETER                   :: ModNameLen = 20
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'Class_RVETFromStrm::'
   
@@ -110,14 +103,6 @@ MODULE Class_RVETFromStrm
   
 CONTAINS
 
-
-  ! -------------------------------------------------------------
-  ! --- SET MODULE-LEVEL LOGGER
-  ! -------------------------------------------------------------
-  SUBROUTINE RVETFromStrm_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
-    ModuleLogger => Logger
-  END SUBROUTINE RVETFromStrm_SetModuleLogger
 
 
 ! ******************************************************************

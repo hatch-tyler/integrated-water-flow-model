@@ -73,7 +73,6 @@ MODULE Class_UrbanLandUse_v41
   ! -------------------------------------------------------------
   PRIVATE
   PUBLIC :: UrbanLandUse_v41_Type
-  PUBLIC :: UrbanLandUsev41_SetModuleLogger
  
   
   ! -------------------------------------------------------------
@@ -135,21 +134,12 @@ MODULE Class_UrbanLandUse_v41
   ! -------------------------------------------------------------
   INTEGER,PARAMETER                   :: ModNameLen = 24
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'Class_UrbanLandUse_v41::'
-  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
 
   
 
 
 CONTAINS
 
-
-  ! -------------------------------------------------------------
-  ! --- SET MODULE LOGGER
-  ! -------------------------------------------------------------
-  SUBROUTINE UrbanLandUsev41_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
-    ModuleLogger => Logger
-  END SUBROUTINE UrbanLandUsev41_SetModuleLogger
 
 
 ! ******************************************************************

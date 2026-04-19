@@ -125,7 +125,6 @@ MODULE Class_Model_ForInquiry
   ! -------------------------------------------------------------
   PRIVATE
   PUBLIC :: Model_ForInquiry_Type          , &
-            ModelForInquiry_SetModuleLogger , &
             f_iFilePathLen                  , &
             f_iDataDescriptionLen
 
@@ -241,22 +240,7 @@ MODULE Class_Model_ForInquiry
   INTEGER,PARAMETER                   :: ModNameLen         = 24
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName            = 'Class_Model_ForInquiry::'
 
-  ! --- MODULE-LEVEL LOGGER (instance-based, replaces global wrapper calls post-construction)
-  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
-
-  
-  
-  
 CONTAINS
-
-
-  ! -------------------------------------------------------------
-  ! --- SET MODULE-LEVEL LOGGER
-  ! -------------------------------------------------------------
-  SUBROUTINE ModelForInquiry_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
-    ModuleLogger => Logger
-  END SUBROUTINE ModelForInquiry_SetModuleLogger
 
 
 

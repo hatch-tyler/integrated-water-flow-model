@@ -29,11 +29,7 @@ MODULE Class_SystemData
   USE ZBudget_Util       , ONLY: IsZBudgetFile
   IMPLICIT NONE
 
-  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
-  
-  
 
-  
 ! ******************************************************************
 ! ******************************************************************
 ! ******************************************************************
@@ -48,8 +44,7 @@ MODULE Class_SystemData
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: SystemDataType         , &
-            SystemData_SetModuleLogger
+  PUBLIC :: SystemDataType
   
   
   ! -------------------------------------------------------------
@@ -234,11 +229,5 @@ CONTAINS
     END SELECT
         
   END SUBROUTINE Kill
-
-
-  SUBROUTINE SystemData_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
-    ModuleLogger => Logger
-  END SUBROUTINE SystemData_SetModuleLogger
 
 END MODULE

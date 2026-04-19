@@ -12,10 +12,8 @@ MODULE Class_PESTOutput
 
   PRIVATE
   PUBLIC :: PESTOutputType
-  PUBLIC :: PESTOutput_SetModuleLogger
 
   CHARACTER(LEN=25), PARAMETER :: cModName = 'Class_PESTOutput'
-  TYPE(MessageLoggerType),POINTER,PRIVATE :: ModuleLogger => NULL()
 
   ! =====================================================================
   ! PESTOutputType - PEST instruction and PCF file writer
@@ -35,17 +33,6 @@ MODULE Class_PESTOutput
   END TYPE PESTOutputType
 
 CONTAINS
-
-
-  ! -------------------------------------------------------------
-  ! --- SET MODULE LOGGER
-  ! -------------------------------------------------------------
-  SUBROUTINE PESTOutput_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType),TARGET,INTENT(IN) :: Logger
-
-    ModuleLogger => Logger
-
-  END SUBROUTINE PESTOutput_SetModuleLogger
 
 
   ! =====================================================================

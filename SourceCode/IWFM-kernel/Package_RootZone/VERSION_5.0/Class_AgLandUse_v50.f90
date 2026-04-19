@@ -80,7 +80,6 @@ MODULE Class_AgLandUse_v50
   ! -------------------------------------------------------------
   PRIVATE
   PUBLIC :: AgDatabase_v50_Type
-  PUBLIC :: AgLandUsev50_SetModuleLogger
 
 
   ! -------------------------------------------------------------
@@ -167,21 +166,12 @@ MODULE Class_AgLandUse_v50
   ! -------------------------------------------------------------
   INTEGER,PARAMETER                   :: ModNameLen = 21
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'Class_AgLandUse_v50::'
-  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
   
   
   
   
 CONTAINS
 
-
-  ! -------------------------------------------------------------
-  ! --- SET MODULE LOGGER
-  ! -------------------------------------------------------------
-  SUBROUTINE AgLandUsev50_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
-    ModuleLogger => Logger
-  END SUBROUTINE AgLandUsev50_SetModuleLogger
 
 
 ! ******************************************************************
