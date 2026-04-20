@@ -2295,7 +2295,7 @@ CONTAINS
 
 
   SUBROUTINE GeneralUtils_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    TYPE(MessageLoggerType), TARGET, INTENT(INOUT) :: Logger
     ModuleLogger => Logger
   END SUBROUTINE GeneralUtils_SetModuleLogger
 

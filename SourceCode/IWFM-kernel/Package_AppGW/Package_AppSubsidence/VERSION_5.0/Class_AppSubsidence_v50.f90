@@ -123,7 +123,7 @@ CONTAINS
   ! --- SET MODULE-LEVEL LOGGER
   ! -------------------------------------------------------------
   SUBROUTINE AppSubsidence_v50_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    TYPE(MessageLoggerType), TARGET, INTENT(INOUT) :: Logger
     ModuleLogger => Logger
   END SUBROUTINE AppSubsidence_v50_SetModuleLogger
 
@@ -748,7 +748,7 @@ CONTAINS
     IF (NGroup .GT. 0) THEN
 
         !Read the parameter values at parametric nodes and compute the interpolation coefficients for finite element nodes
-        CALL GetValuesFromParametricGrid(InFile,AppGrid%GridType,iGWNodeIDs,NGroup,rFactors,.FALSE.,'subsidence',rDummy3DArray,iStat)
+        CALL GetValuesFromParametricGrid(AppGrid%GridType%Logger,InFile,AppGrid%GridType,iGWNodeIDs,NGroup,rFactors,.FALSE.,'subsidence',rDummy3DArray,iStat)
         IF (iStat .EQ. -1) RETURN
 
         !Initialize parameter values

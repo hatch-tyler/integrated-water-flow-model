@@ -52,7 +52,6 @@ MODULE Class_Lake
   ! -------------------------------------------------------------
   PRIVATE
   PUBLIC :: LakeType                     , &
-            Lake_SetModuleLogger        , &
             ReadInitialLakeElevs
 
 
@@ -94,9 +93,8 @@ MODULE Class_Lake
   ! --- MISC. DATA 
   ! -------------------------------------------------------------
   ! -------------------------------------------------------------
-  ! --- MODULE-LEVEL LOGGER
+  ! --- MISC. DATA (continued)
   ! -------------------------------------------------------------
-  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
 
 
   INTEGER,PARAMETER                   :: ModNameLen = 12
@@ -108,13 +106,6 @@ MODULE Class_Lake
 CONTAINS
 
 
-  ! -------------------------------------------------------------
-  ! --- SET MODULE-LEVEL LOGGER
-  ! -------------------------------------------------------------
-  SUBROUTINE Lake_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
-    ModuleLogger => Logger
-  END SUBROUTINE Lake_SetModuleLogger
 
 
 ! ******************************************************************
@@ -211,11 +202,12 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- READ INITIAL LAKE ELEVATIONS
   ! -------------------------------------------------------------
-  SUBROUTINE ReadInitialLakeElevs(LakeDataFile,Lakes,iLakeIDs,iStat)
-    TYPE(GenericFileType) :: LakeDataFile
-    TYPE(LakeType)        :: Lakes(:)
-    INTEGER,INTENT(IN)    :: iLakeIDs(:)
-    INTEGER,INTENT(OUT)   :: iStat
+  SUBROUTINE ReadInitialLakeElevs(Logger,LakeDataFile,Lakes,iLakeIDs,iStat)
+    TYPE(MessageLoggerType) :: Logger
+    TYPE(GenericFileType)   :: LakeDataFile
+    TYPE(LakeType)          :: Lakes(:)
+    INTEGER,INTENT(IN)      :: iLakeIDs(:)
+    INTEGER,INTENT(OUT)     :: iStat
     
     !Local variables
     CHARACTER(LEN=ModNameLen+20) :: ThisProcedure = ModName // 'ReadInitialLakeElevs'
@@ -241,14 +233,14 @@ CONTAINS
         ID = INT(DummyArray(1))
         CALL ConvertID_To_Index(ID,iLakeIDs,iLake)
         IF (iLake .EQ. 0) THEN 
-            CALL ModuleLogger%SetLastMessage('Lake ID '//TRIM(IntToText(ID))//' listed for inital lake elevation is not recognized!',f_iFatal,ThisProcedure)
+            CALL Logger%SetLastMessage('Lake ID '//TRIM(IntToText(ID))//' listed for inital lake elevation is not recognized!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
         
         !Make sure lake data was not entered previously
         IF (lProcessed(iLake)) THEN
-            CALL ModuleLogger%SetLastMessage('Initial elevation for lake '//TRIM(IntToText(ID))//' is entered more than once!',f_iFatal,ThisProcedure)
+            CALL Logger%SetLastMessage('Initial elevation for lake '//TRIM(IntToText(ID))//' is entered more than once!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -263,7 +255,7 @@ CONTAINS
             MessageArray(1) = 'Initial lake elevation for lake '//TRIM(IntToText(ID))//' is lower than the lowest ground surface elevation!'
             WRITE(MessageArray(2),'(A,F8.4)') 'Lowest ground surface elevation = ',Lakes(iLake)%RatingTable%XPoint(1)
             WRITE(MessageArray(3),'(A,F8.4)') 'Initial lake elevation          = ',Lakes(iLake)%Elev
-            CALL ModuleLogger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+            CALL Logger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF

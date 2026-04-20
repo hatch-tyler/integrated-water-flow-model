@@ -151,7 +151,7 @@ CONTAINS
   ! -------------------------------------------------------------
   SUBROUTINE New(AppSWShed,Logger,IsForInquiry,cFileName,cCropCoeffFileName,cWorkingDirectory,TimeStep,NTIME,NStrmNodes,iStrmNodeIDs,AppGrid,Stratigraphy,Precip,ET,iStat,cVersionOverride)
     CLASS(AppSmallWatershedType),INTENT(OUT)   :: AppSWShed
-    TYPE(MessageLoggerType),TARGET,INTENT(IN)  :: Logger
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT)  :: Logger
     LOGICAL,INTENT(IN)                         :: IsForInquiry
     CHARACTER(LEN=*),INTENT(IN)              :: cFileName,cCropCoeffFileName,cWorkingDirectory
     TYPE(TimeStepType),INTENT(IN)            :: TimeStep

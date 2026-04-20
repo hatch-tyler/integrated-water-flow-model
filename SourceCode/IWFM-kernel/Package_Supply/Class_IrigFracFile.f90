@@ -84,7 +84,7 @@ CONTAINS
   ! -------------------------------------------------------------
   SUBROUTINE SetLogger(IrigFracFile,Logger)
     CLASS(IrigFracFileType),INTENT(INOUT)     :: IrigFracFile
-    TYPE(MessageLoggerType),TARGET,INTENT(IN) :: Logger
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT) :: Logger
 
     IrigFracFile%Logger => Logger
 

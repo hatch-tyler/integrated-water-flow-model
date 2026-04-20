@@ -60,8 +60,7 @@ MODULE Class_Grid
             ListConnectedNodes          , &
             ListSurroundingElems        , &
             Compute_DELShpI_DELShpJ     , &
-            Compute_Rot_DELShpI_DELShpJ , &
-            Grid_SetModuleLogger
+            Compute_Rot_DELShpI_DELShpJ
 
 
   ! -------------------------------------------------------------
@@ -122,12 +121,6 @@ MODULE Class_Grid
 
 
   ! -------------------------------------------------------------
-  ! --- MODULE-LEVEL LOGGER (preserves type binary layout)
-  ! -------------------------------------------------------------
-  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
-
-
-  ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
   INTEGER,PARAMETER           :: f_iModNameLen = 12
@@ -141,13 +134,6 @@ MODULE Class_Grid
 CONTAINS
 
 
-  ! -------------------------------------------------------------
-  ! --- SET MODULE-LEVEL LOGGER
-  ! -------------------------------------------------------------
-  SUBROUTINE Grid_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
-    ModuleLogger => Logger
-  END SUBROUTINE Grid_SetModuleLogger
 
 
 
@@ -167,7 +153,7 @@ CONTAINS
   ! -------------------------------------------------------------
   SUBROUTINE New(Grid,Logger,X,Y,NVertex,Vertex,iStat)
     CLASS(GridType),INTENT(OUT)                :: Grid
-    TYPE(MessageLoggerType),TARGET,INTENT(IN)  :: Logger
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT)  :: Logger
     REAL(8),INTENT(IN)                         :: X(:),Y(:)
     INTEGER,INTENT(IN)                         :: NVertex(:),Vertex(:,:)
     INTEGER,INTENT(OUT)                        :: iStat
@@ -784,7 +770,7 @@ CONTAINS
       DO I=1,3
         DO J=I+1,3
           indx = indx+1
-          CALL TRI_INTGRL(I,J,XP(1:NVertex),YP(1:NVertex),LocalElemArea,Integral(indx),iStat)
+          CALL TRI_INTGRL(Grid%Logger,I,J,XP(1:NVertex),YP(1:NVertex),LocalElemArea,Integral(indx),iStat)
           IF (iStat .EQ. -1) RETURN
         END DO
       END DO
@@ -842,7 +828,7 @@ CONTAINS
       DO I=1,3
         DO J=I+1,3
           indx = indx+1
-          CALL TRI_ROT(I,J,XP(1:NVertex),YP(1:NVertex),LocalElemArea,Integral(indx),iStat)
+          CALL TRI_ROT(Grid%Logger,I,J,XP(1:NVertex),YP(1:NVertex),LocalElemArea,Integral(indx),iStat)
           IF (iStat .EQ. -1) RETURN
         END DO
       END DO
@@ -920,7 +906,8 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- INTEGRATION OF DIFFUSION TERM OVER TRIANGULAR ELEMENTS
   ! -------------------------------------------------------------
-  SUBROUTINE TRI_INTGRL(I,J,XP,YP,AREA,Integral,iStat)
+  SUBROUTINE TRI_INTGRL(Logger,I,J,XP,YP,AREA,Integral,iStat)
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
     INTEGER,INTENT(IN)  :: I,J
     REAL(8),INTENT(IN)  :: XP(3),YP(3),AREA
     REAL(8),INTENT(OUT) :: Integral
@@ -936,7 +923,7 @@ CONTAINS
 
     !Check I and J are not equal
     IF (I .EQ. J) THEN
-        CALL ModuleLogger%SetLastMessage('Node I and Node J are equal in integration of diffusion term!',f_iFatal,ThisProcedure)
+        CALL Logger%SetLastMessage('Node I and Node J are equal in integration of diffusion term!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -956,7 +943,8 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- INTEGRATION OF ROTATION TERM OVER TRIANGULAR ELEMENTS
   ! -------------------------------------------------------------
-  SUBROUTINE TRI_ROT(I,J,XP,YP,AREA,Rot,iStat)
+  SUBROUTINE TRI_ROT(Logger,I,J,XP,YP,AREA,Rot,iStat)
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
     INTEGER,INTENT(IN)  :: I,J
     REAL(8),INTENT(IN)  :: XP(3),YP(3),AREA
     REAL(8),INTENT(OUT) :: Rot
@@ -971,7 +959,7 @@ CONTAINS
 
     !Check I and J are not equal
     IF (I .EQ. J) THEN
-        CALL ModuleLogger%SetLastMessage('Node I and Node J are equal in integration of rotation term!',f_iFatal,ThisProcedure)
+        CALL Logger%SetLastMessage('Node I and Node J are equal in integration of rotation term!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF

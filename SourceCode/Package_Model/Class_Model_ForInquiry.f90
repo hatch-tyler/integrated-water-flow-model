@@ -866,7 +866,7 @@ CONTAINS
             CALL AppGW%GetBudget_MonthlyFlows(Budget,iLocationIndex,cAdjustedBeginDate,cAdjustedEndDate,rFactVL,rFlowsWork,cFlowNames,iStat)
             
         CASE (f_iStrmComp)
-            CALL AppStream%GetBudget_MonthlyFlows(Budget,iBudgetType,iLocationIndex,Model%iStrmReachIDs,cAdjustedBeginDate,cAdjustedEndDate,rFactVL,rFlowsWork,cFlowNames,iStat)
+            CALL AppStream%GetBudget_MonthlyFlows(Budget,iBudgetType,iLocationIndex,Model%iStrmReachIDs,cAdjustedBeginDate,cAdjustedEndDate,rFactVL,rFlowsWork,cFlowNames,Model%Logger,iStat)
             
         CASE (f_iRootZoneComp)
             CALL RootZone%GetBudget_MonthlyFlows(Budget,iBudgetType,iLUType,iLocationIndex,cAdjustedBeginDate,cAdjustedEndDate,rFactVL,rFlowsWork,cFlowNames,iStat)
@@ -967,7 +967,7 @@ CONTAINS
             CALL AppGW%GetBudget_MonthlyFlows(Budget,iLocationIndex,cAdjustedBeginDate,cAdjustedEndDate,rFactVL,rFlowsWork,cFlowNames,iStat)
             
         CASE (f_iStrmComp)
-            CALL AppStream%GetBudget_MonthlyFlows(Budget,iBudgetType,iLocationIndex,Model%iStrmReachIDs,cAdjustedBeginDate,cAdjustedEndDate,rFactVL,rFlowsWork,cFlowNames,iStat)
+            CALL AppStream%GetBudget_MonthlyFlows(Budget,iBudgetType,iLocationIndex,Model%iStrmReachIDs,cAdjustedBeginDate,cAdjustedEndDate,rFactVL,rFlowsWork,cFlowNames,Model%Logger,iStat)
             
         CASE (f_iLakeComp)
             CALL AppLake%GetBudget_MonthlyFlows(Budget,iLocationIndex,cAdjustedBeginDate,cAdjustedEndDate,rFactVL,rFlowsWork,cFlowNames,iStat,Model%Logger)

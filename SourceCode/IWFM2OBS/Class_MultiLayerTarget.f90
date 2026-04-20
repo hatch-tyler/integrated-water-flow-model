@@ -76,7 +76,7 @@ CONTAINS
   ! --- SET MODULE LOGGER
   ! -------------------------------------------------------------
   SUBROUTINE MultiLayerTarget_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType),TARGET,INTENT(IN) :: Logger
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT) :: Logger
 
     ModuleLogger => Logger
 

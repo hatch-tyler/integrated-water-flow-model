@@ -62,7 +62,7 @@ CONTAINS
   ! =====================================================================
   SUBROUTINE New(This, Logger, cHDFile, iStat)
     CLASS(HeadDifferenceType), INTENT(INOUT) :: This
-    TYPE(MessageLoggerType),TARGET,INTENT(IN) :: Logger
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT) :: Logger
     CHARACTER(LEN=*),         INTENT(IN)     :: cHDFile
     INTEGER,                  INTENT(OUT)    :: iStat
 

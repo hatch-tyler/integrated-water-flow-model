@@ -92,7 +92,6 @@ MODULE Package_AppPumping
   ! -------------------------------------------------------------
   PRIVATE
   PUBLIC :: AppPumpingType                          , &
-            AppPumping_SetModuleLogger              , &
             f_iPump_Well                            , &
             f_iPump_ElemPump
 
@@ -109,6 +108,7 @@ MODULE Package_AppPumping
   ! -------------------------------------------------------------
   TYPE AppPumpingType
       PRIVATE
+      TYPE(MessageLoggerType),POINTER   :: Logger => NULL()
       LOGICAL                           :: lThereIsPumping  = .FALSE.                !Flag to check if there is at least one pumping (negative value) is specified
       INTEGER                           :: NWells           = 0                      !Number of wells simulated
       INTEGER                           :: NElemPumps       = 0                      !Number of element pumping simulated
@@ -166,12 +166,6 @@ MODULE Package_AppPumping
   ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
-  ! -------------------------------------------------------------
-  ! --- MODULE-LEVEL LOGGER
-  ! -------------------------------------------------------------
-  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
-
-
   INTEGER,PARAMETER                   :: ModNameLen = 20
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'Package_AppPumping::'
   
@@ -180,13 +174,6 @@ MODULE Package_AppPumping
 CONTAINS
 
 
-  ! -------------------------------------------------------------
-  ! --- SET MODULE-LEVEL LOGGER
-  ! -------------------------------------------------------------
-  SUBROUTINE AppPumping_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
-    ModuleLogger => Logger
-  END SUBROUTINE AppPumping_SetModuleLogger
 
 
 ! ******************************************************************
@@ -202,9 +189,10 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- INSTANTIATE PUMPING COMPONENT
   ! -------------------------------------------------------------
-  SUBROUTINE New(AppPumping,lIsForInquiry,cFileName,cWorkingDirectory,AppGrid,Stratigraphy,TimeStep,iStat) 
-    CLASS(AppPumpingType),INTENT(OUT) :: AppPumping
-    LOGICAL,INTENT(IN)                :: lIsForInquiry
+  SUBROUTINE New(AppPumping,Logger,lIsForInquiry,cFileName,cWorkingDirectory,AppGrid,Stratigraphy,TimeStep,iStat)
+    CLASS(AppPumpingType),INTENT(OUT)          :: AppPumping
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
+    LOGICAL,INTENT(IN)                         :: lIsForInquiry
     CHARACTER(LEN=*),INTENT(IN)       :: cFileName,cWorkingDirectory
     TYPE(AppGridType),INTENT(IN)      :: AppGrid
     TYPE(StratigraphyType),INTENT(IN) :: Stratigraphy
@@ -221,13 +209,14 @@ CONTAINS
     CHARACTER(:),ALLOCATABLE              :: cVersion,cAbsPathFileName
     
     !Initialize
+    AppPumping%Logger => Logger
     iStat = 0
-    
+
     !Return if no filename is specified
     IF (cFileName .EQ. '') RETURN
-    
+
     !Inform user
-    CALL ModuleLogger%EchoProgress('   Instantiating pumping data...')
+    CALL Logger%EchoProgress('   Instantiating pumping data...')
     
     !Initialize
     NElements = AppGrid%NElements
@@ -248,7 +237,7 @@ CONTAINS
     CALL CleanSpecialCharacters(ALine)
     IF (ALine .NE. '') THEN
         CALL EstablishAbsolutePathFileName(TRIM(ALine),cWorkingDirectory,cAbsPathFileName)
-        CALL Well_New(ModuleLogger,cAbsPathFileName,AppGrid,Stratigraphy,AppPumping%Wells,iStat)
+        CALL Well_New(Logger,cAbsPathFileName,AppGrid,Stratigraphy,AppPumping%Wells,iStat)
         IF (iStat .EQ. -1) RETURN
         AppPumping%NWells = SIZE(AppPumping%Wells)
     END IF
@@ -259,7 +248,7 @@ CONTAINS
     CALL CleanSpecialCharacters(ALine)
     IF (ALine .NE. '') THEN
         CALL EstablishAbsolutePathFileName(TRIM(ALine),cWorkingDirectory,cAbsPathFileName)
-        CALL ElemPump_New(ModuleLogger,cAbsPathFileName,AppGrid,Stratigraphy,AppPumping%ElemPumps,iStat)
+        CALL ElemPump_New(Logger,cAbsPathFileName,AppGrid,Stratigraphy,AppPumping%ElemPumps,iStat)
         IF (iStat .EQ. -1) RETURN
         AppPumping%NElemPumps = SIZE(AppPumping%ElemPumps)
     END IF
@@ -286,19 +275,19 @@ CONTAINS
         IF (AppPumping%rPumpFactor .LT. 0.0) THEN
             MessageArray(1) = 'To avoid confusion, conversion factor in the timeseries pumping rate file cannot be less than zero!'
             MessageArray(2) = 'Pumping must be specified as a negative value in the data columns, and recharge as a positive value.'
-            CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+            CALL Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
     END IF
-    
+
     !Make sure that time series pumping data is defined if any well or element pumping is pointing a column in it
     IF (.NOT. lIsForInquiry) THEN
         IF (AppPumping%TSPumpFile%File%iGetFileType() .EQ. f_iUNKNOWN) THEN
             !Check with element pumping
             IF (AppPumping%NElemPumps .GT. 0) THEN
                 IF (ANY(AppPumping%ElemPumps%iColPump.GT.0)) THEN
-                    CALL ModuleLogger%SetLastMessage('Time series pumping data must be specified when element pumping refers to a column in this file!',f_iFatal,ThisProcedure)
+                    CALL Logger%SetLastMessage('Time series pumping data must be specified when element pumping refers to a column in this file!',f_iFatal,ThisProcedure)
                     iStat = -1
                     RETURN
                 END IF
@@ -306,24 +295,24 @@ CONTAINS
             !Check with wells
             IF (AppPumping%NWells .GT. 0) THEN
                 IF (ANY(AppPumping%Wells%iColPump.GT.0)) THEN
-                    CALL ModuleLogger%SetLastMessage('Time series pumping data must be specified when well pumping refers to a column in this file!',f_iFatal,ThisProcedure)
+                    CALL Logger%SetLastMessage('Time series pumping data must be specified when well pumping refers to a column in this file!',f_iFatal,ThisProcedure)
                     iStat = -1
                     RETURN
                 END IF
             END IF
         END IF
     END IF
-        
+
     !Check if specified locations have at least one active node
-    CALL CheckActiveLayers(AppPumping,AppGrid,Stratigraphy,iStat)
+    CALL CheckActiveLayers(Logger,AppPumping,AppGrid,Stratigraphy,iStat)
     IF (iStat .EQ. -1) RETURN
-         
+
     !Allocate memory for nodal pumping
     ALLOCATE (AppPumping%NodalPumpRequired(NNodes,NLayers) , &
               AppPumping%NodalPumpActual(NNodes,NLayers)   , &
               STAT=ErrorCode                               )
     IF (ErrorCode .NE. 0) THEN
-        CALL ModuleLogger%SetLastMessage('Error in allocating memory for nodal pumping!',f_iFatal,ThisProcedure)
+        CALL Logger%SetLastMessage('Error in allocating memory for nodal pumping!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -348,7 +337,7 @@ CONTAINS
         CALL CleanSpecialCharacters(ALine)
         IF (ALine .NE. '') THEN
             CALL EstablishAbsolutePathFileName(TRIM(ALine),cWorkingDirectory,cAbsPathFileName)
-            CALL InitElemWellPumpingOutFile(lIsForInquiry,cAbsPathFileName,TimeStep%Unit,AppPumping%rPumpFactor,AppGrid%AppElement%ID,AppPumping%Wells%ID,AppPumping%ElemWellPumpingOutFile,iStat)
+            CALL InitElemWellPumpingOutFile(Logger,lIsForInquiry,cAbsPathFileName,TimeStep%Unit,AppPumping%rPumpFactor,AppGrid%AppElement%ID,AppPumping%Wells%ID,AppPumping%ElemWellPumpingOutFile,iStat)
             IF (iStat .EQ. -1) RETURN
             AppPumping%lElemWellPumpingOutFile_Defined = .TRUE.
         END IF
@@ -365,7 +354,8 @@ CONTAINS
   ! -------------------------------------------------------------
   ! ---INSTANTIATE PUMPING OUTPUT FILE
   ! -------------------------------------------------------------
-  SUBROUTINE InitElemWellPumpingOutFile(lIsForInquiry,cFileName,cUnitT,rPumpFactor,iElemIDs,iWellIDs,OutFile,iStat)
+  SUBROUTINE InitElemWellPumpingOutFile(Logger,lIsForInquiry,cFileName,cUnitT,rPumpFactor,iElemIDs,iWellIDs,OutFile,iStat)
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
     LOGICAL,INTENT(IN)           :: lIsForInquiry
     CHARACTER(LEN=*),INTENT(IN)  :: cFileName,cUnitT
     REAL(8),INTENT(IN)           :: rPumpFactor
@@ -388,7 +378,7 @@ CONTAINS
     
     !Make sure that file is either text or DSS file
     IF (iGetFileType_FromName(cFileName) .NE. f_iTXT) THEN
-        CALL ModuleLogger%SetLastMessage('Element/well pumping output file must be a text file!',f_iFatal,ThisProcedure)
+        CALL Logger%SetLastMessage('Element/well pumping output file must be a text file!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -1395,7 +1385,8 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- CHECK IF PUMPING LOCATIONS ARE NOT SURROUNDED BY ALL INACTIVE NODES
   ! -------------------------------------------------------------
-  SUBROUTINE CheckActiveLayers(AppPumping,AppGrid,Stratigraphy,iStat)
+  SUBROUTINE CheckActiveLayers(Logger,AppPumping,AppGrid,Stratigraphy,iStat)
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
     TYPE(AppPumpingType),INTENT(IN)     :: AppPumping
     TYPE(AppGridType),TARGET,INTENT(IN) :: AppGrid
     TYPE(StratigraphyType),INTENT(IN)   :: Stratigraphy
@@ -1418,11 +1409,11 @@ CONTAINS
             iWellID = AppPumping%Wells(indx)%ID
             iElemID = AppGrid%AppElement(indxElem)%ID
             WRITE (MessageArray(1),'(A10,i6,A12,i8)') 'Well ID = ',iWellID,' at element ',iElemID
-            CALL ModuleLogger%LogMessage(MessageArray(1),f_iMessage,ThisProcedure)
+            CALL Logger%LogMessage(MessageArray(1),f_iMessage,ThisProcedure)
             ErrorCode = 1
         END IF
     END DO
-    
+
     !Check element pumping
     DO indx=1,AppPumping%NElemPumps
         indxElem = AppPumping%ElemPumps(indx)%Element
@@ -1431,16 +1422,16 @@ CONTAINS
         IF (ALL(Stratigraphy%ActiveNode(Vertex(1:NVertex),:) .EQ. .FALSE.)) THEN
             iElemID = AppGrid%AppElement(indxElem)%ID
             WRITE (MessageArray(1),'(A28,i8)') 'Elem. Pump at element ',iElemID
-            CALL ModuleLogger%LogMessage(MessageArray(1),f_iMessage,ThisProcedure)
+            CALL Logger%LogMessage(MessageArray(1),f_iMessage,ThisProcedure)
             ErrorCode = 1
         END IF
     END DO
-    
+
     !Stop the program if necessary
     IF (ErrorCode .GT. 0) THEN
         MessageArray(1) = 'Above elements for pumping have all their surrounding nodes inactive!'
         MessageArray(2) = 'Pumping at these elements are redundent.'
-        CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+        CALL Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF

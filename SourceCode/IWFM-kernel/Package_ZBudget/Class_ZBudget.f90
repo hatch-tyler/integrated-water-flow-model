@@ -167,7 +167,7 @@ CONTAINS
   ! -------------------------------------------------------------
   SUBROUTINE ZBudget_SetLogger(ZBudget,Logger)
     CLASS(ZBudgetType)                      :: ZBudget
-    TYPE(MessageLoggerType),TARGET,INTENT(IN) :: Logger
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT) :: Logger
 
     ZBudget%Logger => Logger
 
@@ -191,7 +191,7 @@ CONTAINS
   ! -------------------------------------------------------------
   SUBROUTINE Create_ZBudget(ZBudget,Logger,cFileName,NTimeSteps,TimeStep,Header,SystemData,iStat)
     CLASS(ZBudgetType)                        :: ZBudget
-    TYPE(MessageLoggerType),TARGET,INTENT(IN) :: Logger
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT) :: Logger
     CHARACTER(LEN=*),INTENT(IN)               :: cFileName
     INTEGER,INTENT(IN)                        :: NTimeSteps
     TYPE(TimeStepType),INTENT(IN)             :: TimeStep
@@ -302,7 +302,7 @@ CONTAINS
   ! -------------------------------------------------------------
   SUBROUTINE Open_ZBudget(ZBudget,Logger,cFileName,iStat)
     CLASS(ZBudgetType)                        :: ZBudget
-    TYPE(MessageLoggerType),TARGET,INTENT(IN) :: Logger
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT) :: Logger
     CHARACTER(LEN=*),INTENT(IN)               :: cFileName
     INTEGER,INTENT(OUT)                       :: iStat
 

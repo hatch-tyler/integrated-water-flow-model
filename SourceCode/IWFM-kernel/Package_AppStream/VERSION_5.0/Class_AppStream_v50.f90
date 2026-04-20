@@ -191,7 +191,7 @@ CONTAINS
   ! --- SET MODULE-LEVEL LOGGER
   ! -------------------------------------------------------------
   SUBROUTINE AppStream_v50_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    TYPE(MessageLoggerType), TARGET, INTENT(INOUT) :: Logger
     ModuleLogger => Logger
   END SUBROUTINE AppStream_v50_SetModuleLogger
 
@@ -226,13 +226,16 @@ CONTAINS
     INTEGER                      :: ErrorCode,iGWNodeIDs(AppGrid%NNodes)
     TYPE(GenericFileType)        :: DataFile
     
+    !Set Logger (INTENT(OUT) resets pointer, restore from module-level)
+    AppStream%Logger => ModuleLogger
+
     !Initialize
     iStat      = 0
     iGWNodeIDs = AppGrid%AppNode%ID
-    
+
     !Inform user
     CALL ModuleLogger%EchoProgress('Instantiating streams')
-    
+
     !Set the flag to check if routed or non-routed streams
     AppStream%lRouted = IsRoutedStreams
     
@@ -265,7 +268,7 @@ CONTAINS
     IF (iStat .EQ. -1) RETURN
     
     !Read stream nodes and fraction of stream-aquifer interaction to be applied to corresponding gw nodes
-    CALL ReadFractionsForGW(DataFile,AppStream%Nodes%ID,StrmGWConnector,iStat)
+    CALL ReadFractionsForGW(DataFile,AppStream%Nodes%ID,StrmGWConnector,AppStream%Logger,iStat)
     IF (iStat .EQ. -1) RETURN
     
     !Close file
@@ -576,10 +579,13 @@ CONTAINS
     
     !Local variables
     CHARACTER(LEN=ModNameLen+30) :: ThisProcedure = ModName // 'AppStream_v50_SetAllComponents'
-    
+
+    !Set Logger (INTENT(OUT) resets pointer, restore from module-level)
+    AppStream%Logger => ModuleLogger
+
     !Initialize
     iStat = 0
-    
+
     !Echo progress
     CALL ModuleLogger%EchoProgress('Instantiating streams')
     
@@ -625,10 +631,13 @@ CONTAINS
     
     !Local variables
     CHARACTER(LEN=ModNameLen+44) :: ThisProcedure = ModName // 'AppStream_v50_SetAllComponentsWithoutBinFile'
-    
+
+    !Set Logger (INTENT(OUT) resets pointer, restore from module-level)
+    AppStream%Logger => ModuleLogger
+
     !Initialize
     iStat = 0
-    
+
     !Instantiate the static components of the AppStream data
     CALL AppStream_v50_SetStaticComponent(AppStream,cPPFileName,AppGrid,Stratigraphy,IsRoutedStreams,StrmGWConnector,StrmLakeConnector,iStat)
     IF (iStat .EQ. -1) RETURN
@@ -768,7 +777,7 @@ CONTAINS
             
         CASE (f_iBudgetType_StrmReach)
             IF (AppStream%StrmReachBudRawFile_Defined) THEN
-                CALL AppStream_v50_GetBudget_MonthlyFlows_GivenFile(AppStream%StrmReachBudRawFile,iBudgetType,iLocationIndex,AppStream%Reaches%ID,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
+                CALL AppStream_v50_GetBudget_MonthlyFlows_GivenFile(AppStream%StrmReachBudRawFile,iBudgetType,iLocationIndex,AppStream%Reaches%ID,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,AppStream%Logger,iStat)
             ELSE
                 CALL ModuleLogger%SetLastMessage('Stream reach budget is not defined to retrieve monthly budget flows!',f_iFatal,ThisProcedure)
                 ALLOCATE (rFlows(0,0) , cFlowNames(0))
@@ -789,14 +798,15 @@ CONTAINS
   ! --- (Assumes cBeginDate and cEndDate are adjusted properly)
   ! --- (REDEFINES THE PROCEDURE IN Class_BaseAppStream)
   ! -------------------------------------------------------------
-  SUBROUTINE AppStream_v50_GetBudget_MonthlyFlows_GivenFile(Budget,iBudgetType,iLocationindex,iStrmReachIDs,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
-    TYPE(BudgetType),INTENT(IN)              :: Budget      !Assumes Budget file is already open
-    CHARACTER(LEN=*),INTENT(IN)              :: cBeginDate,cEndDate
-    INTEGER,INTENT(IN)                       :: iBudgetType,iStrmReachIDs(:),iLocationindex  !Location can be stream node, reach or diversion
-    REAL(8),INTENT(IN)                       :: rFactVL
-    REAL(8),ALLOCATABLE,INTENT(OUT)          :: rFlows(:,:)  !In (column,month) format
-    CHARACTER(LEN=*),ALLOCATABLE,INTENT(OUT) :: cFlowNames(:)
-    INTEGER,INTENT(OUT)                      :: iStat
+  SUBROUTINE AppStream_v50_GetBudget_MonthlyFlows_GivenFile(Budget,iBudgetType,iLocationindex,iStrmReachIDs,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,Logger,iStat)
+    TYPE(BudgetType),INTENT(IN)                :: Budget      !Assumes Budget file is already open
+    CHARACTER(LEN=*),INTENT(IN)                :: cBeginDate,cEndDate
+    INTEGER,INTENT(IN)                         :: iBudgetType,iStrmReachIDs(:),iLocationindex  !Location can be stream node, reach or diversion
+    REAL(8),INTENT(IN)                         :: rFactVL
+    REAL(8),ALLOCATABLE,INTENT(OUT)            :: rFlows(:,:)  !In (column,month) format
+    CHARACTER(LEN=*),ALLOCATABLE,INTENT(OUT)   :: cFlowNames(:)
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
+    INTEGER,INTENT(OUT)                        :: iStat
     
     !Local variables
     CHARACTER(LEN=ModNameLen+46) :: ThisProcedure = ModName // 'AppStream_v50_GetBudget_MonthlyFlows_GivenFile'
@@ -811,10 +821,10 @@ CONTAINS
   
             
         CASE (f_iBudgetType_DiverDetail)
-            CALL ModuleLogger%SetLastMessage('Monthly budget values cannot be retrieved from Diversion Details file!',f_iWarn,ThisProcedure)
+            CALL Logger%SetLastMessage('Monthly budget values cannot be retrieved from Diversion Details file!',f_iWarn,ThisProcedure)
             iStat = -1
-            
-            
+
+
         CASE (f_iBudgetType_StrmReach)
             !Get simulation time steps and allocate array to read data
             iNTimeSteps = Budget%GetNTimeSteps()
@@ -1054,10 +1064,13 @@ CONTAINS
     !Local variables
     CHARACTER(LEN=ModNameLen+20) :: ThisProcedure = ModName // 'ReadPreprocessedData'
     INTEGER                      :: ErrorCode
-    
+
+    !Set Logger (INTENT(OUT) resets pointer, restore from module-level)
+    AppStream%Logger => ModuleLogger
+
     !Initialize
     iStat = 0
-       
+
     !Routed/non-routed flag
     CALL BinFile%ReadData(AppStream%lRouted,iStat)  ;  IF (iStat .EQ. -1) RETURN
     
@@ -1206,7 +1219,7 @@ CONTAINS
     END DO
     
     !Compile reach network from upstream to downstream
-    CALL StrmReach_CompileReachNetwork(AppStream%NReaches,AppStream%Reaches,iStat)
+    CALL StrmReach_CompileReachNetwork(AppStream%NReaches,AppStream%Reaches,AppStream%Logger,iStat)
     IF (iStat .EQ. -1) RETURN
     
     !Compile upstream nodes for each node

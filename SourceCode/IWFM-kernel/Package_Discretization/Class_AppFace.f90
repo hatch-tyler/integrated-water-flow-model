@@ -102,7 +102,7 @@ CONTAINS
   ! -------------------------------------------------------------
   SUBROUTINE ReadData(AppFace,Logger,InFile,NFace,iStat)
     CLASS(AppFaceType),INTENT(OUT)              :: AppFace
-    TYPE(MessageLoggerType),TARGET,INTENT(IN)   :: Logger
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT)   :: Logger
     INTEGER,INTENT(IN)                          :: NFace
     TYPE(GenericFileType)                        :: InFile
     INTEGER,INTENT(OUT)                         :: iStat
@@ -139,7 +139,7 @@ CONTAINS
   ! -------------------------------------------------------------
   SUBROUTINE Construct(AppFace,Logger,NVertex,Vertex,X,Y,iStat)
     CLASS(AppFaceType),INTENT(OUT)              :: AppFace
-    TYPE(MessageLoggerType),TARGET,INTENT(IN)   :: Logger
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT)   :: Logger
     INTEGER,INTENT(IN)                          :: NVertex(:),Vertex(:,:)
     REAL(8),INTENT(IN)                          :: X(:),Y(:)
     INTEGER,INTENT(OUT)                         :: iStat

@@ -185,7 +185,7 @@ CONTAINS
   ! --- SET MODULE-LEVEL LOGGER
   ! -------------------------------------------------------------
   SUBROUTINE AppGrid_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    TYPE(MessageLoggerType), TARGET, INTENT(INOUT) :: Logger
     ModuleLogger => Logger
   END SUBROUTINE AppGrid_SetModuleLogger
 
@@ -637,7 +637,7 @@ CONTAINS
   ! -------------------------------------------------------------
   SUBROUTINE ReadAppGridData(AppGrid,Logger,NodeFileName,ElementConfigFileName,iStat)
     CLASS(AppGridType),INTENT(OUT)              :: AppGrid
-    TYPE(MessageLoggerType),TARGET,INTENT(IN)   :: Logger
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT)   :: Logger
     CHARACTER(LEN=*),INTENT(IN)                 :: NodeFileName , ElementConfigFileName
     INTEGER,INTENT(OUT)                         :: iStat
 
@@ -899,7 +899,7 @@ CONTAINS
   ! -------------------------------------------------------------
   SUBROUTINE ReadProcessedAppGridData(AppGrid,Logger,InFile,iStat)
     CLASS(AppGridType),INTENT(OUT)              :: AppGrid
-    TYPE(MessageLoggerType),TARGET,INTENT(IN)   :: Logger
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT)   :: Logger
     TYPE(GenericFileType)                        :: InFile
     INTEGER,INTENT(OUT)                         :: iStat
 
@@ -1230,7 +1230,7 @@ CONTAINS
     REAL(8),INTENT(IN)                          :: X(:),Y(:)
     INTEGER,INTENT(IN)                          :: NVertex(:),Vertex_IDs(:,:),NodeID(:),ElemID(:),iElemSubregionIDs(:),iSubregionIDs(:)
     CHARACTER(LEN=*),INTENT(IN)                 :: cSubregionNames(:)
-    TYPE(MessageLoggerType),TARGET,INTENT(IN)   :: Logger
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT)   :: Logger
     TYPE(AppGridType),INTENT(OUT)               :: AppGrid
     INTEGER,INTENT(OUT)                         :: iStat
     

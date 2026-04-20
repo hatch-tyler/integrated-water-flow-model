@@ -138,7 +138,7 @@ CONTAINS
   ! --- SET MODULE LOGGER
   ! -------------------------------------------------------------
   SUBROUTINE ResultsExtract_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType),TARGET,INTENT(IN) :: Logger
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT) :: Logger
 
     ModuleLogger => Logger
 

@@ -149,7 +149,7 @@ CONTAINS
   ! -------------------------------------------------------------
   SUBROUTINE BudgetInputFile_SetLogger(BudgetFile,Logger)
     CLASS(BudgetInputFileType)              :: BudgetFile
-    TYPE(MessageLoggerType),TARGET,INTENT(IN) :: Logger
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT) :: Logger
 
     BudgetFile%Logger => Logger
 
@@ -171,7 +171,7 @@ CONTAINS
   ! -------------------------------------------------------------
   SUBROUTINE Create(BudgetFile,Logger,cFileName,OutputData,iStat)
     CLASS(BudgetInputFileType)                :: BudgetFile
-    TYPE(MessageLoggerType),TARGET,INTENT(IN) :: Logger
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT) :: Logger
     CHARACTER(LEN=*),INTENT(IN)               :: cFileName
     TYPE(BudgetHeaderType),INTENT(IN)         :: OutputData
     INTEGER,INTENT(OUT)                       :: iStat
@@ -216,7 +216,7 @@ CONTAINS
   ! -------------------------------------------------------------
   SUBROUTINE Open(BudgetFile,Logger,cFileName,iStat)
     CLASS(BudgetInputFileType)                :: BudgetFile
-    TYPE(MessageLoggerType),TARGET,INTENT(IN) :: Logger
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT) :: Logger
     CHARACTER(LEN=*),INTENT(IN)               :: cFileName
     INTEGER,INTENT(OUT)                       :: iStat
 
@@ -622,7 +622,7 @@ CONTAINS
 
 
   SUBROUTINE BudgetInputFile_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    TYPE(MessageLoggerType), TARGET, INTENT(INOUT) :: Logger
     ModuleLogger => Logger
   END SUBROUTINE BudgetInputFile_SetModuleLogger
 

@@ -40,7 +40,7 @@ CONTAINS
   ! =====================================================================
   SUBROUTINE New(This, Logger, cInsFile, iInsUnit, cPCFFile, iPCFUnit, iStat)
     CLASS(PESTOutputType), INTENT(INOUT) :: This
-    TYPE(MessageLoggerType),TARGET,INTENT(IN) :: Logger
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT) :: Logger
     CHARACTER(LEN=*),      INTENT(IN)    :: cInsFile, cPCFFile
     INTEGER,               INTENT(IN)    :: iInsUnit, iPCFUnit
     INTEGER,               INTENT(OUT)   :: iStat

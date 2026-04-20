@@ -103,7 +103,7 @@ CONTAINS
   ! -------------------------------------------------------------
   SUBROUTINE PairedData_(PairedData,Logger,NPoints,XPoint,YPoint,iStat)
     CLASS(PairedDataType),INTENT(OUT)           :: PairedData
-    TYPE(MessageLoggerType),TARGET,INTENT(IN)   :: Logger
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT)   :: Logger
     INTEGER,INTENT(IN)                          :: NPoints
     REAL(8),INTENT(IN)                          :: XPoint(:),YPoint(:)
     INTEGER,INTENT(OUT)                         :: iStat
@@ -138,7 +138,7 @@ CONTAINS
   ! -------------------------------------------------------------
   SUBROUTINE PairedData_ReadFromFile(PairedData,Logger,InFile,iStat)
     CLASS(PairedDataType),INTENT(OUT)           :: PairedData
-    TYPE(MessageLoggerType),TARGET,INTENT(IN)   :: Logger
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT)   :: Logger
     TYPE(GenericFileType)                        :: InFile
     INTEGER,INTENT(OUT)                         :: iStat
     

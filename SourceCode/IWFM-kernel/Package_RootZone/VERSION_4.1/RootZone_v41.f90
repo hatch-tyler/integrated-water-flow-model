@@ -266,7 +266,7 @@ CONTAINS
   ! --- SET MODULE LOGGER
   ! -------------------------------------------------------------
   SUBROUTINE RootZonev41_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    TYPE(MessageLoggerType), TARGET, INTENT(INOUT) :: Logger
     ModuleLogger => Logger
   END SUBROUTINE RootZonev41_SetModuleLogger
 
@@ -528,7 +528,7 @@ CONTAINS
     CALL CleanSpecialCharacters(cALine)
     IF (cALine .NE. '') THEN
         CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(cALine)),cWorkingDirectory,cAbsPathFileName)
-        CALL LWUseBudRawFile_New(IsForInquiry,cProjectNameForDSS,cAbsPathFileName,TimeStep,NTIME,iNRegion+1,RegionArea,cRegionNames,'land and water use budget',TRIM(cVersionFull),RootZone%LWUseBudRawFile,iStat)
+        CALL LWUseBudRawFile_New(IsForInquiry,cProjectNameForDSS,cAbsPathFileName,TimeStep,NTIME,iNRegion+1,RegionArea,cRegionNames,'land and water use budget',TRIM(cVersionFull),RootZone%LWUseBudRawFile,iStat,RootZone%Logger)
         IF (iStat .EQ. -1) RETURN
         RootZone%Flags%LWUseBudRawFile_Defined = .TRUE.      
     END IF
@@ -539,7 +539,7 @@ CONTAINS
     CALL CleanSpecialCharacters(cALine)
     IF (cALine .NE. '') THEN
         CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(cALine)),cWorkingDirectory,cAbsPathFileName)
-        CALL RootZoneBudRawFile_New(IsForInquiry,cProjectNameForDSS,cAbsPathFileName,TimeStep,NTIME,iNRegion+1,RegionArea,cRegionNames,'root zone budget',TRIM(cVersionFull),RootZone%RootZoneBudRawFile,iStat)
+        CALL RootZoneBudRawFile_New(IsForInquiry,cProjectNameForDSS,cAbsPathFileName,TimeStep,NTIME,iNRegion+1,RegionArea,cRegionNames,'root zone budget',TRIM(cVersionFull),RootZone%RootZoneBudRawFile,iStat,RootZone%Logger)
         IF (iStat .EQ. -1) RETURN
         RootZone%Flags%RootZoneBudRawFile_Defined = .TRUE.
     END IF
@@ -551,7 +551,7 @@ CONTAINS
         CALL CleanSpecialCharacters(cALine)
         IF (cALine .NE. '') THEN
             CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(cALine)),cWorkingDirectory,cAbsPathFileName)
-            CALL LUAreaScaleFactorOutFile_New(IsForInquiry,cAbsPathFileName,iElemIDs,RootZone%LUAreaScaleFactorOutFile,iStat)
+            CALL LUAreaScaleFactorOutFile_New(IsForInquiry,cAbsPathFileName,iElemIDs,RootZone%LUAreaScaleFactorOutFile,iStat,RootZone%Logger)
             IF (iStat .EQ. -1) RETURN
         END IF
     END IF
@@ -3141,7 +3141,7 @@ CONTAINS
         t1                        = rCurrentDateAndTimeJulian
                 
         !Calculate cell level land use areas
-        CALL ElementLU_InterpolateExtrapolate(AppGrid,cLUCodes,f_iMeasuredLUDataForSubregion,indxForNV,RootZone%Flags%lLakeElems,rCurrentDateAndTimeJulian,t1,t1,RegionLUAreas,ElemObsAreas1,ElemObsAreas1,ExIntAreas,iStat)
+        CALL ElementLU_InterpolateExtrapolate(AppGrid,cLUCodes,f_iMeasuredLUDataForSubregion,indxForNV,RootZone%Flags%lLakeElems,rCurrentDateAndTimeJulian,t1,t1,RegionLUAreas,ElemObsAreas1,ElemObsAreas1,ExIntAreas,iStat,RootZone%Logger)
         IF (iStat .EQ. -1) RETURN
         
         !Update cell level land use areas

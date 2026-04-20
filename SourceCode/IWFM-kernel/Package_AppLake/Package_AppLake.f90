@@ -41,7 +41,6 @@ MODULE Package_AppLake
   USE Class_BaseAppLake           , ONLY: BaseAppLakeType                  , &
                                           BaseAppLake_SetModuleLogger      , &
                                           f_iBudgetType_Lake
-  USE Class_Lake                  , ONLY: Lake_SetModuleLogger
   USE Class_AppLake_v40           , ONLY: AppLake_v40_Type                 , &
                                           AppLake_v40_SetModuleLogger
   USE Class_AppLake_v50           , ONLY: AppLake_v50_Type                 , &
@@ -69,7 +68,6 @@ MODULE Package_AppLake
   PUBLIC :: AppLakeType                         , &
             AppLake_SetModuleLogger            , &
             BaseAppLake_SetModuleLogger        , &
-            Lake_SetModuleLogger               , &
             AppLake_v40_SetModuleLogger        , &
             AppLake_v50_SetModuleLogger        , &
             f_iBudgetType_Lake
@@ -155,7 +153,7 @@ CONTAINS
   ! --- SET MODULE-LEVEL LOGGER
   ! -------------------------------------------------------------
   SUBROUTINE AppLake_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    TYPE(MessageLoggerType), TARGET, INTENT(INOUT) :: Logger
     ModuleLogger => Logger
   END SUBROUTINE AppLake_SetModuleLogger
 

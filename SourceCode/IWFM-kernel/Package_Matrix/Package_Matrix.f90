@@ -59,8 +59,7 @@ MODULE Package_Matrix
   ! -------------------------------------------------------------
   PRIVATE
   PUBLIC :: MatrixType           , &
-            ConnectivityListType , &
-            Matrix_SetModuleLogger
+            ConnectivityListType
   
   
   ! -------------------------------------------------------------
@@ -186,22 +185,12 @@ MODULE Package_Matrix
   ! -------------------------------------------------------------
   INTEGER,PARAMETER                   :: ModNameLen = 16
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'Package_Matrix::'
-  TYPE(MessageLoggerType),POINTER,PRIVATE :: ModuleLogger => NULL()
   
   
   
 CONTAINS
 
 
-  ! -------------------------------------------------------------
-  ! --- SET MODULE LOGGER
-  ! -------------------------------------------------------------
-  SUBROUTINE Matrix_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType),TARGET,INTENT(IN) :: Logger
-
-    ModuleLogger => Logger
-
-  END SUBROUTINE Matrix_SetModuleLogger
 
 
 
@@ -252,7 +241,7 @@ CONTAINS
   ! -------------------------------------------------------------
   SUBROUTINE SetLogger(Matrix,Logger)
     CLASS(MatrixType),INTENT(INOUT)               :: Matrix
-    TYPE(MessageLoggerType),TARGET,INTENT(IN) :: Logger
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT) :: Logger
 
     Matrix%Logger => Logger
 
@@ -673,7 +662,7 @@ CONTAINS
   ! -------------------------------------------------------------
   SUBROUTINE ReadPreprocessedData(Matrix,Logger,BinFile,iStat)
     CLASS(MatrixType)                         :: Matrix
-    TYPE(MessageLoggerType),TARGET,INTENT(IN) :: Logger
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT) :: Logger
     TYPE(GenericFileType)                     :: BinFile
     INTEGER,INTENT(OUT)                       :: iStat
 
@@ -1381,9 +1370,9 @@ CONTAINS
     INTEGER,INTENT(OUT) :: iStat
 
 !DIR$ IF (_OPENMP .NE. 0)
-    !$ CALL SOR_OMP(Matrix,NRow,MaxIter,Toler,Relax,NJD,JND,IndexDiag,RHS,COEFF,U,iStat)
+    !$ CALL SOR_OMP(Matrix%Logger,Matrix,NRow,MaxIter,Toler,Relax,NJD,JND,IndexDiag,RHS,COEFF,U,iStat)
 !DIR$ ELSE
-    CALL SOR_Sequential(NRow,MaxIter,Toler,Relax,NJD,JND,IndexDiag,RHS,COEFF,U,iStat)
+    CALL SOR_Sequential(Matrix%Logger,NRow,MaxIter,Toler,Relax,NJD,JND,IndexDiag,RHS,COEFF,U,iStat)
 !DIR$ END IF
 
   END SUBROUTINE SOR
@@ -1392,11 +1381,12 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- SOLVE THE MATRIX EQUATION USING SUCCESSIVE OVER-RELAXATION METHOD (SEQUENTIAL)
   ! -------------------------------------------------------------
-  SUBROUTINE SOR_Sequential(NRow,MaxIter,Toler,Relax,NJD,JND,IndexDiag,RHS,COEFF,U,iStat)
+  SUBROUTINE SOR_Sequential(Logger,NRow,MaxIter,Toler,Relax,NJD,JND,IndexDiag,RHS,COEFF,U,iStat)
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
     INTEGER,INTENT(IN)  :: NRow,MaxIter
-    REAL(8),INTENT(IN)  :: Toler,Relax  
-    INTEGER,INTENT(IN)  :: NJD(:),JND(:),IndexDiag(:)      
-    REAL(8),INTENT(IN)  :: COEFF(:),RHS(:)     
+    REAL(8),INTENT(IN)  :: Toler,Relax
+    INTEGER,INTENT(IN)  :: NJD(:),JND(:),IndexDiag(:)
+    REAL(8),INTENT(IN)  :: COEFF(:),RHS(:)
     REAL(8)             :: U(:)
     INTEGER,INTENT(OUT) :: iStat
     
@@ -1453,7 +1443,7 @@ CONTAINS
             WRITE (MessageArray(3), '(A,I8)')   'Iteration =', Iter
             WRITE (MessageArray(4), '(A,I8)')   'Variable  =', NODEMAX
             WRITE (MessageArray(5),'(A,E12.3)') 'Difference=', ADIFFMAX
-            CALL ModuleLogger%SetLastMessage(MessageArray(1:5),f_iFatal,ThisProcedure)
+            CALL Logger%SetLastMessage(MessageArray(1:5),f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -1465,8 +1455,9 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- SOLVE THE MATRIX EQUATION USING SUCCESSIVE OVER-RELAXATION METHOD (PARALLELL)
   ! -------------------------------------------------------------
-  SUBROUTINE SOR_OMP(Matrix,NRow,MaxIter,Toler,Relax,NJD,JND,IndexDiag,RHS,COEFF,U,iStat)
+  SUBROUTINE SOR_OMP(Logger,Matrix,NRow,MaxIter,Toler,Relax,NJD,JND,IndexDiag,RHS,COEFF,U,iStat)
     !$ USE OMP_LIB
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
     TYPE(MatrixType)    :: Matrix
     INTEGER,INTENT(IN)  :: NRow,MaxIter
     REAL(8),INTENT(IN)  :: Toler,Relax
@@ -1553,7 +1544,7 @@ CONTAINS
             WRITE (MessageArray(3), '(A,I8)')   'Iteration =', Iter
             WRITE (MessageArray(4), '(A,I8)')   'Variable  =', NODEMAX
             WRITE (MessageArray(5),'(A,E12.3)') 'Difference=', ADIFFMAX
-            CALL ModuleLogger%SetLastMessage(MessageArray(1:5),f_iFatal,ThisProcedure)
+            CALL Logger%SetLastMessage(MessageArray(1:5),f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF

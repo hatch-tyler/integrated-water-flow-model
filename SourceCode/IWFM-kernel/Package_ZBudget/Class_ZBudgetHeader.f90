@@ -120,7 +120,7 @@ CONTAINS
   ! -------------------------------------------------------------
   SUBROUTINE ReadFromFile(Header,Logger,SystemData,InFile,iStat)
     CLASS(ZBudgetHeaderType)                  :: Header
-    TYPE(MessageLoggerType),TARGET,INTENT(IN) :: Logger
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT) :: Logger
     TYPE(SystemDataType),INTENT(IN)           :: SystemData
     TYPE(GenericFileType)                     :: InFile
     INTEGER,INTENT(OUT)                       :: iStat

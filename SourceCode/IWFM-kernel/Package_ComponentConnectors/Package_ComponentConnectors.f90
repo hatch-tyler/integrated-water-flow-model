@@ -35,8 +35,7 @@ MODULE Package_ComponentConnectors
                                           Supply_SetIrigFracsRead                 , &
                                           Supply_SetSupplySpecs                   , &
                                           Supply_CheckSupplyDestinationConnection , &
-                                          Supply_ResetIrigFracs                   , &
-                                          SupplyDest_SetModuleLogger
+                                          Supply_ResetIrigFracs
   IMPLICIT NONE
   
   

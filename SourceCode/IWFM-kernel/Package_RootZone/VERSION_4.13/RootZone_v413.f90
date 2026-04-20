@@ -73,7 +73,6 @@ MODULE RootZone_v413
   ! -------------------------------------------------------------
   PRIVATE
   PUBLIC :: RootZone_v413_Type
-  PUBLIC :: RootZonev413_SetModuleLogger
   
   
   ! -------------------------------------------------------------
@@ -101,21 +100,10 @@ MODULE RootZone_v413
   ! -------------------------------------------------------------
   INTEGER,PARAMETER                   :: ModNameLen = 15
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'RootZone_v413::'
-  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
-  
 
-  
-  
+
+
 CONTAINS
-
-
-  ! -------------------------------------------------------------
-  ! --- SET MODULE LOGGER
-  ! -------------------------------------------------------------
-  SUBROUTINE RootZonev413_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
-    ModuleLogger => Logger
-  END SUBROUTINE RootZonev413_SetModuleLogger
 
 
 ! ******************************************************************
@@ -160,9 +148,6 @@ CONTAINS
     PROCEDURE(AgLWUseBudRawFile_New),POINTER    :: pAgLWUseBudRawFile_New
     PROCEDURE(AgRootZoneBudRawFile_New),POINTER :: pPondedAgRootZoneBudRawFile_New,pNonPondedAgRootZoneBudRawFile_New
     
-    !Set Logger
-    RootZone%Logger => ModuleLogger
-
     !Initialize
     iStat = 0
 
@@ -466,7 +451,7 @@ CONTAINS
     CALL CleanSpecialCharacters(cALine)
     IF (cALine .NE. '') THEN
         CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(cALine)),cWorkingDirectory,cAbsPathFileName)
-        CALL RootZone%LWUseBudRawFile_New(IsForInquiry,cProjectNameForDSS,cAbsPathFileName,TimeStep,NTIME,iNRegion+1,rRegionArea,cRegionNames,'land and water use budget',TRIM(cVersionFull),RootZone%LWUseBudRawFile,iStat)
+        CALL RootZone%LWUseBudRawFile_New(IsForInquiry,cProjectNameForDSS,cAbsPathFileName,TimeStep,NTIME,iNRegion+1,rRegionArea,cRegionNames,'land and water use budget',TRIM(cVersionFull),RootZone%LWUseBudRawFile,iStat,RootZone%Logger)
         IF (iStat .EQ. -1) RETURN
         RootZone%Flags%LWUseBudRawFile_Defined = .TRUE.      
     END IF
@@ -477,7 +462,7 @@ CONTAINS
     CALL CleanSpecialCharacters(cALine)
     IF (cALine .NE. '') THEN
         CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(cALine)),cWorkingDirectory,cAbsPathFileName)
-        CALL RootZone%RootZoneBudRawFile_New(IsForInquiry,cProjectNameForDSS,cAbsPathFileName,TimeStep,NTIME,iNRegion+1,rRegionArea,cRegionNames,'root zone budget',TRIM(cVersionFull),RootZone%RootZoneBudRawFile,iStat)
+        CALL RootZone%RootZoneBudRawFile_New(IsForInquiry,cProjectNameForDSS,cAbsPathFileName,TimeStep,NTIME,iNRegion+1,rRegionArea,cRegionNames,'root zone budget',TRIM(cVersionFull),RootZone%RootZoneBudRawFile,iStat,RootZone%Logger)
         IF (iStat .EQ. -1) RETURN
         RootZone%Flags%RootZoneBudRawFile_Defined = .TRUE.
     END IF
@@ -511,7 +496,7 @@ CONTAINS
         CALL CleanSpecialCharacters(cALine)
         IF (cALine .NE. '') THEN
             CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(cALine)),cWorkingDirectory,cAbsPathFileName)
-            CALL LUAreaScaleFactorOutFile_New(IsForInquiry,cAbsPathFileName,iElemIDs,RootZone%LUAreaScaleFactorOutFile,iStat)
+            CALL LUAreaScaleFactorOutFile_New(IsForInquiry,cAbsPathFileName,iElemIDs,RootZone%LUAreaScaleFactorOutFile,iStat,RootZone%Logger)
             IF (iStat .EQ. -1) RETURN
         END IF
     END IF
@@ -643,7 +628,7 @@ CONTAINS
     END IF
     
     !Check if time series data column pointers are referring to existing data columns
-    CALL CheckTSDataPointers(RootZone,iElemIDs,Precip,ET,iStat)
+    CALL CheckTSDataPointers(RootZone,iElemIDs,Precip,ET,iStat,RootZone%Logger)
     IF (iStat .EQ. -1) RETURN
     
     !Close file
@@ -1186,12 +1171,13 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- CHECK POINTERS TO TIME SERIES DATA COLUMNS
   ! -------------------------------------------------------------
-  SUBROUTINE CheckTSDataPointers(RootZone,iElemIDs,Precip,ET,iStat)
-    TYPE(RootZone_v413_Type),INTENT(IN) :: RootZone
-    INTEGER,INTENT(IN)                  :: iElemIDs(:)
-    TYPE(PrecipitationType),INTENT(IN)  :: Precip
-    TYPE(ETType),INTENT(IN)             :: ET
-    INTEGER,INTENT(OUT)                 :: iStat
+  SUBROUTINE CheckTSDataPointers(RootZone,iElemIDs,Precip,ET,iStat,Logger)
+    TYPE(RootZone_v413_Type),INTENT(IN)        :: RootZone
+    INTEGER,INTENT(IN)                         :: iElemIDs(:)
+    TYPE(PrecipitationType),INTENT(IN)         :: Precip
+    TYPE(ETType),INTENT(IN)                    :: ET
+    INTEGER,INTENT(OUT)                        :: iStat
+    TYPE(MessageLoggerType),OPTIONAL,INTENT(INOUT) :: Logger
     
     !Local variables
     CHARACTER(LEN=ModNameLen+19) :: ThisProcedure = ModName // 'CheckTSDataPointers'
@@ -1211,10 +1197,8 @@ CONTAINS
                 MessageArray(1) = 'Crop coefficient data column(s) referenced by non-ponded crop data file for'
                 MessageArray(2) = 'element '//TRIM(IntToText(ID))//' is greater than the columns in the'
                 MessageArray(3) = 'Crop/Habitat Coeffcient Data File!'
-                IF (ASSOCIATED(ModuleLogger)) THEN
-                    CALL ModuleLogger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
-                ELSE
-                    CALL ModuleLogger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+                IF (PRESENT(Logger)) THEN
+                    CALL Logger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
                 END IF
                 iStat = -1
                 RETURN
@@ -1229,10 +1213,8 @@ CONTAINS
                 MessageArray(1) = 'Crop coefficient data column(s) referenced by ponded crop data file for'
                 MessageArray(2) = 'element '//TRIM(IntToText(ID))//' is greater than the columns in the'
                 MessageArray(3) = 'Crop/Habitat Coeffcient Data File!'
-                IF (ASSOCIATED(ModuleLogger)) THEN
-                    CALL ModuleLogger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
-                ELSE
-                    CALL ModuleLogger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+                IF (PRESENT(Logger)) THEN
+                    CALL Logger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
                 END IF
                 iStat = -1
                 RETURN
@@ -1247,10 +1229,8 @@ CONTAINS
                 MessageArray(1) = 'Crop coefficient data column(s) referenced by urban data file for'
                 MessageArray(2) = 'element '//TRIM(IntToText(ID))//' is greater than the columns in the'
                 MessageArray(3) = 'Crop/Habitat Coeffcient Data File!'
-                IF (ASSOCIATED(ModuleLogger)) THEN
-                    CALL ModuleLogger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
-                ELSE
-                    CALL ModuleLogger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+                IF (PRESENT(Logger)) THEN
+                    CALL Logger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
                 END IF
                 iStat = -1
                 RETURN
@@ -1265,10 +1245,8 @@ CONTAINS
                 MessageArray(1) = 'Crop coefficient data column(s) referenced by native&riparain vegetation data file for'
                 MessageArray(2) = 'element '//TRIM(IntToText(ID))//' is greater than the columns in the'
                 MessageArray(3) = 'Crop/Habitat Coeffcient Data File!'
-                IF (ASSOCIATED(ModuleLogger)) THEN
-                    CALL ModuleLogger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
-                ELSE
-                    CALL ModuleLogger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+                IF (PRESENT(Logger)) THEN
+                    CALL Logger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
                 END IF
                 iStat = -1
                 RETURN

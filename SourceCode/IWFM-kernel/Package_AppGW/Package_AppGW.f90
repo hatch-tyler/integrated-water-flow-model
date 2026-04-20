@@ -23,16 +23,13 @@
 MODULE Package_AppGW
   USE MessageLogger        , ONLY: MessageLoggerType
   USE Package_AppTileDrain , ONLY: f_iTileDrain                      , &
-                                   f_iSubIrig                        , &
-                                   AppTileDrain_SetModuleLogger
+                                   f_iSubIrig
   USE Package_AppPumping   , ONLY: f_iPump_Well                      , &
-                                   f_iPump_ElemPump                  , &
-                                   AppPumping_SetModuleLogger
+                                   f_iPump_ElemPump
   USE Class_AppSubsidence_v40, ONLY: AppSubsidence_v40_SetModuleLogger
   USE Class_AppSubsidence_v50, ONLY: AppSubsidence_v50_SetModuleLogger
   USE Class_AppGW   ! Re-export all public entities (AppGWType, constants, etc.)
   USE GWHydrograph         , ONLY: GWHydrograph_SetModuleLogger
-  USE Class_AppBC          , ONLY: AppBC_SetModuleLogger
   USE Class_LayerBC        , ONLY: LayerBC_SetModuleLogger
   USE Class_Well           , ONLY: Well_SetModuleLogger
   USE Class_ElementPumping , ONLY: ElemPump_SetModuleLogger
@@ -48,7 +45,7 @@ CONTAINS
   ! --- PROPAGATE LOGGER TO ALL SUB-MODULES
   ! -------------------------------------------------------------
   SUBROUTINE AppGW_SetAllModuleLoggers(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    TYPE(MessageLoggerType), TARGET, INTENT(INOUT) :: Logger
 
     !Main orchestrator
     CALL AppGW_SetModuleLogger(Logger)
@@ -57,16 +54,11 @@ CONTAINS
     CALL GWHydrograph_SetModuleLogger(Logger)
 
     !Boundary conditions
-    CALL AppBC_SetModuleLogger(Logger)
     CALL LayerBC_SetModuleLogger(Logger)
 
     !Pumping
-    CALL AppPumping_SetModuleLogger(Logger)
     CALL Well_SetModuleLogger(Logger)
     CALL ElemPump_SetModuleLogger(Logger)
-
-    !Tile drain
-    CALL AppTileDrain_SetModuleLogger(Logger)
 
     !Subsidence
     CALL AppSubsidence_v40_SetModuleLogger(Logger)

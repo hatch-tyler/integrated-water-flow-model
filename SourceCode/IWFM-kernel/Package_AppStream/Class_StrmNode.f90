@@ -90,7 +90,7 @@ CONTAINS
   SUBROUTINE StrmNode_ReadPreprocessedData(NNodes,InFile,Logger,Nodes,iStat)
     INTEGER,INTENT(IN)                       :: NNodes
     TYPE(GenericFileType)                    :: InFile
-    TYPE(MessageLoggerType),TARGET,INTENT(IN) :: Logger
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT) :: Logger
     TYPE(StrmNodeType)                       :: Nodes(NNodes)
     INTEGER,INTENT(OUT)                      :: iStat
     

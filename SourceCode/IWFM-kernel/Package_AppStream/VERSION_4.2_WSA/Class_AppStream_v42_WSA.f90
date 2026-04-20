@@ -142,7 +142,7 @@ CONTAINS
   ! --- SET MODULE-LEVEL LOGGER
   ! -------------------------------------------------------------
   SUBROUTINE AppStream_v42_WSA_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    TYPE(MessageLoggerType), TARGET, INTENT(INOUT) :: Logger
     ModuleLogger => Logger
   END SUBROUTINE AppStream_v42_WSA_SetModuleLogger
 
@@ -176,10 +176,13 @@ CONTAINS
     
     !Local variables
     CHARACTER(LEN=ModNameLen+16) :: ThisProcedure = ModName // 'SetAllComponents'
-    
+
+    !Set Logger (INTENT(OUT) resets pointer, restore from module-level)
+    AppStream%Logger => ModuleLogger
+
     !Initialize
     iStat = 0
-    
+
     !Echo progress
     CALL ModuleLogger%EchoProgress('Instantiating streams')
     

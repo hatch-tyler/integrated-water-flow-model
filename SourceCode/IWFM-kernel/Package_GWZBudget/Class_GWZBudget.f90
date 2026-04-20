@@ -289,7 +289,7 @@ CONTAINS
   ! -------------------------------------------------------------
   SUBROUTINE Create(GWZBudget,Logger,IsForInquiry,cZBudgetOutFileName,AppGrid,Stratigraphy,AppGW,AppStream,AppLake,AppSWShed,StrmGWConnector,TimeStep,NTIME,lDeepPerc,lRootZone_Defined,iStat)
     CLASS(GWZBudgetType)                       :: GWZBudget
-    TYPE(MessageLoggerType),TARGET,INTENT(IN)  :: Logger
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT)  :: Logger
     LOGICAL,INTENT(IN)                         :: IsForInquiry
     CHARACTER(LEN=*),INTENT(IN)            :: cZBudgetOutFileName
     TYPE(AppGridType),INTENT(IN)           :: AppGrid
@@ -1830,7 +1830,7 @@ CONTAINS
 
 
   SUBROUTINE GWZBudget_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    TYPE(MessageLoggerType), TARGET, INTENT(INOUT) :: Logger
     ModuleLogger => Logger
   END SUBROUTINE GWZBudget_SetModuleLogger
 

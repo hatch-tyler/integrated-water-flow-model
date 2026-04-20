@@ -141,7 +141,7 @@ CONTAINS
   ! -------------------------------------------------------------
   SUBROUTINE SetLogger(SupplyAdjustment,Logger)
     CLASS(SupplyAdjustmentType),INTENT(INOUT) :: SupplyAdjustment
-    TYPE(MessageLoggerType),TARGET,INTENT(IN) :: Logger
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT) :: Logger
 
     SupplyAdjustment%Logger => Logger
 

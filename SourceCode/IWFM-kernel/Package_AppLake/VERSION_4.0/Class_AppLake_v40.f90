@@ -123,7 +123,7 @@ CONTAINS
   ! --- SET MODULE-LEVEL LOGGER
   ! -------------------------------------------------------------
   SUBROUTINE AppLake_v40_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    TYPE(MessageLoggerType), TARGET, INTENT(INOUT) :: Logger
     ModuleLogger => Logger
   END SUBROUTINE AppLake_v40_SetModuleLogger
 
@@ -491,7 +491,7 @@ CONTAINS
     END IF
 
     !Initial lake elevations
-    CALL ReadInitialLakeElevs(LakeDataFile,AppLake%Lakes,iLakeIDs,iStat)
+    CALL ReadInitialLakeElevs(AppLake%Logger,LakeDataFile,AppLake%Lakes,iLakeIDs,iStat)
     
     !Check that TS data columns that are pointed to are legit
     CALL AppLake%CheckTSDataPointers(Precip,ET,iStat)

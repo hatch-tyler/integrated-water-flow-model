@@ -84,8 +84,7 @@ MODULE Class_AppDiverBypass
             f_iNDiverDetailColumns     , &
             f_iDiverRecvLoss           , &
             f_iBypassRecvLoss          , &
-            f_iAllRecvLoss             , &
-            AppDiverBypass_SetModuleLogger
+            f_iAllRecvLoss
      
 
 
@@ -171,11 +170,6 @@ MODULE Class_AppDiverBypass
   ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
-  ! -------------------------------------------------------------
-  ! --- MODULE-LEVEL LOGGER
-  ! -------------------------------------------------------------
-  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
-
   INTEGER,PARAMETER                   :: ModNameLen        = 22
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName           = 'Class_AppDiverBypass::'
   INTEGER,PARAMETER                   :: f_iDiverRecvLoss  = 1 , &
@@ -196,14 +190,6 @@ MODULE Class_AppDiverBypass
 
 CONTAINS
 
-
-  ! -------------------------------------------------------------
-  ! --- SET MODULE-LEVEL LOGGER
-  ! -------------------------------------------------------------
-  SUBROUTINE AppDiverBypass_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
-    ModuleLogger => Logger
-  END SUBROUTINE AppDiverBypass_SetModuleLogger
 
 
 
@@ -265,7 +251,7 @@ CONTAINS
     
     !Instantiate the diversions data file
     IF (.NOT. IsForInquiry) THEN
-        CALL DiverFile_New(DiverFileName,cWorkingDirectory,TimeStep,AppDiverBypass%DiverFile,iStat)
+        CALL DiverFile_New(DiverFileName,cWorkingDirectory,TimeStep,AppDiverBypass%DiverFile,AppDiverBypass%Logger,iStat)
         IF (iStat .EQ. -1) RETURN
     END IF
     
@@ -356,11 +342,12 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- INITIALIZE DIVERSIONS TIME SERIES DATA FILE
   ! -------------------------------------------------------------
-  SUBROUTINE DiverFile_New(FileName,cWorkingDirectory,TimeStep,DiverDataFile,iStat)
-    CHARACTER(LEN=*),INTENT(IN)   :: FileName,cWorkingDirectory
-    TYPE(TimeStepType),INTENT(IN) :: TimeStep
-    TYPE(DiverFileType)           :: DiverDataFile
-    INTEGER,INTENT(OUT)           :: iStat
+  SUBROUTINE DiverFile_New(FileName,cWorkingDirectory,TimeStep,DiverDataFile,Logger,iStat)
+    CHARACTER(LEN=*),INTENT(IN)              :: FileName,cWorkingDirectory
+    TYPE(TimeStepType),INTENT(IN)            :: TimeStep
+    TYPE(DiverFileType)                      :: DiverDataFile
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
+    INTEGER,INTENT(OUT)                      :: iStat
 
     !Local variables
     REAL(8) :: Factor(1)
@@ -373,10 +360,10 @@ CONTAINS
     IF (FileName .EQ. '') RETURN
     
     !Print progress
-    IF (ASSOCIATED(ModuleLogger)) THEN
-        CALL ModuleLogger%EchoProgress('Instantiating diversions data file')
+    IF (ASSOCIATED(Logger)) THEN
+        CALL Logger%EchoProgress('Instantiating diversions data file')
     ELSE
-        CALL ModuleLogger%EchoProgress('Instantiating diversions data file')
+        CALL Logger%EchoProgress('Instantiating diversions data file')
     END IF
 
     !Instantiate

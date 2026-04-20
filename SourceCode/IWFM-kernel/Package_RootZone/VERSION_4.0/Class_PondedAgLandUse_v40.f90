@@ -186,7 +186,7 @@ CONTAINS
   ! --- SET MODULE-LEVEL LOGGER
   ! -------------------------------------------------------------
   SUBROUTINE PondedAgv40_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    TYPE(MessageLoggerType), TARGET, INTENT(INOUT) :: Logger
     ModuleLogger => Logger
   END SUBROUTINE PondedAgv40_SetModuleLogger
 
@@ -363,7 +363,7 @@ CONTAINS
     IF (NBudgetCrops .GT. 0) THEN
       IF (ALine .NE. '') THEN
           CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(ALine)),cWorkingDirectory,cAbsPathFileName)
-          CALL AgLWUseBudRawFile_New(IsForInquiry,cProjectNameForDSS,cAbsPathFileName,TimeStep,NTimeSteps,NBudgetRegions,RegionAreas,cRegionNames,'land and water use budget for specific ponded crops',cVersion,PondLand%LWUseBudRawFile,iStat)
+          CALL AgLWUseBudRawFile_New(IsForInquiry,cProjectNameForDSS,cAbsPathFileName,TimeStep,NTimeSteps,NBudgetRegions,RegionAreas,cRegionNames,'land and water use budget for specific ponded crops',cVersion,PondLand%LWUseBudRawFile,iStat,Logger)
           IF (iStat .EQ. -1) RETURN
           PondLand%lLWUseBudRawFile_Defined = .TRUE.
       END IF
@@ -374,7 +374,7 @@ CONTAINS
     IF (NBudgetCrops .GT. 0) THEN
       IF (ALine .NE. '') THEN
           CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(ALine)),cWorkingDirectory,cAbsPathFileName)
-          CALL AgRootZoneBudRawFile_New(IsForInquiry,cProjectNameForDSS,cAbsPathFileName,TimeStep,NTimeSteps,NBudgetRegions,RegionAreas,cRegionNames,'root zone budget for specific ponded crops',cVersion,PondLand%RootZoneBudRawFile,iStat)
+          CALL AgRootZoneBudRawFile_New(IsForInquiry,cProjectNameForDSS,cAbsPathFileName,TimeStep,NTimeSteps,NBudgetRegions,RegionAreas,cRegionNames,'root zone budget for specific ponded crops',cVersion,PondLand%RootZoneBudRawFile,iStat,Logger)
           IF (iStat .EQ. -1) RETURN
           PondLand%lRootZoneBudRawFile_Defined = .TRUE.
       END IF

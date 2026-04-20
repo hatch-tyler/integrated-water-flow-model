@@ -405,9 +405,9 @@ CONTAINS
         IF (ALine .NE. '') THEN
             CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(ALine)),cWorkingDirectory,cAbsPathFileName)
             IF (PRESENT(pAgLWUseBudRawFile_New)) THEN
-                CALL pAgLWUseBudRawFile_New(IsForInquiry,cProjectNameForDSS,cAbsPathFileName,TimeStep,NTimeSteps,NBudgetRegions,RegionAreas,cRegionNames,'land and water use budget for specific non-ponded crops',cVersion,AgLand%LWUseBudRawFile,iStat)
+                CALL pAgLWUseBudRawFile_New(IsForInquiry,cProjectNameForDSS,cAbsPathFileName,TimeStep,NTimeSteps,NBudgetRegions,RegionAreas,cRegionNames,'land and water use budget for specific non-ponded crops',cVersion,AgLand%LWUseBudRawFile,iStat,Logger)
             ELSE
-                CALL AgLWUseBudRawFile_New(IsForInquiry,cProjectNameForDSS,cAbsPathFileName,TimeStep,NTimeSteps,NBudgetRegions,RegionAreas,cRegionNames,'land and water use budget for specific non-ponded crops',cVersion,AgLand%LWUseBudRawFile,iStat)
+                CALL AgLWUseBudRawFile_New(IsForInquiry,cProjectNameForDSS,cAbsPathFileName,TimeStep,NTimeSteps,NBudgetRegions,RegionAreas,cRegionNames,'land and water use budget for specific non-ponded crops',cVersion,AgLand%LWUseBudRawFile,iStat,Logger)
             END IF
             IF (iStat .EQ. -1) RETURN
             AgLand%lLWUseBudRawFile_Defined = .TRUE.
@@ -420,9 +420,9 @@ CONTAINS
         IF (ALine .NE. '') THEN
             CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(ALine)),cWorkingDirectory,cAbsPathFileName)
             IF (PRESENT(pAgRootZoneBudRawFile_New)) THEN
-                CALL pAgRootZoneBudRawFile_New(IsForInquiry,cProjectNameForDSS,cAbsPathFileName,TimeStep,NTimeSteps,NBudgetRegions,RegionAreas,cRegionNames,'root zone budget for specific non-ponded crops',cVersion,AgLand%RootZoneBudRawFile,iStat)
+                CALL pAgRootZoneBudRawFile_New(IsForInquiry,cProjectNameForDSS,cAbsPathFileName,TimeStep,NTimeSteps,NBudgetRegions,RegionAreas,cRegionNames,'root zone budget for specific non-ponded crops',cVersion,AgLand%RootZoneBudRawFile,iStat,Logger)
             ELSE
-                CALL AgRootZoneBudRawFile_New(IsForInquiry,cProjectNameForDSS,cAbsPathFileName,TimeStep,NTimeSteps,NBudgetRegions,RegionAreas,cRegionNames,'root zone budget for specific non-ponded crops',cVersion,AgLand%RootZoneBudRawFile,iStat)
+                CALL AgRootZoneBudRawFile_New(IsForInquiry,cProjectNameForDSS,cAbsPathFileName,TimeStep,NTimeSteps,NBudgetRegions,RegionAreas,cRegionNames,'root zone budget for specific non-ponded crops',cVersion,AgLand%RootZoneBudRawFile,iStat,Logger)
             END IF
             IF (iStat .EQ. -1) RETURN
             AgLand%lRootZoneBudRawFile_Defined = .TRUE.

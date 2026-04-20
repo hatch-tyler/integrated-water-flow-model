@@ -56,7 +56,6 @@ MODULE Package_AppStream
   USE StrmHydrograph              , ONLY: iHydFlow
   USE Class_BaseAppStream         , ONLY: BaseAppStreamType                                , &
                                           RoutingOrderedReachIndex_To_IDOrderedReachIndex  , &
-                                          BaseAppStream_SetModuleLogger                    , &
                                           f_iBudgetType_StrmNode                           , &
                                           f_iBudgetType_StrmReach                          , &
                                           f_iBudgetType_DiverDetail
@@ -74,8 +73,7 @@ MODULE Package_AppStream
                                           AppStream_v50_SetModuleLogger
   USE Class_AppDiverBypass        , ONLY: f_iDiverRecvLoss                                 , &
                                           f_iBypassRecvLoss                                , &
-                                          f_iAllRecvLoss                                   , &
-                                          AppDiverBypass_SetModuleLogger
+                                          f_iAllRecvLoss
   USE Class_Diversion             , ONLY: DiversionType                                    , &
                                           DeliveryType                                     , &
                                           Diversion_SetModuleLogger
@@ -83,9 +81,7 @@ MODULE Package_AppStream
   USE Package_Matrix              , ONLY: MatrixType                                       , &
                                           ConnectivityListType
   USE Package_Budget              , ONLY: BudgetType
-  USE Class_StrmReach             , ONLY: StrmReach_SetModuleLogger
   USE Class_Bypass                , ONLY: Bypass_SetModuleLogger
-  USE Class_LossDestination       , ONLY: LossDestination_SetModuleLogger
   IMPLICIT NONE
   
   
@@ -280,20 +276,16 @@ CONTAINS
   ! --- SET MODULE-LEVEL LOGGER AND PROPAGATE TO SUB-MODULES
   ! -------------------------------------------------------------
   SUBROUTINE AppStream_SetAllModuleLoggers(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    TYPE(MessageLoggerType), TARGET, INTENT(INOUT) :: Logger
     ModuleLogger => Logger
-    CALL BaseAppStream_SetModuleLogger(Logger)
     CALL AppStream_v40_SetModuleLogger(Logger)
     CALL AppStream_v41_SetModuleLogger(Logger)
     CALL AppStream_v42_SetModuleLogger(Logger)
     CALL AppStream_v42_WSA_SetModuleLogger(Logger)
     CALL AppStream_v421_SetModuleLogger(Logger)
     CALL AppStream_v50_SetModuleLogger(Logger)
-    CALL AppDiverBypass_SetModuleLogger(Logger)
     CALL Diversion_SetModuleLogger(Logger)
     CALL Bypass_SetModuleLogger(Logger)
-    CALL StrmReach_SetModuleLogger(Logger)
-    CALL LossDestination_SetModuleLogger(Logger)
   END SUBROUTINE AppStream_SetAllModuleLoggers
 
 
@@ -349,12 +341,14 @@ CONTAINS
     SELECT CASE (TRIM(cVersionLocal))
         CASE ('4.0')
             ALLOCATE(AppStream_v40_Type :: AppStream%Me)
+            AppStream%Me%Logger => AppStream%Logger
             CALL AppStream%Me%New(cFileName,AppGrid,Stratigraphy,lRoutedStreams,StrmGWConnector,StrmLakeConnector,iStat)
             IF (iStat .EQ. -1) RETURN
             AppStream%iComponentVersion = 40
             AppStream%lDefined          = .TRUE.
         CASE ('4.1')
             ALLOCATE(AppStream_v41_Type :: AppStream%Me)
+            AppStream%Me%Logger => AppStream%Logger
             CALL AppStream%Me%New(cFileName,AppGrid,Stratigraphy,lRoutedStreams,StrmGWConnector,StrmLakeConnector,iStat)
             IF (iStat .EQ. -1) RETURN
             AppStream%iComponentVersion = 41
@@ -365,18 +359,21 @@ CONTAINS
             ELSE
                 ALLOCATE(AppStream_v42_Type :: AppStream%Me)
             END IF
+            AppStream%Me%Logger => AppStream%Logger
             CALL AppStream%Me%New(cFileName,AppGrid,Stratigraphy,lRoutedStreams,StrmGWConnector,StrmLakeConnector,iStat)
             IF (iStat .EQ. -1) RETURN
             AppStream%iComponentVersion = 42
             AppStream%lDefined          = .TRUE.
         CASE ('4.21')
             ALLOCATE(AppStream_v421_Type :: AppStream%Me)
+            AppStream%Me%Logger => AppStream%Logger
             CALL AppStream%Me%New(cFileName,AppGrid,Stratigraphy,lRoutedStreams,StrmGWConnector,StrmLakeConnector,iStat)
             IF (iStat .EQ. -1) RETURN
             AppStream%iComponentVersion = 421
             AppStream%lDefined          = .TRUE.
         CASE ('5.0')
             ALLOCATE(AppStream_v50_Type :: AppStream%Me)
+            AppStream%Me%Logger => AppStream%Logger
             CALL AppStream%Me%New(cFileName,AppGrid,Stratigraphy,lRoutedStreams,StrmGWConnector,StrmLakeConnector,iStat)
             IF (iStat .EQ. -1) RETURN
             AppStream%iComponentVersion = 50
@@ -492,8 +489,8 @@ CONTAINS
 
     !Instantiate the dynamic component
     CALL DATE_AND_TIME(VALUES=iPerfStart)
-    CALL AppStream%Me%New(IsForInquiry,cFileName,cWorkingDirectory,IWFMKernelVersion%GetVersion(),TimeStep,NTIME,iLakeIDs,AppGrid,Stratigraphy,ETData,StrmLakeConnector,StrmGWConnector,iStat)
     IF (ALLOCATED(AppStream%Me)) AppStream%Me%Logger => AppStream%Logger
+    CALL AppStream%Me%New(IsForInquiry,cFileName,cWorkingDirectory,IWFMKernelVersion%GetVersion(),TimeStep,NTIME,iLakeIDs,AppGrid,Stratigraphy,ETData,StrmLakeConnector,StrmGWConnector,iStat)
     IF (f_lLogPerfMarkers) THEN
         CALL DATE_AND_TIME(VALUES=iPerfEnd)
         rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) &
@@ -536,12 +533,14 @@ CONTAINS
     SELECT CASE (iVersion)
         CASE (40)
             ALLOCATE(AppStream_v40_Type :: AppStream%Me)
+            AppStream%Me%Logger => AppStream%Logger
             CALL AppStream%Me%New(BinFile,iStat)
             IF (iStat .EQ. -1) RETURN
             AppStream%iComponentVersion = 40
             AppStream%lDefined          = .TRUE.
         CASE (41)
             ALLOCATE(AppStream_v41_Type :: AppStream%Me)
+            AppStream%Me%Logger => AppStream%Logger
             CALL AppStream%Me%New(BinFile,iStat)
             IF (iStat .EQ. -1) RETURN
             AppStream%iComponentVersion = 41
@@ -552,18 +551,21 @@ CONTAINS
             ELSE
                 ALLOCATE(AppStream_v42_Type :: AppStream%Me)
             END IF
+            AppStream%Me%Logger => AppStream%Logger
             CALL AppStream%Me%New(BinFile,iStat)
             IF (iStat .EQ. -1) RETURN
             AppStream%iComponentVersion = 42
             AppStream%lDefined          = .TRUE.
         CASE (421)
             ALLOCATE(AppStream_v421_Type :: AppStream%Me)
+            AppStream%Me%Logger => AppStream%Logger
             CALL AppStream%Me%New(BinFile,iStat)
             IF (iStat .EQ. -1) RETURN
             AppStream%iComponentVersion = 421
             AppStream%lDefined          = .TRUE.
         CASE (50)
             ALLOCATE(AppStream_v50_Type :: AppStream%Me)
+            AppStream%Me%Logger => AppStream%Logger
             CALL AppStream%Me%New(BinFile,iStat)
             IF (iStat .EQ. -1) RETURN
             AppStream%iComponentVersion = 50
@@ -573,7 +575,6 @@ CONTAINS
             iStat = -1
             RETURN
     END SELECT
-    IF (ALLOCATED(AppStream%Me)) AppStream%Me%Logger => AppStream%Logger
 
   END SUBROUTINE SetStaticComponentFromBinFile
   
@@ -625,12 +626,14 @@ CONTAINS
     SELECT CASE (iVersion)
         CASE (40)
             ALLOCATE(AppStream_v40_Type :: AppStream%Me)
+            AppStream%Me%Logger => AppStream%Logger
             CALL AppStream%Me%New(lForInquiry,cFileName,cSimWorkingDirectory,IWFMKernelVersion%GetVersion(),TimeStep,NTIME,iLakeIDs,AppGrid,Stratigraphy,ETData,BinFile,StrmLakeConnector,StrmGWConnector,iStat)
             IF (iStat .EQ. -1) RETURN
             AppStream%iComponentVersion = 40
             AppStream%lDefined          = .TRUE.
         CASE (41)
             ALLOCATE(AppStream_v41_Type :: AppStream%Me)
+            AppStream%Me%Logger => AppStream%Logger
             CALL AppStream%Me%New(lForInquiry,cFileName,cSimWorkingDirectory,IWFMKernelVersion%GetVersion(),TimeStep,NTIME,iLakeIDs,AppGrid,Stratigraphy,ETData,BinFile,StrmLakeConnector,StrmGWConnector,iStat)
             IF (iStat .EQ. -1) RETURN
             AppStream%iComponentVersion = 41
@@ -641,18 +644,21 @@ CONTAINS
             ELSE
                 ALLOCATE(AppStream_v42_Type :: AppStream%Me)
             END IF
+            AppStream%Me%Logger => AppStream%Logger
             CALL AppStream%Me%New(lForInquiry,cFileName,cSimWorkingDirectory,IWFMKernelVersion%GetVersion(),TimeStep,NTIME,iLakeIDs,AppGrid,Stratigraphy,ETData,BinFile,StrmLakeConnector,StrmGWConnector,iStat)
             IF (iStat .EQ. -1) RETURN
             AppStream%iComponentVersion = 42
             AppStream%lDefined          = .TRUE.
         CASE (421)
             ALLOCATE(AppStream_v421_Type :: AppStream%Me)
+            AppStream%Me%Logger => AppStream%Logger
             CALL AppStream%Me%New(lForInquiry,cFileName,cSimWorkingDirectory,IWFMKernelVersion%GetVersion(),TimeStep,NTIME,iLakeIDs,AppGrid,Stratigraphy,ETData,BinFile,StrmLakeConnector,StrmGWConnector,iStat)
             IF (iStat .EQ. -1) RETURN
             AppStream%iComponentVersion = 421
             AppStream%lDefined          = .TRUE.
         CASE (50)
             ALLOCATE(AppStream_v50_Type :: AppStream%Me)
+            AppStream%Me%Logger => AppStream%Logger
             CALL AppStream%Me%New(lForInquiry,cFileName,cSimWorkingDirectory,IWFMKernelVersion%GetVersion(),TimeStep,NTIME,iLakeIDs,AppGrid,Stratigraphy,ETData,BinFile,StrmLakeConnector,StrmGWConnector,iStat)
             IF (iStat .EQ. -1) RETURN
             AppStream%iComponentVersion = 50
@@ -662,7 +668,6 @@ CONTAINS
             iStat = -1
             RETURN
     END SELECT
-    IF (ALLOCATED(AppStream%Me)) AppStream%Me%Logger => AppStream%Logger
     IF (f_lLogPerfMarkers) THEN
         CALL DATE_AND_TIME(VALUES=iPerfEnd)
         rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) &
@@ -719,12 +724,14 @@ CONTAINS
     SELECT CASE (TRIM(cVersionPre))
         CASE ('4.0')
             ALLOCATE(AppStream_v40_Type :: AppStream%Me)
+            AppStream%Me%Logger => AppStream%Logger
             CALL AppStream%Me%New(lRoutedStreams,lForInquiry,cPPFileName,cSimFileName,cSimWorkingDirectory,IWFMKernelVersion%GetVersion(),AppGrid,Stratigraphy,ETData,TimeStep,NTIME,iLakeIDs,StrmLakeConnector,StrmGWConnector,iStat)
             IF (iStat .EQ. -1) RETURN
             AppStream%iComponentVersion = 40
             AppStream%lDefined          = .TRUE.
         CASE ('4.1')
             ALLOCATE(AppStream_v41_Type :: AppStream%Me)
+            AppStream%Me%Logger => AppStream%Logger
             CALL AppStream%Me%New(lRoutedStreams,lForInquiry,cPPFileName,cSimFileName,cSimWorkingDirectory,IWFMKernelVersion%GetVersion(),AppGrid,Stratigraphy,ETData,TimeStep,NTIME,iLakeIDs,StrmLakeConnector,StrmGWConnector,iStat)
             IF (iStat .EQ. -1) RETURN
             AppStream%iComponentVersion = 41
@@ -735,18 +742,21 @@ CONTAINS
             ELSE
                 ALLOCATE(AppStream_v42_Type :: AppStream%Me)
             END IF
+            AppStream%Me%Logger => AppStream%Logger
             CALL AppStream%Me%New(lRoutedStreams,lForInquiry,cPPFileName,cSimFileName,cSimWorkingDirectory,IWFMKernelVersion%GetVersion(),AppGrid,Stratigraphy,ETData,TimeStep,NTIME,iLakeIDs,StrmLakeConnector,StrmGWConnector,iStat)
             IF (iStat .EQ. -1) RETURN
             AppStream%iComponentVersion = 42
             AppStream%lDefined          = .TRUE.
         CASE ('4.21')
             ALLOCATE(AppStream_v421_Type :: AppStream%Me)
+            AppStream%Me%Logger => AppStream%Logger
             CALL AppStream%Me%New(lRoutedStreams,lForInquiry,cPPFileName,cSimFileName,cSimWorkingDirectory,IWFMKernelVersion%GetVersion(),AppGrid,Stratigraphy,ETData,TimeStep,NTIME,iLakeIDs,StrmLakeConnector,StrmGWConnector,iStat)
             IF (iStat .EQ. -1) RETURN
             AppStream%iComponentVersion = 421
             AppStream%lDefined          = .TRUE.
         CASE ('5.0')
             ALLOCATE(AppStream_v50_Type :: AppStream%Me)
+            AppStream%Me%Logger => AppStream%Logger
             CALL AppStream%Me%New(lRoutedStreams,lForInquiry,cPPFileName,cSimFileName,cSimWorkingDirectory,IWFMKernelVersion%GetVersion(),AppGrid,Stratigraphy,ETData,TimeStep,NTIME,iLakeIDs,StrmLakeConnector,StrmGWConnector,iStat)
             IF (iStat .EQ. -1) RETURN
             AppStream%iComponentVersion = 50
@@ -757,7 +767,6 @@ CONTAINS
             RETURN
     END SELECT
     IF (f_lLogPerfMarkers) THEN
-    IF (ALLOCATED(AppStream%Me)) AppStream%Me%Logger => AppStream%Logger
         CALL DATE_AND_TIME(VALUES=iPerfEnd)
         rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) &
                  - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
@@ -1208,14 +1217,15 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET MONTHLY BUDGET FLOWS FROM A DEFINED BUDGET FILE
   ! -------------------------------------------------------------
-  SUBROUTINE GetBudget_MonthlyFlows_GivenFile(Budget,iBudgetType,iLocationIndex,iStrmReachIDs,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
-    TYPE(BudgetType),INTENT(IN)              :: Budget          !Assumes Budget file is already open
-    CHARACTER(LEN=*),INTENT(IN)              :: cBeginDate,cEndDate
-    INTEGER,INTENT(IN)                       :: iBudgetType,iStrmReachIDs(:),iLocationIndex !Location can be stream node, reach or diversion
-    REAL(8),INTENT(IN)                       :: rFactVL
-    REAL(8),ALLOCATABLE,INTENT(OUT)          :: rFlows(:,:)     !In (column,month) format
-    CHARACTER(LEN=*),ALLOCATABLE,INTENT(OUT) :: cFlowNames(:)
-    INTEGER,INTENT(OUT)                      :: iStat
+  SUBROUTINE GetBudget_MonthlyFlows_GivenFile(Budget,iBudgetType,iLocationIndex,iStrmReachIDs,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,Logger,iStat)
+    TYPE(BudgetType),INTENT(IN)                :: Budget          !Assumes Budget file is already open
+    CHARACTER(LEN=*),INTENT(IN)                :: cBeginDate,cEndDate
+    INTEGER,INTENT(IN)                         :: iBudgetType,iStrmReachIDs(:),iLocationIndex !Location can be stream node, reach or diversion
+    REAL(8),INTENT(IN)                         :: rFactVL
+    REAL(8),ALLOCATABLE,INTENT(OUT)            :: rFlows(:,:)     !In (column,month) format
+    CHARACTER(LEN=*),ALLOCATABLE,INTENT(OUT)   :: cFlowNames(:)
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
+    INTEGER,INTENT(OUT)                        :: iStat
     
     !Local variables
     CHARACTER(LEN=ModNameLen+32) :: ThisProcedure = ModName // 'GetBudget_MonthlyFlows_GivenFile'
@@ -1239,17 +1249,17 @@ CONTAINS
         CASE ('5.0')
             ALLOCATE(AppStream_v50_Type :: AppStream%Me)
         CASE DEFAULT
-            IF (ASSOCIATED(ModuleLogger)) THEN
-                CALL ModuleLogger%SetLastMessage('Stream Component version number is not recognized ('//TRIM(cVersion)//')!',f_iFatal,ThisProcedure)
+            IF (ASSOCIATED(Logger)) THEN
+                CALL Logger%SetLastMessage('Stream Component version number is not recognized ('//TRIM(cVersion)//')!',f_iFatal,ThisProcedure)
             ELSE
-                CALL ModuleLogger%SetLastMessage('Stream Component version number is not recognized ('//TRIM(cVersion)//')!',f_iFatal,ThisProcedure)
+                CALL Logger%SetLastMessage('Stream Component version number is not recognized ('//TRIM(cVersion)//')!',f_iFatal,ThisProcedure)
             END IF
             iStat = -1
             RETURN
     END SELECT
         
     !Get monthly data    
-    CALL AppStream%Me%GetBudget_MonthlyFlows_GivenFile(Budget,iBudgetType,iLocationIndex,iStrmReachIDs,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
+    CALL AppStream%Me%GetBudget_MonthlyFlows_GivenFile(Budget,iBudgetType,iLocationIndex,iStrmReachIDs,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,Logger,iStat)
     
     !Clear memory
     DEALLOCATE (AppStream%Me , cVersion , STAT=iErrorCode)

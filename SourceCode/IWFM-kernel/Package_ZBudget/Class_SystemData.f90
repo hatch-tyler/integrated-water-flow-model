@@ -101,7 +101,7 @@ CONTAINS
   ! -------------------------------------------------------------
   SUBROUTINE ReadFromFile(SystemData,Logger,HDFFile,iStat)
     CLASS(SystemDataType),INTENT(OUT)         :: SystemData
-    TYPE(MessageLoggerType),TARGET,INTENT(IN) :: Logger
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT) :: Logger
     TYPE(GenericFileType)                     :: HDFFile
     INTEGER,INTENT(OUT)                       :: iStat
 

@@ -80,7 +80,7 @@ CONTAINS
   SUBROUTINE StrmNode_New(NNodes,InFile,Logger,Nodes,iStat)
     INTEGER,INTENT(IN)                        :: NNodes
     TYPE(GenericFileType)                     :: InFile
-    TYPE(MessageLoggerType),TARGET,INTENT(IN) :: Logger
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT) :: Logger
     TYPE(StrmNode_v41_Type)                   :: Nodes(NNodes)
     INTEGER,INTENT(OUT)                       :: iStat
 

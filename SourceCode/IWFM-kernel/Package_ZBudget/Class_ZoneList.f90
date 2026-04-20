@@ -42,10 +42,7 @@ MODULE Class_ZoneList
                                      f_iUndefinedZone
   IMPLICIT NONE
 
-  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
-  
 
-    
 ! ******************************************************************
 ! ******************************************************************
 ! ******************************************************************
@@ -62,8 +59,7 @@ MODULE Class_ZoneList
   PRIVATE
   PUBLIC :: ZoneType         , &
             AdjacentZoneType , &
-            ZoneListType     , &
-            ZoneList_SetModuleLogger
+            ZoneListType
   
   
   ! -------------------------------------------------------------
@@ -472,7 +468,7 @@ CONTAINS
   ! -------------------------------------------------------------
   SUBROUTINE GenerateZoneList_DataFromASCIIFile(ZoneList,Logger,iNDataCols,lFaceFlows_Defined,SystemData,cZoneDefFileName,iStat)
     CLASS(ZoneListType)                       :: ZoneList
-    TYPE(MessageLoggerType),TARGET,INTENT(IN) :: Logger
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT) :: Logger
     INTEGER,INTENT(IN)                        :: iNDataCols
     LOGICAL,INTENT(IN)                        :: lFaceFlows_Defined
     TYPE(SystemDataType),INTENT(IN)           :: SystemData
@@ -541,7 +537,7 @@ CONTAINS
     ALLOCATE (ElemZones(SystemData%NElements,SystemData%NLayers))
     
     !Read element zonal data
-    CALL ReadElemZoneInformation(ZoneDefFile,SystemData%NElements,SystemData%NLayers,ZoneList%iZoneExtent,SystemData%iElementIDs,ElemZones,iStat)
+    CALL ReadElemZoneInformation(Logger,ZoneDefFile,SystemData%NElements,SystemData%NLayers,ZoneList%iZoneExtent,SystemData%iElementIDs,ElemZones,iStat)
     IF (iStat .EQ. -1) GOTO 100
     
     !Compile zone list in a binary tree
@@ -558,7 +554,7 @@ CONTAINS
   ! -------------------------------------------------------------
   SUBROUTINE GenerateZoneList(ZoneList,Logger,iNDataCols,lFaceFlows_Defined,SystemData,iZExtent,iElems,iLayers,iZones,iZonesWithNames,cZoneNames,iStat)
     CLASS(ZoneListType)                       :: ZoneList
-    TYPE(MessageLoggerType),TARGET,INTENT(IN) :: Logger
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT) :: Logger
     INTEGER,INTENT(IN)                        :: iNDataCols,iZExtent,iElems(:),iLayers(:),iZones(:),iZonesWithNames(:)
     LOGICAL,INTENT(IN)                        :: lFaceFlows_Defined
     TYPE(SystemDataType),INTENT(IN)           :: SystemData
@@ -960,10 +956,11 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- READ IN THE ZONE NUMBERING FROM MAIN CONTROL FILE
   ! -------------------------------------------------------------
-  SUBROUTINE ReadElemZoneInformation(InputFile,NElements,NLayers,ZExtent,ElementIDs,ElemZones,iStat)
-    TYPE(GenericFileType) :: InputFile
-    INTEGER,INTENT(IN)    :: NElements,NLayers,ZExtent,ElementIDs(NElements)
-    INTEGER,INTENT(OUT)   :: ElemZones(NElements,NLayers),iStat
+  SUBROUTINE ReadElemZoneInformation(Logger,InputFile,NElements,NLayers,ZExtent,ElementIDs,ElemZones,iStat)
+    TYPE(MessageLoggerType)  :: Logger
+    TYPE(GenericFileType)    :: InputFile
+    INTEGER,INTENT(IN)       :: NElements,NLayers,ZExtent,ElementIDs(NElements)
+    INTEGER,INTENT(OUT)      :: ElemZones(NElements,NLayers),iStat
 
     !Local variables
     CHARACTER(LEN=ModNameLen+23)   :: ThisProcedure = ModName // 'ReadElemZoneInformation'
@@ -982,7 +979,7 @@ CONTAINS
     !If none of the elements are assigned zone numbers, stop
     IF (SIZE(DummyCharArray) .EQ. 0) THEN
         CALL InpuTFile%GetName(cFileName)
-        CALL ModuleLogger%SetLastMessage('Element zone information is not found in file '//TRIM(CFileName)//'!',f_iFatal,ThisProcedure)
+        CALL Logger%SetLastMessage('Element zone information is not found in file '//TRIM(CFileName)//'!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -1002,7 +999,7 @@ CONTAINS
             IF (LayerNo .GT. NLayers) THEN
                 MessageArray(1) = 'Zone layer number at element '//TRIM(IntToText(ElementID))//' is specified as '//TRIM(IntToText(LayerNo))
                 MessageArray(2) = 'when the number of layers simulated is '//TRIM(IntToText(NLayers))//'!' 
-                CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                CALL Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -1013,14 +1010,14 @@ CONTAINS
         
         !Make sure element id is in the model
         IF (ElementIndex .EQ. 0) THEN
-            CALL ModuleLogger%SetLastMessage('Element number '//TRIM(IntToText(ElementID))//' is not in the model!',f_iFatal,ThisProcedure)
+            CALL Logger%SetLastMessage('Element number '//TRIM(IntToText(ElementID))//' is not in the model!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
         
         !Make sure that zone number is not specified as -999
         IF (ZoneNo .EQ. -999) THEN
-            CALL ModuleLogger%SetLastMessage('-999 cannot be used as a zone number!',f_iFatal,ThisProcedure)
+            CALL Logger%SetLastMessage('-999 cannot be used as a zone number!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -1029,7 +1026,7 @@ CONTAINS
         IF (ZExtent .EQ. f_iZoneHorizontal) THEN
             !Check if zone number for elements have already been specified
             IF (ANY(ElemZones(ElementIndex,:) .NE. f_iUndefinedZone)) THEN
-                CALL ModuleLogger%SetLastMessage('Multiple zone numbers are specified for element '//TRIM(IntToText(ElementID))//'!',f_iFatal,ThisProcedure)
+                CALL Logger%SetLastMessage('Multiple zone numbers are specified for element '//TRIM(IntToText(ElementID))//'!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -1039,7 +1036,7 @@ CONTAINS
         ELSE
             !Check if zone number for elements have already been specified
             IF (ElemZones(ElementIndex,LayerNo) .NE. f_iUndefinedZone) THEN
-                CALL ModuleLogger%SetLastMessage('Multiple zone numbers are specified for element '//TRIM(IntToText(ElementID))//' in layer '//TRIM(IntToText(LayerNo))//'!',f_iFatal,ThisProcedure)
+                CALL Logger%SetLastMessage('Multiple zone numbers are specified for element '//TRIM(IntToText(ElementID))//' in layer '//TRIM(IntToText(LayerNo))//'!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -1048,11 +1045,5 @@ CONTAINS
     END DO
 
   END SUBROUTINE ReadElemZoneInformation
-
-
-  SUBROUTINE ZoneList_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
-    ModuleLogger => Logger
-  END SUBROUTINE ZoneList_SetModuleLogger
 
 END MODULE

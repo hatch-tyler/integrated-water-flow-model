@@ -245,7 +245,7 @@ CONTAINS
   ! --- SET MODULE-LEVEL LOGGER
   ! -------------------------------------------------------------
   SUBROUTINE RootZonev40_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    TYPE(MessageLoggerType), TARGET, INTENT(INOUT) :: Logger
     ModuleLogger => Logger
   END SUBROUTINE RootZonev40_SetModuleLogger
 
@@ -509,7 +509,7 @@ CONTAINS
     CALL CleanSpecialCharacters(ALine)
     IF (ALine .NE. '') THEN
         CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(ALine)),cWorkingDirectory,cAbsPathFileName)
-        CALL LWUseBudRawFile_New(IsForInquiry,cProjectNameForDSS,cAbsPathFileName,TimeStep,NTIME,NRegion+1,RegionArea,RegionNames,'land and water use budget',TRIM(cVersionFull),RootZone%LWUseBudRawFile,iStat)
+        CALL LWUseBudRawFile_New(IsForInquiry,cProjectNameForDSS,cAbsPathFileName,TimeStep,NTIME,NRegion+1,RegionArea,RegionNames,'land and water use budget',TRIM(cVersionFull),RootZone%LWUseBudRawFile,iStat,RootZone%Logger)
         IF (iStat .EQ. -1) RETURN
         RootZone%Flags%LWUseBudRawFile_Defined = .TRUE.      
     END IF
@@ -520,7 +520,7 @@ CONTAINS
     CALL CleanSpecialCharacters(ALine)
     IF (ALine .NE. '') THEN
         CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(ALine)),cWorkingDirectory,cAbsPathFileName)
-        CALL RootZoneBudRawFile_New(IsForInquiry,cProjectNameForDSS,cAbsPathFileName,TimeStep,NTIME,NRegion+1,RegionArea,RegionNames,'root zone budget',TRIM(cVersionFull),RootZone%RootZoneBudRawFile,iStat)
+        CALL RootZoneBudRawFile_New(IsForInquiry,cProjectNameForDSS,cAbsPathFileName,TimeStep,NTIME,NRegion+1,RegionArea,RegionNames,'root zone budget',TRIM(cVersionFull),RootZone%RootZoneBudRawFile,iStat,RootZone%Logger)
         IF (iStat .EQ. -1) RETURN
         RootZone%Flags%RootZoneBudRawFile_Defined = .TRUE.
     END IF
@@ -3051,7 +3051,7 @@ CONTAINS
         t1                        = rCurrentDateAndTimeJulian
                 
         !Calculate cell level land use areas
-        CALL ElementLU_InterpolateExtrapolate(AppGrid,cLUCodes,f_iMeasuredLUDataForSubregion,indxForNV,RootZone%Flags%lLakeElems,rCurrentDateAndTimeJulian,t1,t1,RegionLUAreas,ElemObsAreas1,ElemObsAreas1,ExIntAreas,iStat)
+        CALL ElementLU_InterpolateExtrapolate(AppGrid,cLUCodes,f_iMeasuredLUDataForSubregion,indxForNV,RootZone%Flags%lLakeElems,rCurrentDateAndTimeJulian,t1,t1,RegionLUAreas,ElemObsAreas1,ElemObsAreas1,ExIntAreas,iStat,RootZone%Logger)
         IF (iStat .EQ. -1) RETURN
         
         !Update cell level land use areas

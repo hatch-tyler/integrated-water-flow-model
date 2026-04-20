@@ -74,11 +74,9 @@ MODULE Class_Budget
                                       LocationDataType
   IMPLICIT NONE
 
-  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
-  
-  
-  
-  
+
+
+
 ! ******************************************************************
 ! ******************************************************************
 ! ******************************************************************
@@ -95,8 +93,7 @@ MODULE Class_Budget
   PRIVATE
   PUBLIC :: BudgetType          , &
             PrintIntervalType   , &
-            ModifiedAgSupplyReq , &
-            Budget_SetModuleLogger
+            ModifiedAgSupplyReq
 
   
   ! -------------------------------------------------------------
@@ -170,7 +167,7 @@ CONTAINS
   ! -------------------------------------------------------------
   SUBROUTINE Budget_SetLogger(Budget,Logger)
     CLASS(BudgetType)                         :: Budget
-    TYPE(MessageLoggerType),TARGET,INTENT(IN) :: Logger
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT) :: Logger
 
     Budget%Logger => Logger
 
@@ -194,7 +191,7 @@ CONTAINS
   ! -------------------------------------------------------------
   SUBROUTINE Create(Budget,Logger,cInputFileName,HeaderData,iStat)
     CLASS(BudgetType)                         :: Budget
-    TYPE(MessageLoggerType),TARGET,INTENT(IN) :: Logger
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT) :: Logger
     CHARACTER(LEN=*),INTENT(IN)               :: cInputFileName
     TYPE(BudgetHeaderType),INTENT(IN)         :: HeaderData
     INTEGER,INTENT(OUT)                       :: iStat
@@ -213,7 +210,7 @@ CONTAINS
   ! -------------------------------------------------------------
   SUBROUTINE Open(Budget,Logger,cInputFileName,iStat)
     CLASS(BudgetType)                         :: Budget
-    TYPE(MessageLoggerType),TARGET,INTENT(IN) :: Logger
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT) :: Logger
     CHARACTER(LEN=*),INTENT(IN)               :: cInputFileName
     INTEGER,INTENT(OUT)                       :: iStat
 
@@ -542,7 +539,7 @@ CONTAINS
     END IF
     
     !Adjust print begin and end times
-    CALL AdjustOutputTimes(Budget%Header,iPrintDeltaT_InMinutes,PrintIntervalLocal,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    CALL AdjustOutputTimes(Budget%Logger,Budget%Header,iPrintDeltaT_InMinutes,PrintIntervalLocal,iStat)  ;  IF (iStat .EQ. -1) RETURN
     IF (TrackTime) THEN
         NIntervals      = NPeriods(DeltaT_InMinutes,PrintIntervalLocal%PrintBeginDateAndTime,PrintIntervalLocal%PrintEndDateAndTime) + 1
         PrintTimeStamp  = IncrementTimeStamp(PrintIntervalLocal%PrintBeginDateAndTime,DeltaT_InMinutes,-1)
@@ -893,7 +890,7 @@ CONTAINS
     END IF
     
     !Adjust print begin and end times
-    CALL AdjustOutputTimes(Budget%Header,iPrintDeltaT_InMinutes,PrintIntervalLocal,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    CALL AdjustOutputTimes(Budget%Logger,Budget%Header,iPrintDeltaT_InMinutes,PrintIntervalLocal,iStat)  ;  IF (iStat .EQ. -1) RETURN
     IF (TrackTime) THEN
       NIntervals      = NPeriods(DeltaT_InMinutes,PrintIntervalLocal%PrintBeginDateAndTime,PrintIntervalLocal%PrintEndDateAndTime) + 1
       PrintTimeStamp  = IncrementTimeStamp(PrintIntervalLocal%PrintBeginDateAndTime,DeltaT_InMinutes,-1)
@@ -938,10 +935,10 @@ CONTAINS
     
     !Relative position in file
     IF (TrackTime) THEN
-        CALL StorageUnitsToSkip(Budget%Header,cDateAndTime=PrintIntervalLocal%PrintBeginDateAndTime,iUnits=indxPosRelative,iStat=iStat)
+        CALL StorageUnitsToSkip(Budget%Logger,Budget%Header,cDateAndTime=PrintIntervalLocal%PrintBeginDateAndTime,iUnits=indxPosRelative,iStat=iStat)
         indxPosRelative = Budget%Header%iPosition + indxPosRelative
     ELSE
-        CALL StorageUnitsToSkip(Budget%Header,rTime=PrintIntervalLocal%PrintBeginTime,iUnits=indxPosRelative,iStat=iStat)
+        CALL StorageUnitsToSkip(Budget%Logger,Budget%Header,rTime=PrintIntervalLocal%PrintBeginTime,iUnits=indxPosRelative,iStat=iStat)
         indxPosRelative = Budget%Header%iPosition + indxPosRelative
     END IF
     IF (iStat .EQ. -1) RETURN
@@ -1710,10 +1707,10 @@ CONTAINS
 
     !Relative position in file after skipping for time steps that is not required for printing
     IF (TrackTime) THEN
-        CALL StorageUnitsToSkip(Budget%Header,cDateAndTime=cOutputBeginDateAndTime,iUnits=indxPosRelative,iStat=iStat)
+        CALL StorageUnitsToSkip(Budget%Logger,Budget%Header,cDateAndTime=cOutputBeginDateAndTime,iUnits=indxPosRelative,iStat=iStat)
         indxPosRelative = indxPosRelative + Budget%Header%iPosition
     ELSE
-        CALL StorageUnitsToSkip(Budget%Header,rTime=rOutputBeginTime,iUnits=indxPosRelative,iStat=iStat)
+        CALL StorageUnitsToSkip(Budget%Logger,Budget%Header,rTime=rOutputBeginTime,iUnits=indxPosRelative,iStat=iStat)
         indxPosRelative = indxPosRelative + Budget%Header%iPosition 
     END IF
     IF (iStat .EQ. -1) RETURN
@@ -1964,7 +1961,8 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- CALCULATE NUMBER OF BYTES TO SKIP TO GET TO A SPECIFIED TIME STEP IN BINARY FILE
   ! -------------------------------------------------------------
-  SUBROUTINE StorageUnitsToSkip(OutputData,cDateAndTime,rTime,iUnits,iStat)
+  SUBROUTINE StorageUnitsToSkip(Logger,OutputData,cDateAndTime,rTime,iUnits,iStat)
+    TYPE(MessageLoggerType)                                :: Logger
     TYPE(BudgetHeaderType),INTENT(IN)                     :: OutputData
     CHARACTER(LEN=f_iTimeStampLength),OPTIONAL,INTENT(IN) :: cDateAndTime
     REAL(8),OPTIONAL,INTENT(IN)                           :: rTime
@@ -1982,7 +1980,7 @@ CONTAINS
     IF (OutputData%TimeStep%TrackTime) THEN
       !Make sure the right data is supplied
       IF (.NOT. PRESENT(cDateAndTime)) THEN
-          CALL ModuleLogger%SetLastMessage('Print-out date and time for time-tracked budget output is missing!',f_iFatal,ThisProcedure)
+          CALL Logger%SetLastMessage('Print-out date and time for time-tracked budget output is missing!',f_iFatal,ThisProcedure)
           iStat = -1
           RETURN
       END IF
@@ -1991,7 +1989,7 @@ CONTAINS
     ELSE
       !Make sure the right data is supplied
       IF (.NOT. PRESENT(rTime)) THEN
-          CALL ModuleLogger%SetLastMessage('Print-out time for non-time-tracked budget output is missing!',f_iFatal,ThisProcedure)
+          CALL Logger%SetLastMessage('Print-out time for non-time-tracked budget output is missing!',f_iFatal,ThisProcedure)
           iStat = -1
           RETURN
       END IF
@@ -2164,7 +2162,8 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- ADJUST THE OUTPUT BEGIN AND END TIMES IF NECESSARY
   ! -------------------------------------------------------------
-  SUBROUTINE AdjustOutputTimes(OutputData,iPrintDeltaT_InMinutes,PrintInterval,iStat)
+  SUBROUTINE AdjustOutputTimes(Logger,OutputData,iPrintDeltaT_InMinutes,PrintInterval,iStat)
+    TYPE(MessageLoggerType)           :: Logger
     TYPE(BudgetHeaderType),INTENT(IN) :: OutputData
     INTEGER,INTENT(IN)                :: iPrintDeltaT_InMinutes
     TYPE(PrintIntervalType)           :: PrintInterval
@@ -2190,7 +2189,7 @@ CONTAINS
       IF (PrintInterval%PrintBeginDateAndTime .TSGT. PrintInterval%PrintEndDateAndTime) THEN
         MessageArray(1)='Starting date and time for budget table print-out for '//TRIM(OutputData%cBudgetDescriptor)
         MessageArray(2)='cannot be less than the ending date and time!'
-        CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+        CALL Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
       END IF
@@ -2227,7 +2226,7 @@ CONTAINS
       IF (PrintInterval%PrintBeginTime .GT. PrintInterval%PrintEndTime) THEN
         MessageArray(1)='Starting time for budget table print-out '//TRIM(OutputData%cBudgetDescriptor)
         MessageArray(2)='cannot be less than the ending time!'
-        CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+        CALL Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
       END IF
@@ -2250,11 +2249,5 @@ CONTAINS
     END IF
 
   END SUBROUTINE AdjustOutputTimes
-
-
-  SUBROUTINE Budget_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
-    ModuleLogger => Logger
-  END SUBROUTINE Budget_SetModuleLogger
 
 END MODULE

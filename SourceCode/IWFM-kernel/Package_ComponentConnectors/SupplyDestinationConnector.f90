@@ -63,8 +63,7 @@ MODULE SupplyDestinationConnector
             Supply_SetIrigFracsRead                 , &
             Supply_CheckSupplyDestinationConnection , &
             Supply_ResetIrigFracs                   , &
-            Supply_SetSupplySpecs                   , &
-            SupplyDest_SetModuleLogger
+            Supply_SetSupplySpecs
   
   ! -------------------------------------------------------------
   ! --- SUPPLY TO DESTINATION CONNECTOR TYPE
@@ -130,28 +129,12 @@ MODULE SupplyDestinationConnector
   ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
-  ! -------------------------------------------------------------
-  ! --- MODULE-LEVEL LOGGER
-  ! -------------------------------------------------------------
-  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
-
-
   INTEGER,PARAMETER                   :: ModNameLen = 28
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'SupplyDestinationConnector::'
 
 
 
 CONTAINS
-
-
-  ! -------------------------------------------------------------
-  ! --- SET MODULE-LEVEL LOGGER
-  ! -------------------------------------------------------------
-  SUBROUTINE SupplyDest_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
-    ModuleLogger => Logger
-  END SUBROUTINE SupplyDest_SetModuleLogger
-
 
 
 ! ******************************************************************
@@ -205,13 +188,13 @@ CONTAINS
     SELECT CASE (iDemandCalcLocation)
         CASE (f_iFlowDest_Element)
             DO indxSupply=1,NSupply
-                CALL SupplyToElement_New(Connector%SupplyToDestination(indxSupply),cSupplyDescription,indxSupply,SupplyDest(indxSupply),AppGrid,iStat)
+                CALL SupplyToElement_New(Connector%Logger,Connector%SupplyToDestination(indxSupply),cSupplyDescription,indxSupply,SupplyDest(indxSupply),AppGrid,iStat)
                 IF (iStat .EQ. -1) RETURN
             END DO
             
         CASE (f_iFlowDest_Subregion)
             DO indxSupply=1,NSupply
-                CALL SupplyToSubregion_New(Connector%SupplyToDestination(indxSupply),cSupplyDescription,indxSupply,SupplyDest(indxSupply),AppGrid,iStat) 
+                CALL SupplyToSubregion_New(Connector%Logger,Connector%SupplyToDestination(indxSupply),cSupplyDescription,indxSupply,SupplyDest(indxSupply),AppGrid,iStat) 
                 IF (iStat .EQ. -1) RETURN
             END DO
     END SELECT
@@ -250,7 +233,8 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- NEW SUPPLY TO ELEMENT CONNECTOR
   ! -------------------------------------------------------------
-  SUBROUTINE SupplyToElement_New(Connector,cDescription,iSupply,Destination,AppGrid,iStat) 
+  SUBROUTINE SupplyToElement_New(Logger,Connector,cDescription,iSupply,Destination,AppGrid,iStat)
+    TYPE(MessageLoggerType)              :: Logger
     TYPE(SupplyToDestinationType)        :: Connector
     CHARACTER(LEN=*),INTENT(IN)          :: cDescription
     INTEGER,INTENT(IN)                   :: iSupply
@@ -280,11 +264,11 @@ CONTAINS
                 MessageArray(1) = 'A ' // TRIM(LowerCase(cDescription)) //' is delivered to an element that is not in the model domain!'
                 MessageArray(2) = TRIM(cDescription) // ' number = ' //TRIM(IntToText(iSupply))
                 MessageArray(3) = 'Element delivered = ' // TRIM(IntToText(Destination%iDest))
-                CALL ModuleLogger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+                CALL Logger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
-            
+
             !Store element info
             Connector%iDestType = f_iFlowDest_Element
             Connector%nDest     = 1
@@ -307,7 +291,7 @@ CONTAINS
                     MessageArray(1) = 'A ' // TRIM(LowerCase(cDescription)) //' is delivered to an element that is not in the model domain!'
                     MessageArray(2) = TRIM(cDescription) // ' number = ' //TRIM(IntToText(iSupply))
                     MessageArray(3) = 'Element delivered = ' // TRIM(IntToText(iElem))
-                    CALL ModuleLogger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+                    CALL Logger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
                     iStat = -1
                     RETURN
                 END IF
@@ -333,7 +317,7 @@ CONTAINS
                 MessageArray(1) = 'A ' // TRIM(LowerCase(cDescription)) //' is delivered to a subregion that is not in the model domain!'
                 MessageArray(2) = TRIM(cDescription) // ' number = ' //TRIM(IntToText(iSupply))
                 MessageArray(3) = 'Subregion delivered = ' // TRIM(IntToText(iRegion))
-                CALL ModuleLogger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+                CALL Logger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -357,7 +341,8 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- NEW SUPPLY TO SUBREGION CONNECTOR
   ! -------------------------------------------------------------
-  SUBROUTINE SupplyToSubregion_New(Connector,cDescription,iSupply,Destination,AppGrid,iStat) 
+  SUBROUTINE SupplyToSubregion_New(Logger,Connector,cDescription,iSupply,Destination,AppGrid,iStat)
+    TYPE(MessageLoggerType)               :: Logger
     TYPE(SupplyToDestinationType)         :: Connector
     CHARACTER(LEN=*),INTENT(IN)           :: cDescription
     INTEGER,INTENT(IN)                    :: iSupply
@@ -387,11 +372,11 @@ CONTAINS
                 MessageArray(1) = 'A ' // TRIM(LowerCase(cDescription)) //' is delivered to an element that is not in the model domain!'
                 MessageArray(2) = TRIM(cDescription) // ' number = ' //TRIM(IntToText(iSupply))
                 MessageArray(3) = 'Element delivered = ' // TRIM(IntToText(Destination%iDest))
-                CALL ModuleLogger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+                CALL Logger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
-            
+
             !Store subregion info
             Connector%iDestType = f_iFlowDest_Subregion
             Connector%nDest     = 1
@@ -428,7 +413,7 @@ CONTAINS
                 MessageArray(1) = 'A ' // TRIM(LowerCase(cDescription)) //' is delivered to a subregion that is not in the model domain!'
                 MessageArray(2) = TRIM(cDescription) // ' number = ' //TRIM(IntToText(iSupply))
                 MessageArray(3) = 'Subregion delivered = ' // TRIM(IntToText(iRegion))
-                CALL ModuleLogger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+                CALL Logger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -869,7 +854,7 @@ CONTAINS
         IF (Supply_Ag .GT. 0.0) THEN
             rFrac = SUM(pConnector%SupplyToDestFracs_Ag)
             IF (ABS(1d0-rFrac) .GT. 1d-2) THEN
-                CALL ModuleLogger%SetLastMessage('Not all agricultural water supply for '//TRIM(cSupplyDescription)//' '//TRIM(IntToText(indx))//' is going to the desired demand location!',f_iFatal,ThisProcedure)
+                CALL SupplyDestConnector%Logger%SetLastMessage('Not all agricultural water supply for '//TRIM(cSupplyDescription)//' '//TRIM(IntToText(indx))//' is going to the desired demand location!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -880,7 +865,7 @@ CONTAINS
         IF (Supply_Urb .GT. 0.0) THEN
             rFrac = SUM(pConnector%SupplyToDestFracs_Urb)
             IF (ABS(1d0-rFrac) .GT. 1d-2) THEN
-                CALL ModuleLogger%SetLastMessage('Not all urban water supply for '//TRIM(cSupplyDescription)//' '//TRIM(IntToText(indx))//' is going to the desired demand location!',f_iFatal,ThisProcedure)
+                CALL SupplyDestConnector%Logger%SetLastMessage('Not all urban water supply for '//TRIM(cSupplyDescription)//' '//TRIM(IntToText(indx))//' is going to the desired demand location!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF

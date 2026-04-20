@@ -148,7 +148,7 @@ CONTAINS
   ! --- SET MODULE-LEVEL LOGGER
   ! -------------------------------------------------------------
   SUBROUTINE AppStream_v42_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    TYPE(MessageLoggerType), TARGET, INTENT(INOUT) :: Logger
     ModuleLogger => Logger
   END SUBROUTINE AppStream_v42_SetModuleLogger
 
@@ -183,13 +183,16 @@ CONTAINS
     INTEGER                      :: NRTB,ErrorCode,iGWNodeIDs(AppGrid%NNodes)
     TYPE(GenericFileType)        :: DataFile
     
+    !Set Logger (INTENT(OUT) resets pointer, restore from module-level)
+    AppStream%Logger => ModuleLogger
+
     !Initialize
     iStat      = 0
     iGWNodeIDs = AppGrid%AppNode%ID
-    
+
     !Inform user
     CALL ModuleLogger%EchoProgress('Instantiating streams')
-    
+
     !Set the flag to check if routed or non-routed streams
     AppStream%lRouted = IsRoutedStreams
     
@@ -468,10 +471,13 @@ CONTAINS
     
     !Local variables
     CHARACTER(LEN=ModNameLen+30) :: ThisProcedure = ModName // 'AppStream_v42_SetAllComponents'
-    
+
+    !Set Logger (INTENT(OUT) resets pointer, restore from module-level)
+    AppStream%Logger => ModuleLogger
+
     !Initialize
     iStat = 0
-    
+
     !Echo progress
     CALL ModuleLogger%EchoProgress('Instantiating streams')
     
@@ -517,10 +523,13 @@ CONTAINS
     
     !Local variables
     CHARACTER(LEN=ModNameLen+44) :: ThisProcedure = ModName // 'AppStream_v42_SetAllComponentsWithoutBinFile'
-    
+
+    !Set Logger (INTENT(OUT) resets pointer, restore from module-level)
+    AppStream%Logger => ModuleLogger
+
     !Initialize
     iStat = 0
-    
+
     !Instantiate the static components of the AppStream data
     CALL AppStream_v42_SetStaticComponent(AppStream,cPPFileName,AppGrid,Stratigraphy,IsRoutedStreams,StrmGWConnector,StrmLakeConnector,iStat)
     IF (iStat .EQ. -1) RETURN
@@ -836,18 +845,21 @@ CONTAINS
     !Local variables
     CHARACTER(LEN=ModNameLen+20) :: ThisProcedure = ModName // 'ReadPreprocessedData'
     INTEGER                      :: ErrorCode
-    
+
+    !Set Logger (INTENT(OUT) resets pointer, restore from module-level)
+    AppStream%Logger => ModuleLogger
+
     !Initialize
     iStat = 0
-       
+
     !Routed/non-routed flag
     CALL BinFile%ReadData(AppStream%lRouted,iStat)  ;  IF (iStat .EQ. -1) RETURN
-    
+
     !Read dimensions
     CALL BinFile%ReadData(AppStream%NStrmNodes,iStat)               ;  IF (iStat .EQ. -1) RETURN
     CALL BinFile%ReadData(AppStream%NReaches,iStat)                 ;  IF (iStat .EQ. -1) RETURN
     CALL BinFile%ReadData(AppStream%TimeUnitRatingTableFlow,iStat)  ;  IF (iStat .EQ. -1) RETURN
-    
+
     !Allocate memory
     ALLOCATE (AppStream%Nodes(AppStream%NStrmNodes) , AppStream%Reaches(AppStream%NReaches) , STAT=ErrorCode)
     IF (ErrorCode .NE. 0) THEN
@@ -1010,7 +1022,7 @@ CONTAINS
     END DO
     
     !Compile reach network from upstream to downstream
-    CALL StrmReach_CompileReachNetwork(AppStream%NReaches,AppStream%Reaches,iStat)
+    CALL StrmReach_CompileReachNetwork(AppStream%NReaches,AppStream%Reaches,AppStream%Logger,iStat)
     IF (iStat .EQ. -1) RETURN
     
     !Compile upstream nodes for each node

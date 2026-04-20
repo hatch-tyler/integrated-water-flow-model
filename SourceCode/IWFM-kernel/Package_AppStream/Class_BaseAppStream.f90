@@ -101,8 +101,7 @@ MODULE Class_BaseAppStream
             RoutingOrderedReachIndex_To_IDOrderedReachIndex , &
             f_iBudgetType_StrmNode                          , &
             f_iBudgetType_StrmReach                         , &
-            f_iBudgetType_DiverDetail                       , &
-            BaseAppStream_SetModuleLogger
+            f_iBudgetType_DiverDetail
   
 
   ! -------------------------------------------------------------
@@ -282,11 +281,6 @@ MODULE Class_BaseAppStream
   ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
-  ! -------------------------------------------------------------
-  ! --- MODULE-LEVEL LOGGER
-  ! -------------------------------------------------------------
-  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
-
   INTEGER,PARAMETER                   :: ModNameLen = 21
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName = 'Class_BaseAppStream::'
   
@@ -532,15 +526,6 @@ MODULE Class_BaseAppStream
   
   
 CONTAINS
-
-
-  ! -------------------------------------------------------------
-  ! --- SET MODULE-LEVEL LOGGER
-  ! -------------------------------------------------------------
-  SUBROUTINE BaseAppStream_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
-    ModuleLogger => Logger
-  END SUBROUTINE BaseAppStream_SetModuleLogger
 
 
 
@@ -806,7 +791,7 @@ CONTAINS
             
         CASE (f_iBudgetType_StrmReach)
             IF (AppStream%StrmReachBudRawFile_Defined) THEN
-                CALL GetBudget_MonthlyFlows_GivenFile(AppStream%StrmReachBudRawFile,iBudgetType,iLocationIndex,AppStream%Reaches%ID,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
+                CALL GetBudget_MonthlyFlows_GivenFile(AppStream%StrmReachBudRawFile,iBudgetType,iLocationIndex,AppStream%Reaches%ID,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,AppStream%Logger,iStat)
             ELSE
                 CALL AppStream%Logger%SetLastMessage('Stream reach budget is not defined to retrieve monthly budget flows!',f_iFatal,ThisProcedure)
                 ALLOCATE (rFlows(0,0) , cFlowNames(0))
@@ -826,15 +811,16 @@ CONTAINS
   ! --- GET MONTHLY BUDGET FLOWS FROM A DEFINED BUDGET FILE
   ! --- (Assumes cBeginDate and cEndDate are adjusted properly)
   ! -------------------------------------------------------------
-  SUBROUTINE GetBudget_MonthlyFlows_GivenFile(Budget,iBudgetType,iLocationIndex,iStrmReachIDs,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
-    TYPE(BudgetType),INTENT(IN)              :: Budget      !Assumes Budget file is already open
-    CHARACTER(LEN=*),INTENT(IN)              :: cBeginDate,cEndDate
-    INTEGER,INTENT(IN)                       :: iBudgetType,iStrmReachIDs(:),iLocationIndex  !Location can be stream node, reach or diversion
-    REAL(8),INTENT(IN)                       :: rFactVL
-    REAL(8),ALLOCATABLE,INTENT(OUT)          :: rFlows(:,:)  !In (column,month) format
-    CHARACTER(LEN=*),ALLOCATABLE,INTENT(OUT) :: cFlowNames(:)
-    INTEGER,INTENT(OUT)                      :: iStat
-    
+  SUBROUTINE GetBudget_MonthlyFlows_GivenFile(Budget,iBudgetType,iLocationIndex,iStrmReachIDs,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,Logger,iStat)
+    TYPE(BudgetType),INTENT(IN)                :: Budget      !Assumes Budget file is already open
+    CHARACTER(LEN=*),INTENT(IN)                :: cBeginDate,cEndDate
+    INTEGER,INTENT(IN)                         :: iBudgetType,iStrmReachIDs(:),iLocationIndex  !Location can be stream node, reach or diversion
+    REAL(8),INTENT(IN)                         :: rFactVL
+    REAL(8),ALLOCATABLE,INTENT(OUT)            :: rFlows(:,:)  !In (column,month) format
+    CHARACTER(LEN=*),ALLOCATABLE,INTENT(OUT)   :: cFlowNames(:)
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
+    INTEGER,INTENT(OUT)                        :: iStat
+
     !Local variables
     CHARACTER(LEN=ModNameLen+32) :: ThisProcedure = ModName // 'GetBudget_MonthlyFlows_GivenFile'
     INTEGER,PARAMETER            :: iReadCols(14) = [1,2,3,4,5,6,7,8,9,10,11,12,13,14]
@@ -848,10 +834,10 @@ CONTAINS
   
             
         CASE (f_iBudgetType_DiverDetail)
-            IF (ASSOCIATED(ModuleLogger)) THEN
-                CALL ModuleLogger%SetLastMessage('Monthly budget values cannot be retrieved from Diversion Details file!',f_iWarn,ThisProcedure)
+            IF (ASSOCIATED(Logger)) THEN
+                CALL Logger%SetLastMessage('Monthly budget values cannot be retrieved from Diversion Details file!',f_iWarn,ThisProcedure)
             ELSE
-                CALL ModuleLogger%SetLastMessage('Monthly budget values cannot be retrieved from Diversion Details file!',f_iWarn,ThisProcedure)
+                CALL Logger%SetLastMessage('Monthly budget values cannot be retrieved from Diversion Details file!',f_iWarn,ThisProcedure)
             END IF
             ALLOCATE (rFlows(0,0) , cFlowNames(0))
             iStat = -1
@@ -2017,11 +2003,12 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- READ STREAM NODES AND FRACTIONS OF STREAM_AQUIFER INTERACTION TO APPLY TO GW NODES
   ! -------------------------------------------------------------
-  SUBROUTINE ReadFractionsForGW(DataFile,iStrmNodeIDs,StrmGWConnector,iStat)
-    TYPE(GenericFileType)     :: DataFile
-    INTEGER,INTENT(IN)        :: iStrmNodeIDs(:)
-    TYPE(StrmGWConnectorType) :: StrmGWConnector
-    INTEGER,INTENT(OUT)       :: iStat
+  SUBROUTINE ReadFractionsForGW(DataFile,iStrmNodeIDs,StrmGWConnector,Logger,iStat)
+    TYPE(GenericFileType)                      :: DataFile
+    INTEGER,INTENT(IN)                         :: iStrmNodeIDs(:)
+    TYPE(StrmGWConnectorType)                  :: StrmGWConnector
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
+    INTEGER,INTENT(OUT)                        :: iStat
     
     !Local variables
     CHARACTER(LEN=ModNameLen+18),PARAMETER :: ThisProcedure = ModName // 'ReadFractionsForGW'
@@ -2050,10 +2037,10 @@ CONTAINS
         rFractions(indx) = rDummy(2)
         CALL ConvertID_To_Index(iStrmNode,iStrmNodeIDs,iStrmNodes(indx))
         IF (iStrmNodes(indx) .EQ. 0) THEN
-            IF (ASSOCIATED(ModuleLogger)) THEN
-                CALL ModuleLogger%SetLastMessage('Stream node ID '//TRIM(IntToText(iStrmNode))//' listed for partal stream-aquifer interaction is not in the model!',f_iFatal,ThisProcedure)
+            IF (ASSOCIATED(Logger)) THEN
+                CALL Logger%SetLastMessage('Stream node ID '//TRIM(IntToText(iStrmNode))//' listed for partal stream-aquifer interaction is not in the model!',f_iFatal,ThisProcedure)
             ELSE
-                CALL ModuleLogger%SetLastMessage('Stream node ID '//TRIM(IntToText(iStrmNode))//' listed for partal stream-aquifer interaction is not in the model!',f_iFatal,ThisProcedure)
+                CALL Logger%SetLastMessage('Stream node ID '//TRIM(IntToText(iStrmNode))//' listed for partal stream-aquifer interaction is not in the model!',f_iFatal,ThisProcedure)
             END IF
             iStat = -1
             RETURN
@@ -2446,7 +2433,7 @@ CONTAINS
     INTEGER,INTENT(IN)       :: iLakeIDs(:)
     INTEGER,INTENT(OUT)      :: iStat
     
-    CALL StrmReach_DestinationIDs_To_Indices(AppStream%Reaches,iLakeIDs,iStat)
+    CALL StrmReach_DestinationIDs_To_Indices(AppStream%Reaches,iLakeIDs,AppStream%Logger,iStat)
     
   END SUBROUTINE DestinationIDs_To_Indices
   

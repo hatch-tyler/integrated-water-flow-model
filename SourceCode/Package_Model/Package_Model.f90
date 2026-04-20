@@ -86,13 +86,8 @@ MODULE Package_Model
   USE Class_Version               , ONLY: Version_SetModuleLogger
   USE GeneralUtilities            , ONLY: GeneralUtils_SetModuleLogger
   USE TimeSeriesUtilities         , ONLY: TimeSeries_SetModuleLogger
-  USE Class_Budget                , ONLY: Budget_SetModuleLogger
   USE Class_BudgetInputFile       , ONLY: BudgetInputFile_SetModuleLogger
-  USE Class_ZoneList              , ONLY: ZoneList_SetModuleLogger
-  USE Package_AppUnsatZone        , ONLY: AppUnsatZone_SetModuleLogger
-  USE ParametricGrid              , ONLY: ParametricGrid_SetModuleLogger
   USE Opening_screen              , ONLY: OpeningScreen_SetModuleLogger
-  USE Package_Matrix              , ONLY: Matrix_SetModuleLogger
   USE Class_GWZBudget             , ONLY: GWZBudget_SetModuleLogger
   USE WSA_ANN                     , ONLY: WSA_ANN_SetModuleLogger
   USE Package_Misc                , ONLY: FlowDestinationType                         , &
@@ -135,7 +130,6 @@ MODULE Package_Model
   USE Package_Discretization      , ONLY: AppGridType                                 , &
                                           StratigraphyType                            , &
                                           Discretization_GetNodeLayer                 , &
-                                          Grid_SetModuleLogger                        , &
                                           AppGrid_SetModuleLogger
   USE Package_AppGW               , ONLY: AppGWType                                   , &
                                           AppGW_SetAllModuleLoggers                   , &
@@ -157,7 +151,6 @@ MODULE Package_Model
   USE Package_AppLake             , ONLY: AppLakeType                                 , &
                                           AppLake_SetModuleLogger                     , &
                                           BaseAppLake_SetModuleLogger                 , &
-                                          Lake_SetModuleLogger                        , &
                                           AppLake_v40_SetModuleLogger                 , &
                                           AppLake_v50_SetModuleLogger                 , &
                                           f_iBudgetType_Lake
@@ -182,7 +175,6 @@ MODULE Package_Model
                                           StrmGWConnectorType                         , &
                                           LakeGWConnectorType                         , &
                                           SupplyDestinationConnectorType              , &
-                                          SupplyDest_SetModuleLogger                  , &
                                           f_iLakeToStrmFlow
   USE Package_PrecipitationET     , ONLY: PrecipitationType                           , &
                                           ETType
@@ -630,7 +622,7 @@ CONTAINS
   ! --- SET MODULE-LEVEL LOGGER
   ! -------------------------------------------------------------
   SUBROUTINE PackageModel_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    TYPE(MessageLoggerType), TARGET, INTENT(INOUT) :: Logger
     ModuleLogger => Logger
   END SUBROUTINE PackageModel_SetModuleLogger
 
@@ -638,7 +630,7 @@ CONTAINS
   SUBROUTINE IWFM_InitAllModuleLoggers()
     CALL PackageModel_SetModuleLogger(DefaultLogger)
 
-    CALL Grid_SetModuleLogger(DefaultLogger)
+
     CALL AppGrid_SetModuleLogger(DefaultLogger)
 
 
@@ -647,10 +639,8 @@ CONTAINS
 
 
 
-    CALL SupplyDest_SetModuleLogger(DefaultLogger)
     CALL AppLake_SetModuleLogger(DefaultLogger)
     CALL BaseAppLake_SetModuleLogger(DefaultLogger)
-    CALL Lake_SetModuleLogger(DefaultLogger)
     CALL AppLake_v40_SetModuleLogger(DefaultLogger)
     CALL AppLake_v50_SetModuleLogger(DefaultLogger)
     CALL AppSWShed_v40_SetModuleLogger(DefaultLogger)
@@ -668,16 +658,13 @@ CONTAINS
     CALL Version_SetModuleLogger(DefaultLogger)
     CALL GeneralUtils_SetModuleLogger(DefaultLogger)
     CALL TimeSeries_SetModuleLogger(DefaultLogger)
-    CALL Budget_SetModuleLogger(DefaultLogger)
     CALL BudgetInputFile_SetModuleLogger(DefaultLogger)
 
-    CALL ZoneList_SetModuleLogger(DefaultLogger)
     CALL GWZBudget_SetModuleLogger(DefaultLogger)
     CALL WSA_ANN_SetModuleLogger(DefaultLogger)
-    CALL AppUnsatZone_SetModuleLogger(DefaultLogger)
-    CALL ParametricGrid_SetModuleLogger(DefaultLogger)
+
     CALL OpeningScreen_SetModuleLogger(DefaultLogger)
-    CALL Matrix_SetModuleLogger(DefaultLogger)
+
   END SUBROUTINE IWFM_InitAllModuleLoggers
 
 
@@ -960,7 +947,7 @@ CONTAINS
     CALL PackageModel_SetModuleLogger(DefaultLogger)
 
     !Set module-level loggers for Batch 2 packages
-    CALL Grid_SetModuleLogger(DefaultLogger)
+
     CALL AppGrid_SetModuleLogger(DefaultLogger)
 
 
@@ -971,10 +958,8 @@ CONTAINS
     !Set module-level loggers for Batch 3 packages
 
 
-    CALL SupplyDest_SetModuleLogger(DefaultLogger)
     CALL AppLake_SetModuleLogger(DefaultLogger)
     CALL BaseAppLake_SetModuleLogger(DefaultLogger)
-    CALL Lake_SetModuleLogger(DefaultLogger)
     CALL AppLake_v40_SetModuleLogger(DefaultLogger)
     CALL AppLake_v50_SetModuleLogger(DefaultLogger)
     CALL AppSWShed_v40_SetModuleLogger(DefaultLogger)
@@ -992,16 +977,13 @@ CONTAINS
     CALL Version_SetModuleLogger(DefaultLogger)
     CALL GeneralUtils_SetModuleLogger(DefaultLogger)
     CALL TimeSeries_SetModuleLogger(DefaultLogger)
-    CALL Budget_SetModuleLogger(DefaultLogger)
     CALL BudgetInputFile_SetModuleLogger(DefaultLogger)
 
-    CALL ZoneList_SetModuleLogger(DefaultLogger)
     CALL GWZBudget_SetModuleLogger(DefaultLogger)
     CALL WSA_ANN_SetModuleLogger(DefaultLogger)
-    CALL AppUnsatZone_SetModuleLogger(DefaultLogger)
-    CALL ParametricGrid_SetModuleLogger(DefaultLogger)
+
     CALL OpeningScreen_SetModuleLogger(DefaultLogger)
-    CALL Matrix_SetModuleLogger(DefaultLogger)
+
 
     !Matrix data
     CALL Model%Matrix%New(DefaultLogger,BinaryFile,iStat)
@@ -1120,7 +1102,7 @@ CONTAINS
     CALL Model%SupplyAdjust%SetLogger(DefaultLogger)
     CALL Model%IrigFracFile%SetLogger(DefaultLogger)
     CALL Model%GWZBudget%SetLogger(DefaultLogger)
-    CALL Grid_SetModuleLogger(DefaultLogger)
+
     CALL AppGrid_SetModuleLogger(DefaultLogger)
 
 
@@ -1141,16 +1123,13 @@ CONTAINS
     CALL Version_SetModuleLogger(DefaultLogger)
     CALL GeneralUtils_SetModuleLogger(DefaultLogger)
     CALL TimeSeries_SetModuleLogger(DefaultLogger)
-    CALL Budget_SetModuleLogger(DefaultLogger)
     CALL BudgetInputFile_SetModuleLogger(DefaultLogger)
 
-    CALL ZoneList_SetModuleLogger(DefaultLogger)
     CALL GWZBudget_SetModuleLogger(DefaultLogger)
     CALL WSA_ANN_SetModuleLogger(DefaultLogger)
-    CALL AppUnsatZone_SetModuleLogger(DefaultLogger)
-    CALL ParametricGrid_SetModuleLogger(DefaultLogger)
+
     CALL OpeningScreen_SetModuleLogger(DefaultLogger)
-    CALL Matrix_SetModuleLogger(DefaultLogger)
+
 
     !Solution scheme control data
     CALL Model%Matrix%SetSolver(MSOLVE,0.01d0*Model%Convergence%Tolerance,Model%Convergence%IterMax,RELAX,iStat)  ;  iF (iStat .EQ. -1) RETURN
@@ -1523,7 +1502,7 @@ CONTAINS
     CALL Model%SupplyAdjust%SetLogger(DefaultLogger)
     CALL Model%IrigFracFile%SetLogger(DefaultLogger)
     CALL Model%GWZBudget%SetLogger(DefaultLogger)
-    CALL Grid_SetModuleLogger(DefaultLogger)
+
     CALL AppGrid_SetModuleLogger(DefaultLogger)
 
 
@@ -1544,16 +1523,13 @@ CONTAINS
     CALL Version_SetModuleLogger(DefaultLogger)
     CALL GeneralUtils_SetModuleLogger(DefaultLogger)
     CALL TimeSeries_SetModuleLogger(DefaultLogger)
-    CALL Budget_SetModuleLogger(DefaultLogger)
     CALL BudgetInputFile_SetModuleLogger(DefaultLogger)
 
-    CALL ZoneList_SetModuleLogger(DefaultLogger)
     CALL GWZBudget_SetModuleLogger(DefaultLogger)
     CALL WSA_ANN_SetModuleLogger(DefaultLogger)
-    CALL AppUnsatZone_SetModuleLogger(DefaultLogger)
-    CALL ParametricGrid_SetModuleLogger(DefaultLogger)
+
     CALL OpeningScreen_SetModuleLogger(DefaultLogger)
-    CALL Matrix_SetModuleLogger(DefaultLogger)
+
 
     !Solution scheme control data
     CALL Model%Matrix%SetSolver(MSOLVE,0.01d0*Model%Convergence%Tolerance,Model%Convergence%IterMax,RELAX,iStat)  ;  IF (iStat .EQ. -1) RETURN
@@ -1913,7 +1889,7 @@ CONTAINS
     CALL Model%SupplyAdjust%SetLogger(DefaultLogger)
     CALL Model%IrigFracFile%SetLogger(DefaultLogger)
     CALL Model%GWZBudget%SetLogger(DefaultLogger)
-    CALL Grid_SetModuleLogger(DefaultLogger)
+
     CALL AppGrid_SetModuleLogger(DefaultLogger)
 
 
@@ -1934,16 +1910,13 @@ CONTAINS
     CALL Version_SetModuleLogger(DefaultLogger)
     CALL GeneralUtils_SetModuleLogger(DefaultLogger)
     CALL TimeSeries_SetModuleLogger(DefaultLogger)
-    CALL Budget_SetModuleLogger(DefaultLogger)
     CALL BudgetInputFile_SetModuleLogger(DefaultLogger)
 
-    CALL ZoneList_SetModuleLogger(DefaultLogger)
     CALL GWZBudget_SetModuleLogger(DefaultLogger)
     CALL WSA_ANN_SetModuleLogger(DefaultLogger)
-    CALL AppUnsatZone_SetModuleLogger(DefaultLogger)
-    CALL ParametricGrid_SetModuleLogger(DefaultLogger)
+
     CALL OpeningScreen_SetModuleLogger(DefaultLogger)
-    CALL Matrix_SetModuleLogger(DefaultLogger)
+
 
     !Solution scheme control data
     Model%Convergence%Tolerance = Toler

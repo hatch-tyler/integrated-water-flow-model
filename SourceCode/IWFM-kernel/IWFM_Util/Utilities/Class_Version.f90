@@ -246,7 +246,7 @@ CONTAINS
 
 
   SUBROUTINE Version_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    TYPE(MessageLoggerType), TARGET, INTENT(INOUT) :: Logger
     ModuleLogger => Logger
   END SUBROUTINE Version_SetModuleLogger
 

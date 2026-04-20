@@ -112,7 +112,7 @@ CONTAINS
   ! --- SET MODULE-LEVEL LOGGER
   ! -------------------------------------------------------------
   SUBROUTINE Bypass_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    TYPE(MessageLoggerType), TARGET, INTENT(INOUT) :: Logger
     ModuleLogger => Logger
   END SUBROUTINE Bypass_SetModuleLogger
 
@@ -405,7 +405,7 @@ CONTAINS
     CALL InFile%Kill()
     
     !Re-order reaches based on bypasses
-    CALL StrmReach_CompileReachNetwork(SIZE(Reaches),Reaches,iStat,iBypassOutReachIDs,iBypassInReachIDs)
+    CALL StrmReach_CompileReachNetwork(SIZE(Reaches),Reaches,Logger,iStat,iBypassOutReachIDs,iBypassInReachIDs)
     
     !Free memory
     DEALLOCATE (Dummy2DRealArray , iBypassIDs , iBypassOutReachIDs , iBypassInReachIDs , STAT=ErrorCode)

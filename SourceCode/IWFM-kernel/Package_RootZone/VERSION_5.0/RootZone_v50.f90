@@ -315,7 +315,7 @@ CONTAINS
   ! --- SET MODULE LOGGER
   ! -------------------------------------------------------------
   SUBROUTINE RootZonev50_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    TYPE(MessageLoggerType), TARGET, INTENT(INOUT) :: Logger
     ModuleLogger => Logger
   END SUBROUTINE RootZonev50_SetModuleLogger
 
@@ -545,7 +545,7 @@ CONTAINS
     CALL CleanSpecialCharacters(ALine)
     IF (ALine .NE. '') THEN
         CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(ALine)),cWorkingDirectory,cAbsPathFileName)
-        CALL LWUseBudRawFile_New(IsForInquiry,cProjectNameForDSS,cAbsPathFileName,TimeStep,NTIME,NRegion+1,RegionArea,RegionNames,'land and water use budget',TRIM(cVersionFull),RootZone%LWUseBudRawFile,iStat)
+        CALL LWUseBudRawFile_New(IsForInquiry,cProjectNameForDSS,cAbsPathFileName,TimeStep,NTIME,NRegion+1,RegionArea,RegionNames,'land and water use budget',TRIM(cVersionFull),RootZone%LWUseBudRawFile,iStat,RootZone%Logger)
         IF (iStat .EQ. -1) RETURN
         RootZone%Flags%LWUseBudRawFile_Defined = .TRUE.      
     END IF
@@ -556,7 +556,7 @@ CONTAINS
     CALL CleanSpecialCharacters(ALine)
     IF (ALine .NE. '') THEN
         CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(ALine)),cWorkingDirectory,cAbsPathFileName)
-        CALL RootZoneBudRawFile_New(IsForInquiry,cProjectNameForDSS,cAbsPathFileName,TimeStep,NTIME,NRegion+1,RegionArea,RegionNames,'root zone budget',TRIM(cVersionFull),RootZone%RootZoneBudRawFile,iStat)
+        CALL RootZoneBudRawFile_New(IsForInquiry,cProjectNameForDSS,cAbsPathFileName,TimeStep,NTIME,NRegion+1,RegionArea,RegionNames,'root zone budget',TRIM(cVersionFull),RootZone%RootZoneBudRawFile,iStat,RootZone%Logger)
         IF (iStat .EQ. -1) RETURN
         RootZone%Flags%RootZoneBudRawFile_Defined = .TRUE.
     END IF
@@ -1007,7 +1007,7 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- NEW HDF5 LAND AND WATER USE BUDGET FILE FOR POST-PROCESSING
   ! -------------------------------------------------------------
-  SUBROUTINE LWUseBudRawFile_New(IsForInquiry,cProjectNameForDSS,cFileName,TimeStep,NTIME,NRegion,RegionArea,cRegionNames,cDescriptor,cVersion,RawFile,iStat)
+  SUBROUTINE LWUseBudRawFile_New(IsForInquiry,cProjectNameForDSS,cFileName,TimeStep,NTIME,NRegion,RegionArea,cRegionNames,cDescriptor,cVersion,RawFile,iStat,Logger)
     LOGICAL,INTENT(IN)            :: IsForInquiry
     CHARACTER(LEN=*),INTENT(IN)   :: cProjectNameForDSS,cFileName,cRegionNames(NRegion)
     TYPE(TimeStepType),INTENT(IN) :: TimeStep
@@ -1017,6 +1017,7 @@ CONTAINS
     CHARACTER(LEN=*),INTENT(IN)   :: cVersion
     TYPE(BudgetType)              :: RawFile
     INTEGER,INTENT(OUT)           :: iStat
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT) :: Logger
     
     !Local variables
     TYPE(BudgetHeaderType) :: OutputData
@@ -1064,10 +1065,10 @@ CONTAINS
 
     !Instantiate the land and water use raw file for when it is opened for inquiry
     IF (IsForInquiry) THEN
-        CALL RawFile%New(ModuleLogger,cFileName,iStat)
+        CALL RawFile%New(Logger,cFileName,iStat)
         RETURN
     END IF
-    
+
     !Budget descriptor
     OutputData%cBudgetDescriptor = cDescriptor
     
@@ -1176,8 +1177,8 @@ CONTAINS
     END ASSOCIATE
                                              
     !Instantiate the land and water use raw file
-    CALL RawFile%New(ModuleLogger,cFileName,OutputData,iStat)
-    
+    CALL RawFile%New(Logger,cFileName,OutputData,iStat)
+
   END SUBROUTINE LWUseBudRawFile_New
 
   
@@ -1433,7 +1434,7 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- NEW HDF5 ROOT ZONE BUDGET FILE FOR POST-PROCESSING
   ! -------------------------------------------------------------
-  SUBROUTINE RootZoneBudRawFile_New(IsForInquiry,cProjectNameForDSS,cFileName,TimeStep,NTIME,NRegion,RegionArea,cRegionNames,cDescriptor,cVersion,RawFile,iStat)
+  SUBROUTINE RootZoneBudRawFile_New(IsForInquiry,cProjectNameForDSS,cFileName,TimeStep,NTIME,NRegion,RegionArea,cRegionNames,cDescriptor,cVersion,RawFile,iStat,Logger)
     LOGICAL,INTENT(IN)            :: IsForInquiry
     CHARACTER(LEN=*),INTENT(IN)   :: cProjectNameForDSS,cFileName,cRegionNames(NRegion)
     TYPE(TimeStepType),INTENT(IN) :: TimeStep
@@ -1443,6 +1444,7 @@ CONTAINS
     CHARACTER(LEN=*),INTENT(IN)   :: cVersion
     TYPE(BudgetType)              :: RawFile
     INTEGER,INTENT(OUT)           :: iStat
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT) :: Logger
 
     !Local variables
     TYPE(BudgetHeaderType) :: OutputData
@@ -1548,7 +1550,7 @@ CONTAINS
                                                   
     !Instantiate the root zone budget raw file for when it is opened for inquiry
     IF (IsForInquiry) THEN
-        CALL RawFile%New(ModuleLogger,cFileName,iStat)
+        CALL RawFile%New(Logger,cFileName,iStat)
         RETURN
     END IF
     
@@ -1690,11 +1692,11 @@ CONTAINS
     END ASSOCIATE
                                              
     !Instantiate the land and water use raw file
-    CALL RawFile%New(ModuleLogger,cFileName,OutputData,iStat)
-    
+    CALL RawFile%New(Logger,cFileName,OutputData,iStat)
+
     !Free memory
     CALL OutputData%Kill()
-    
+
   END SUBROUTINE RootZoneBudRawFile_New
   
   
@@ -2483,15 +2485,16 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET MONTHLY ZBUDGET FLOWS FROM ZBUDGET OUTPUT 
   ! -------------------------------------------------------------
-  SUBROUTINE RootZone_v50_GetZBudget_MonthlyFlows_GivenFile(ZBudget,iZBudgetType,ZoneList,iZoneID,iLUType,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
-    TYPE(ZBudgetType),INTENT(IN)             :: ZBudget              
+  SUBROUTINE RootZone_v50_GetZBudget_MonthlyFlows_GivenFile(ZBudget,iZBudgetType,ZoneList,iZoneID,iLUType,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat,Logger)
+    TYPE(ZBudgetType),INTENT(IN)             :: ZBudget
     TYPE(ZoneListType),INTENT(IN)            :: ZoneList
     INTEGER,INTENT(IN)                       :: iZBudgetType,iZoneID,iLUType
-    CHARACTER(LEN=*),INTENT(IN)              :: cBeginDate,cEndDate  
+    CHARACTER(LEN=*),INTENT(IN)              :: cBeginDate,cEndDate
     REAL(8),INTENT(IN)                       :: rFactVL
-    REAL(8),ALLOCATABLE,INTENT(OUT)          :: rFlows(:,:)          
+    REAL(8),ALLOCATABLE,INTENT(OUT)          :: rFlows(:,:)
     CHARACTER(LEN=*),ALLOCATABLE,INTENT(OUT) :: cFlowNames(:)
     INTEGER,INTENT(OUT)                      :: iStat
+    TYPE(MessageLoggerType),OPTIONAL,INTENT(INOUT) :: Logger
     
     !Local variables
     CHARACTER(LEN=ModNameLen+46) :: ThisProcedure = ModName // 'RootZone_v50_GetZBudget_MonthlyFlows_GivenFile'
@@ -2665,15 +2668,16 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET ANNUAL ZBUDGET FLOWS FROM ZBUDGET OUTPUT 
   ! -------------------------------------------------------------
-  SUBROUTINE RootZone_v50_GetZBudget_AnnualFlows_GivenFile(ZBudget,iZBudgetType,ZoneList,iZoneID,iLUType,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
-    TYPE(ZBudgetType),INTENT(IN)             :: ZBudget              
+  SUBROUTINE RootZone_v50_GetZBudget_AnnualFlows_GivenFile(ZBudget,iZBudgetType,ZoneList,iZoneID,iLUType,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat,Logger)
+    TYPE(ZBudgetType),INTENT(IN)             :: ZBudget
     TYPE(ZoneListType),INTENT(IN)            :: ZoneList
     INTEGER,INTENT(IN)                       :: iZBudgetType,iZoneID,iLUType
-    CHARACTER(LEN=*),INTENT(IN)              :: cBeginDate,cEndDate  
+    CHARACTER(LEN=*),INTENT(IN)              :: cBeginDate,cEndDate
     REAL(8),INTENT(IN)                       :: rFactVL
-    REAL(8),ALLOCATABLE,INTENT(OUT)          :: rFlows(:,:)          
+    REAL(8),ALLOCATABLE,INTENT(OUT)          :: rFlows(:,:)
     CHARACTER(LEN=*),ALLOCATABLE,INTENT(OUT) :: cFlowNames(:)
     INTEGER,INTENT(OUT)                      :: iStat
+    TYPE(MessageLoggerType),OPTIONAL,INTENT(INOUT) :: Logger
     
     !Local variables
     CHARACTER(LEN=ModNameLen+45) :: ThisProcedure = ModName // 'RootZone_v50_GetZBudget_AnnualFlows_GivenFile'

@@ -78,7 +78,7 @@ CONTAINS
   ! --- SET MODULE LOGGER
   ! -------------------------------------------------------------
   SUBROUTINE SMP2SMP_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType),TARGET,INTENT(IN) :: Logger
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT) :: Logger
 
     ModuleLogger => Logger
 
@@ -126,7 +126,7 @@ CONTAINS
   ! =====================================================================
   SUBROUTINE Init(This, Logger, iDateSpec)
     CLASS(SMP2SMPType), INTENT(INOUT) :: This
-    TYPE(MessageLoggerType),TARGET,INTENT(IN) :: Logger
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT) :: Logger
     INTEGER,            INTENT(IN)    :: iDateSpec  ! 1=dd/mm, 2=mm/dd
 
     This%Logger => Logger

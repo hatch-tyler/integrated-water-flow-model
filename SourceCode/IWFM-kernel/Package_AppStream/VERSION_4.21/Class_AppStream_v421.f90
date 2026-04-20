@@ -57,9 +57,9 @@ MODULE Class_AppStream_v421
   USE Class_StrmReach               , ONLY: StrmReach_New                   , &
                                             StrmReach_CompileReachNetwork   , &
                                             StrmReach_WritePreprocessedData
+  USE Class_BaseAppStream            , ONLY: ReadFractionsForGW
   USE Class_AppStream_v42           , ONLY: AppStream_v42_Type              , &
-                                            ReadFractionsForGW              , &
-                                            CompileUpstrmNodes 
+                                            CompileUpstrmNodes
   USE Package_Discretization        , ONLY: AppGridType                     , &
                                             StratigraphyType                
   USE Package_PrecipitationET       , ONLY: ETType
@@ -127,7 +127,7 @@ CONTAINS
   ! --- SET MODULE-LEVEL LOGGER
   ! -------------------------------------------------------------
   SUBROUTINE AppStream_v421_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    TYPE(MessageLoggerType), TARGET, INTENT(INOUT) :: Logger
     ModuleLogger => Logger
   END SUBROUTINE AppStream_v421_SetModuleLogger
 
@@ -161,11 +161,14 @@ CONTAINS
     CHARACTER                    :: ALine*100
     INTEGER                      :: NRTB,ErrorCode,iGWNodeIDs(AppGrid%NNodes)
     TYPE(GenericFileType)        :: DataFile
-    
+
+    !Set Logger (INTENT(OUT) resets pointer, restore from module-level)
+    AppStream%Logger => ModuleLogger
+
     !Initialize
     iStat      = 0
     iGWNodeIDs = AppGrid%AppNode%ID
-    
+
     !Inform user
     CALL ModuleLogger%EchoProgress('Instantiating streams')
     
@@ -214,7 +217,7 @@ CONTAINS
     IF (iStat .EQ. -1) RETURN
     
     !Read stream nodes and fraction of stream-aquifer interaction to be applied to corresponding gw nodes
-    CALL ReadFractionsForGW(DataFile,AppStream%Nodes%ID,StrmGWConnector,iStat)
+    CALL ReadFractionsForGW(DataFile,AppStream%Nodes%ID,StrmGWConnector,AppStream%Logger,iStat)
     IF (iStat .EQ. -1) RETURN
     
     !Close file
@@ -419,10 +422,13 @@ CONTAINS
     
     !Local variables
     CHARACTER(LEN=ModNameLen+31) :: ThisProcedure = ModName // 'AppStream_v421_SetAllComponents'
-    
+
+    !Set Logger (INTENT(OUT) resets pointer, restore from module-level)
+    AppStream%Logger => ModuleLogger
+
     !Initialize
     iStat = 0
-    
+
     !Echo progress
     CALL ModuleLogger%EchoProgress('Instantiating streams')
     
@@ -468,10 +474,13 @@ CONTAINS
     
     !Local variables
     CHARACTER(LEN=ModNameLen+45) :: ThisProcedure = ModName // 'AppStream_v421_SetAllComponentsWithoutBinFile'
-    
+
+    !Set Logger (INTENT(OUT) resets pointer, restore from module-level)
+    AppStream%Logger => ModuleLogger
+
     !Initialize
     iStat = 0
-    
+
     !Instantiate the static components of the AppStream data
     CALL AppStream_v421_SetStaticComponent(AppStream,cPPFileName,AppGrid,Stratigraphy,IsRoutedStreams,StrmGWConnector,StrmLakeConnector,iStat)
     IF (iStat .EQ. -1) RETURN
@@ -555,10 +564,13 @@ CONTAINS
     !Local variables
     CHARACTER(LEN=ModNameLen+20) :: ThisProcedure = ModName // 'ReadPreprocessedData'
     INTEGER                      :: ErrorCode,indxNode
-    
+
+    !Set Logger (INTENT(OUT) resets pointer, restore from module-level)
+    AppStream%Logger => ModuleLogger
+
     !Initialize
     iStat = 0
-       
+
     !Routed/non-routed flag
     CALL BinFile%ReadData(AppStream%lRouted,iStat)  ;  IF (iStat .EQ. -1) RETURN
     
@@ -805,7 +817,7 @@ CONTAINS
     END DO
     
     !Compile reach network from upstream to downstream
-    CALL StrmReach_CompileReachNetwork(AppStream%NReaches,AppStream%Reaches,iStat)
+    CALL StrmReach_CompileReachNetwork(AppStream%NReaches,AppStream%Reaches,AppStream%Logger,iStat)
     IF (iStat .EQ. -1) RETURN
     
     !Compile upstream nodes for each node

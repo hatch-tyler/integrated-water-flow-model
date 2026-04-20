@@ -88,8 +88,7 @@ MODULE Package_AppUnsatZone
   PRIVATE
   PUBLIC :: AppUnsatZoneType          , &
             f_iBudgetType_UnsatZone   , &
-            f_iZBudgetType_UnsatZone  , &
-            AppUnsatZone_SetModuleLogger
+            f_iZBudgetType_UnsatZone
   
   
   ! -------------------------------------------------------------
@@ -186,23 +185,9 @@ MODULE Package_AppUnsatZone
   ! -------------------------------------------------------------
   INTEGER,PARAMETER                   :: ModNameLen  = 22
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName     = 'Package_AppUnsatZone::'
-  TYPE(MessageLoggerType),POINTER,PRIVATE :: ModuleLogger => NULL()
 
 
-  
 CONTAINS
-
-
-  ! -------------------------------------------------------------
-  ! --- SET MODULE LOGGER
-  ! -------------------------------------------------------------
-  SUBROUTINE AppUnsatZone_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType),TARGET,INTENT(IN) :: Logger
-
-    ModuleLogger => Logger
-
-  END SUBROUTINE AppUnsatZone_SetModuleLogger
-
 
 
 ! ******************************************************************
@@ -220,7 +205,7 @@ CONTAINS
   ! -------------------------------------------------------------
   SUBROUTINE New(AppUnsatZone,Logger,IsForInquiry,cFileName,cWorkingDirectory,AppGrid,Stratigraphy,TimeStep,NTIME,DepthToGW,iStat,ICFile)
     CLASS(AppUnsatZoneType),INTENT(OUT)          :: AppUnsatZone
-    TYPE(MessageLoggerType),TARGET,INTENT(IN)    :: Logger
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT)    :: Logger
     LOGICAL,INTENT(IN)                           :: IsForInquiry
     CHARACTER(LEN=*),INTENT(IN)         :: cFileName,cWorkingDirectory
     TYPE(AppGridType),INTENT(IN)        :: AppGrid
@@ -295,7 +280,7 @@ CONTAINS
     IF (ALine .NE. '') THEN
         ALLOCATE (AppUnsatZone%ZBudgetRawFile)
         CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(ALine)),cWorkingDirectory,cAbsPathFileName)
-        CALL UZZoneBudRawFile_New(IsForInquiry,cAbsPathFileName,TimeStep,NTIME,NUZLayers,AppGrid,AppUnsatZone%ZBudgetRawFile,iStat)
+        CALL UZZoneBudRawFile_New(Logger,IsForInquiry,cAbsPathFileName,TimeStep,NTIME,NUZLayers,AppGrid,AppUnsatZone%ZBudgetRawFile,iStat)
         IF (iStat .EQ. -1) RETURN
     END IF
     
@@ -330,7 +315,7 @@ CONTAINS
     END IF
     
     !Read unsat zone parameters
-    CALL ReadUnsatZoneParameters(NUZLayers,AppGrid,Stratigraphy,TimeStep,UnsatZoneFile,AppUnsatZone%VarTimeUnit,AppUnsatZone%UnsatElems,iStat)
+    CALL ReadUnsatZoneParameters(Logger,NUZLayers,AppGrid,Stratigraphy,TimeStep,UnsatZoneFile,AppUnsatZone%VarTimeUnit,AppUnsatZone%UnsatElems,iStat)
     IF (iStat .EQ. -1) RETURN
     
     !Compute dynamic unsat zone thickness based on the location of gw head and set the flag
@@ -341,9 +326,9 @@ CONTAINS
     
     !Read initial conditions
     IF (PRESENT(ICFile)) THEN
-        CALL ReadInitialConditions(ICFile,AppGrid%AppElement%ID,NUZLayers,AppUnsatZone%UnsatElems,iStat)
+        CALL ReadInitialConditions(Logger,ICFile,AppGrid%AppElement%ID,NUZLayers,AppUnsatZone%UnsatElems,iStat)
     ELSE
-        CALL ReadInitialConditions(UnsatZoneFile,AppGrid%AppElement%ID,NUZLayers,AppUnsatZone%UnsatElems,iStat)
+        CALL ReadInitialConditions(Logger,UnsatZoneFile,AppGrid%AppElement%ID,NUZLayers,AppUnsatZone%UnsatElems,iStat)
     END IF
     IF (iStat .EQ. -1) RETURN
     
@@ -363,7 +348,8 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- NEW HDF5 UNSATURATED ZONE ZONE BUDGET FILE FOR POST-PROCESSING
   ! -------------------------------------------------------------
-  SUBROUTINE UZZoneBudRawFile_New(IsForInquiry,cFileName,TimeStep,NTIME,NUZLayers,AppGrid,ZBudFile,iStat)
+  SUBROUTINE UZZoneBudRawFile_New(Logger,IsForInquiry,cFileName,TimeStep,NTIME,NUZLayers,AppGrid,ZBudFile,iStat)
+    TYPE(MessageLoggerType)       :: Logger
     LOGICAL,INTENT(IN)            :: IsForInquiry
     CHARACTER(LEN=*),INTENT(IN)   :: cFileName
     TYPE(TimeStepType),INTENT(IN) :: TimeStep
@@ -384,7 +370,7 @@ CONTAINS
     
     !If this is for inquiry, open file for reading and return
     IF (IsForInquiry) THEN
-        IF (cFileName .NE. '') CALL ZBudFile%New(ModuleLogger,cFileName,iStat)
+        IF (cFileName .NE. '') CALL ZBudFile%New(Logger,cFileName,iStat)
         RETURN
     END IF
     
@@ -448,7 +434,7 @@ CONTAINS
               Header%ASCIIOutput%cColumnTitles(3)                                  , &
               STAT = ErrorCode                                                     )
     IF (ErrorCode .NE. 0) THEN
-        CALL ModuleLogger%SetLastMessage('Error allocating memory for unsaturated zone Z-Budget file!',f_iFatal,ThisProcedure)
+        CALL Logger%SetLastMessage('Error allocating memory for unsaturated zone Z-Budget file!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -499,7 +485,7 @@ CONTAINS
                          'DEEP_PERC'          ]
                              
     !Instantiate Z-Budget file
-    CALL ZBudFile%New(ModuleLogger,cFileName,NTIME,TimeStepLocal,Header,SystemData,iStat)
+    CALL ZBudFile%New(Logger,cFileName,NTIME,TimeStepLocal,Header,SystemData,iStat)
     
   END SUBROUTINE UZZoneBudRawFile_New
 
@@ -716,11 +702,12 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- READ UNSAT ZONE INITIAL MOISTURE CONDITIONS
   ! -------------------------------------------------------------
-  SUBROUTINE ReadInitialConditions(InFile,iElemIDs,NUZLayers,UnsatElems,iStat) 
-    TYPE(GenericFileType) :: InFile
-    INTEGER,INTENT(IN)    :: iElemIDs(:),NUZLayers
-    TYPE(UnsatElemType)   :: UnsatElems(:,:)
-    INTEGER,INTENT(OUT)   :: iStat
+  SUBROUTINE ReadInitialConditions(Logger,InFile,iElemIDs,NUZLayers,UnsatElems,iStat)
+    TYPE(MessageLoggerType) :: Logger
+    TYPE(GenericFileType)   :: InFile
+    INTEGER,INTENT(IN)      :: iElemIDs(:),NUZLayers
+    TYPE(UnsatElemType)     :: UnsatElems(:,:)
+    INTEGER,INTENT(OUT)     :: iStat
     
     !Local variables
     CHARACTER(LEN=ModNameLen+21) :: ThisProcedure = ModName // 'ReadInitialConditions'
@@ -751,14 +738,14 @@ CONTAINS
             
             !Make sure element is modeled
             IF (iElem .EQ. 0) THEN
-                CALL ModuleLogger%SetLastMessage('Element '//TRIM(IntToText(ID))//' listed for unsaturated zone initial conditions is not in the model!',f_iFatal,ThisProcedure)
+                CALL Logger%SetLastMessage('Element '//TRIM(IntToText(ID))//' listed for unsaturated zone initial conditions is not in the model!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
             
             !Make sure same element is not listed more than once
             IF (lProcessed(iElem)) THEN
-                CALL ModuleLogger%SetLastMessage('Element '//TRIM(IntToText(ID))//' specified for unsaturated zone initail conditions is listed more than once!',f_iFatal,ThisProcedure)
+                CALL Logger%SetLastMessage('Element '//TRIM(IntToText(ID))//' specified for unsaturated zone initail conditions is listed more than once!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -778,7 +765,7 @@ CONTAINS
                 MessageArray(2) = ' is larger than the total porosity!'
                 WRITE(MessageArray(3),'(A27,F8.6)') 'Total porosity           = ',UnsatElems(indxLayer,indxElem)%TotalPorosity
                 WRITE(MessageArray(4),'(A27,F8.6)') 'Initial moisture content = ',UnsatElems(indxLayer,indxElem)%SoilM
-                CALL ModuleLogger%SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
+                CALL Logger%SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -791,13 +778,14 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- READ UNSAT ZONE PARAMETERS
   ! -------------------------------------------------------------
-  SUBROUTINE ReadUnsatZoneParameters(NUZLayers,AppGrid,Stratigraphy,TimeStep,InFile,VarTimeUnit,UnsatElems,iStat)
+  SUBROUTINE ReadUnsatZoneParameters(Logger,NUZLayers,AppGrid,Stratigraphy,TimeStep,InFile,VarTimeUnit,UnsatElems,iStat)
+    TYPE(MessageLoggerType)           :: Logger
     INTEGER,INTENT(IN)                :: NUZLayers
     TYPE(AppGridType),INTENT(IN)      :: AppGrid
     TYPE(StratigraphyTYpe),INTENT(IN) :: Stratigraphy
     TYPE(TimeStepType),INTENT(IN)     :: TimeStep
     TYPE(GenericFileType)             :: InFile
-    CHARACTER(LEN=*),INTENT(OUT)      :: VarTimeUnit           
+    CHARACTER(LEN=*),INTENT(OUT)      :: VarTimeUnit
     TYPE(UnsatElemType),INTENT(OUT)   :: UnsatElems(:,:)
     INTEGER,INTENT(OUT)               :: iStat
     
@@ -829,7 +817,7 @@ CONTAINS
     !Make sure time units are valid if time tracking simulation
     IF (TimeStep%TrackTime) THEN
         IF (IsTimeIntervalValid(VarTimeUnit) .EQ. 0) THEN
-            CALL ModuleLogger%SetLastMessage('Time unit for unsaturated zone hydraulic conductivity is not valid!',f_iFatal,ThisProcedure)
+            CALL Logger%SetLastMessage('Time unit for unsaturated zone hydraulic conductivity is not valid!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -845,14 +833,14 @@ CONTAINS
             ID = INT(rDummyArray(1))
             CALL ConvertID_To_Index(ID,iElemIDs,iElem)
             IF (iElem .EQ. 0) THEN 
-                CALL ModuleLogger%SetLastMessage('Element '//TRIM(IntToText(ID))//' listed for unsaturated zone parameters is not in the model!',f_iFatal,ThisProcedure)
+                CALL Logger%SetLastMessage('Element '//TRIM(IntToText(ID))//' listed for unsaturated zone parameters is not in the model!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
             
             !Make sure same element is not specified more than once
             IF (lProcessed(iElem)) THEN
-                CALL ModuleLogger%SetLastMessage('Element '//TRIM(IntToText(ID))//' specified for unsatuarted zone parameters is listed more than once!',f_iFatal,ThisProcedure)
+                CALL Logger%SetLastMessage('Element '//TRIM(IntToText(ID))//' specified for unsatuarted zone parameters is listed more than once!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -871,7 +859,7 @@ CONTAINS
     IF (NGroup .GT. 0) THEN
 
         !Read the parameter values at parametric nodes and compute the interpolation coefficients for grid elements
-        CALL GetValuesFromParametricGrid(InFile,AppGrid%GridType,iElemIDs,NGroup,rFactors,.TRUE.,'unsaturated zone',rDummy3DArray,iStat)
+        CALL GetValuesFromParametricGrid(AppGrid%GridType%Logger,InFile,AppGrid%GridType,iElemIDs,NGroup,rFactors,.TRUE.,'unsaturated zone',rDummy3DArray,iStat)
         IF (iStat .EQ. -1) RETURN
 
         !Initialize parameter values
@@ -907,7 +895,7 @@ CONTAINS
             IF (UnsatElems(indxLayer,indxElem)%TotalPorosity .LE. 0.0) THEN
                 MessageArray(1) = 'Unsaturated zone porosity becomes less than zero'
                 WRITE (MessageArray(2),'(A,F9.3,A)') 'at element '//TRIM(IntToText(iElemIDs(indxElem)))//', layer '//TRIM(IntToText(indxLayer))//' (',UnsatElems(indxLayer,indxElem)%TotalPorosity,')'
-                CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                CALL Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -916,7 +904,7 @@ CONTAINS
             IF (.NOT. ANY(UnsatElems(indxLayer,indxElem)%KunsatMethod.EQ.f_iKunsatMethodList)) THEN
                 MessageArray(1) = 'Method to compute unsaturated hydraulic conductivity for unsaturated'
                 MessageArray(2) = 'zone at element '//TRIM(IntToText(iElemIDs(indxElem)))//' and layer '//TRIM(IntToText(indxLayer))//' is not recognized!'
-                CALL ModuleLogger%SetLastMessage(MessageArray(1:2) ,f_iFatal,ThisProcedure)
+                CALL Logger%SetLastMessage(MessageArray(1:2) ,f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF

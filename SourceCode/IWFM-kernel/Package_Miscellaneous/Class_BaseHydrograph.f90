@@ -170,7 +170,7 @@ CONTAINS
   ! --- SET MODULE-LEVEL LOGGER
   ! -------------------------------------------------------------
   SUBROUTINE BaseHydrograph_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    TYPE(MessageLoggerType), TARGET, INTENT(INOUT) :: Logger
     ModuleLogger => Logger
   END SUBROUTINE BaseHydrograph_SetModuleLogger
 
@@ -192,7 +192,7 @@ CONTAINS
   ! -------------------------------------------------------------
   SUBROUTINE New(HydOutput,Logger,IsForInquiry,InFile,cWorkingDirectory,AppGrid,Stratigraphy,iGWNodeIDs,iHydFor,UNITLTOU,CPart,TimeStep,iStat)
     CLASS(HydOutputType)                        :: HydOutput
-    TYPE(MessageLoggerType),TARGET,INTENT(IN)   :: Logger
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT)   :: Logger
     LOGICAL,INTENT(IN)                          :: IsForInquiry
     TYPE(GenericFileType)             :: InFile
     TYPE(AppGridType),INTENT(IN)      :: AppGrid

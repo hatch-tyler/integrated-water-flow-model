@@ -116,7 +116,7 @@ CONTAINS
   ! -------------------------------------------------------------
   SUBROUTINE NewStratigraphy(Stratigraphy,Logger,NNodes,NLayers,TopActiveLayer,ActiveNode,GSElev,TopElev,BottomElev,iStat)
     CLASS(StratigraphyType),INTENT(OUT)         :: Stratigraphy
-    TYPE(MessageLoggerType),TARGET,INTENT(IN)   :: Logger
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT)   :: Logger
     INTEGER,INTENT(IN)                          :: NLayers , NNodes , TopActiveLayer(NNodes)
     LOGICAL,INTENT(IN)                          :: ActiveNode(NNodes,NLayers)
     REAL(8),INTENT(IN)                          :: GSElev(NNodes),TopElev(NNodes,NLayers),BottomElev(NNodes,NLayers)
@@ -202,7 +202,7 @@ CONTAINS
   ! -------------------------------------------------------------
   SUBROUTINE ReadStratigraphyData(Stratigraphy,Logger,NNodes,NodeIDs,FileName,iStat)
     CLASS(StratigraphyType),INTENT(OUT)         :: Stratigraphy
-    TYPE(MessageLoggerType),TARGET,INTENT(IN)   :: Logger
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT)   :: Logger
     INTEGER,INTENT(IN)                          :: NNodes,NodeIDs(NNodes)
     CHARACTER(LEN=*),INTENT(IN)                 :: FileName
     INTEGER,INTENT(OUT)                         :: iStat
@@ -331,7 +331,7 @@ CONTAINS
   ! -------------------------------------------------------------
   SUBROUTINE ReadProcessedStratigraphyData(Stratigraphy,Logger,NNodes,InFile,iStat)
     CLASS(StratigraphyType),INTENT(OUT)         :: Stratigraphy
-    TYPE(MessageLoggerType),TARGET,INTENT(IN)   :: Logger
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT)   :: Logger
     INTEGER,INTENT(IN)                          :: NNodes
     TYPE(GenericFileType)                        :: InFile
     INTEGER,INTENT(OUT)                         :: iStat

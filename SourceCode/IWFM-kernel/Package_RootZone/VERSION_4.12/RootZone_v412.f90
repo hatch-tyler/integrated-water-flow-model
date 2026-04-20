@@ -426,7 +426,7 @@ CONTAINS
   ! --- SET MODULE LOGGER
   ! -------------------------------------------------------------
   SUBROUTINE RootZonev412_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    TYPE(MessageLoggerType), TARGET, INTENT(INOUT) :: Logger
     ModuleLogger => Logger
   END SUBROUTINE RootZonev412_SetModuleLogger
 
@@ -717,7 +717,7 @@ CONTAINS
     CALL CleanSpecialCharacters(cALine)
     IF (cALine .NE. '') THEN
         CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(cALine)),cWorkingDirectory,cAbsPathFileName)
-        CALL LWUseBudRawFile_New(IsForInquiry,cProjectNameForDSS,cAbsPathFileName,TimeStep,NTIME,NRegion+1,RegionArea,RegionNames,'land and water use budget',TRIM(cVersionFull),RootZone%LWUseBudRawFile,iStat)
+        CALL LWUseBudRawFile_New(IsForInquiry,cProjectNameForDSS,cAbsPathFileName,TimeStep,NTIME,NRegion+1,RegionArea,RegionNames,'land and water use budget',TRIM(cVersionFull),RootZone%LWUseBudRawFile,iStat,RootZone%Logger)
         IF (iStat .EQ. -1) RETURN
         RootZone%Flags%LWUseBudRawFile_Defined = .TRUE.      
     END IF
@@ -728,7 +728,7 @@ CONTAINS
     CALL CleanSpecialCharacters(cALine)
     IF (cALine .NE. '') THEN
         CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(cALine)),cWorkingDirectory,cAbsPathFileName)
-        CALL RootZoneBudRawFile_New(IsForInquiry,cProjectNameForDSS,cAbsPathFileName,TimeStep,NTIME,NRegion+1,RegionArea,RegionNames,'root zone budget',TRIM(cVersionFull),RootZone%RootZoneBudRawFile,iStat)
+        CALL RootZoneBudRawFile_New(IsForInquiry,cProjectNameForDSS,cAbsPathFileName,TimeStep,NTIME,NRegion+1,RegionArea,RegionNames,'root zone budget',TRIM(cVersionFull),RootZone%RootZoneBudRawFile,iStat,RootZone%Logger)
         IF (iStat .EQ. -1) RETURN
         RootZone%Flags%RootZoneBudRawFile_Defined = .TRUE.
     END IF
@@ -762,7 +762,7 @@ CONTAINS
         CALL CleanSpecialCharacters(cALine)
         IF (cALine .NE. '') THEN
             CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(cALine)),cWorkingDirectory,cAbsPathFileName)
-            CALL LUAreaScaleFactorOutFile_New(IsForInquiry,cAbsPathFileName,iElemIDs,RootZone%LUAreaScaleFactorOutFile,iStat)
+            CALL LUAreaScaleFactorOutFile_New(IsForInquiry,cAbsPathFileName,iElemIDs,RootZone%LUAreaScaleFactorOutFile,iStat,RootZone%Logger)
             IF (iStat .EQ. -1) RETURN
         END IF
     END IF
@@ -910,7 +910,7 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- NEW BINARY LAND AND WATER USE BUDGET FILE FOR POST-PROCESSING
   ! -------------------------------------------------------------
-  SUBROUTINE LWUseBudRawFile_New(IsForInquiry,cProjectNameForDSS,cFileName,TimeStep,NTIME,NRegion,RegionArea,cRegionNames,cDescriptor,cVersion,RawFile,iStat)
+  SUBROUTINE LWUseBudRawFile_New(IsForInquiry,cProjectNameForDSS,cFileName,TimeStep,NTIME,NRegion,RegionArea,cRegionNames,cDescriptor,cVersion,RawFile,iStat,Logger)
     LOGICAL,INTENT(IN)            :: IsForInquiry
     CHARACTER(LEN=*),INTENT(IN)   :: cProjectNameForDSS,cFileName,cRegionNames(NRegion)
     TYPE(TimeStepType),INTENT(IN) :: TimeStep
@@ -920,6 +920,7 @@ CONTAINS
     CHARACTER(LEN=*),INTENT(IN)   :: cVersion
     TYPE(BudgetType),INTENT(OUT)  :: RawFile
     INTEGER,INTENT(OUT)           :: iStat
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT) :: Logger
     
     !Local variables
     TYPE(BudgetHeaderType) :: OutputData
@@ -965,10 +966,10 @@ CONTAINS
     
     !Instantiate the land and water use raw file for when it is openned for inquiry
     IF (IsForInquiry) THEN
-        CALL RawFile%New(ModuleLogger,cFileName,iStat)
+        CALL RawFile%New(Logger,cFileName,iStat)
         RETURN
     END IF
-    
+
     !Budget descriptor
     OutputData%cBudgetDescriptor = cDescriptor
     
@@ -1076,8 +1077,8 @@ CONTAINS
     END ASSOCIATE
                                              
     !Instantiate the land and water use raw file
-    CALL RawFile%New(ModuleLogger,cFileName,OutputData,iStat)
-    
+    CALL RawFile%New(Logger,cFileName,OutputData,iStat)
+
   END SUBROUTINE LWUseBudRawFile_New
   
   
@@ -1337,7 +1338,7 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- NEW HDF5 ROOT ZONE BUDGET FILE FOR POST-PROCESSING
   ! -------------------------------------------------------------
-  SUBROUTINE RootZoneBudRawFile_New(IsForInquiry,cProjectNameForDSS,cFileName,TimeStep,NTIME,NRegion,RegionArea,cRegionNames,cDescriptor,cVersion,RawFile,iStat)
+  SUBROUTINE RootZoneBudRawFile_New(IsForInquiry,cProjectNameForDSS,cFileName,TimeStep,NTIME,NRegion,RegionArea,cRegionNames,cDescriptor,cVersion,RawFile,iStat,Logger)
     LOGICAL,INTENT(IN)            :: IsForInquiry
     CHARACTER(LEN=*),INTENT(IN)   :: cProjectNameForDSS,cFileName,cRegionNames(NRegion)
     TYPE(TimeStepType),INTENT(IN) :: TimeStep
@@ -1347,6 +1348,7 @@ CONTAINS
     CHARACTER(LEN=*),INTENT(IN)   :: cVersion
     TYPE(BudgetType),INTENT(OUT)  :: RawFile
     INTEGER,INTENT(OUT)           :: iStat
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT) :: Logger
 
     !Local variables
     TYPE(BudgetHeaderType) :: OutputData
@@ -1477,16 +1479,16 @@ CONTAINS
                                                                 'NRV_ET'             ,&      !Native&Riparian Veg. Actual ET (-)                      
                                                                 'NRV_PERC'           ,&      !Native&Riparian Veg. Percolation (-)                    
                                                                 'NRV_END_STOR'       ,&      !Native&Riparian Veg. Ending Storage (-)                 
-                                                                'NRV_DISCREPANCY'    ]       !Native&Riparian Veg. Discrepancy (=) 
+                                                                'NRV_DISCREPANCY'    ]       !Native&Riparian Veg. Discrepancy (=)
     !Initialize
     iStat = 0
-                                                  
+
     !Instantiate the root zone budget raw file for when it is opened for inquiry
     IF (IsForInquiry) THEN
-        CALL RawFile%New(ModuleLogger,cFileName,iStat)
+        CALL RawFile%New(Logger,cFileName,iStat)
         RETURN
     END IF
-    
+
     !Budget descriptor
     OutputData%cBudgetDescriptor = cDescriptor
     
@@ -1641,11 +1643,11 @@ CONTAINS
     END ASSOCIATE
                                              
     !Instantiate the root zone budget file
-    CALL RawFile%New(ModuleLogger,cFileName,OutputData,iStat)
-    
+    CALL RawFile%New(Logger,cFileName,OutputData,iStat)
+
     !Free memory
     CALL OutputData%Kill()
-    
+
   END SUBROUTINE RootZoneBudRawFile_New
 
   
@@ -2071,7 +2073,7 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- NEW BINARY CROP-SPECIFIC LAND AND WATER USE BUDGET FILE FOR POST-PROCESSING
   ! -------------------------------------------------------------
-  SUBROUTINE AgLWUseBudRawFile_New(IsForInquiry,cProjectNameForDSS,cFileName,TimeStep,NTIME,NRegion,RegionArea,cRegionNames,cDescriptor,cVersion,RawFile,iStat)
+  SUBROUTINE AgLWUseBudRawFile_New(IsForInquiry,cProjectNameForDSS,cFileName,TimeStep,NTIME,NRegion,RegionArea,cRegionNames,cDescriptor,cVersion,RawFile,iStat,Logger)
     LOGICAL,INTENT(IN)            :: IsForInquiry
     CHARACTER(LEN=*),INTENT(IN)   :: cProjectNameForDSS,cFileName,cRegionNames(NRegion)
     TYPE(TimeStepType),INTENT(IN) :: TimeStep
@@ -2081,6 +2083,7 @@ CONTAINS
     CHARACTER(LEN=*),INTENT(IN)   :: cVersion
     TYPE(BudgetType),INTENT(OUT)  :: RawFile
     INTEGER,INTENT(OUT)           :: iStat
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT) :: Logger
 
     !Local variables
     TYPE(BudgetHeaderType) :: OutputData
@@ -2116,7 +2119,7 @@ CONTAINS
     
     !Instantiate the land and water use raw file for when it is opened for inquiry
     IF (IsForInquiry) THEN
-        CALL RawFile%New(ModuleLogger,cFileName,iStat)
+        CALL RawFile%New(Logger,cFileName,iStat)
         RETURN
     END IF
        
@@ -2227,15 +2230,15 @@ CONTAINS
     END ASSOCIATE
                                              
     !Instantiate the land and water use raw file
-    CALL RawFile%New(ModuleLogger,cFileName,OutputData,iStat)
-        
+    CALL RawFile%New(Logger,cFileName,OutputData,iStat)
+
   END SUBROUTINE AgLWUseBudRawFile_New
   
   
   ! -------------------------------------------------------------
   ! --- NEW BINARY ROOT ZONE BUDGET FILE FOR POST-PROCESSING OF Non-PONDED AG LANDS
   ! -------------------------------------------------------------
-  SUBROUTINE NonPondedAgRootZoneBudRawFile_New(IsForInquiry,cProjectNameForDSS,cFileName,TimeStep,NTIME,NRegion,RegionArea,cRegionNames,cDescriptor,cVersion,RawFile,iStat)
+  SUBROUTINE NonPondedAgRootZoneBudRawFile_New(IsForInquiry,cProjectNameForDSS,cFileName,TimeStep,NTIME,NRegion,RegionArea,cRegionNames,cDescriptor,cVersion,RawFile,iStat,Logger)
     LOGICAL,INTENT(IN)            :: IsForInquiry
     CHARACTER(LEN=*),INTENT(IN)   :: cProjectNameForDSS,cFileName,cRegionNames(NRegion)
     TYPE(TimeStepType),INTENT(IN) :: TimeStep
@@ -2245,6 +2248,7 @@ CONTAINS
     CHARACTER(LEN=*),INTENT(IN)   :: cVersion
     TYPE(BudgetType),INTENT(OUT)  :: RawFile
     INTEGER,INTENT(OUT)           :: iStat
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT) :: Logger
 
     !Local variables
     TYPE(BudgetHeaderType) :: OutputData
@@ -2300,14 +2304,14 @@ CONTAINS
     
     !Instantiate the root zone budget raw file for when it is opened for inquiry
     IF (IsForInquiry) THEN
-        CALL RawFile%New(ModuleLogger,cFileName,iStat)
+        CALL RawFile%New(Logger,cFileName,iStat)
         RETURN
     END IF
 
     !Budget descriptor
     OutputData%cBudgetDescriptor = cDescriptor
-    
-    !Increment the initial simulation time to represent the data begin date  
+
+    !Increment the initial simulation time to represent the data begin date
     TimeStepLocal = TimeStep
     IF (TimeStep%TrackTime) THEN
         TimeStepLocal%CurrentDateAndTime = IncrementTimeStamp(TimeStepLocal%CurrentDateAndTime,TimeStepLocal%DeltaT_InMinutes)
@@ -2431,15 +2435,15 @@ CONTAINS
     END ASSOCIATE
                                              
     !Instantiate the root zone budget raw file
-    CALL RawFile%New(ModuleLogger,cFileName,OutputData,iStat)
-    
+    CALL RawFile%New(Logger,cFileName,OutputData,iStat)
+
   END SUBROUTINE NonPondedAgRootZoneBudRawFile_New
   
   
   ! -------------------------------------------------------------
   ! --- NEW BINARY ROOT ZONE BUDGET FILE FOR POST-PROCESSING OF PONDED AG LANDS
   ! -------------------------------------------------------------
-  SUBROUTINE PondedAgRootZoneBudRawFile_New(IsForInquiry,cProjectNameForDSS,cFileName,TimeStep,NTIME,NRegion,RegionArea,cRegionNames,cDescriptor,cVersion,RawFile,iStat)
+  SUBROUTINE PondedAgRootZoneBudRawFile_New(IsForInquiry,cProjectNameForDSS,cFileName,TimeStep,NTIME,NRegion,RegionArea,cRegionNames,cDescriptor,cVersion,RawFile,iStat,Logger)
     LOGICAL,INTENT(IN)            :: IsForInquiry
     CHARACTER(LEN=*),INTENT(IN)   :: cProjectNameForDSS,cFileName,cRegionNames(NRegion)
     TYPE(TimeStepType),INTENT(IN) :: TimeStep
@@ -2449,6 +2453,7 @@ CONTAINS
     CHARACTER(LEN=*),INTENT(IN)   :: cVersion
     TYPE(BudgetType),INTENT(OUT)  :: RawFile
     INTEGER,INTENT(OUT)           :: iStat
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT) :: Logger
 
     !Local variables
     TYPE(BudgetHeaderType) :: OutputData
@@ -2510,14 +2515,14 @@ CONTAINS
     
     !Instantiate the root zone budget raw file for when it is opened for inquiry
     IF (IsForInquiry) THEN
-        CALL RawFile%New(ModuleLogger,cFileName,iStat)
+        CALL RawFile%New(Logger,cFileName,iStat)
         RETURN
     END IF
 
     !Budget descriptor
     OutputData%cBudgetDescriptor = cDescriptor
-    
-    !Increment the initial simulation time to represent the data begin date  
+
+    !Increment the initial simulation time to represent the data begin date
     TimeStepLocal = TimeStep
     IF (TimeStep%TrackTime) THEN
         TimeStepLocal%CurrentDateAndTime = IncrementTimeStamp(TimeStepLocal%CurrentDateAndTime,TimeStepLocal%DeltaT_InMinutes)
@@ -2647,8 +2652,8 @@ CONTAINS
     END ASSOCIATE
                                              
     !Instantiate the root zone budget raw file
-    CALL RawFile%New(ModuleLogger,cFileName,OutputData,iStat)
-    
+    CALL RawFile%New(Logger,cFileName,OutputData,iStat)
+
   END SUBROUTINE PondedAgRootZoneBudRawFile_New
 
   
@@ -3244,15 +3249,16 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET MONTHLY ZBUDGET FLOWS 
   ! -------------------------------------------------------------
-  SUBROUTINE RootZone_v412_GetZBudget_MonthlyFlows_GivenFile(ZBudget,iZBudgetType,ZoneList,iZoneID,iLUType,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
-     TYPE(ZBudgetType),INTENT(IN)             :: ZBudget              
+  SUBROUTINE RootZone_v412_GetZBudget_MonthlyFlows_GivenFile(ZBudget,iZBudgetType,ZoneList,iZoneID,iLUType,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat,Logger)
+     TYPE(ZBudgetType),INTENT(IN)             :: ZBudget
      TYPE(ZoneListType),INTENT(IN)            :: ZoneList
      INTEGER,INTENT(IN)                       :: iZBudgetType,iZoneID,iLUType
-     CHARACTER(LEN=*),INTENT(IN)              :: cBeginDate,cEndDate  
+     CHARACTER(LEN=*),INTENT(IN)              :: cBeginDate,cEndDate
      REAL(8),INTENT(IN)                       :: rFactVL
-     REAL(8),ALLOCATABLE,INTENT(OUT)          :: rFlows(:,:)          
+     REAL(8),ALLOCATABLE,INTENT(OUT)          :: rFlows(:,:)
      CHARACTER(LEN=*),ALLOCATABLE,INTENT(OUT) :: cFlowNames(:)
      INTEGER,INTENT(OUT)                      :: iStat
+     TYPE(MessageLoggerType),OPTIONAL,INTENT(INOUT) :: Logger
      
      !Local variables
      CHARACTER(LEN=ModNameLen+47),PARAMETER :: ThisProcedure = ModName // 'RootZone_v412_GetZBudget_MonthlyFlows_GivenFile'
@@ -3487,15 +3493,16 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET ANNUAL ZBUDGET FLOWS 
   ! -------------------------------------------------------------
-  SUBROUTINE RootZone_v412_GetZBudget_AnnualFlows_GivenFile(ZBudget,iZBudgetType,ZoneList,iZoneID,iLUType,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
-     TYPE(ZBudgetType),INTENT(IN)             :: ZBudget              
+  SUBROUTINE RootZone_v412_GetZBudget_AnnualFlows_GivenFile(ZBudget,iZBudgetType,ZoneList,iZoneID,iLUType,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat,Logger)
+     TYPE(ZBudgetType),INTENT(IN)             :: ZBudget
      TYPE(ZoneListType),INTENT(IN)            :: ZoneList
      INTEGER,INTENT(IN)                       :: iZBudgetType,iZoneID,iLUType
-     CHARACTER(LEN=*),INTENT(IN)              :: cBeginDate,cEndDate  
+     CHARACTER(LEN=*),INTENT(IN)              :: cBeginDate,cEndDate
      REAL(8),INTENT(IN)                       :: rFactVL
-     REAL(8),ALLOCATABLE,INTENT(OUT)          :: rFlows(:,:)          
+     REAL(8),ALLOCATABLE,INTENT(OUT)          :: rFlows(:,:)
      CHARACTER(LEN=*),ALLOCATABLE,INTENT(OUT) :: cFlowNames(:)
      INTEGER,INTENT(OUT)                      :: iStat
+     TYPE(MessageLoggerType),OPTIONAL,INTENT(INOUT) :: Logger
      
      !Local variables
      CHARACTER(LEN=ModNameLen+46),PARAMETER :: ThisProcedure = ModName // 'RootZone_v412_GetZBudget_AnnualFlows_GivenFile'

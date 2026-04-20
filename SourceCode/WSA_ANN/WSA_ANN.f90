@@ -294,7 +294,7 @@ CONTAINS
   ! -------------------------------------------------------------
   SUBROUTINE New(WSA,Logger,cFileName,cSIMWorkingDirectory,TimeStep,AppGrid,AppStream,iStat)
     CLASS(WSA_ANN_Type)                      :: WSA
-    TYPE(MessageLoggerType),TARGET,INTENT(IN) :: Logger
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT) :: Logger
     CHARACTER(LEN=*),INTENT(IN)              :: cFileName,cSIMWorkingDirectory
     TYPE(TImeStepType),INTENT(IN)  :: TimeStep 
     TYPE(AppGridType),INTENT(IN)   :: AppGrid
@@ -1843,7 +1843,7 @@ CONTAINS
 
 
   SUBROUTINE WSA_ANN_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    TYPE(MessageLoggerType), TARGET, INTENT(INOUT) :: Logger
     ModuleLogger => Logger
   END SUBROUTINE WSA_ANN_SetModuleLogger
 

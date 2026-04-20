@@ -46,8 +46,7 @@ MODULE Class_LossDestination
   ! -------------------------------------------------------------
   PRIVATE
   PUBLIC :: LossDestinationType          , &
-            LossDestination_New            , &
-            LossDestination_SetModuleLogger
+            LossDestination_New
   
 
   ! -------------------------------------------------------------
@@ -64,11 +63,6 @@ MODULE Class_LossDestination
   ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
-  ! -------------------------------------------------------------
-  ! --- MODULE-LEVEL LOGGER
-  ! -------------------------------------------------------------
-  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
-
   INTEGER,PARAMETER                   :: ModNameLen = 23
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'Class_LossDestination::'
     
@@ -76,14 +70,6 @@ MODULE Class_LossDestination
 
 CONTAINS
 
-
-  ! -------------------------------------------------------------
-  ! --- SET MODULE-LEVEL LOGGER
-  ! -------------------------------------------------------------
-  SUBROUTINE LossDestination_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
-    ModuleLogger => Logger
-  END SUBROUTINE LossDestination_SetModuleLogger
 
 
 
@@ -136,10 +122,10 @@ CONTAINS
         ID = INT(rDummyArray(1))
         CALL ConvertID_To_Index(ID,iDiverIDs,iDiver)
         IF (iDiver .EQ. 0) THEN
-            IF (ASSOCIATED(ModuleLogger)) THEN
-                CALL ModuleLogger%SetLastMessage(TRIM(cBypassOrDiver)//' ID '//TRIM(IntToText(ID))//' listed for '//TRIM(cDestDescription)//' is not in the model!',f_iFatal,ThisProcedure)
+            IF (ASSOCIATED(Logger)) THEN
+                CALL Logger%SetLastMessage(TRIM(cBypassOrDiver)//' ID '//TRIM(IntToText(ID))//' listed for '//TRIM(cDestDescription)//' is not in the model!',f_iFatal,ThisProcedure)
             ELSE
-                CALL ModuleLogger%SetLastMessage(TRIM(cBypassOrDiver)//' ID '//TRIM(IntToText(ID))//' listed for '//TRIM(cDestDescription)//' is not in the model!',f_iFatal,ThisProcedure)
+                CALL Logger%SetLastMessage(TRIM(cBypassOrDiver)//' ID '//TRIM(IntToText(ID))//' listed for '//TRIM(cDestDescription)//' is not in the model!',f_iFatal,ThisProcedure)
             END IF
             iStat = -1
             RETURN
@@ -147,10 +133,10 @@ CONTAINS
         
         !Make sure same diversion ID is not used
         IF (lProcessed(iDiver)) THEN
-            IF (ASSOCIATED(ModuleLogger)) THEN
-                CALL ModuleLogger%SetLastMessage(TRIM(cBypassOrDiver)//' ID '//TRIM(IntToText(ID))//' is used more than once for '//TRIM(cDestDescription)//' description!',f_iFatal,ThisProcedure)
+            IF (ASSOCIATED(Logger)) THEN
+                CALL Logger%SetLastMessage(TRIM(cBypassOrDiver)//' ID '//TRIM(IntToText(ID))//' is used more than once for '//TRIM(cDestDescription)//' description!',f_iFatal,ThisProcedure)
             ELSE
-                CALL ModuleLogger%SetLastMessage(TRIM(cBypassOrDiver)//' ID '//TRIM(IntToText(ID))//' is used more than once for '//TRIM(cDestDescription)//' description!',f_iFatal,ThisProcedure)
+                CALL Logger%SetLastMessage(TRIM(cBypassOrDiver)//' ID '//TRIM(IntToText(ID))//' is used more than once for '//TRIM(cDestDescription)//' description!',f_iFatal,ThisProcedure)
             END IF
             iStat = -1
             RETURN
@@ -168,10 +154,10 @@ CONTAINS
         DEALLOCATE (iDestList , STAT=iErrorCode)
         ALLOCATE (iDestList(iNDest) , pDest%iDestList(iNDest) , pDest%rFracs(iNDest) ,STAT=iErrorCode)
         IF (iErrorCode .NE. 0) THEN
-            IF (ASSOCIATED(ModuleLogger)) THEN
-                CALL ModuleLogger%SetLastMessage('Error allocating memory for '//TRIM(cDestDescription)//' for '//TRIM(LowerCase(cBypassOrDiver))//' '//TRIM(IntToText(ID))//'!',f_iFatal,ThisProcedure)
+            IF (ASSOCIATED(Logger)) THEN
+                CALL Logger%SetLastMessage('Error allocating memory for '//TRIM(cDestDescription)//' for '//TRIM(LowerCase(cBypassOrDiver))//' '//TRIM(IntToText(ID))//'!',f_iFatal,ThisProcedure)
             ELSE
-                CALL ModuleLogger%SetLastMessage('Error allocating memory for '//TRIM(cDestDescription)//' for '//TRIM(LowerCase(cBypassOrDiver))//' '//TRIM(IntToText(ID))//'!',f_iFatal,ThisProcedure)
+                CALL Logger%SetLastMessage('Error allocating memory for '//TRIM(cDestDescription)//' for '//TRIM(LowerCase(cBypassOrDiver))//' '//TRIM(IntToText(ID))//'!',f_iFatal,ThisProcedure)
             END IF
             iStat = -1
             RETURN
@@ -194,10 +180,10 @@ CONTAINS
             END IF
             CALL ConvertID_To_Index(iDestList(indxDest),iDestIDs,pDest%iDestList(indxDest))
             IF (pDest%iDestList(indxDest) .EQ. 0) THEN
-                IF (ASSOCIATED(ModuleLogger)) THEN
-                    CALL ModuleLogger%SetLastMessage('Destination '//TRIM(IntToText(iDestList(indxDest)))//' for '//TRIM(cDestDescription)//' listed for '//TRIM(LowerCase(cBypassOrDiver))//' ID '//TRIM(IntToText(ID))//' is not in the model!',f_iFatal,ThisProcedure)
+                IF (ASSOCIATED(Logger)) THEN
+                    CALL Logger%SetLastMessage('Destination '//TRIM(IntToText(iDestList(indxDest)))//' for '//TRIM(cDestDescription)//' listed for '//TRIM(LowerCase(cBypassOrDiver))//' ID '//TRIM(IntToText(ID))//' is not in the model!',f_iFatal,ThisProcedure)
                 ELSE
-                    CALL ModuleLogger%SetLastMessage('Destination '//TRIM(IntToText(iDestList(indxDest)))//' for '//TRIM(cDestDescription)//' listed for '//TRIM(LowerCase(cBypassOrDiver))//' ID '//TRIM(IntToText(ID))//' is not in the model!',f_iFatal,ThisProcedure)
+                    CALL Logger%SetLastMessage('Destination '//TRIM(IntToText(iDestList(indxDest)))//' for '//TRIM(cDestDescription)//' listed for '//TRIM(LowerCase(cBypassOrDiver))//' ID '//TRIM(IntToText(ID))//' is not in the model!',f_iFatal,ThisProcedure)
                 END IF
                 iStat = -1
                 RETURN

@@ -584,7 +584,7 @@ CONTAINS
 
 
   SUBROUTINE FortBinFile_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(IN) :: Logger
+    TYPE(MessageLoggerType), TARGET, INTENT(INOUT) :: Logger
     ModuleLogger => Logger
   END SUBROUTINE FortBinFile_SetModuleLogger
 

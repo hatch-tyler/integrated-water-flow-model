@@ -84,7 +84,7 @@ CONTAINS
   ! -------------------------------------------------------------
   SUBROUTINE New(TecplotOut,Logger,IsForInquiry,cFileName,cDescriptor,iStat)
     CLASS(TecplotOutputType)                    :: TecplotOut
-    TYPE(MessageLoggerType),TARGET,INTENT(IN)   :: Logger
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT)   :: Logger
     LOGICAL,INTENT(IN)                          :: IsForInquiry
     CHARACTER(LEN=*),INTENT(IN)                 :: cFileName,cDescriptor
     INTEGER,INTENT(OUT)                         :: iStat
