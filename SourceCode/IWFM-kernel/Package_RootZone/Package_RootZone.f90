@@ -25,6 +25,7 @@ MODULE Package_RootZone
                                           IWFMKernelVersion
   USE MessageLogger              , ONLY : MessageLoggerType                  , &
                                           MessageArray                       , &
+                                          DefaultLogger                      , &
                                           f_iFatal
   USE TimeSeriesUtilities        , ONLY : TimeStepType                       
   USE GeneralUtilities           , ONLY : FirstLocation                      , &
@@ -270,9 +271,9 @@ CONTAINS
     
     !Open root zone file and retrieve version number
     CALL RootZoneParamFile%New(FileName=cFileName,InputFile=.TRUE.,IsTSFile=.FALSE.,iStat=iStat)  ;  IF (iStat .EQ. -1) RETURN
-    CALL ReadVersion(RootZoneParamFile,'ROOT ZONE',cVersion,iStat)
+    CALL ReadVersion(RootZoneParamFile,'ROOT ZONE',cVersion,iStat,RootZone%Logger)
     IF (iStat .EQ. -1) RETURN
-    
+
     !Close file to reset it
     CALL RootZoneParamFile%Kill()
     
@@ -1548,9 +1549,13 @@ CONTAINS
     
     !Open root zone file and retrieve version number
     CALL RootZoneMainFile%New(FileName=cRootZoneMainFileName,InputFile=.TRUE.,IsTSFile=.FALSE.,iStat=iStat)  ;  IF (iStat .EQ. -1) RETURN
-    CALL ReadVersion(RootZoneMainFile,'ROOT ZONE',cVersion,iStat)
+    IF (PRESENT(Logger)) THEN
+        CALL ReadVersion(RootZoneMainFile,'ROOT ZONE',cVersion,iStat,Logger)
+    ELSE
+        CALL ReadVersion(RootZoneMainFile,'ROOT ZONE',cVersion,iStat,DefaultLogger)
+    END IF
     IF (iStat .EQ. -1) RETURN
-    
+
     !Close file to reset it
     CALL RootZoneMainFile%Kill()
     

@@ -180,7 +180,7 @@ CONTAINS
     IF (iStat .EQ. -1) RETURN
     
     !Read first line that stores version number
-    CALL ReadVersion(TDFile,'TILE DRAINS',cVersion,iStat)
+    CALL ReadVersion(TDFile,'TILE DRAINS',cVersion,iStat,AppTileDrain%Logger)
     IF (iStat .EQ. -1) RETURN
 
     !Read tile drain data

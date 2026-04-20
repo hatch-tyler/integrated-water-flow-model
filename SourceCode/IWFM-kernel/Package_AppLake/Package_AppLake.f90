@@ -199,7 +199,7 @@ CONTAINS
 
     !Open main control file and retrieve version number
     CALL AppLakeMainFile%New(FileName=cFileName,InputFile=.TRUE.,IsTSFile=.FALSE.,iStat=iStat)  ;  IF (iStat .EQ. -1) RETURN
-    CALL ReadVersion(AppLakeMainFile,'LAKE',cVersionLocal,iStat)
+    CALL ReadVersion(AppLakeMainFile,'LAKE',cVersionLocal,iStat,AppLake%Logger)
     IF (iStat .EQ. -1) RETURN
 
     !Close file to reset it
@@ -345,7 +345,7 @@ CONTAINS
 
     !Open main control file and retrieve version number
     CALL AppLakeMainFile%New(FileName=cFileName,InputFile=.TRUE.,IsTSFile=.FALSE.,iStat=iStat)  ;  IF (iStat .EQ. -1) RETURN
-    CALL ReadVersion(AppLakeMainFile,'LAKE',cVersionSim,iStat)
+    CALL ReadVersion(AppLakeMainFile,'LAKE',cVersionSim,iStat,AppLake%Logger)
     IF (iStat .EQ. -1) RETURN
 
     !Close file to reset it
@@ -485,7 +485,7 @@ CONTAINS
 
     !Open file and read the version number line to decide which component to instantiate
     CALL MainFile%New(FileName=cPPFileName,InputFile=.TRUE.,Descriptor='main stream data file',iStat=iStat)  ;  IF (iStat .EQ. -1) RETURN
-    CALL ReadVersion(MainFile,'LAKE',cVersionPre,iStat)
+    CALL ReadVersion(MainFile,'LAKE',cVersionPre,iStat,AppLake%Logger)
     IF (iStat .EQ. -1) RETURN
 
     !Close main input file to reset it

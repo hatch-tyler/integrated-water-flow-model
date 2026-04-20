@@ -323,7 +323,7 @@ CONTAINS
     IF (iStat .EQ. -1) RETURN
     
     !Make sure that version numbers from Pre-processor and Simulation match
-    CALL ReadVersion(MainFile,'STREAM',cVersionSim,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    CALL ReadVersion(MainFile,'STREAM',cVersionSim,iStat,AppStream%Logger)  ;  IF (iStat .EQ. -1) RETURN
     IF (TRIM(cVersionSim) .NE. '5.0') THEN
         MessageArray(1) = 'Stream Component versions used in Pre-Processor and Simulation must match!'
         MessageArray(2) = 'Version number in Pre-Processor = 5.0' 

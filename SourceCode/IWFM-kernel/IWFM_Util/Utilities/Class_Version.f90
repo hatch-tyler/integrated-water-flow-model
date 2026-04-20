@@ -30,10 +30,7 @@ MODULE Class_Version
   USE IOInterface       ,  ONLY : GenericFileType
   IMPLICIT NONE
 
-  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
-  
 
-  
 ! ******************************************************************
 ! ******************************************************************
 ! ******************************************************************
@@ -49,8 +46,7 @@ MODULE Class_Version
   ! -------------------------------------------------------------
     PRIVATE
     PUBLIC :: VersionType  , &
-              ReadVersion  , &
-              Version_SetModuleLogger
+              ReadVersion
 
 
   ! -------------------------------------------------------------
@@ -215,39 +211,34 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- READ VERSION FROM A FILE
   ! -------------------------------------------------------------
-  SUBROUTINE ReadVersion(InFile,cComponent,cVersion,iStat)
-    TYPE(GenericFileType)       :: InFile
-    CHARACTER(LEN=*),INTENT(IN) :: cComponent
-    CHARACTER(:),ALLOCATABLE    :: cVersion
-    INTEGER,INTENT(OUT)         :: iStat
-    
+  SUBROUTINE ReadVersion(InFile,cComponent,cVersion,iStat,Logger)
+    TYPE(GenericFileType)                    :: InFile
+    CHARACTER(LEN=*),INTENT(IN)              :: cComponent
+    CHARACTER(:),ALLOCATABLE                 :: cVersion
+    INTEGER,INTENT(OUT)                      :: iStat
+    TYPE(MessageLoggerType),INTENT(INOUT)    :: Logger
+
     !Local variables
     CHARACTER(LEN=ModNameLen+11) :: ThisProcedure = ModName // 'ReadVersion'
     CHARACTER                    :: ALine*2000
     INTEGER                      :: iStart
-    
+
     !Initialize
     iStat = 0
-    
-    CALL InFile%ReadData(ALine,iStat)  ;  IF (iStat .EQ. -1) RETURN 
+
+    CALL InFile%ReadData(ALine,iStat)  ;  IF (iStat .EQ. -1) RETURN
     CALL CleanSpecialCharacters(ALine)  ;  ALine = ADJUSTL(ALine)
     iStart   = FirstLocation('#',ALine,Back=.FALSE.)
     IF (iStart .LE. 0) THEN
         MessageArray(1) = 'Error in identifying the version number of the '//TRIM(cComponent)//' component!'
         MessageArray(2) = 'Make sure that the version number is listed at the first line of the'
         MessageArray(3) = TRIM(cComponent)//' input file (see the input file template for format).'
-        CALL ModuleLogger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+        CALL Logger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
     cVersion = ALine(iStart+1:LEN_TRIM(ALine))
-    
+
   END SUBROUTINE ReadVersion
-
-
-  SUBROUTINE Version_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(INOUT) :: Logger
-    ModuleLogger => Logger
-  END SUBROUTINE Version_SetModuleLogger
 
 END MODULE

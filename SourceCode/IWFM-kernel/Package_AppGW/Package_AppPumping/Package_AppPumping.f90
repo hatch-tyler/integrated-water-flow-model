@@ -228,7 +228,7 @@ CONTAINS
     IF (iStat .EQ. -1) RETURN
     
     !Read first line that holds version number
-    CALL ReadVersion(PumpDataFile,'PUMPING',cVersion,iStat)
+    CALL ReadVersion(PumpDataFile,'PUMPING',cVersion,iStat,AppPumping%Logger)
     IF (iStat .EQ. -1) RETURN
     
     !Read well specifications

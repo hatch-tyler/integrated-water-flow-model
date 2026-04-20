@@ -83,7 +83,6 @@ MODULE Package_Model
   USE Class_HDF5FileType          , ONLY: HDF5File_SetModuleLogger
   USE IOInterface                 , ONLY: IOInterface_SetModuleLogger
   USE TSDFileHandler              , ONLY: TSDFileHandler_SetModuleLogger
-  USE Class_Version               , ONLY: Version_SetModuleLogger
   USE GeneralUtilities            , ONLY: GeneralUtils_SetModuleLogger
   USE TimeSeriesUtilities         , ONLY: TimeSeries_SetModuleLogger
   USE Class_BudgetInputFile       , ONLY: BudgetInputFile_SetModuleLogger
@@ -129,8 +128,7 @@ MODULE Package_Model
                                           f_iLandUse_Urb 
   USE Package_Discretization      , ONLY: AppGridType                                 , &
                                           StratigraphyType                            , &
-                                          Discretization_GetNodeLayer                 , &
-                                          AppGrid_SetModuleLogger
+                                          Discretization_GetNodeLayer
   USE Package_AppGW               , ONLY: AppGWType                                   , &
                                           AppGW_SetAllModuleLoggers                   , &
                                           f_iSpFlowBCID                               , &
@@ -631,9 +629,6 @@ CONTAINS
     CALL PackageModel_SetModuleLogger(DefaultLogger)
 
 
-    CALL AppGrid_SetModuleLogger(DefaultLogger)
-
-
     CALL BaseHydrograph_SetModuleLogger(DefaultLogger)
 
 
@@ -655,7 +650,6 @@ CONTAINS
     CALL HDF5File_SetModuleLogger(DefaultLogger)
     CALL IOInterface_SetModuleLogger(DefaultLogger)
     CALL TSDFileHandler_SetModuleLogger(DefaultLogger)
-    CALL Version_SetModuleLogger(DefaultLogger)
     CALL GeneralUtils_SetModuleLogger(DefaultLogger)
     CALL TimeSeries_SetModuleLogger(DefaultLogger)
     CALL BudgetInputFile_SetModuleLogger(DefaultLogger)
@@ -948,8 +942,6 @@ CONTAINS
 
     !Set module-level loggers for Batch 2 packages
 
-    CALL AppGrid_SetModuleLogger(DefaultLogger)
-
 
     CALL BaseHydrograph_SetModuleLogger(DefaultLogger)
 
@@ -974,7 +966,6 @@ CONTAINS
     CALL HDF5File_SetModuleLogger(DefaultLogger)
     CALL IOInterface_SetModuleLogger(DefaultLogger)
     CALL TSDFileHandler_SetModuleLogger(DefaultLogger)
-    CALL Version_SetModuleLogger(DefaultLogger)
     CALL GeneralUtils_SetModuleLogger(DefaultLogger)
     CALL TimeSeries_SetModuleLogger(DefaultLogger)
     CALL BudgetInputFile_SetModuleLogger(DefaultLogger)
@@ -1103,8 +1094,6 @@ CONTAINS
     CALL Model%IrigFracFile%SetLogger(DefaultLogger)
     CALL Model%GWZBudget%SetLogger(DefaultLogger)
 
-    CALL AppGrid_SetModuleLogger(DefaultLogger)
-
 
     CALL BaseHydrograph_SetModuleLogger(DefaultLogger)
 
@@ -1120,7 +1109,6 @@ CONTAINS
     CALL HDF5File_SetModuleLogger(DefaultLogger)
     CALL IOInterface_SetModuleLogger(DefaultLogger)
     CALL TSDFileHandler_SetModuleLogger(DefaultLogger)
-    CALL Version_SetModuleLogger(DefaultLogger)
     CALL GeneralUtils_SetModuleLogger(DefaultLogger)
     CALL TimeSeries_SetModuleLogger(DefaultLogger)
     CALL BudgetInputFile_SetModuleLogger(DefaultLogger)
@@ -1503,8 +1491,6 @@ CONTAINS
     CALL Model%IrigFracFile%SetLogger(DefaultLogger)
     CALL Model%GWZBudget%SetLogger(DefaultLogger)
 
-    CALL AppGrid_SetModuleLogger(DefaultLogger)
-
 
     CALL BaseHydrograph_SetModuleLogger(DefaultLogger)
 
@@ -1520,7 +1506,6 @@ CONTAINS
     CALL HDF5File_SetModuleLogger(DefaultLogger)
     CALL IOInterface_SetModuleLogger(DefaultLogger)
     CALL TSDFileHandler_SetModuleLogger(DefaultLogger)
-    CALL Version_SetModuleLogger(DefaultLogger)
     CALL GeneralUtils_SetModuleLogger(DefaultLogger)
     CALL TimeSeries_SetModuleLogger(DefaultLogger)
     CALL BudgetInputFile_SetModuleLogger(DefaultLogger)
@@ -1890,8 +1875,6 @@ CONTAINS
     CALL Model%IrigFracFile%SetLogger(DefaultLogger)
     CALL Model%GWZBudget%SetLogger(DefaultLogger)
 
-    CALL AppGrid_SetModuleLogger(DefaultLogger)
-
 
     CALL BaseHydrograph_SetModuleLogger(DefaultLogger)
 
@@ -1907,7 +1890,6 @@ CONTAINS
     CALL HDF5File_SetModuleLogger(DefaultLogger)
     CALL IOInterface_SetModuleLogger(DefaultLogger)
     CALL TSDFileHandler_SetModuleLogger(DefaultLogger)
-    CALL Version_SetModuleLogger(DefaultLogger)
     CALL GeneralUtils_SetModuleLogger(DefaultLogger)
     CALL TimeSeries_SetModuleLogger(DefaultLogger)
     CALL BudgetInputFile_SetModuleLogger(DefaultLogger)

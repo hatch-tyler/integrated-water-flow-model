@@ -277,7 +277,7 @@ CONTAINS
     IF (iStat .EQ. -1) RETURN
     
     !Read away component version number and make sure Pre and Sim component versions are the same 
-    CALL ReadVersion(MainFile,'STREAM',cVersionSim,iStat)
+    CALL ReadVersion(MainFile,'STREAM',cVersionSim,iStat,AppStream%Logger)
     IF (iStat .EQ. -1) RETURN
     IF (TRIM(cVersionSim) .NE. '4.1') THEN
         MessageArray(1) = 'Stream Component versions used in Pre-Processor and Simulation must match!'

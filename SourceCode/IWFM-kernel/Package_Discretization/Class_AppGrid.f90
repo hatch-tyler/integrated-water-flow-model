@@ -51,8 +51,7 @@ MODULE Class_AppGrid
   PUBLIC :: AppGridType                                , &
             AppNodeType                                , &
             AppElementType                             , &
-            AppFaceType                                , &
-            AppGrid_SetModuleLogger
+            AppFaceType
           
 
   ! -------------------------------------------------------------
@@ -165,12 +164,6 @@ MODULE Class_AppGrid
 
 
   ! -------------------------------------------------------------
-  ! --- MODULE-LEVEL LOGGER (preserves type binary layout)
-  ! -------------------------------------------------------------
-  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
-
-
-  ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
   INTEGER,PARAMETER                   :: ModNameLen = 15
@@ -181,13 +174,6 @@ MODULE Class_AppGrid
 CONTAINS
 
 
-  ! -------------------------------------------------------------
-  ! --- SET MODULE-LEVEL LOGGER
-  ! -------------------------------------------------------------
-  SUBROUTINE AppGrid_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(INOUT) :: Logger
-    ModuleLogger => Logger
-  END SUBROUTINE AppGrid_SetModuleLogger
 
 
 
@@ -663,8 +649,8 @@ CONTAINS
     CALL AppGrid%Logger%EchoProgress('Instantiating application grid')
 
     !Read grid data
-    CALL ReadNodeData(NodeFileName,NodeID,X,Y,iStat)  ;  IF (iStat .EQ. -1) RETURN
-    CALL ReadElementConfigData(ElementConfigFileName,ElemID,NVertex,Vertex_IDs,iElemSubregionIDs,iSubregionIDs,cSubregionNames,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    CALL ReadNodeData(NodeFileName,Logger,NodeID,X,Y,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    CALL ReadElementConfigData(ElementConfigFileName,Logger,ElemID,NVertex,Vertex_IDs,iElemSubregionIDs,iSubregionIDs,cSubregionNames,iStat)  ;  IF (iStat .EQ. -1) RETURN
 
     !Instantiate application grid
     CALL ConstructAppGrid(X,Y,NVertex,Vertex_IDs,NodeID,ElemID,iElemSubregionIDs,iSubregionIDs,cSubregionNames,Logger,AppGrid,iStat)
@@ -679,11 +665,12 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- READ NODE DATA
   ! -------------------------------------------------------------
-  SUBROUTINE ReadNodeData(FileName,ID,X,Y,iStat)
-    CHARACTER(LEN=*),INTENT(IN)     :: FileName
-    INTEGER,ALLOCATABLE,INTENT(OUT) :: ID(:)
-    REAL(8),ALLOCATABLE,INTENT(OUT) :: X(:),Y(:)
-    INTEGER,INTENT(OUT)             :: iStat
+  SUBROUTINE ReadNodeData(FileName,Logger,ID,X,Y,iStat)
+    CHARACTER(LEN=*),INTENT(IN)          :: FileName
+    TYPE(MessageLoggerType),INTENT(INOUT) :: Logger
+    INTEGER,ALLOCATABLE,INTENT(OUT)      :: ID(:)
+    REAL(8),ALLOCATABLE,INTENT(OUT)      :: X(:),Y(:)
+    INTEGER,INTENT(OUT)                  :: iStat
 
     !Local variables
     CHARACTER(LEN=ModNameLen+12) :: ThisProcedure = ModName // 'ReadNodeData'
@@ -706,7 +693,7 @@ CONTAINS
     !Allocate memory for node data set
     ALLOCATE (X(NNodes) , Y(NNodes) , ID(NNodes) , STAT=ErrorCode)
     IF (ErrorCode.NE.0) THEN
-        CALL ModuleLogger%SetLastMessage('Error in allocating memory for grid nodes!',f_iFatal,ThisProcedure)
+        CALL Logger%SetLastMessage('Error in allocating memory for grid nodes!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -725,21 +712,21 @@ CONTAINS
         X(indx) = Dummy2DRealArray(indx,2) * Factor 
         Y(indx) = Dummy2DRealArray(indx,3) * Factor
         
-        !$OMP PARALLEL DEFAULT(PRIVATE) SHARED(indx,ID,ID1,X,Y,ThisProcedure,iStat) 
-        !$OMP DO SCHEDULE(STATIC,500) 
+        !$OMP PARALLEL DEFAULT(PRIVATE) SHARED(indx,ID,ID1,X,Y,Logger,ThisProcedure,iStat)
+        !$OMP DO SCHEDULE(STATIC,500)
         DO indx1=1,indx-1
             ID2 = ID(indx1)
-            
+
             !Make sure same node ID is not entered more than once
             IF (ID1 .EQ. ID2) THEN
-                 CALL ModuleLogger%SetLastMessage('Node ID ' // TRIM(IntToText(ID1)) // ' is defined more than once!',f_iFatal,ThisProcedure)
+                 CALL Logger%SetLastMessage('Node ID ' // TRIM(IntToText(ID1)) // ' is defined more than once!',f_iFatal,ThisProcedure)
                  iStat = -1
             END IF
-       
+
             !Check if two nodes have the same coordinates
             IF (X(indx1) .EQ. X(indx)) THEN
                 IF (Y(indx1) .EQ. Y(indx)) THEN
-                    CALL ModuleLogger%SetLastMessage('Nodes '//TRIM(IntToText(ID1))//' and '//TRIM(IntToText(ID2))//' have the same coordinates!',f_iFatal,ThisProcedure)
+                    CALL Logger%SetLastMessage('Nodes '//TRIM(IntToText(ID1))//' and '//TRIM(IntToText(ID2))//' have the same coordinates!',f_iFatal,ThisProcedure)
                     iStat = -1
                 END IF
             END IF
@@ -761,11 +748,12 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- READ ELEMENT CONFIGURATION DATA
   ! -------------------------------------------------------------
-  SUBROUTINE ReadElementConfigData(FileName,ID,NVertex,Vertex_ID,iElemSubregionIDs,iSubregionIDs,cSubregionNames,iStat) 
-    CHARACTER(LEN=*),INTENT(IN)                           :: FileName
-    INTEGER,ALLOCATABLE,INTENT(OUT)                       :: ID(:),NVertex(:),Vertex_ID(:,:),iElemSubregionIDs(:),iSubregionIDs(:)
-    CHARACTER(LEN=iRegionNameLen),ALLOCATABLE,INTENT(OUT) :: cSubregionNames(:)
-    INTEGER,INTENT(OUT)                                   :: iStat
+  SUBROUTINE ReadElementConfigData(FileName,Logger,ID,NVertex,Vertex_ID,iElemSubregionIDs,iSubregionIDs,cSubregionNames,iStat)
+    CHARACTER(LEN=*),INTENT(IN)                            :: FileName
+    TYPE(MessageLoggerType),INTENT(INOUT)                  :: Logger
+    INTEGER,ALLOCATABLE,INTENT(OUT)                        :: ID(:),NVertex(:),Vertex_ID(:,:),iElemSubregionIDs(:),iSubregionIDs(:)
+    CHARACTER(LEN=iRegionNameLen),ALLOCATABLE,INTENT(OUT)  :: cSubregionNames(:)
+    INTEGER,INTENT(OUT)                                    :: iStat
 
     !Local variables
     CHARACTER(LEN=ModNameLen+21) :: ThisProcedure = ModName//'ReadElementConfigData'
@@ -792,7 +780,7 @@ CONTAINS
     !Allocate memory for the element data set
     ALLOCATE (ID(NElements) , NVertex(NElements) , Vertex_ID(4,NElements) , iElemSubregionIDs(NElements) , cSubregionNames(NRegions) , STAT=ErrorCode)
     IF (ErrorCode.NE.0) THEN
-        CALL ModuleLogger%SetLastMessage('Error in allocating memory for grid elements!',f_iFatal,ThisProcedure)
+        CALL Logger%SetLastMessage('Error in allocating memory for grid elements!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -838,7 +826,7 @@ CONTAINS
         !Nodes should not repeat
         DO indx1=2,5
             IF (ANY(TDummy2DIntArray(indx1,indx) .EQ. TDummy2DIntArray(indx1+1:5,indx))) THEN
-                CALL ModuleLogger%SetLastMessage('Repeating node numbers at element '//TRIM(IntToText(ID1))//'!',f_iFatal,ThisProcedure)
+                CALL Logger%SetLastMessage('Repeating node numbers at element '//TRIM(IntToText(ID1))//'!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -846,19 +834,19 @@ CONTAINS
         
         !Same element ID should not be defined; check only if the element ID is less than the previous ID
         IF (ID1 .LT. iMaxID) THEN
-            !$OMP PARALLEL DEFAULT(PRIVATE) SHARED(indx,ID1,ID,ThisProcedure,iStat) 
-            !$OMP DO SCHEDULE(STATIC,500) 
+            !$OMP PARALLEL DEFAULT(PRIVATE) SHARED(indx,ID1,ID,Logger,ThisProcedure,iStat)
+            !$OMP DO SCHEDULE(STATIC,500)
             DO indx1=1,indx-1
                 ID2 = ID(indx1)
                 IF (ID1 .EQ. ID2) THEN
-                     CALL ModuleLogger%SetLastMessage('Element ID ' // TRIM(IntToText(ID1)) // ' is defined more than once!',f_iFatal,ThisProcedure)
+                     CALL Logger%SetLastMessage('Element ID ' // TRIM(IntToText(ID1)) // ' is defined more than once!',f_iFatal,ThisProcedure)
                      iStat = -1
                 END IF
             END DO
             !$OMP END DO
             !$OMP END PARALLEL
         ELSE IF (ID1 .EQ. iMaxID) THEN
-            CALL ModuleLogger%SetLastMessage('Element ID ' // TRIM(IntToText(ID1)) // ' is defined more than once!',f_iFatal,ThisProcedure)
+            CALL Logger%SetLastMessage('Element ID ' // TRIM(IntToText(ID1)) // ' is defined more than once!',f_iFatal,ThisProcedure)
             iStat = -1
         ELSE
             iMaxID = ID1
@@ -870,10 +858,10 @@ CONTAINS
              MessageArray(1) = 'Subregion numbers should be greater than zero!'
              MessageArray(2) = 'Element number  = '//TRIM(IntToText(ID1))
              MessageArray(3) = 'Subregion number= '//TRIM(IntToText(TDummy2DIntArray(6,indx)))
-             CALL ModuleLogger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+             CALL Logger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
              iStat = -1
              RETURN
-        END IF   
+        END IF
         
         !If made to this point, transfer data to permenant array
         IF (TDummy2DIntArray(5,indx) .EQ. 0) THEN
@@ -943,7 +931,7 @@ CONTAINS
 
     !Read app. grid nodal data
     ALLOCATE (AppGrid%AppNode(AppGrid%NNodes))
-    CALL AppNode_ReadPreprocessedData(InFile,AppGrid%NNodes,AppGrid%AppNode,iStat)  
+    CALL AppNode_ReadPreprocessedData(InFile,Logger,AppGrid%NNodes,AppGrid%AppNode,iStat)  
     IF (iStat .EQ. -1) RETURN
     
     !Number of connected nodes
@@ -951,7 +939,7 @@ CONTAINS
 
     !Read app. grid element data
     ALLOCATE (AppGrid%AppElement(AppGrid%NElements))
-    CALL AppElement_ReadPreprocessedData(InFile,AppGrid%NElements,AppGrid%AppElement,iStat)  
+    CALL AppElement_ReadPreprocessedData(InFile,Logger,AppGrid%NElements,AppGrid%AppElement,iStat)  
     IF (iStat .EQ. -1) RETURN
 
     !Read app. grid face data
@@ -995,11 +983,12 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- READ PRE-PROCESSED AppNode DATA FROM BINARY FILE
   ! -------------------------------------------------------------
-  SUBROUTINE AppNode_ReadPreprocessedData(InFile,NNodes,AppNode,iStat)
-    TYPE(GenericFileType) :: Infile
-    INTEGER,INTENT(IN)    :: NNodes
-    TYPE(AppNodeType)     :: AppNode(NNodes)
-    INTEGER,INTENT(OUT)   :: iStat
+  SUBROUTINE AppNode_ReadPreprocessedData(InFile,Logger,NNodes,AppNode,iStat)
+    TYPE(GenericFileType)                  :: Infile
+    TYPE(MessageLoggerType),INTENT(INOUT)  :: Logger
+    INTEGER,INTENT(IN)                     :: NNodes
+    TYPE(AppNodeType)                      :: AppNode(NNodes)
+    INTEGER,INTENT(OUT)                    :: iStat
     
     !Local variables
     CHARACTER(LEN=ModNameLen+28) :: ThisProcedure = ModName // 'AppNode_ReadPreprocessedData'
@@ -1023,7 +1012,7 @@ CONTAINS
                 AppNode(indx)%ConnectedNode(iSizeConnectedNode)        , &
                 STAT=ErrorCode                                         )
       IF (ErrorCode .NE. 0) THEN
-          CALL ModuleLogger%SetLastMessage('Error allocating memory for application nodal data!',f_iFatal,ThisProcedure)
+          CALL Logger%SetLastMessage('Error allocating memory for application nodal data!',f_iFatal,ThisProcedure)
           iStat = -1
           RETURN
       END IF
@@ -1040,11 +1029,12 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- READ PRE-PROCESSED AppElement DATA
   ! -------------------------------------------------------------
-  SUBROUTINE AppElement_ReadPreprocessedData(InFile,NElements,AppElement,iStat)
-    TYPE(GenericFileType) :: InFile
-    INTEGER,INTENT(IN)    :: NElements
-    TYPE(AppElementType)  :: AppElement(NElements)
-    INTEGER,INTENT(OUT)   :: iStat
+  SUBROUTINE AppElement_ReadPreprocessedData(InFile,Logger,NElements,AppElement,iStat)
+    TYPE(GenericFileType)                  :: InFile
+    TYPE(MessageLoggerType),INTENT(INOUT)  :: Logger
+    INTEGER,INTENT(IN)                     :: NElements
+    TYPE(AppElementType)                   :: AppElement(NElements)
+    INTEGER,INTENT(OUT)                    :: iStat
     
     !Local variables
     CHARACTER(LEN=ModNameLen+31) :: ThisProcedure = ModName // 'AppElement_ReadPreprocessedData'
@@ -1068,7 +1058,7 @@ CONTAINS
                 AppElement(indx)%Integral_Rot_DELShpI_DELShpJ(nIntegral_Rot_DELShpI_DELShpJ)  , &
                 STAT=ErrorCode                                                                )
       IF (ErrorCode .NE. 0) THEN
-          CALL ModuleLogger%SetLastMessage('Error allocating memory for application elements!',f_iFatal,ThisProcedure)
+          CALL Logger%SetLastMessage('Error allocating memory for application elements!',f_iFatal,ThisProcedure)
           iStat = -1
           RETURN
       END IF
@@ -1444,7 +1434,7 @@ CONTAINS
     IF (iStat .EQ. -1) RETURN
 
     !Identify the boundary nodes
-    CALL ListBoundaryNodes(AppGrid,DummyIntArray,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    CALL ListBoundaryNodes(AppGrid,Logger,DummyIntArray,iStat)  ;  IF (iStat .EQ. -1) RETURN
     AppGrid%AppNode(DummyIntArray)%BoundaryNode = .TRUE.
 
     !Gather surrounding elements for each node
@@ -1487,7 +1477,7 @@ CONTAINS
     !$OMP PARALLEL DEFAULT(PRIVATE) SHARED(NNodes,AppGrid,iStatParallel,ThisProcedure) 
     !$OMP DO SCHEDULE(STATIC,500)
     DO indx=1,NNodes
-        CALL ListFacesAtNode(AppGrid,indx,AppGrid%AppNode(indx)%FaceID,iStat)  
+        CALL ListFacesAtNode(AppGrid,Logger,indx,AppGrid%AppNode(indx)%FaceID,iStat)  
         IF (iStat .EQ. -1) THEN
             iStatParallel = -1
         END IF
@@ -1529,7 +1519,7 @@ CONTAINS
     CALL ReorderFacesInCCWDirection(AppGrid)
     
     !Compute irrotationality coefficents at each node for face flow computations
-    CALL ComputeIrrotationalCoeff(NNodes,AppGrid%X,AppGrid%Y,AppGrid%AppFace,AppGrid%AppNode,iStat)  
+    CALL ComputeIrrotationalCoeff(NNodes,AppGrid%X,AppGrid%Y,AppGrid%AppFace,AppGrid%AppNode,Logger,iStat)  
     IF (iStat .EQ. -1) RETURN
     
     !If subregion IDs are defined along with subregion names, make sure they are consistent with unique subregion IDs compiled from element data
@@ -1545,7 +1535,7 @@ CONTAINS
     END IF
     
     !Compile the subregional information
-    CALL CompileSubregionalData(AppGrid,iSubregionIDs_Unique,cSubregionNames,iStat)  
+    CALL CompileSubregionalData(AppGrid,Logger,iSubregionIDs_Unique,cSubregionNames,iStat)  
     IF (iStat .EQ. -1) RETURN
     
     !Check for positive stiffness matrix entries
@@ -1894,12 +1884,13 @@ CONTAINS
   ! --- COMPUTE COEFFICIENTS FOR THE EXPRESSION OF IRROTATIONALITY AT EACH NODE
   ! --- (Assumes array Coeff is already allocated)
   ! -------------------------------------------------------------
-  SUBROUTINE ComputeIrrotationalCoeff(NNodes,X,Y,AppFace,AppNode,iStat)
-    INTEGER,INTENT(IN)           :: NNodes
-    REAL(8),INTENT(IN)           :: X(NNodes),Y(NNodes)
-    TYPE(AppFaceType),INTENT(IN) :: AppFace
-    TYPE(AppNodeType)            :: AppNode(NNodes)
-    INTEGER,INTENT(OUT)          :: iStat
+  SUBROUTINE ComputeIrrotationalCoeff(NNodes,X,Y,AppFace,AppNode,Logger,iStat)
+    INTEGER,INTENT(IN)                     :: NNodes
+    REAL(8),INTENT(IN)                     :: X(NNodes),Y(NNodes)
+    TYPE(AppFaceType),INTENT(IN)           :: AppFace
+    TYPE(AppNodeType)                      :: AppNode(NNodes)
+    TYPE(MessageLoggerType),INTENT(INOUT)  :: Logger
+    INTEGER,INTENT(OUT)                    :: iStat
     
     !Local variables
     CHARACTER(LEN=ModNameLen+24) :: ThisProcedure = ModName // 'ComputeIrrotationalCoeff'
@@ -1914,7 +1905,7 @@ CONTAINS
     iStatParallel = 0
     
     !Compute irrotationality coefficients at each node
-    !$OMP PARALLEL DEFAULT(PRIVATE) SHARED(NNodes,AppNode,AppFace,X,Y,iStatParallel) 
+    !$OMP PARALLEL DEFAULT(PRIVATE) SHARED(NNodes,AppNode,AppFace,X,Y,Logger,iStatParallel)
     !$OMP DO SCHEDULE(STATIC,500)
     DO indxNode=1,NNodes
                
@@ -1924,7 +1915,7 @@ CONTAINS
       !Allocate memory for irrotationality coefficients, zero them out
       ALLOCATE (AppNode(indxNode)%IrrotationalCoeff(NFace) , STAT=ErrorCode)
       IF (ErrorCode .NE. 0) THEN
-          CALL ModuleLogger%SetLastMessage('Error in allocating mmeory for irrotationality coefficients for node ' // TRIM(IntToText(indxNode)) // '!',f_iFatal,ThisProcedure)
+          CALL Logger%SetLastMessage('Error in allocating mmeory for irrotationality coefficients for node ' // TRIM(IntToText(indxNode)) // '!',f_iFatal,ThisProcedure)
           iStatParallel = -1
       END IF
       AppNode(indxNode)%IrrotationalCoeff = 0.0
@@ -2250,8 +2241,9 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- IDENTIFY BOUNDARY NODES
   ! -------------------------------------------------------------
-  SUBROUTINE ListBoundaryNodes(AppGrid,NodeList,iStat)
+  SUBROUTINE ListBoundaryNodes(AppGrid,Logger,NodeList,iStat)
     TYPE(AppGridType),TARGET,INTENT(IN) :: AppGrid
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT) :: Logger
     INTEGER,ALLOCATABLE,INTENT(OUT)     :: NodeList(:)
     INTEGER,INTENT(OUT)                 :: iStat
 
@@ -2283,7 +2275,7 @@ CONTAINS
     END IF
 
     !Transfer unique,ordered data to return argument
-    CALL BndNodeList%GetArray(ModuleLogger,iWorkArray,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    CALL BndNodeList%GetArray(Logger,iWorkArray,iStat)  ;  IF (iStat .EQ. -1) RETURN
     CALL GetUniqueArrayComponents(iWorkArray,NodeList)
     CALL ShellSort(NodeList)
     
@@ -2297,11 +2289,12 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GATHER THE LIST OF FACES CONNECTING AT A NODE
   ! -------------------------------------------------------------
-  SUBROUTINE ListFacesAtNode(AppGrid,NodeNo,TheList,iStat)
-    TYPE(AppGridType),INTENT(IN)    :: AppGrid
-    INTEGER,INTENT(IN)              :: NodeNo
-    INTEGER,ALLOCATABLE,INTENT(OUT) :: TheList(:)
-    INTEGER,INTENT(OUT)             :: iStat
+  SUBROUTINE ListFacesAtNode(AppGrid,Logger,NodeNo,TheList,iStat)
+    TYPE(AppGridType),INTENT(IN)      :: AppGrid
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT) :: Logger
+    INTEGER,INTENT(IN)                :: NodeNo
+    INTEGER,ALLOCATABLE,INTENT(OUT)   :: TheList(:)
+    INTEGER,INTENT(OUT)               :: iStat
 
     !Local variables
     INTEGER                     :: indx
@@ -2319,7 +2312,7 @@ CONTAINS
     END DO
 
     !Save the ordered face list in the return array
-    CALL FaceList%GetArray(ModuleLogger,TheList,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    CALL FaceList%GetArray(Logger,TheList,iStat)  ;  IF (iStat .EQ. -1) RETURN
     CALL ShellSort(TheList)
 
     !Free memory
@@ -2508,11 +2501,12 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- COMPILE SUBREGIONAL DATA
   ! -------------------------------------------------------------
-  SUBROUTINE CompileSubregionalData(AppGrid,Subregion_IDs,cSubregionNames,iStat)
-    TYPE(AppGridType),TARGET    :: AppGrid
-    INTEGER,INTENT(IN)          :: Subregion_IDs(:)
-    CHARACTER(LEN=*),INTENT(IN) :: cSubregionNames(:)
-    INTEGER,INTENT(OUT)         :: iStat
+  SUBROUTINE CompileSubregionalData(AppGrid,Logger,Subregion_IDs,cSubregionNames,iStat)
+    TYPE(AppGridType),TARGET               :: AppGrid
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT)  :: Logger
+    INTEGER,INTENT(IN)                     :: Subregion_IDs(:)
+    CHARACTER(LEN=*),INTENT(IN)            :: cSubregionNames(:)
+    INTEGER,INTENT(OUT)                    :: iStat
     
     !Local variables
     CHARACTER(LEN=ModNameLen+22)            :: ThisProcedure = ModName // 'CompileSubregionalData'
@@ -2613,7 +2607,7 @@ CONTAINS
       pAppSubregion                  => AppGrid%AppSubregion(indxRegion)
       NNeighborRegions               =  NeighborRegionList(indxRegion)%GetNNodes()
       ALLOCATE (pAppSubregion%NeighborRegions(NNeighborRegions) , iWorkArray(NNeighborRegions))
-      CALL NeighborRegionList(indxRegion)%GetArray(ModuleLogger,iWorkArray,iStat)  ;  IF (iStat .EQ. -1) RETURN
+      CALL NeighborRegionList(indxRegion)%GetArray(Logger,iWorkArray,iStat)  ;  IF (iStat .EQ. -1) RETURN
       CALL ShellSort(iWorkArray)
       pAppSubregion%NNeighborRegions         = NNeighborRegions
       pAppSubregion%NeighborRegions%RegionNo = iWorkArray
@@ -2622,7 +2616,7 @@ CONTAINS
         RegionNo                    =  pNeighborRegion%RegionNo
         NFace                       =  FaceBetweenRegionsList(indxRegion,RegionNo)%GetNNodes()
         pNeighborRegion%NRegBndFace =  NFace
-        CALL FaceBetweenRegionsList(indxRegion,RegionNo)%GetArray(ModuleLogger,pNeighborRegion%RegBndFace,iStat)  
+        CALL FaceBetweenRegionsList(indxRegion,RegionNo)%GetArray(Logger,pNeighborRegion%RegBndFace,iStat)  
         IF (iStat .EQ. -1) RETURN
       END DO
     END DO
@@ -2653,7 +2647,7 @@ CONTAINS
       !Initialize
       iStat = 0
       DEALLOCATE (iArray , STAT=iErr)
-      CALL NeighborRegionList(ToRegID)%GetArray(ModuleLogger,iArray,iStat)
+      CALL NeighborRegionList(ToRegID)%GetArray(Logger,iArray,iStat)
       IF (iStat .EQ. -1) RETURN
            
       !Check

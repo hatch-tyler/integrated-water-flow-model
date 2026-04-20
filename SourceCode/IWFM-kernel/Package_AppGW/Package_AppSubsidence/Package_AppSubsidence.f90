@@ -150,7 +150,7 @@ CONTAINS
     
     !Open subsidence file and retrieve version number
     CALL SubsidenceParamFile%New(FileName=cFileName,InputFile=.TRUE.,IsTSFile=.FALSE.,iStat=iStat)  ;  IF (iStat .EQ. -1) RETURN
-    CALL ReadVersion(SubsidenceParamFile,'SUBSIDENCE',cVersion,iStat)
+    CALL ReadVersion(SubsidenceParamFile,'SUBSIDENCE',cVersion,iStat,AppSubsidence%Logger)
     IF (iStat .EQ. -1) RETURN
     
     !Close file to reset it

@@ -185,7 +185,7 @@ CONTAINS
     !Open main input file and retrive AppSmallWatershed version number
     CALL MainFile%New(FileName=cFileName,InputFile=.TRUE.,IsTSFile=.FALSE.,Descriptor='small watershed parameters',iStat=iStat) 
     IF (iStat .EQ. -1) RETURN
-    CALL ReadVersion(MainFile,'SMALL WATERSHED',cVersion,iStat)
+    CALL ReadVersion(MainFile,'SMALL WATERSHED',cVersion,iStat,AppSWShed%Logger)
     IF (iStat .EQ. -1) RETURN
 
     !Close file to reset it

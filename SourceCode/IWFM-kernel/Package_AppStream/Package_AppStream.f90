@@ -330,7 +330,7 @@ CONTAINS
 
     !Open main control file and retrieve version number
     CALL AppStreamMainFile%New(FileName=cFileName,InputFile=.TRUE.,IsTSFile=.FALSE.,iStat=iStat)  ;  IF (iStat .EQ. -1) RETURN
-    CALL ReadVersion(AppStreamMainFile,'STREAM',cVersionLocal,iStat)
+    CALL ReadVersion(AppStreamMainFile,'STREAM',cVersionLocal,iStat,AppStream%Logger)
     IF (iStat .EQ. -1) RETURN
 
     !Close file to reset it
@@ -442,7 +442,7 @@ CONTAINS
 
     !Open main control file and retrieve version number
     CALL AppStreamMainFile%New(FileName=cFileName,InputFile=.TRUE.,IsTSFile=.FALSE.,iStat=iStat)  ;  IF (iStat .EQ. -1) RETURN
-    CALL ReadVersion(AppStreamMainFile,'STREAM',cVersionSim,iStat)
+    CALL ReadVersion(AppStreamMainFile,'STREAM',cVersionSim,iStat,AppStream%Logger)
     IF (iStat .EQ. -1) RETURN
 
     !Close file to reset it
@@ -713,7 +713,7 @@ CONTAINS
 
     !Open file and read the version number line to decide which component to instantiate
     CALL MainFile%New(FileName=cPPFileName,InputFile=.TRUE.,Descriptor='main stream data file',iStat=iStat)  ;  IF (iStat .EQ. -1) RETURN
-    CALL ReadVersion(MainFile,'STREAM',cVersionPre,iStat)
+    CALL ReadVersion(MainFile,'STREAM',cVersionPre,iStat,AppStream%Logger)
     IF (iStat .EQ. -1) RETURN
 
     !Close main input file to reset it

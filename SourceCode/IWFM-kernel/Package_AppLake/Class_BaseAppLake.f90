@@ -729,7 +729,7 @@ CONTAINS
     IF (iStat .EQ. -1) RETURN
     
     !Read the first line that holds version number
-    CALL ReadVersion(InFile,'LAKE',cVersion,iStat)
+    CALL ReadVersion(InFile,'LAKE',cVersion,iStat,Logger)
     IF (iStat .EQ. -1) RETURN
     
     !Number of lakes

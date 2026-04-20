@@ -183,7 +183,7 @@ CONTAINS
     IF (iStat .EQ. -1) RETURN
 
     !Read the first line that holds version number
-    CALL ReadVersion(InFile,'LAKE',cVersion,iStat)
+    CALL ReadVersion(InFile,'LAKE',cVersion,iStat,AppLake%Logger)
     IF (iStat .EQ. -1) RETURN
 
     !Number of lakes
@@ -369,7 +369,7 @@ CONTAINS
     IF (iStat .EQ. -1) RETURN
     
     !Read the the version number and make sure versions used in Preproccessor and Simulation are the same
-    CALL ReadVersion(LakeDataFile,'LAKE',cVersionSim,iStat)
+    CALL ReadVersion(LakeDataFile,'LAKE',cVersionSim,iStat,AppLake%Logger)
     IF (iStat .EQ. -1) RETURN
     IF (TRIM(cVersionSim) .NE. '5.0') THEN
         MessageArray(1) = 'Lake Component versions used in Pre-Processor and Simulation must match!'
