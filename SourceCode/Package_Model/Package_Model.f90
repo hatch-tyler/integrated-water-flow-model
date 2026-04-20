@@ -75,7 +75,6 @@ MODULE Package_Model
                                           f_iUNKNOWN                                     
   USE IWFM_Kernel_Version         , ONLY: IWFMKernelVersion
   USE IWFM_Version                , ONLY: IWFMVersion
-  USE Class_BaseHydrograph        , ONLY: BaseHydrograph_SetModuleLogger
   USE Class_BaseFileType          , ONLY: BaseFile_SetModuleLogger
   USE Class_AsciiFileType         , ONLY: AsciiFile_SetModuleLogger
   USE Class_DSSFileType           , ONLY: DSSFile_SetModuleLogger
@@ -88,7 +87,6 @@ MODULE Package_Model
   USE Class_BudgetInputFile       , ONLY: BudgetInputFile_SetModuleLogger
   USE Opening_screen              , ONLY: OpeningScreen_SetModuleLogger
   USE Class_GWZBudget             , ONLY: GWZBudget_SetModuleLogger
-  USE WSA_ANN                     , ONLY: WSA_ANN_SetModuleLogger
   USE Package_Misc                , ONLY: FlowDestinationType                         , &
                                           SolverDataType                              , &
                                           Print_Screen                                , &
@@ -130,7 +128,6 @@ MODULE Package_Model
                                           StratigraphyType                            , &
                                           Discretization_GetNodeLayer
   USE Package_AppGW               , ONLY: AppGWType                                   , &
-                                          AppGW_SetAllModuleLoggers                   , &
                                           f_iSpFlowBCID                               , &
                                           f_iSpHeadBCID                               , &
                                           f_iGHBCID                                   , &
@@ -629,7 +626,7 @@ CONTAINS
     CALL PackageModel_SetModuleLogger(DefaultLogger)
 
 
-    CALL BaseHydrograph_SetModuleLogger(DefaultLogger)
+
 
 
 
@@ -640,7 +637,7 @@ CONTAINS
     CALL AppLake_v50_SetModuleLogger(DefaultLogger)
     CALL AppSWShed_v40_SetModuleLogger(DefaultLogger)
     CALL AppSWShed_v41_SetModuleLogger(DefaultLogger)
-    CALL AppGW_SetAllModuleLoggers(DefaultLogger)
+
     CALL AppStream_SetAllModuleLoggers(DefaultLogger)
     CALL RootZone_SetAllModuleLoggers(DefaultLogger)
     CALL BaseFile_SetModuleLogger(DefaultLogger)
@@ -655,7 +652,7 @@ CONTAINS
     CALL BudgetInputFile_SetModuleLogger(DefaultLogger)
 
     CALL GWZBudget_SetModuleLogger(DefaultLogger)
-    CALL WSA_ANN_SetModuleLogger(DefaultLogger)
+
 
     CALL OpeningScreen_SetModuleLogger(DefaultLogger)
 
@@ -768,7 +765,7 @@ CONTAINS
         IF (iStat .EQ. -1) RETURN
     END IF
     CALL Model%AppLake%RegisterWithMatrix(Model%Matrix,iStat)  ;  IF (iStat .EQ. -1) RETURN
-    CALL Model%AppGW%RegisterWithMatrix(Model%AppGrid,Model%Stratigraphy,Model%Matrix,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    CALL Model%AppGW%RegisterWithMatrix(ModuleLogger,Model%AppGrid,Model%Stratigraphy,Model%Matrix,iStat)  ;  IF (iStat .EQ. -1) RETURN
     IF (lRoutedStreams) THEN
         CALL Model%AppStream%GetStrmConnectivity(StrmConnectivity)
         CALL Model%StrmGWConnector%RegisterWithMatrix(StrmConnectivity,Model%AppGrid,Model%Matrix,iStat)
@@ -879,7 +876,7 @@ CONTAINS
         IF (iStat .EQ. -1) RETURN
     END IF
     CALL Model%AppLake%RegisterWithMatrix(Model%Matrix,iStat)  ;  IF (iStat .EQ. -1) RETURN
-    CALL Model%AppGW%RegisterWithMatrix(Model%AppGrid,Model%Stratigraphy,Model%Matrix,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    CALL Model%AppGW%RegisterWithMatrix(ModuleLogger,Model%AppGrid,Model%Stratigraphy,Model%Matrix,iStat)  ;  IF (iStat .EQ. -1) RETURN
     IF (lRoutedStreams) THEN
         CALL Model%AppStream%GetStrmConnectivity(StrmConnectivity)
         CALL Model%StrmGWConnector%RegisterWithMatrix(StrmConnectivity,Model%AppGrid,Model%Matrix,iStat)
@@ -943,7 +940,7 @@ CONTAINS
     !Set module-level loggers for Batch 2 packages
 
 
-    CALL BaseHydrograph_SetModuleLogger(DefaultLogger)
+
 
 
 
@@ -956,7 +953,7 @@ CONTAINS
     CALL AppLake_v50_SetModuleLogger(DefaultLogger)
     CALL AppSWShed_v40_SetModuleLogger(DefaultLogger)
     CALL AppSWShed_v41_SetModuleLogger(DefaultLogger)
-    CALL AppGW_SetAllModuleLoggers(DefaultLogger)
+
     CALL AppStream_SetAllModuleLoggers(DefaultLogger)
     CALL RootZone_SetAllModuleLoggers(DefaultLogger)
     CALL BaseFile_SetModuleLogger(DefaultLogger)
@@ -971,7 +968,7 @@ CONTAINS
     CALL BudgetInputFile_SetModuleLogger(DefaultLogger)
 
     CALL GWZBudget_SetModuleLogger(DefaultLogger)
-    CALL WSA_ANN_SetModuleLogger(DefaultLogger)
+
 
     CALL OpeningScreen_SetModuleLogger(DefaultLogger)
 
@@ -1095,11 +1092,11 @@ CONTAINS
     CALL Model%GWZBudget%SetLogger(DefaultLogger)
 
 
-    CALL BaseHydrograph_SetModuleLogger(DefaultLogger)
 
 
 
-    CALL AppGW_SetAllModuleLoggers(DefaultLogger)
+
+
     CALL AppStream_SetAllModuleLoggers(DefaultLogger)
     CALL RootZone_SetAllModuleLoggers(DefaultLogger)
     CALL BaseFile_SetModuleLogger(DefaultLogger)
@@ -1114,7 +1111,7 @@ CONTAINS
     CALL BudgetInputFile_SetModuleLogger(DefaultLogger)
 
     CALL GWZBudget_SetModuleLogger(DefaultLogger)
-    CALL WSA_ANN_SetModuleLogger(DefaultLogger)
+
 
     CALL OpeningScreen_SetModuleLogger(DefaultLogger)
 
@@ -1492,11 +1489,11 @@ CONTAINS
     CALL Model%GWZBudget%SetLogger(DefaultLogger)
 
 
-    CALL BaseHydrograph_SetModuleLogger(DefaultLogger)
 
 
 
-    CALL AppGW_SetAllModuleLoggers(DefaultLogger)
+
+
     CALL AppStream_SetAllModuleLoggers(DefaultLogger)
     CALL RootZone_SetAllModuleLoggers(DefaultLogger)
     CALL BaseFile_SetModuleLogger(DefaultLogger)
@@ -1511,7 +1508,7 @@ CONTAINS
     CALL BudgetInputFile_SetModuleLogger(DefaultLogger)
 
     CALL GWZBudget_SetModuleLogger(DefaultLogger)
-    CALL WSA_ANN_SetModuleLogger(DefaultLogger)
+
 
     CALL OpeningScreen_SetModuleLogger(DefaultLogger)
 
@@ -1876,11 +1873,11 @@ CONTAINS
     CALL Model%GWZBudget%SetLogger(DefaultLogger)
 
 
-    CALL BaseHydrograph_SetModuleLogger(DefaultLogger)
 
 
 
-    CALL AppGW_SetAllModuleLoggers(DefaultLogger)
+
+
     CALL AppStream_SetAllModuleLoggers(DefaultLogger)
     CALL RootZone_SetAllModuleLoggers(DefaultLogger)
     CALL BaseFile_SetModuleLogger(DefaultLogger)
@@ -1895,7 +1892,7 @@ CONTAINS
     CALL BudgetInputFile_SetModuleLogger(DefaultLogger)
 
     CALL GWZBudget_SetModuleLogger(DefaultLogger)
-    CALL WSA_ANN_SetModuleLogger(DefaultLogger)
+
 
     CALL OpeningScreen_SetModuleLogger(DefaultLogger)
 
@@ -4052,7 +4049,7 @@ CONTAINS
     CALL Model%AppGrid%GetNodeIDs(iNodeIDs)
     
     !Retrieve initial gw heads
-    CALL Model%AppGW%GetGWHeadsIC(Model%cGWMainInputFileName,iNodeIDs,Model%Stratigraphy,rGWHeadsIC,iStat)
+    CALL Model%AppGW%GetGWHeadsIC(ModuleLogger,Model%cGWMainInputFileName,iNodeIDs,Model%Stratigraphy,rGWHeadsIC,iStat)
     
   END SUBROUTINE GetGWHeadsIC
   
@@ -4264,7 +4261,8 @@ CONTAINS
     
     !Is this full model or model for inquiry
     IF (Model%lModel_ForInquiry_Defined) THEN
-        CALL Model%AppGW%GetAquitardKv_FromFile(Model%cGWMainInputFileName , &
+        CALL Model%AppGW%GetAquitardKv_FromFile(ModuleLogger                , &
+                                                Model%cGWMainInputFileName , &
                                                 Model%cSIMWorkingDirectory , &
                                                 Model%AppGrid              , &
                                                 Model%Stratigraphy         , &
@@ -4290,7 +4288,8 @@ CONTAINS
     
     !Is this full model or model for inquiry
     IF (Model%lModel_ForInquiry_Defined) THEN
-        CALL Model%AppGW%GetAquiferKv_FromFile(Model%cGWMainInputFileName , &
+        CALL Model%AppGW%GetAquiferKv_FromFile(ModuleLogger                , &
+                                               Model%cGWMainInputFileName , &
                                                Model%cSIMWorkingDirectory , &
                                                Model%AppGrid              , &
                                                Model%Stratigraphy         , &
@@ -4316,7 +4315,8 @@ CONTAINS
     
     !Is this full model or model for inquiry
     IF (Model%lModel_ForInquiry_Defined) THEN
-        CALL Model%AppGW%GetAquiferKh_FromFile(Model%cGWMainInputFileName , &
+        CALL Model%AppGW%GetAquiferKh_FromFile(ModuleLogger                , &
+                                               Model%cGWMainInputFileName , &
                                                Model%cSIMWorkingDirectory , &
                                                Model%AppGrid              , &
                                                Model%Stratigraphy         , &
@@ -4342,7 +4342,8 @@ CONTAINS
     
     !Is this full model or model for inquiry
     IF (Model%lModel_ForInquiry_Defined) THEN
-        CALL Model%AppGW%GetAquiferSy_FromFile(Model%cGWMainInputFileName , &
+        CALL Model%AppGW%GetAquiferSy_FromFile(ModuleLogger                , &
+                                               Model%cGWMainInputFileName , &
                                                Model%cSIMWorkingDirectory , &
                                                Model%AppGrid              , &
                                                Model%Stratigraphy         , &
@@ -4368,7 +4369,8 @@ CONTAINS
     
     !Is this full model or model for inquiry
     IF (Model%lModel_ForInquiry_Defined) THEN
-        CALL Model%AppGW%GetAquiferSs_FromFile(Model%cGWMainInputFileName , &
+        CALL Model%AppGW%GetAquiferSs_FromFile(ModuleLogger                , &
+                                               Model%cGWMainInputFileName , &
                                                Model%cSIMWorkingDirectory , &
                                                Model%AppGrid              , &
                                                Model%Stratigraphy         , &
@@ -4394,7 +4396,8 @@ CONTAINS
     
     !Is this full model or model for inquiry
     IF (Model%lModel_ForInquiry_Defined) THEN
-        CALL Model%AppGW%GetAquiferParameters_FromFile(Model%cGWMainInputFileName , &
+        CALL Model%AppGW%GetAquiferParameters_FromFile(ModuleLogger                , &
+                                                       Model%cGWMainInputFileName , &
                                                        Model%cSIMWorkingDirectory , &
                                                        Model%AppGrid              , &
                                                        Model%Stratigraphy         , &

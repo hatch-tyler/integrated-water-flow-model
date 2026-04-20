@@ -75,13 +75,11 @@ MODULE Package_AppStream
                                           f_iBypassRecvLoss                                , &
                                           f_iAllRecvLoss
   USE Class_Diversion             , ONLY: DiversionType                                    , &
-                                          DeliveryType                                     , &
-                                          Diversion_SetModuleLogger
+                                          DeliveryType
   USE Class_StrmNodeBudget        , ONLY: StrmNodeBudgetType
   USE Package_Matrix              , ONLY: MatrixType                                       , &
                                           ConnectivityListType
   USE Package_Budget              , ONLY: BudgetType
-  USE Class_Bypass                , ONLY: Bypass_SetModuleLogger
   IMPLICIT NONE
   
   
@@ -284,8 +282,6 @@ CONTAINS
     CALL AppStream_v42_WSA_SetModuleLogger(Logger)
     CALL AppStream_v421_SetModuleLogger(Logger)
     CALL AppStream_v50_SetModuleLogger(Logger)
-    CALL Diversion_SetModuleLogger(Logger)
-    CALL Bypass_SetModuleLogger(Logger)
   END SUBROUTINE AppStream_SetAllModuleLoggers
 
 

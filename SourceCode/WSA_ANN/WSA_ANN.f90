@@ -59,7 +59,6 @@ MODULE WSA_ANN
   USE Package_ComponentConnectors , ONLY: StrmGWConnectorType
   IMPLICIT NONE
 
-  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
 
 
   
@@ -78,8 +77,7 @@ MODULE WSA_ANN
   ! --- PUBLIC VARIABLES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC  :: WSA_ANN_Type , &
-             WSA_ANN_SetModuleLogger
+  PUBLIC  :: WSA_ANN_Type
   
   
   ! -------------------------------------------------------------
@@ -601,7 +599,7 @@ CONTAINS
     !Make sure DSS file is used only if it is a time-tracking simulation
     IF (WSA%VarOutFile%iGetFileType() .EQ. f_iDSS) THEN
         IF (.NOT. TimeStep%TrackTime) THEN
-            CALL ModuleLogger%SetLastMessage('DSS files for printing of the input variables for the ANN model of the water supply adjustments can only be used for time-tracking simulations.',f_iFatal,ThisProcedure)
+            CALL WSA%Logger%SetLastMessage('DSS files for printing of the input variables for the ANN model of the water supply adjustments can only be used for time-tracking simulations.',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -715,7 +713,7 @@ CONTAINS
     !Make sure DSS file is used only if it is a time-tracking simulation
     IF (WSA%WSAOutFile%iGetFileType() .EQ. f_iDSS) THEN
         IF (.NOT. TimeStep%TrackTime) THEN
-            CALL ModuleLogger%SetLastMessage('DSS files for printing of the calculated water supply adjustments can only be used for time-tracking simulations.',f_iFatal,ThisProcedure)
+            CALL WSA%Logger%SetLastMessage('DSS files for printing of the calculated water supply adjustments can only be used for time-tracking simulations.',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -818,7 +816,7 @@ CONTAINS
         !Make sure WSA ID is recognized
         iWSA = LocateInList(iWSAID,WSA%IDs)
         IF (iWSA .EQ. 0) THEN
-            CALL ModuleLogger%SetLastMessage('WSA ID '//TRIM(IntToText(iWSAID))//' listed for ANN model parameters is not valid!',f_iFatal,ThisProcedure)
+            CALL WSA%Logger%SetLastMessage('WSA ID '//TRIM(IntToText(iWSAID))//' listed for ANN model parameters is not valid!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -849,7 +847,7 @@ CONTAINS
         iLoc = FirstLocation(' ',ALine)  ;  ALine = ADJUSTL(ALine(iLoc:))
         iWSA = LocateInList(iWSAID,WSA%IDs)
         IF (iWSA .EQ. 0) THEN
-            CALL ModuleLogger%SetLastMessage('WSA ID '//TRIM(IntToText(iWSAID))//' listed for ANN model scaling parameters is not valid!',f_iFatal,ThisProcedure)
+            CALL WSA%Logger%SetLastMessage('WSA ID '//TRIM(IntToText(iWSAID))//' listed for ANN model scaling parameters is not valid!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -861,13 +859,13 @@ CONTAINS
         iVarID = INT(rDummyArray6(4))
         iVar   = LocateInList(iVarID,WSA%iVarIDs)
         IF (iVar .EQ. 0) THEN
-            CALL ModuleLogger%SetLastMessage('Input variable ID '//TRIM(IntToText(iVarID))//' listed for ANN model scaling parameters is not valid!',f_iFatal,ThisProcedure)
+            CALL WSA%Logger%SetLastMessage('Input variable ID '//TRIM(IntToText(iVarID))//' listed for ANN model scaling parameters is not valid!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
         iVar = LocateInList(iVar,WSA%VarAggregation(iWSA)%iUniqueVarIndexList)
         IF (iVar .EQ. 0) THEN
-            CALL ModuleLogger%SetLastMessage('Input variable ID '//TRIM(IntToText(iVarID))//' listed for scaling parameters is not used as a variable for WSA ID '//TRIM(IntToText(iWSAID))//'!',f_iFatal,ThisProcedure)
+            CALL WSA%Logger%SetLastMessage('Input variable ID '//TRIM(IntToText(iVarID))//' listed for scaling parameters is not used as a variable for WSA ID '//TRIM(IntToText(iWSAID))//'!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -893,13 +891,13 @@ CONTAINS
                 iVarID = INT(rDummyArray3(1))
                 iVar   = LocateInList(iVarID,WSA%iVarIDs)
                 IF (iVar .EQ. 0) THEN
-                    CALL ModuleLogger%SetLastMessage('Input variable ID '//TRIM(IntToText(iVarID))//' listed for ANN model scaling parameters is not valid!',f_iFatal,ThisProcedure)
+                    CALL WSA%Logger%SetLastMessage('Input variable ID '//TRIM(IntToText(iVarID))//' listed for ANN model scaling parameters is not valid!',f_iFatal,ThisProcedure)
                     iStat = -1
                     RETURN
                 END IF
                 iVar = LocateInList(iVar,WSA%VarAggregation(iWSA)%iUniqueVarIndexList)
                 IF (iVar .EQ. 0) THEN
-                    CALL ModuleLogger%SetLastMessage('Input variable ID '//TRIM(IntToText(iVarID))//' listed for scaling parameters is not used as a variable for WSA ID '//TRIM(IntToText(iWSAID))//'!',f_iFatal,ThisProcedure)
+                    CALL WSA%Logger%SetLastMessage('Input variable ID '//TRIM(IntToText(iVarID))//' listed for scaling parameters is not used as a variable for WSA ID '//TRIM(IntToText(iWSAID))//'!',f_iFatal,ThisProcedure)
                     iStat = -1
                     RETURN
                 END IF
@@ -935,7 +933,7 @@ CONTAINS
         !Make sure WSA ID is valid
         iWSA = LocateInList(iWSAID,WSA%IDs)
         IF (iWSA .EQ. 0) THEN
-            CALL ModuleLogger%SetLastMessage('WSA ID '//TRIM(IntToText(iWSAID))//' listed for ANN weights and biases is not valid!',f_iFatal,ThisProcedure)
+            CALL WSA%Logger%SetLastMessage('WSA ID '//TRIM(IntToText(iWSAID))//' listed for ANN weights and biases is not valid!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -963,7 +961,7 @@ CONTAINS
             IF (.NOT. iActCode .EQ. f_iAct_None) THEN
                 IF (.NOT. iActCode .EQ. f_iAct_ReLU) THEN
                     IF (.NOT. iActCode .EQ. f_iAct_Sigmoid) THEN
-                        CALL ModuleLogger%SetLastMessage('Activation code '//TRIM(IntToText(iActCode))//' listed for WSA ID '//TRIM(IntToText(iWSAID))//', layer '//TRIM(IntToText(iLayer))//' and neuron '//TRIM(IntToText(iNeuron))//' is not recognized!',f_iFatal,ThisProcedure)
+                        CALL WSA%Logger%SetLastMessage('Activation code '//TRIM(IntToText(iActCode))//' listed for WSA ID '//TRIM(IntToText(iWSAID))//', layer '//TRIM(IntToText(iLayer))//' and neuron '//TRIM(IntToText(iNeuron))//' is not recognized!',f_iFatal,ThisProcedure)
                         iStat = -1
                         RETURN
                     END IF
@@ -982,7 +980,7 @@ CONTAINS
                 IF (.NOT. iActCode .EQ. f_iAct_None) THEN
                     IF (.NOT. iActCode .EQ. f_iAct_ReLU) THEN
                         IF (.NOT. iActCode .EQ. f_iAct_Sigmoid) THEN
-                            CALL ModuleLogger%SetLastMessage('Activation code '//TRIM(IntToText(iActCode))//' listed for WSA ID '//TRIM(IntToText(iWSAID))//', layer '//TRIM(IntToText(iLayer))//' and neuron '//TRIM(IntToText(iNeuron))//' is not recognized!',f_iFatal,ThisProcedure)
+                            CALL WSA%Logger%SetLastMessage('Activation code '//TRIM(IntToText(iActCode))//' listed for WSA ID '//TRIM(IntToText(iWSAID))//', layer '//TRIM(IntToText(iLayer))//' and neuron '//TRIM(IntToText(iNeuron))//' is not recognized!',f_iFatal,ThisProcedure)
                             iStat = -1
                             RETURN
                         END IF
@@ -1614,13 +1612,13 @@ CONTAINS
         !Make sure WSA and variable IDs are recognized
         iWSA = LocateInList(iWSAID,WSA%IDs)
         IF (iWSA .EQ. 0) THEN
-            CALL ModuleLogger%SetLastMessage('WSA ID '//TRIM(IntToText(iWSAID))//' listed in variable aggregation methods is not recognized!',f_iFatal,ThisProcedure)
+            CALL WSA%Logger%SetLastMessage('WSA ID '//TRIM(IntToText(iWSAID))//' listed in variable aggregation methods is not recognized!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
         iVar = LocateInList(iVarID,WSA%iVarIDs)
         IF (iVar .EQ. 0) THEN
-            CALL ModuleLogger%SetLastMessage('Variable ID '//TRIM(IntToText(iVarID))//' listed for variable aggregation for WSA '//TRIM(IntToText(iWSAID))//' is not recognized!',f_iFatal,ThisProcedure)
+            CALL WSA%Logger%SetLastMessage('Variable ID '//TRIM(IntToText(iVarID))//' listed for variable aggregation for WSA '//TRIM(IntToText(iWSAID))//' is not recognized!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -1643,7 +1641,7 @@ CONTAINS
         READ (ALine,*) iLocationType
         iLoc = FirstLocation(' ',ALine)  ;  ALine = ADJUSTL(ALine(iLoc:))
         IF (LocateInList(iLocationType,f_iLocationTypeList) .EQ. 0) THEN
-            CALL ModuleLogger%SetLastMessage('Location type '//TRIM(IntToText(iLocationType))//' listed for variable aggregation for WSA '//TRIM(IntToText(iWSAID))//' is not recognized!',f_iFatal,ThisProcedure)
+            CALL WSA%Logger%SetLastMessage('Location type '//TRIM(IntToText(iLocationType))//' listed for variable aggregation for WSA '//TRIM(IntToText(iWSAID))//' is not recognized!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -1675,7 +1673,7 @@ CONTAINS
             !Process location ID
             iLocIndex = LocateInList(iLocID, pIDs)
             IF (iLocIndex .EQ. 0) THEN
-                CALL ModuleLogger%SetLastMessage(TRIM(cLocation)//' '//TRIM(IntToText(iLocID))//' listed for WSA '//TRIM(IntToText(iWSAID))//' variable aggregation locations is not in the IWFM model!',f_iFatal,ThisProcedure)
+                CALL WSA%Logger%SetLastMessage(TRIM(cLocation)//' '//TRIM(IntToText(iLocID))//' listed for WSA '//TRIM(IntToText(iWSAID))//' variable aggregation locations is not in the IWFM model!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -1690,7 +1688,7 @@ CONTAINS
         aVarAggregation%iNLocations = SIZE(aVarAggregation%iLocations)
         
         !Check consistency b/w variable type and location type for aggregation
-        CALL CheckVariableLocationAggregationConsistency(WSA%iVarTypes,aVarAggregation,iStat)   ;  IF (iStat .NE. 0) RETURN
+        CALL CheckVariableLocationAggregationConsistency(WSA%Logger,WSA%iVarTypes,aVarAggregation,iStat)   ;  IF (iStat .NE. 0) RETURN
         
         !Convert stream reaches to stream nodes
         IF (iLocationType .EQ. f_iLocationType_StrmReach) THEN
@@ -1753,7 +1751,8 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- CHECK IF VARIABLE TYPE AND LISTED LOCATIONS FOR AGGREGATION ARE CONSISTENT
   ! -------------------------------------------------------------
-  SUBROUTINE CheckVariableLocationAggregationConsistency(iVarTypes,aVarAggregation,iStat)
+  SUBROUTINE CheckVariableLocationAggregationConsistency(Logger,iVarTypes,aVarAggregation,iStat)
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT) :: Logger
     INTEGER,INTENT(IN)                  :: iVarTypes(:)
     TYPE(VarAggregationType),INTENT(IN) :: aVarAggregation
     INTEGER,INTENT(OUT)                 :: iStat
@@ -1777,7 +1776,7 @@ CONTAINS
                        iLocationType .EQ. f_iLocationtype_StrmReach       )) THEN
                 MessageArray(1) = 'For WSA variable aggregation, location type must be either '//TRIM(IntToText(f_iLocationType_StrmNode))
                 MessageArray(2) = ' or '//TRIM(IntToText(f_iLocationType_StrmReach))//' when variable type is '//TRIM(IntToText(iVarType))//'!' 
-                CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                CALL Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -1787,7 +1786,7 @@ CONTAINS
                        iLocationType .EQ. f_iLocationType_Subregion      )) THEN
                 MessageArray(1) = 'For WSA variable aggregation, location type must be either '//TRIM(IntToText(f_iLocationType_Element))
                 MessageArray(2) = ' or '//TRIM(IntToText(f_iLocationType_Subregion))//' when variable type is '//TRIM(IntToText(iVarType))//'!' 
-                CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                CALL Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF 
@@ -1797,7 +1796,7 @@ CONTAINS
                        iLocationType .EQ. f_iLocationType_Subregion       )) THEN
                 MessageArray(1) = 'For WSA variable aggregation, location type must be either '//TRIM(IntToText(f_iLocationType_Element))
                 MessageArray(2) = ' or '//TRIM(IntToText(f_iLocationType_Subregion))//' when variable type is '//TRIM(IntToText(iVarType))//'!' 
-                CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                CALL Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF 
@@ -1841,10 +1840,5 @@ CONTAINS
     
   END FUNCTION IsHistoricalRun
 
-
-  SUBROUTINE WSA_ANN_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(INOUT) :: Logger
-    ModuleLogger => Logger
-  END SUBROUTINE WSA_ANN_SetModuleLogger
 
 END MODULE

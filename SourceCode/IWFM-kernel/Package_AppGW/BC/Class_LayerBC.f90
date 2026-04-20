@@ -64,7 +64,6 @@ MODULE Class_LayerBC
   ! -------------------------------------------------------------
   PRIVATE
   PUBLIC :: LayerBCType                            , &
-            LayerBC_SetModuleLogger                , &
             LayerBC_InitSpecifiedFlowBC            , &
             LayerBC_InitSpecifiedHeadBC            , &
             LayerBC_InitGeneralHeadBC              , &
@@ -182,12 +181,6 @@ MODULE Class_LayerBC
   ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
-  ! -------------------------------------------------------------
-  ! --- MODULE-LEVEL LOGGER
-  ! -------------------------------------------------------------
-  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
-
-
   INTEGER,PARAMETER                   :: ModNameLen = 15
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'Class_LayerBC::'
 
@@ -195,16 +188,6 @@ MODULE Class_LayerBC
 
   
 CONTAINS
-
-
-  ! -------------------------------------------------------------
-  ! --- SET MODULE-LEVEL LOGGER
-  ! -------------------------------------------------------------
-  SUBROUTINE LayerBC_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(INOUT) :: Logger
-    ModuleLogger => Logger
-  END SUBROUTINE LayerBC_SetModuleLogger
-
 
 
 
@@ -265,7 +248,7 @@ CONTAINS
     
     !Make sure time unit is recognized
     IF (IsTimeIntervalValid(cTimeUnit) .EQ. 0) THEN
-        CALL ModuleLogger%SetLastMessage(TRIM(cTimeUnit) // ' in Specified Flow Boundary Conditions File is not a recognized time unit!',f_iFatal,ThisProcedure)
+        CALL Logger%SetLastMessage(TRIM(cTimeUnit) // ' in Specified Flow Boundary Conditions File is not a recognized time unit!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -287,21 +270,21 @@ CONTAINS
       
         !Make sure iNode is in model range
         IF (iNode .EQ. 0) THEN
-            CALL ModuleLogger%SetLastMessage('Node number '//TRIM(IntToText(ID))//' listed in groundwater specified flow boundary condition file is not in the model.',f_iFatal,ThisProcedure)
+            CALL Logger%SetLastMessage('Node number '//TRIM(IntToText(ID))//' listed in groundwater specified flow boundary condition file is not in the model.',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
         
         !Make sure iLayer is in model range
         IF (iLayer .GT. Stratigraphy%Nlayers  .OR.  iLayer .LT. 1) THEN
-            CALL ModuleLogger%SetLastMessage('Layer number '//TRIM(IntToText(iLayer))//' listed in groundwater specified flow boundary condition file is out of range.',f_iFatal,ThisProcedure)
+            CALL Logger%SetLastMessage('Layer number '//TRIM(IntToText(iLayer))//' listed in groundwater specified flow boundary condition file is out of range.',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
         
         !Make sure boundary node is an active node
         IF (.NOT. Stratigraphy%ActiveNode(iNode,iLayer)) THEN
-            CALL ModuleLogger%SetLastMessage('Specified flow boundary node '//TRIM(IntToText(ID))//' in layer '//TRIM(IntToText(iLayer))//' is an inactive node!',f_iFatal,ThisProcedure)
+            CALL Logger%SetLastMessage('Specified flow boundary node '//TRIM(IntToText(ID))//' in layer '//TRIM(IntToText(iLayer))//' is an inactive node!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -419,21 +402,21 @@ CONTAINS
         
         !Make sure iNode is in model range
         IF (iNode .EQ. 0) THEN
-            CALL ModuleLogger%SetLastMessage('Node number '//TRIM(IntToText(ID))//' listed in groundwater specified head boundary condition file is not in the model.',f_iFatal,ThisProcedure)
+            CALL Logger%SetLastMessage('Node number '//TRIM(IntToText(ID))//' listed in groundwater specified head boundary condition file is not in the model.',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
         
         !Make sure iLayer is in model range
         IF (iLayer .GT. Stratigraphy%Nlayers  .OR.  iLayer .LT. 1) THEN
-            CALL ModuleLogger%SetLastMessage('Layer number '//TRIM(IntToText(iLayer))//' listed in groundwater specified head boundary condition file is out of range.',f_iFatal,ThisProcedure)
+            CALL Logger%SetLastMessage('Layer number '//TRIM(IntToText(iLayer))//' listed in groundwater specified head boundary condition file is out of range.',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
         
         !Make sure boundary node is an active node
         IF (.NOT. Stratigraphy%ActiveNode(iNode,iLayer)) THEN
-            CALL ModuleLogger%SetLastMessage('Specified head boundary node '//TRIM(IntToText(ID))//' in layer '//TRIM(IntToText(iLayer))//' is an inactive node!',f_iFatal,ThisProcedure)
+            CALL Logger%SetLastMessage('Specified head boundary node '//TRIM(IntToText(ID))//' in layer '//TRIM(IntToText(iLayer))//' is an inactive node!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -448,7 +431,7 @@ CONTAINS
                 WRITE (MessageArray(3),'(A,F9.3)') 'Specified head   =',BH
                 WRITE (MessageArray(4),'(A,F9.3)') 'Bottom of aquifer=',BottomElev
                 MessageArray(5) = 'Assigning the elevation of aquifer bottom as specified head b.c.'
-                CALL ModuleLogger%LogMessage(MessageArray(1:5),f_iWarn,ThisProcedure)
+                CALL Logger%LogMessage(MessageArray(1:5),f_iWarn,ThisProcedure)
                 BH = BottomElev
             END IF
             
@@ -557,7 +540,7 @@ CONTAINS
     
     !Make sure time unit is recognized
     IF (IsTimeIntervalValid(cTimeUnit) .EQ. 0) THEN
-        CALL ModuleLogger%SetLastMessage(TRIM(cTimeUnit) // ' in General Head Boundary Conditions File is not a recognized time unit!',f_iFatal,ThisProcedure)
+        CALL Logger%SetLastMessage(TRIM(cTimeUnit) // ' in General Head Boundary Conditions File is not a recognized time unit!',f_iFatal,ThisProcedure)
           iStat = -1
           RETURN
       END IF
@@ -574,21 +557,21 @@ CONTAINS
       
         !Make sure iNode is in model range
         IF (iNode .EQ. 0) THEN
-            CALL ModuleLogger%SetLastMessage('Node number '//TRIM(IntToText(ID))//' listed in groundwater general head boundary condition file is not in the model.',f_iFatal,ThisProcedure)
+            CALL Logger%SetLastMessage('Node number '//TRIM(IntToText(ID))//' listed in groundwater general head boundary condition file is not in the model.',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
         
         !Make sure iLayer is in model range
         IF (iLayer .GT. Stratigraphy%NLayers  .OR.  iLayer .LT. 1) THEN
-            CALL ModuleLogger%SetLastMessage('Layer number '//TRIM(IntToText(iLayer))//' listed in groundwater general head boundary condition file is out of range.',f_iFatal,ThisProcedure)
+            CALL Logger%SetLastMessage('Layer number '//TRIM(IntToText(iLayer))//' listed in groundwater general head boundary condition file is out of range.',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
         
         !Make sure boundary node is an active node
         IF (.NOT. Stratigraphy%ActiveNode(iNode,iLayer)) THEN
-            CALL ModuleLogger%SetLastMessage('General head boundary node '//TRIM(IntToText(ID))//' in layer '//TRIM(IntToText(iLayer))//' is an inactive node!',f_iFatal,ThisProcedure)
+            CALL Logger%SetLastMessage('General head boundary node '//TRIM(IntToText(ID))//' in layer '//TRIM(IntToText(iLayer))//' is an inactive node!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -698,12 +681,12 @@ CONTAINS
         
     !Make sure that time units are recognized
     IF (IsTimeIntervalValid(cTimeUnit) .EQ. 0) THEN
-        CALL ModuleLogger%SetLastMessage(TRIM(cTimeUnit) // ' in Constrained General Head Boundary Conditions File is not a recognized time unit!',f_iFatal,ThisProcedure)
+        CALL Logger%SetLastMessage(TRIM(cTimeUnit) // ' in Constrained General Head Boundary Conditions File is not a recognized time unit!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
     IF (IsTimeIntervalValid(cTimeUnitConductance) .EQ. 0) THEN
-        CALL ModuleLogger%SetLastMessage(TRIM(cTimeUnitConductance) // ' in Constrained General Head Boundary Conditions File is not a recognized time unit!',f_iFatal,ThisProcedure)
+        CALL Logger%SetLastMessage(TRIM(cTimeUnitConductance) // ' in Constrained General Head Boundary Conditions File is not a recognized time unit!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -732,21 +715,21 @@ CONTAINS
       
         !Make sure iNode is in model range
         IF (iNode .EQ. 0) THEN
-            CALL ModuleLogger%SetLastMessage('Node number '//TRIM(IntToText(ID))//' listed in groundwater constrained general head boundary condition file is not in the model.',f_iFatal,ThisProcedure)
+            CALL Logger%SetLastMessage('Node number '//TRIM(IntToText(ID))//' listed in groundwater constrained general head boundary condition file is not in the model.',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
       
         !Make sure iLayer is in model range
         IF (iLayer .GT. Stratigraphy%Nlayers  .OR.  iLayer .LT. 1) THEN
-            CALL ModuleLogger%SetLastMessage('Layer number '//TRIM(IntToText(iLayer))//' listed in groundwater constrained general head boundary condition file is out of range.',f_iFatal,ThisProcedure)
+            CALL Logger%SetLastMessage('Layer number '//TRIM(IntToText(iLayer))//' listed in groundwater constrained general head boundary condition file is out of range.',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
         
         !Make sure boundary node is an active node
         IF (.NOT. Stratigraphy%ActiveNode(iNode,iLayer)) THEN
-            CALL ModuleLogger%SetLastMessage('Constrained general head boundary node '//TRIM(IntToText(ID))//' in layer '//TRIM(IntToText(iLayer))//' is an inactive node!',f_iFatal,ThisProcedure)
+            CALL Logger%SetLastMessage('Constrained general head boundary node '//TRIM(IntToText(ID))//' in layer '//TRIM(IntToText(iLayer))//' is an inactive node!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -1385,11 +1368,12 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- SET THE TIME SERIES BOUNDARY CONDITIONS 
   ! -------------------------------------------------------------
-  SUBROUTINE LayerBC_SetTSBoundaryConditions(NodeIDs,BottomElev,rBCValues,Heads,LayerBC)
+  SUBROUTINE LayerBC_SetTSBoundaryConditions(NodeIDs,BottomElev,rBCValues,Heads,LayerBC,Logger)
     INTEGER,INTENT(IN) :: NodeIDs(:)
     REAL(8),INTENT(IN) :: BottomElev(:,:),rBCValues(:)
     REAL(8)            :: Heads(:,:)
     TYPE(LayerBCType)  :: LayerBC(:)
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
     
     !Local variables
     CHARACTER(LEN=ModNameLen+31) :: ThisProcedure = ModName // 'LayerBC_SetTSBoundaryConditions'
@@ -1422,7 +1406,7 @@ CONTAINS
                             WRITE (MessageArray(3),'(A,F9.3)') 'Specified head            =',rBCValues(iTSColumn)
                             WRITE (MessageArray(4),'(A,F9.3)') 'Bottom elevation of layer =',BottomElev(iNode,indxLayer)
                             MessageArray(5) = 'Assigning the bottom elevation of the layer as specified head b.c.'
-                            CALL ModuleLogger%LogMessage(MessageArray(1:5),f_iWarn,ThisProcedure)
+                            CALL Logger%LogMessage(MessageArray(1:5),f_iWarn,ThisProcedure)
                             rHead = BottomElev(iNode,indxLayer)
                         ELSE
                             rHead = rBCValues(iTSColumn)
@@ -1655,9 +1639,10 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- MAKE SURE ONLY ONE B.C. IS SPECIFIED FOR A NODE
   ! -------------------------------------------------------------
-  SUBROUTINE LayerBC_CheckConsistency(LayerBC,NodeIDs,iStat)
+  SUBROUTINE LayerBC_CheckConsistency(LayerBC,NodeIDs,Logger,iStat)
     TYPE(LayerBCType),INTENT(IN) :: LayerBC(:)
     INTEGER,INTENT(IN)           :: NodeIDs(:)
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
     INTEGER,INTENT(OUT)          :: iStat
     
     !Local variables
@@ -1688,7 +1673,7 @@ CONTAINS
                    cMessage = 'Multiple boundary conditions are specified for node '//TRIM(IntToText(NodeIDs(iNode)))//' at layer '//TRIM(IntToText(indxLayer))//' ('
                    cMessage = TRIM(cMessage) // TRIM(f_cBCDescriptor(iBCTypes(indxNode))) // ' ,'
                    cMessage = TRIM(cMessage) //' ' // TRIM(f_cBCDescriptor(iBCTypes(indxNode1)))// ').'
-                   CALL ModuleLogger%SetLastMessage(TRIM(cMessage),f_iFatal,ThisProcedure)
+                   CALL Logger%SetLastMessage(TRIM(cMessage),f_iFatal,ThisProcedure)
                    iStat = -1
                    RETURN
                 END IF
@@ -1704,7 +1689,7 @@ CONTAINS
         indx1    = LocateInList(iColFlow,iTSHeadBCColumns)
         IF (indx1 .NE. 0) THEN
             cMessage = 'Time series boundary condition column ' // TRIM(IntToText(iColFlow)) // ' is being used as both flow and head boundary conditions!'
-            CALL ModuleLogger%SetLastMessage(TRIM(cMessage),f_iFatal,ThisProcedure)
+            CALL Logger%SetLastMessage(TRIM(cMessage),f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF

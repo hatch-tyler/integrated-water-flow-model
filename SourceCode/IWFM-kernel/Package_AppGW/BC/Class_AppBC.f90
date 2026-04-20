@@ -255,12 +255,12 @@ CONTAINS
     END IF
     
     !Make sure there are no errors in b.c. data
-    CALL LayerBC_CheckConsistency(AppBC%LayerBC,iGWNodeIDs,iStat)
+    CALL LayerBC_CheckConsistency(AppBC%LayerBC,iGWNodeIDs,AppBC%Logger,iStat)
     IF (iStat .EQ. -1) RETURN
-    
+
     !Apply time series b.c. that is initially read
     IF (AppBC%TSBCDataFile%lUpdated)  &
-        CALL LayerBC_SetTSBoundaryConditions(iGWNodeIDs,Stratigraphy%BottomElev,AppBC%TSBCDataFile%rValues,GWHeads,AppBC%LayerBC)
+        CALL LayerBC_SetTSBoundaryConditions(iGWNodeIDs,Stratigraphy%BottomElev,AppBC%TSBCDataFile%rValues,GWHeads,AppBC%LayerBC,AppBC%Logger)
     
     !Instantiate boundary node flow hydrograph output data
     ALLOCATE (AppBC%BCFlowOutput , STAT=ErrorCode ,ERRMSG=cErrorMsg)
@@ -859,7 +859,7 @@ CONTAINS
     IF (iStat .NE. 0) RETURN
     
     !Check for inconsistencies
-    CALL LayerBC_CheckConsistency(AppBC%LayerBC,iNodeIDs,iStat)   
+    CALL LayerBC_CheckConsistency(AppBC%LayerBC,iNodeIDs,AppBC%Logger,iStat)
     
   END SUBROUTINE SetBC
   
@@ -892,7 +892,7 @@ CONTAINS
     
     !Use the newly read time series b.c. data to set the layer b.c. data
     IF (AppBC%TSBCDataFile%lUpdated)   &
-        CALL LayerBC_SetTSBoundaryConditions(NodeIDs,BottomElev,AppBC%TSBCDataFile%rValues,Heads,AppBC%LayerBC)
+        CALL LayerBC_SetTSBoundaryConditions(NodeIDs,BottomElev,AppBC%TSBCDataFile%rValues,Heads,AppBC%LayerBC,AppBC%Logger)
     
   END SUBROUTINE ReadTSData
   

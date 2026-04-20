@@ -21,45 +21,11 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov
 !***********************************************************************
 MODULE Package_AppGW
-  USE MessageLogger        , ONLY: MessageLoggerType
   USE Package_AppTileDrain , ONLY: f_iTileDrain                      , &
                                    f_iSubIrig
   USE Package_AppPumping   , ONLY: f_iPump_Well                      , &
                                    f_iPump_ElemPump
-  USE Class_AppSubsidence_v40, ONLY: AppSubsidence_v40_SetModuleLogger
-  USE Class_AppSubsidence_v50, ONLY: AppSubsidence_v50_SetModuleLogger
   USE Class_AppGW   ! Re-export all public entities (AppGWType, constants, etc.)
-  !USE GWHydrograph removed — GWHydrograph_SetModuleLogger eliminated
-  USE Class_LayerBC        , ONLY: LayerBC_SetModuleLogger
-  USE Class_Well           , ONLY: Well_SetModuleLogger
-  !USE Class_ElementPumping removed — ElemPump_SetModuleLogger eliminated
   IMPLICIT NONE
-
-  ! All public entities from Class_AppGW are re-exported via USE without ONLY
-  PUBLIC :: AppGW_SetAllModuleLoggers
-
-CONTAINS
-
-
-  ! -------------------------------------------------------------
-  ! --- PROPAGATE LOGGER TO ALL SUB-MODULES
-  ! -------------------------------------------------------------
-  SUBROUTINE AppGW_SetAllModuleLoggers(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(INOUT) :: Logger
-
-    !Main orchestrator
-    CALL AppGW_SetModuleLogger(Logger)
-
-    !Boundary conditions
-    CALL LayerBC_SetModuleLogger(Logger)
-
-    !Pumping
-    CALL Well_SetModuleLogger(Logger)
-
-    !Subsidence
-    CALL AppSubsidence_v40_SetModuleLogger(Logger)
-    CALL AppSubsidence_v50_SetModuleLogger(Logger)
-
-  END SUBROUTINE AppGW_SetAllModuleLoggers
 
 END MODULE

@@ -71,8 +71,7 @@ MODULE Class_BaseHydrograph
             f_iHyd_AtXY            , &
             f_iHyd_AtNode          , &
             f_iHyd_GWHead          , &
-            f_iHyd_Subsidence      , &
-            BaseHydrograph_SetModuleLogger
+            f_iHyd_Subsidence
   
   
   ! -------------------------------------------------------------
@@ -146,12 +145,6 @@ MODULE Class_BaseHydrograph
 
   
   ! -------------------------------------------------------------
-  ! --- MODULE-LEVEL LOGGER (preserves type binary layout)
-  ! -------------------------------------------------------------
-  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
-
-
-  ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
   INTEGER,PARAMETER                   :: f_iHyd_AtXY       = 0  , &
@@ -164,16 +157,6 @@ MODULE Class_BaseHydrograph
 
 
 CONTAINS
-
-
-  ! -------------------------------------------------------------
-  ! --- SET MODULE-LEVEL LOGGER
-  ! -------------------------------------------------------------
-  SUBROUTINE BaseHydrograph_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(INOUT) :: Logger
-    ModuleLogger => Logger
-  END SUBROUTINE BaseHydrograph_SetModuleLogger
-
 
 
 
@@ -228,7 +211,7 @@ CONTAINS
     END IF
     
     !Read the hydrograph data
-    CALL HydrographList_New(AppGrid,Stratigraphy,iGWNodeIDs,iHydFor,NHyd,FactXY,InFile,HydOutput%Hyd_AtNode,HydOutput%Hyd_AtXY,HydOutput%OrderedHydList,iStat)
+    CALL HydrographList_New(Logger,AppGrid,Stratigraphy,iGWNodeIDs,iHydFor,NHyd,FactXY,InFile,HydOutput%Hyd_AtNode,HydOutput%Hyd_AtXY,HydOutput%OrderedHydList,iStat)
     IF (iStat .EQ. -1) RETURN
     HydOutput%NHyd_AtNode = SIZE(HydOutput%Hyd_AtNode)
     HydOutput%NHyd_AtXY   = SIZE(HydOutput%Hyd_AtXY)
@@ -240,7 +223,7 @@ CONTAINS
         CALL PrepHydInFile_ForInquiry(cAbsPathFileName,iGWNodeIDs,AppGrid%AppElement%ID,iHydFor,CPart,HydOutput%Hyd_AtNode,HydOutput%Hyd_AtXY,HydOutput%OrderedHydList,TimeStep,HydOutput%InFile_ForInquiry,iStat)
     ELSE
         ALLOCATE (HydOutput%OutFile)
-        CALL PrepHydOutFile(cAbsPathFileName,iGWNodeIDs,AppGrid%AppElement%ID,iHydFor,UNITLTOU,CPart,HydOutput%Hyd_AtNode,HydOutput%Hyd_AtXY,HydOutput%OrderedHydList,TimeStep,HydOutput%OutFile,iStat)
+        CALL PrepHydOutFile(Logger,cAbsPathFileName,iGWNodeIDs,AppGrid%AppElement%ID,iHydFor,UNITLTOU,CPart,HydOutput%Hyd_AtNode,HydOutput%Hyd_AtXY,HydOutput%OrderedHydList,TimeStep,HydOutput%OutFile,iStat)
     END IF
     
   END SUBROUTINE New
@@ -249,7 +232,8 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- NEW LIST OF HYDROGRAPH DATA
   ! -------------------------------------------------------------
-  SUBROUTINE HydrographList_New(AppGrid,Stratigraphy,iGWNodeIDs,iHydFor,NHyd,FactXY,InFile,Hyd_AtNode,Hyd_AtXY,OrderedHydList,iStat)
+  SUBROUTINE HydrographList_New(Logger,AppGrid,Stratigraphy,iGWNodeIDs,iHydFor,NHyd,FactXY,InFile,Hyd_AtNode,Hyd_AtXY,OrderedHydList,iStat)
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT) :: Logger
     TYPE(AppGridType),INTENT(IN)                 :: AppGrid
     TYPE(StratigraphyType),INTENT(IN)            :: Stratigraphy
     INTEGER,INTENT(IN)                           :: iGWNodeIDs(:),iHydFor,NHyd
@@ -296,7 +280,7 @@ CONTAINS
     !Allocate hydrograph pointers
     ALLOCATE (OrderedHydList(NHyd) ,STAT=ErrorCode , ERRMSG=cErrorMsg)
     IF (ErrorCode .NE. 0) THEN
-        CALL ModuleLogger%SetLastMessage('Error in allocating memory for ordered '//TRIM(cHydDescriptor)//' hydrograph list!'//NEW_LINE('x')//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
+        CALL Logger%SetLastMessage('Error in allocating memory for ordered '//TRIM(cHydDescriptor)//' hydrograph list!'//NEW_LINE('x')//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -322,14 +306,14 @@ CONTAINS
                 MessageArray(1) = 'Error in data entry for '//TRIM(cHydDescriptor)//' hydrograph specification '//TRIM(IntToText(indx))//'!'
                 MessageArray(2) = 'Model is trying to read the following data line:'
                 MessageArray(3) = TRIM(ADJUSTL(ALinePerm))
-                CALL ModuleLogger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+                CALL Logger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
             IF (indx1 .EQ. 1) ID = DummyArray(indx1)
             iLoc = FirstLocation(' ',ALine)
             IF (iLoc .EQ. 0) THEN
-                CALL ModuleLogger%SetLastMessage('Error in data entry for '//TRIM(cHydDescriptor)//' hydrograph specification '//TRIM(IntToText(ID))//'!',f_iFatal,ThisProcedure)
+                CALL Logger%SetLastMessage('Error in data entry for '//TRIM(cHydDescriptor)//' hydrograph specification '//TRIM(IntToText(ID))//'!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -340,14 +324,14 @@ CONTAINS
         
         !Make sure hydrograph type is recognized
         IF (.NOT.(iHydType .EQ. f_iHyd_AtXY   .OR.   iHydType .EQ. f_iHyd_AtNode)) THEN
-            CALL ModuleLogger%SetLastMessage(TRIM(cHydDescriptorCapital)//' hydrograph type listed for hydrograph ID '//TRIM(IntToText(ID))//' is not recognized!',f_iFatal,ThisProcedure)
+            CALL Logger%SetLastMessage(TRIM(cHydDescriptorCapital)//' hydrograph type listed for hydrograph ID '//TRIM(IntToText(ID))//' is not recognized!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
 
         !Make sure layer is modeled
         IF (iHydLayer .LT. 0   .OR.   iHydLayer .GT. Stratigraphy%NLayers) THEN
-            CALL ModuleLogger%SetLastMessage(TRIM(cHydDescriptorCapital)//' hydrograph layer listed for hydrograph ID '//TRIM(IntToText(ID))//' is outside model bounds!',f_iFatal,ThisProcedure)
+            CALL Logger%SetLastMessage(TRIM(cHydDescriptorCapital)//' hydrograph layer listed for hydrograph ID '//TRIM(IntToText(ID))//' is outside model bounds!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -360,13 +344,13 @@ CONTAINS
                     MessageArray(1) = 'Error in data entry for '//TRIM(cHydDescriptor)//' hydrograph specification ID '//TRIM(IntToText(ID))//'!'
                     MessageArray(2) = 'Model is trying to read the following data line:'
                     MessageArray(3) = TRIM(ADJUSTL(ALinePerm))
-                    CALL ModuleLogger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+                    CALL Logger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
                     iStat = -1
                     RETURN
                 END IF
                 iLoc = FirstLocation(' ',ALine)
                 IF (iLoc .EQ. 0) THEN
-                    CALL ModuleLogger%SetLastMessage('Error in data entry for '//TRIM(cHydDescriptor)//' hydrograph specification ID '//TRIM(IntToText(ID))//'!',f_iFatal,ThisProcedure)
+                    CALL Logger%SetLastMessage('Error in data entry for '//TRIM(cHydDescriptor)//' hydrograph specification ID '//TRIM(IntToText(ID))//'!',f_iFatal,ThisProcedure)
                     iStat = -1
                     RETURN
                 END IF
@@ -380,19 +364,19 @@ CONTAINS
                 MessageArray(1) = 'Error in data entry for '//TRIM(cHydDescriptor)//' hydrograph specification ID '//TRIM(IntToText(ID))//'!'
                 MessageArray(2) = 'Model is trying to read the following data line:'
                 MessageArray(3) = TRIM(ADJUSTL(ALinePerm))
-                CALL ModuleLogger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+                CALL Logger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
             CALL LookupIDInIndex(iHydNode,iSortedNodeIDs,iSortedNodeToOrig,iNodeIndex)
             IF (iNodeIndex .EQ. 0) THEN
-                CALL ModuleLogger%SetLastMessage('Node number listed for '//TRIM(cHydDescriptor)//' hydrograph specification ID '//TRIM(IntToText(ID))//' is not in the model!',f_iFatal,ThisProcedure)
+                CALL Logger%SetLastMessage('Node number listed for '//TRIM(cHydDescriptor)//' hydrograph specification ID '//TRIM(IntToText(ID))//' is not in the model!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
             iLoc = FirstLocation(' ',ALine)
             IF (iLoc .EQ. 0) THEN
-                CALL ModuleLogger%SetLastMessage('Error in data entry for '//TRIM(cHydDescriptor)//' hydrograph specification ID '//TRIM(IntToText(ID))//'!',f_iFatal,ThisProcedure)
+                CALL Logger%SetLastMessage('Error in data entry for '//TRIM(cHydDescriptor)//' hydrograph specification ID '//TRIM(IntToText(ID))//'!',f_iFatal,ThisProcedure)
                     iStat = -1
                     RETURN
                 END IF
@@ -404,16 +388,16 @@ CONTAINS
             CASE (f_iHyd_AtXY)
                 CALL AppGrid%FEInterpolate(X,Y,iElem,Nodes,Coeff)   
                 IF (iElem .EQ. 0) THEN
-                    CALL ModuleLogger%SetLastMessage(TRIM(cHydDescriptorCapital)//' hydrograph ID '//TRIM(IntToText(ID))//' is not in the model domain!',f_iFatal,ThisProcedure)
+                    CALL Logger%SetLastMessage(TRIM(cHydDescriptorCapital)//' hydrograph ID '//TRIM(IntToText(ID))//' is not in the model domain!',f_iFatal,ThisProcedure)
                     iStat = -1
                     RETURN
                 END IF
                 IF (iHydLayer .NE. 0) THEN
                     IF (ALL(Stratigraphy%ActiveNode(Nodes,iHydLayer) .EQ. .FALSE.))  &
-                        CALL ModuleLogger%LogMessage(TRIM(cHydDescriptorCapital)//' hydrograph ID '//TRIM(IntToText(ID))//' is located in an inactive layer!',f_iInfo,ThisProcedure)
+                        CALL Logger%LogMessage(TRIM(cHydDescriptorCapital)//' hydrograph ID '//TRIM(IntToText(ID))//' is located in an inactive layer!',f_iInfo,ThisProcedure)
                 ELSE
                     IF (ALL(Stratigraphy%ActiveNode(Nodes,:) .EQ. .FALSE.))  &
-                        CALL ModuleLogger%LogMessage(TRIM(cHydDescriptorCapital)//' hydrograph ID '//TRIM(IntToText(ID))//' is located in an inactive layer!',f_iInfo,ThisProcedure)
+                        CALL Logger%LogMessage(TRIM(cHydDescriptorCapital)//' hydrograph ID '//TRIM(IntToText(ID))//' is located in an inactive layer!',f_iInfo,ThisProcedure)
                 END IF
                 iSize           = SIZE(Nodes)
                 aXYHyd%cName    = ALine
@@ -432,10 +416,10 @@ CONTAINS
             CASE (f_iHyd_AtNode)
                 IF (iHydLayer .NE. 0) THEN
                     IF (.NOT. Stratigraphy%ActiveNode(iNodeIndex,iHydLayer))  &
-                        CALL ModuleLogger%LogMessage('Groundwater node '//TRIM(IntToText(iHydNode))//' at layer '//TRIM(IntToText(iHydLayer))//' for '//TRIM(cHydDescriptor)//' hydrograph ID '//TRIM(IntToText(ID))//' is inactive!',f_iInfo,ThisProcedure)
+                        CALL Logger%LogMessage('Groundwater node '//TRIM(IntToText(iHydNode))//' at layer '//TRIM(IntToText(iHydLayer))//' for '//TRIM(cHydDescriptor)//' hydrograph ID '//TRIM(IntToText(ID))//' is inactive!',f_iInfo,ThisProcedure)
                 ELSE
                     IF (ALL(Stratigraphy%ActiveNode(iNodeIndex,:) .EQ. .FALSE.))  &
-                        CALL ModuleLogger%LogMessage('There are no active layers at node '//TRIM(IntToText(iHydNode))//' for '//TRIM(cHydDescriptor)//' hydrograph ID '//TRIM(IntToText(ID))//'!',f_iInfo,ThisProcedure)
+                        CALL Logger%LogMessage('There are no active layers at node '//TRIM(IntToText(iHydNode))//' for '//TRIM(cHydDescriptor)//' hydrograph ID '//TRIM(IntToText(ID))//'!',f_iInfo,ThisProcedure)
                 END IF
                 aNodeHyd%cName    = ALine
                 ANodeHyd%ID       = ID
@@ -451,7 +435,7 @@ CONTAINS
     !Store hydrograph data in persistent variables
     ALLOCATE (Hyd_AtNode(NHyd_AtNode) , Hyd_AtXY(NHyd_AtXY) , STAT=ErrorCode , ERRMSG=cErrorMsg)
     IF (ErrorCode .NE. 0) THEN
-        CALL ModuleLogger%SetLastMessage('Error in allocating memory for '//TRIM(cHydDescriptor)//' hydrograph data!'//NEW_LINE('x')//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
+        CALL Logger%SetLastMessage('Error in allocating memory for '//TRIM(cHydDescriptor)//' hydrograph data!'//NEW_LINE('x')//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -871,7 +855,8 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- PREPARE HYDROGRAPH OUTPUT FILE FOR PRINT-OUT
   ! -------------------------------------------------------------
-  SUBROUTINE PrepHydOutFile(cFileName,NodeIDs,ElementIDs,iHydFor,UNITLTOU,CPartIn,Hyd_AtNode,Hyd_AtXY,OrderedHydList,TimeStep,OutFile,iStat)
+  SUBROUTINE PrepHydOutFile(Logger,cFileName,NodeIDs,ElementIDs,iHydFor,UNITLTOU,CPartIn,Hyd_AtNode,Hyd_AtXY,OrderedHydList,TimeStep,OutFile,iStat)
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT) :: Logger
     CHARACTER(LEN=*),INTENT(IN)     :: cFileName,UNITLTOU,cPartIn
     INTEGER,INTENT(IN)              :: NodeIDs(:),ElementIDs(:),iHydFor
     TYPE(HydAtNodeType),INTENT(IN)  :: Hyd_AtNode(:)
@@ -911,7 +896,7 @@ CONTAINS
     !Make sure that DSS file is used only if it is a time tracking simulation
     IF (OutFile%iGetFileType() .EQ. f_iDSS) THEN
         IF (.NOT. TimeStep%TrackTime) THEN
-            CALL ModuleLogger%SetLastMessage('DSS files for '//TRIM(cHydDescriptor)//' hydrograph printing can only be used for time-tracking simulations.',f_iFatal,ThisProcedure)
+            CALL Logger%SetLastMessage('DSS files for '//TRIM(cHydDescriptor)//' hydrograph printing can only be used for time-tracking simulations.',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
