@@ -54,17 +54,13 @@ MODULE Package_RootZone
                                           f_iBudgetType_PondedCrop_RZ        , & 
                                           f_iZBudgetType_RootZone            , &
                                           f_iZBudgetType_LWU             
-  USE RootZone_v40               , ONLY : RootZone_v40_Type                  , &
-                                          RootZonev40_SetModuleLogger
+  USE RootZone_v40               , ONLY : RootZone_v40_Type
   USE RootZone_v401              , ONLY : RootZone_v401_Type
-  USE RootZone_v41               , ONLY : RootZone_v41_Type                  , &
-                                          RootZonev41_SetModuleLogger
+  USE RootZone_v41               , ONLY : RootZone_v41_Type
   USE RootZone_v411              , ONLY : RootZone_v411_Type
-  USE RootZone_v412              , ONLY : RootZone_v412_Type                 , &
-                                          RootZonev412_SetModuleLogger
+  USE RootZone_v412              , ONLY : RootZone_v412_Type
   USE RootZone_v413              , ONLY : RootZone_v413_Type
-  USE RootZone_v50               , ONLY : RootZone_v50_Type                  , &
-                                          RootZonev50_SetModuleLogger
+  USE RootZone_v50               , ONLY : RootZone_v50_Type
   USE Package_PrecipitationET    , ONLY : PrecipitationType                  ,  &
                                           ETType
   USE Package_ComponentConnectors, ONLY : SupplyDestinationConnectorType
@@ -90,7 +86,6 @@ MODULE Package_RootZone
   ! -------------------------------------------------------------
   PRIVATE
   PUBLIC :: RootZoneType                       , &
-            RootZone_SetAllModuleLoggers       , &
             ElementLU_InterpolateExtrapolate   , &
             f_iMeasuredLUDataForSubregion      , &
             f_iMeasuredLUDataForModelDomain    , &
@@ -217,18 +212,6 @@ MODULE Package_RootZone
   
   
 CONTAINS
-
-
-  ! -------------------------------------------------------------
-  ! --- SET ALL MODULE-LEVEL LOGGERS (propagates to sub-modules that still use ModuleLogger)
-  ! -------------------------------------------------------------
-  SUBROUTINE RootZone_SetAllModuleLoggers(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(INOUT) :: Logger
-    CALL RootZonev40_SetModuleLogger(Logger)
-    CALL RootZonev41_SetModuleLogger(Logger)
-    CALL RootZonev412_SetModuleLogger(Logger)
-    CALL RootZonev50_SetModuleLogger(Logger)
-  END SUBROUTINE RootZone_SetAllModuleLoggers
 
 
 ! ******************************************************************

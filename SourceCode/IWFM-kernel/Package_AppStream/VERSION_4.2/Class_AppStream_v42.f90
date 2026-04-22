@@ -89,8 +89,7 @@ MODULE Class_AppStream_v42
   PRIVATE
   PUBLIC :: AppStream_v42_Type          , &
             ReadFractionsForGW          , &
-            CompileUpstrmNodes          , &
-            AppStream_v42_SetModuleLogger
+            CompileUpstrmNodes
  
   
   ! -------------------------------------------------------------
@@ -130,11 +129,6 @@ MODULE Class_AppStream_v42
   ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
-  ! -------------------------------------------------------------
-  ! --- MODULE-LEVEL LOGGER
-  ! -------------------------------------------------------------
-  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
-
   INTEGER,PARAMETER                   :: ModNameLen      = 21
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName         = 'Class_AppStream_v42::'
   
@@ -143,14 +137,6 @@ MODULE Class_AppStream_v42
   
 CONTAINS
 
-
-  ! -------------------------------------------------------------
-  ! --- SET MODULE-LEVEL LOGGER
-  ! -------------------------------------------------------------
-  SUBROUTINE AppStream_v42_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(INOUT) :: Logger
-    ModuleLogger => Logger
-  END SUBROUTINE AppStream_v42_SetModuleLogger
 
 
 
@@ -168,7 +154,7 @@ CONTAINS
   ! --- READ RAW STREAM DATA (GENERALLY CALLED IN PRE-PROCESSOR)
   ! -------------------------------------------------------------
   SUBROUTINE AppStream_v42_SetStaticComponent(AppStream,cFileName,AppGrid,Stratigraphy,IsRoutedStreams,StrmGWConnector,StrmLakeConnector,iStat)
-    CLASS(AppStream_v42_Type),INTENT(OUT) :: AppStream
+    CLASS(AppStream_v42_Type),INTENT(INOUT) :: AppStream
     CHARACTER(LEN=*),INTENT(IN)           :: cFileName
     TYPE(AppGridType),INTENT(IN)          :: AppGrid         !Not used in this version! Only included to comply with the interface definition.
     TYPE(StratigraphyType),INTENT(IN)     :: Stratigraphy
@@ -183,15 +169,13 @@ CONTAINS
     INTEGER                      :: NRTB,ErrorCode,iGWNodeIDs(AppGrid%NNodes)
     TYPE(GenericFileType)        :: DataFile
     
-    !Set Logger (INTENT(OUT) resets pointer, restore from module-level)
-    AppStream%Logger => ModuleLogger
 
     !Initialize
     iStat      = 0
     iGWNodeIDs = AppGrid%AppNode%ID
 
     !Inform user
-    CALL ModuleLogger%EchoProgress('Instantiating streams')
+    CALL AppStream%Logger%EchoProgress('Instantiating streams')
 
     !Set the flag to check if routed or non-routed streams
     AppStream%lRouted = IsRoutedStreams
@@ -210,7 +194,7 @@ CONTAINS
     
     !Make sure that NRTB is greater than 1
     IF (NRTB .LE. 1) THEN
-        CALL ModuleLogger%SetLastMessage('Number of data points in stream rating tables should be greater than 1!',f_iFatal,ThisProcedure)
+        CALL AppStream%Logger%SetLastMessage('Number of data points in stream rating tables should be greater than 1!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -223,7 +207,7 @@ CONTAINS
               AppStream%Nodes(AppStream%NStrmNodes) , &
               STAT = ErrorCode                      )
     IF (ErrorCode .NE. 0) THEN
-        CALL ModuleLogger%SetLastMessage('Error allocating memory for stream configuration data!',f_iFatal,ThisProcedure)
+        CALL AppStream%Logger%SetLastMessage('Error allocating memory for stream configuration data!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -237,7 +221,7 @@ CONTAINS
     IF (iStat .EQ. -1) RETURN
     
     !Read stream nodes and fraction of stream-aquifer interaction to be applied to corresponding gw nodes
-    CALL ReadFractionsForGW(DataFile,AppStream%Nodes%ID,StrmGWConnector,iStat)
+    CALL ReadFractionsForGW(DataFile,AppStream%Nodes%ID,StrmGWConnector,AppStream%Logger,iStat)
     IF (iStat .EQ. -1) RETURN
     
     !Close file
@@ -293,7 +277,7 @@ CONTAINS
         MessageArray(1) = 'Stream Component versions used in Pre-Processor and Simulation must match!'
         MessageArray(2) = 'Version number in Pre-Processor = 4.2' 
         MessageArray(3) = 'Version number in Simulation    = ' // TRIM(cVersionSim)
-        CALL ModuleLogger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+        CALL AppStream%Logger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -372,7 +356,7 @@ CONTAINS
         CALL DATE_AND_TIME(VALUES=iPerfEnd)
         rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
         WRITE(cPerfMsg,'(A,F8.3,A)') '      [PERF] Stream DivBypass: ', rPerfSec, ' sec'
-        CALL ModuleLogger%LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+        CALL AppStream%Logger%LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
     END IF
 
     !Reach IDs
@@ -383,7 +367,7 @@ CONTAINS
     IF (lRoutedStreams) THEN
         IF (ReachBudRawFileName .NE. '') THEN
             IF (IsForInquiry) THEN
-                CALL AppStream%StrmReachBudRawFile%New(ModuleLogger,ReachBudRawFileName,iStat)
+                CALL AppStream%StrmReachBudRawFile%New(AppStream%Logger,ReachBudRawFileName,iStat)
                 IF (iStat .EQ. -1) RETURN
             ELSE
                 !Sort reach IDs for budget printing in order
@@ -394,7 +378,7 @@ CONTAINS
                 iReachIDs = AppStream%Reaches%ID
                 !Prepare budget header
                 BudHeader = PrepareStreamBudgetHeader(AppStream%NReaches,AppStream%iPrintReachBudgetOrder,iReachIDs,iStrmNodeIDs,NTIME,TimeStep,TRIM(cVersionFull),cReachNames=AppStream%Reaches%cName)
-                CALL AppStream%StrmReachBudRawFile%New(ModuleLogger,ReachBudRawFileName,BudHeader,iStat)
+                CALL AppStream%StrmReachBudRawFile%New(AppStream%Logger,ReachBudRawFileName,BudHeader,iStat)
                 IF (iStat .EQ. -1) RETURN
                 CALL BudHeader%Kill()
             END IF
@@ -414,7 +398,7 @@ CONTAINS
         CALL DATE_AND_TIME(VALUES=iPerfEnd)
         rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
         WRITE(cPerfMsg,'(A,F8.3,A)') '      [PERF] Stream Budget+Hyd: ', rPerfSec, ' sec'
-        CALL ModuleLogger%LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+        CALL AppStream%Logger%LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
     END IF
 
     !Stream bed parameters for stream-gw connectivity, wetted perimeter and stream length for each node
@@ -427,7 +411,7 @@ CONTAINS
         CALL DATE_AND_TIME(VALUES=iPerfEnd)
         rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
         WRITE(cPerfMsg,'(A,F8.3,A)') '      [PERF] Stream Conductance: ', rPerfSec, ' sec'
-        CALL ModuleLogger%LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+        CALL AppStream%Logger%LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
     END IF
 
     !If non-routed streams, return at this point
@@ -456,7 +440,7 @@ CONTAINS
   ! --- INSTANTIATE COMPLETE STREAM DATA
   ! -------------------------------------------------------------
   SUBROUTINE AppStream_v42_SetAllComponents(AppStream,IsForInquiry,cFileName,cSimWorkingDirectory,cPackageVersion,TimeStep,NTIME,iLakeIDs,AppGrid,Stratigraphy,ETData,BinFile,StrmLakeConnector,StrmGWConnector,iStat)
-    CLASS(AppStream_v42_Type),INTENT(OUT) :: AppStream
+    CLASS(AppStream_v42_Type),INTENT(INOUT) :: AppStream
     LOGICAL,INTENT(IN)                    :: IsForInquiry
     CHARACTER(LEN=*),INTENT(IN)           :: cFileName,cSimWorkingDirectory,cPackageVersion
     TYPE(TimeStepType),INTENT(IN)         :: TimeStep
@@ -472,14 +456,12 @@ CONTAINS
     !Local variables
     CHARACTER(LEN=ModNameLen+30) :: ThisProcedure = ModName // 'AppStream_v42_SetAllComponents'
 
-    !Set Logger (INTENT(OUT) resets pointer, restore from module-level)
-    AppStream%Logger => ModuleLogger
 
     !Initialize
     iStat = 0
 
     !Echo progress
-    CALL ModuleLogger%EchoProgress('Instantiating streams')
+    CALL AppStream%Logger%EchoProgress('Instantiating streams')
     
     !Read the preprocessed data for streams
     CALL ReadPreprocessedData(AppStream,BinFile,iStat)
@@ -495,7 +477,7 @@ CONTAINS
             IF (SIZE(AppStream%State) .EQ. 0) THEN
                 MessageArray(1) = 'For proper simulation of streams, relevant stream data files must'
                 MessageArray(2) = 'be specified when stream nodes are defined in Pre-Processor.'
-                CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                CALL AppStream%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -509,7 +491,7 @@ CONTAINS
   ! --- INSTANTIATE COMPLETE STREAM DATA WITHOUT INTERMEDIATE BINARY FILE
   ! -------------------------------------------------------------
   SUBROUTINE AppStream_v42_SetAllComponentsWithoutBinFile(AppStream,IsForInquiry,IsRoutedStreams,cPPFileName,cSimFileName,cSimWorkingDirectory,cPackageVersion,AppGrid,Stratigraphy,ETData,TimeStep,NTIME,iLakeIDs,StrmLakeConnector,StrmGWConnector,iStat)
-    CLASS(AppStream_v42_Type),INTENT(OUT) :: AppStream
+    CLASS(AppStream_v42_Type),INTENT(INOUT) :: AppStream
     LOGICAL,INTENT(IN)                    :: IsForInquiry,IsRoutedStreams
     CHARACTER(LEN=*),INTENT(IN)           :: cPPFileName,cSimFileName,cSimWorkingDirectory,cPackageVersion
     TYPE(AppGridType),INTENT(IN)          :: AppGrid
@@ -524,8 +506,6 @@ CONTAINS
     !Local variables
     CHARACTER(LEN=ModNameLen+44) :: ThisProcedure = ModName // 'AppStream_v42_SetAllComponentsWithoutBinFile'
 
-    !Set Logger (INTENT(OUT) resets pointer, restore from module-level)
-    AppStream%Logger => ModuleLogger
 
     !Initialize
     iStat = 0
@@ -544,7 +524,7 @@ CONTAINS
             IF (SIZE(AppStream%State) .EQ. 0) THEN
                 MessageArray(1) = 'For proper simulation of streams, relevant stream data files must'
                 MessageArray(2) = 'be specified when stream nodes are defined in Pre-Processor.'
-                CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                CALL AppStream%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -838,7 +818,7 @@ CONTAINS
   ! --- READ PREPROCESSED DATA
   ! -------------------------------------------------------------
   SUBROUTINE ReadPreprocessedData(AppStream,BinFile,iStat)
-    CLASS(AppStream_v42_Type),INTENT(OUT) :: AppStream
+    CLASS(AppStream_v42_Type),INTENT(INOUT) :: AppStream
     TYPE(GenericFileType)                 :: BinFile
     INTEGER,INTENT(OUT)                   :: iStat
     
@@ -846,8 +826,6 @@ CONTAINS
     CHARACTER(LEN=ModNameLen+20) :: ThisProcedure = ModName // 'ReadPreprocessedData'
     INTEGER                      :: ErrorCode
 
-    !Set Logger (INTENT(OUT) resets pointer, restore from module-level)
-    AppStream%Logger => ModuleLogger
 
     !Initialize
     iStat = 0
@@ -863,13 +841,13 @@ CONTAINS
     !Allocate memory
     ALLOCATE (AppStream%Nodes(AppStream%NStrmNodes) , AppStream%Reaches(AppStream%NReaches) , STAT=ErrorCode)
     IF (ErrorCode .NE. 0) THEN
-        CALL ModuleLogger%SetLastMessage('Error allocating memory for stream data!',f_iFatal,ThisProcedure)
+        CALL AppStream%Logger%SetLastMessage('Error allocating memory for stream data!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
     
     !Read stream node data
-    CALL StrmNode_New(AppStream%NStrmNodes,BinFile,ModuleLogger,AppStream%Nodes,iStat)
+    CALL StrmNode_New(AppStream%NStrmNodes,BinFile,AppStream%Logger,AppStream%Nodes,iStat)
     IF (iStat .EQ. -1) RETURN
     
     !Read stream reach data
@@ -915,7 +893,7 @@ CONTAINS
             !Make sure reach ID is not used more than once
             DO indxReach1=1,indxReach-1
                 IF (pReach%ID .EQ. AppStream%Reaches(indxReach1)%ID) THEN
-                    CALL ModuleLogger%SetLastMessage('Stream reach ID '//TRIM(IntToText(pReach%ID))//' is used more than once!',f_iFatal,ThisProcedure)
+                    CALL AppStream%Logger%SetLastMessage('Stream reach ID '//TRIM(IntToText(pReach%ID))//' is used more than once!',f_iFatal,ThisProcedure)
                     iStat = -1
                     RETURN
                 END IF
@@ -940,7 +918,7 @@ CONTAINS
             IF (NNodes .LT. 2) THEN
                 MessageArray(1) = 'There should be at least 2 stream nodes for each reach.'
                 MessageArray(2) = 'Reach '//TRIM(IntToText(pReach%ID))//' has less than 2 stream nodes!'
-                CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                CALL AppStream%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -959,7 +937,7 @@ CONTAINS
                 !Make sure stream node ID is not repeated
                 DO indxNode1=1,indxStrmNode-1
                     IF (iStrmNodeID .EQ.  AppStream%Nodes(indxNode1)%ID) THEN
-                        CALL ModuleLogger%SetLastMessage('Stream node ID '//TRIM(IntToText(iStrmNodeID))//' is used more than once!',f_iFatal,ThisProcedure)
+                        CALL AppStream%Logger%SetLastMessage('Stream node ID '//TRIM(IntToText(iStrmNodeID))//' is used more than once!',f_iFatal,ThisProcedure)
                         iStat = -1
                         RETURN
                     END IF
@@ -968,7 +946,7 @@ CONTAINS
                 !First gw node index and corresponding layer
                 CALL ConvertID_To_Index(DummyIntArray2(2),iGWNodeIDs,iGWNodes(1))
                 IF (iGWNodes(1) .EQ. 0) THEN
-                    CALL ModuleLogger%SetLastMessage('Groundwater node '//TRIM(IntToText(DummyIntArray2(2)))//' listed in stream reach '//TRIM(IntToText(pReach%ID))//' ('//TRIM(pReach%cName)//') for stream node '//TRIM(IntToText(iStrmNodeID))//' is not in the model!',f_iFatal,ThisProcedure)
+                    CALL AppStream%Logger%SetLastMessage('Groundwater node '//TRIM(IntToText(DummyIntArray2(2)))//' listed in stream reach '//TRIM(IntToText(pReach%ID))//' ('//TRIM(pReach%cName)//') for stream node '//TRIM(IntToText(iStrmNodeID))//' is not in the model!',f_iFatal,ThisProcedure)
                     iStat = -1
                     RETURN
                 END IF
@@ -982,7 +960,7 @@ CONTAINS
                     READ (ALine,*) iGWNode_Work  ;  iLoc = FirstLocation(' ',ALine)  ;  ALine = ALine(iLoc+1:)
                     CALL ConvertID_To_Index(iGWNode_Work,iGWNodeIDs,iGWNodes(nGWNodes))
                     IF (iGWNodes(nGWNodes) .EQ. 0) THEN
-                        CALL ModuleLogger%SetLastMessage('Groundwater node '//TRIM(IntToText(iGWNode_Work))//' listed in stream reach '//TRIM(IntToText(pReach%ID))//' ('//TRIM(pReach%cName)//') for stream node '//TRIM(IntToText(iStrmNodeID))//' is not in the model!',f_iFatal,ThisProcedure)
+                        CALL AppStream%Logger%SetLastMessage('Groundwater node '//TRIM(IntToText(iGWNode_Work))//' listed in stream reach '//TRIM(IntToText(pReach%ID))//' ('//TRIM(pReach%cName)//') for stream node '//TRIM(IntToText(iStrmNodeID))//' is not in the model!',f_iFatal,ThisProcedure)
                         iStat = -1
                         RETURN
                     END IF
@@ -1006,13 +984,13 @@ CONTAINS
             iStrmNodeID = pReach%OutFlowDest
             CALL ConvertID_To_Index(iStrmNodeID,AppStream%Nodes%ID,iDestNode)
             IF (iDestNode .EQ. 0) THEN
-                CALL ModuleLogger%SetLastMessage('Outflow stream node '//TRIM(IntToText(iStrmNodeID))//' for reach '//TRIM(IntToText(iReachID))//' ('//TRIM(pReach%cName)//') is not in the model!',f_iFatal,ThisProcedure)
+                CALL AppStream%Logger%SetLastMessage('Outflow stream node '//TRIM(IntToText(iStrmNodeID))//' for reach '//TRIM(IntToText(iReachID))//' ('//TRIM(pReach%cName)//') is not in the model!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
             IF (iDestNode .LE. pReach%DownstrmNode) THEN
                 IF (iDestNode .GE. pReach%UpstrmNode) THEN
-                    CALL ModuleLogger%SetLastMessage('Stream reach '//TRIM(IntToText(iReachID))//' ('//TRIM(pReach%cName)//') is outflowing back into itself!',f_iFatal,ThisProcedure)
+                    CALL AppStream%Logger%SetLastMessage('Stream reach '//TRIM(IntToText(iReachID))//' ('//TRIM(pReach%cName)//') is outflowing back into itself!',f_iFatal,ThisProcedure)
                     iStat = -1
                     RETURN
                 END IF
@@ -1073,7 +1051,7 @@ CONTAINS
     
     !Make sure that time unit of rating tables is recognized
     IF (IsTimeIntervalValid(TRIM(AppStream%TimeUnitRatingTableFlow)) .EQ. 0) THEN
-        CALL ModuleLogger%SetLastMessage('Time unit for the stream rating tables ('//TRIM(AppStream%TimeUnitRatingTableFlow)//') is not recognized!',f_iFatal,ThisProcedure)
+        CALL AppStream%Logger%SetLastMessage('Time unit for the stream rating tables ('//TRIM(AppStream%TimeUnitRatingTableFlow)//') is not recognized!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -1087,14 +1065,14 @@ CONTAINS
         iStrmNodeID = INT(DummyArray(1))
         CALL ConvertID_To_Index(iStrmNodeID,iNodeIDs,iNode)
         IF (iNode .EQ. 0) THEN
-            CALL ModuleLogger%SetLastMessage('Stream node ID '//TRIM(IntToText(iStrmNodeID))//' listed for stream rating tables is not in the model!',f_iFatal,ThisProcedure)
+            CALL AppStream%Logger%SetLastMessage('Stream node ID '//TRIM(IntToText(iStrmNodeID))//' listed for stream rating tables is not in the model!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
         
         !Make sure the node has not been processed before
         IF (lProcessed(iNode)) THEN
-            CALL ModuleLogger%SetLastMessage('Stream node ID '//TRIM(IntToText(iStrmNodeID))//' has been assigned rating tables more than once!',f_iFatal,ThisProcedure)
+            CALL AppStream%Logger%SetLastMessage('Stream node ID '//TRIM(IntToText(iStrmNodeID))//' has been assigned rating tables more than once!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -1115,7 +1093,7 @@ CONTAINS
                 MessageArray(2) = 'less than or equal to the stream bed elevation!'
                 WRITE (MessageArray(3),'(A,F10.2)') ' Stream node = '//TRIM(IntToText(iStrmNodeID))        //'   Stream bed elevation    = ',AppStream%Nodes(iNode)%BottomElev
                 WRITE (MessageArray(4),'(A,F10.2)') ' GW node     = '//TRIM(IntToText(iGWNodeIDs(iGWNode)))//'   Aquifer bottom elevation= ',AquiferBottomElev
-                CALL ModuleLogger%SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
+                CALL AppStream%Logger%SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -1127,7 +1105,7 @@ CONTAINS
         HRTB(2:) = DummyArray2D(:,1) * FACTLT
         QRTB(2:) = DummyArray2D(:,2) * FACTQ
         HRTB     = HRTB + AppStream%Nodes(iNode)%BottomElev
-        CALL AppStream%Nodes(iNode)%RatingTable%New(ModuleLogger,NRTB,HRTB,QRTB,iStat)
+        CALL AppStream%Nodes(iNode)%RatingTable%New(AppStream%Logger,NRTB,HRTB,QRTB,iStat)
         IF (iStat .EQ. -1) RETURN
         
         !Make sure rating table is specified properly
@@ -1135,14 +1113,14 @@ CONTAINS
             IF (HRTB(indx) .LE. HRTB(indx-1)) THEN
                 MessageArray(1) = 'The flow depths specified in the rating table for stream node '//TRIM(IntToText(iStrmNodeID))
                 MessageArray(2) = 'must monotonically increase!'
-                CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                CALL AppStream%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
             IF (QRTB(indx) .LE. QRTB(indx-1)) THEN
                 MessageArray(1) = 'The flows specified in the rating table for stream node '//TRIM(IntToText(iStrmNodeID))
                 MessageArray(2) = 'must monotonically increase!'
-                CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                CALL AppStream%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -1152,7 +1130,7 @@ CONTAINS
         IF (AppStream%Nodes(iNode)%RatingTable%CheckGradientMonotonicity() .EQ. .FALSE.) THEN
             MessageArray(1) = 'The gradient of the rating table at stream node '//TRIM(IntToText(iStrmNodeID))//' is not monotonicaly increasing or decreasing!'
             MessageArray(2) = 'This may lead to problems with the iterative solution!'
-            CALL ModuleLogger%LogMessage(MessageArray(1:2),f_iWarn,ThisProcedure)
+            CALL AppStream%Logger%LogMessage(MessageArray(1:2),f_iWarn,ThisProcedure)
         END IF
 
     END DO
@@ -1166,11 +1144,12 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- READ STREAM NODES AND FRACTIONS OF STREAM_AQUIFER INTERACTION TO APPLY TO GW NODES
   ! -------------------------------------------------------------
-  SUBROUTINE ReadFractionsForGW(DataFile,iStrmNodeIDs,StrmGWConnector,iStat)
-    TYPE(GenericFileType)     :: DataFile
-    INTEGER,INTENT(IN)        :: iStrmNodeIDs(:)
-    TYPE(StrmGWConnectorType) :: StrmGWConnector
-    INTEGER,INTENT(OUT)       :: iStat
+  SUBROUTINE ReadFractionsForGW(DataFile,iStrmNodeIDs,StrmGWConnector,Logger,iStat)
+    TYPE(GenericFileType)                          :: DataFile
+    INTEGER,INTENT(IN)                             :: iStrmNodeIDs(:)
+    TYPE(StrmGWConnectorType)                      :: StrmGWConnector
+    TYPE(MessageLoggerType),POINTER,INTENT(IN)     :: Logger
+    INTEGER,INTENT(OUT)                            :: iStat
     
     !Local variables
     CHARACTER(LEN=ModNameLen+18),PARAMETER :: ThisProcedure = ModName // 'ReadFractionsForGW'
@@ -1199,7 +1178,7 @@ CONTAINS
         rFractions(indx) = rDummy(2)
         CALL ConvertID_To_Index(iStrmNode,iStrmNodeIDs,iStrmNodes(indx))
         IF (iStrmNodes(indx) .EQ. 0) THEN
-            CALL ModuleLogger%SetLastMessage('Stream node ID '//TRIM(IntToText(iStrmNode))//' listed for partial stream-aquifer interaction is not in the model!',f_iFatal,ThisProcedure)
+            CALL Logger%SetLastMessage('Stream node ID '//TRIM(IntToText(iStrmNode))//' listed for partial stream-aquifer interaction is not in the model!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -1214,15 +1193,15 @@ CONTAINS
             MessageArray(2) = 'be assigned fractions less than 1.0 to apply the stream-aquifer interaction to the'
             MessageArray(3) = 'corresponding groundwater node.'
             MessageArray(4) = 'Stream node ' // TRIM(IntTotext(iStrmNode)) // ' has ' // TRIM(IntTotext(SIZE(iGWNodes))) // ' groundwater nodes associated with it.'
-            CALL ModuleLogger%SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
+            CALL Logger%SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
     END DO
-    
+
     !Pass the information to StrmGWConnector
     CALL StrmGWConnector%SetFractionsForGW(iStrmNodes,rFractions,iStat)
-    
+
   END SUBROUTINE ReadFractionsForGW
   
 
@@ -1282,7 +1261,7 @@ CONTAINS
     
     !If there are no streams, write relevant information and return
     IF (AppStream%NStrmNodes .EQ. 0) THEN
-      CALL ModuleLogger%LogMessage('***** THERE ARE NO STREAM NODES *****',f_iMessage,'',f_iFILE) 
+      CALL AppStream%Logger%LogMessage('***** THERE ARE NO STREAM NODES *****',f_iMessage,'',f_iFILE) 
       RETURN
     END IF
     
@@ -1291,9 +1270,9 @@ CONTAINS
     CALL StrmGWConnector%GetAllGWNodes(iGWNodes)
     
     !Write titles
-    CALL ModuleLogger%LogMessage(' REACH STREAM GRID     GROUND   INVERT             AQUIFER   ALLUVIAL    UPSTREAM',f_iMessage,'',f_iFILE)
-    CALL ModuleLogger%LogMessage('   NO.   NO.   NO.     ELEV.     ELEV.     DEPTH    BOTTOM  THICKNESS      NODES',f_iMessage,'',f_iFILE)
-    CALL ModuleLogger%LogMessage('                           (ALL UNITS ARE IN '//TRIM(UNITLTOU)//')',f_iMessage,'',f_iFILE)
+    CALL AppStream%Logger%LogMessage(' REACH STREAM GRID     GROUND   INVERT             AQUIFER   ALLUVIAL    UPSTREAM',f_iMessage,'',f_iFILE)
+    CALL AppStream%Logger%LogMessage('   NO.   NO.   NO.     ELEV.     ELEV.     DEPTH    BOTTOM  THICKNESS      NODES',f_iMessage,'',f_iFILE)
+    CALL AppStream%Logger%LogMessage('                           (ALL UNITS ARE IN '//TRIM(UNITLTOU)//')',f_iMessage,'',f_iFILE)
     
     !Write stream reach data
     DO indxReach=1,AppStream%NReaches
@@ -1328,10 +1307,10 @@ CONTAINS
                                                                  AquiferBottom*FACTLTOU                    , &
                                                                  DELA*FACTLTOU                             
                 END IF
-                CALL ModuleLogger%LogMessage(TRIM(ALine),f_iMessage,'',f_iFILE)
+                CALL AppStream%Logger%LogMessage(TRIM(ALine),f_iMessage,'',f_iFILE)
             END DO
         END DO
-        CALL ModuleLogger%LogMessage('',f_iMessage,'',f_iFILE)
+        CALL AppStream%Logger%LogMessage('',f_iMessage,'',f_iFILE)
     END DO
     
     !Clear memory
@@ -1415,7 +1394,7 @@ CONTAINS
     INTEGER,PARAMETER                       :: iCompIDs_Connect(1) = [f_iStrmComp]
     
     !Inform user about simulation progress
-    CALL ModuleLogger%EchoProgress('Simulating stream flows')
+    CALL AppStream%Logger%EchoProgress('Simulating stream flows')
     
     !Initialize
     NNodes  = SIZE(GWHeads , DIM=1)

@@ -318,15 +318,16 @@ MODULE Class_BaseRootZone
      END SUBROUTINE Abstract_GetBudget_MonthlyFlows_GivenRootZone
      
      
-     SUBROUTINE Abstract_GetBudget_MonthlyFlows_GivenFile(Budget,iBudgetType,iLUType,iSubregionIndex,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
-       IMPORT                                   :: BudgetType
-       TYPE(BudgetType),INTENT(IN)              :: Budget      
+     SUBROUTINE Abstract_GetBudget_MonthlyFlows_GivenFile(Budget,iBudgetType,iLUType,iSubregionIndex,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat,Logger)
+       IMPORT                                   :: BudgetType,MessageLoggerType
+       TYPE(BudgetType),INTENT(IN)              :: Budget
        CHARACTER(LEN=*),INTENT(IN)              :: cBeginDate,cEndDate
-       INTEGER,INTENT(IN)                       :: iBudgetType,iLUType,iSubregionIndex  
+       INTEGER,INTENT(IN)                       :: iBudgetType,iLUType,iSubregionIndex
        REAL(8),INTENT(IN)                       :: rFactVL
-       REAL(8),ALLOCATABLE,INTENT(OUT)          :: rFlows(:,:)  
+       REAL(8),ALLOCATABLE,INTENT(OUT)          :: rFlows(:,:)
        CHARACTER(LEN=*),ALLOCATABLE,INTENT(OUT) :: cFlowNames(:)
        INTEGER,INTENT(OUT)                      :: iStat
+       TYPE(MessageLoggerType),OPTIONAL,INTENT(INOUT) :: Logger
      END SUBROUTINE Abstract_GetBudget_MonthlyFlows_GivenFile
      
      
@@ -342,15 +343,16 @@ MODULE Class_BaseRootZone
      END SUBROUTINE Abstract_GetBudget_AnnualFlows_GivenRootZone
      
      
-     SUBROUTINE Abstract_GetBudget_AnnualFlows_GivenFile(Budget,iBudgetType,iLUType,iSubregionIndex,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
-       IMPORT                                   :: BudgetType
-       TYPE(BudgetType),INTENT(IN)              :: Budget      
+     SUBROUTINE Abstract_GetBudget_AnnualFlows_GivenFile(Budget,iBudgetType,iLUType,iSubregionIndex,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat,Logger)
+       IMPORT                                   :: BudgetType,MessageLoggerType
+       TYPE(BudgetType),INTENT(IN)              :: Budget
        CHARACTER(LEN=*),INTENT(IN)              :: cBeginDate,cEndDate
-       INTEGER,INTENT(IN)                       :: iBudgetType,iLUType,iSubregionIndex  
+       INTEGER,INTENT(IN)                       :: iBudgetType,iLUType,iSubregionIndex
        REAL(8),INTENT(IN)                       :: rFactVL
-       REAL(8),ALLOCATABLE,INTENT(OUT)          :: rFlows(:,:)  
+       REAL(8),ALLOCATABLE,INTENT(OUT)          :: rFlows(:,:)
        CHARACTER(LEN=*),ALLOCATABLE,INTENT(OUT) :: cFlowNames(:)
        INTEGER,INTENT(OUT)                      :: iStat
+       TYPE(MessageLoggerType),OPTIONAL,INTENT(INOUT) :: Logger
      END SUBROUTINE Abstract_GetBudget_AnnualFlows_GivenFile
      
      
@@ -504,14 +506,15 @@ MODULE Class_BaseRootZone
      END SUBROUTINE Abstract_GetWaterSupply
      
      
-    SUBROUTINE Abstract_GetLandUseAreasForTimePeriod(cRootZoneMainFileName,cWorkingDirectory,cBeginDate,cEndDate,TimeStep,AppGrid,iLUType,iLU,rLUAreas,iStat)
-      IMPORT                        :: TimeStepType,AppGridType
+    SUBROUTINE Abstract_GetLandUseAreasForTimePeriod(cRootZoneMainFileName,cWorkingDirectory,cBeginDate,cEndDate,TimeStep,AppGrid,iLUType,iLU,rLUAreas,iStat,Logger)
+      IMPORT                        :: TimeStepType,AppGridType,MessageLoggerType
       CHARACTER(LEN=*),INTENT(IN)   :: cRootZoneMainFileName,cWorkingDirectory,cBeginDate,cEndDate
       TYPE(TimeStepType),INTENT(IN) :: TimeStep
       TYPE(AppGridType),INTENT(IN)  :: AppGrid
       INTEGER,INTENT(IN)            :: iLUType,iLU    !iLU is not used for urban lands
       REAL(8),INTENT(OUT)           :: rLUAreas(:,:)  !For each (element,time)
       INTEGER,INTENT(OUT)           :: iStat
+      TYPE(MessageLoggerType),OPTIONAL,INTENT(INOUT) :: Logger
     END SUBROUTINE Abstract_GetLandUseAreasForTimePeriod
 
   

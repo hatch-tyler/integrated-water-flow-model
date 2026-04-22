@@ -135,7 +135,6 @@ MODULE RootZone_v50
   ! -------------------------------------------------------------
   PRIVATE
   PUBLIC :: RootZone_v50_Type
-  PUBLIC :: RootZonev50_SetModuleLogger
   
   
   ! -------------------------------------------------------------
@@ -304,20 +303,9 @@ MODULE RootZone_v50
   INTEGER,PARAMETER                   :: f_iNLands        = 4    !Ag, urban, native and riparian
   INTEGER,PARAMETER                   :: ModNameLen       = 14
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName          = 'RootZone_v50::'
-  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
-  
-  
-  
+
+
 CONTAINS
-
-
-  ! -------------------------------------------------------------
-  ! --- SET MODULE LOGGER
-  ! -------------------------------------------------------------
-  SUBROUTINE RootZonev50_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(INOUT) :: Logger
-    ModuleLogger => Logger
-  END SUBROUTINE RootZonev50_SetModuleLogger
 
 
 ! ******************************************************************
@@ -368,7 +356,6 @@ CONTAINS
     CHARACTER(LEN=80)                           :: cPerfMsg
 
     !Initialize
-    RootZone%Logger => ModuleLogger
     iStat = 0
 
     !Return if no filename is given
@@ -574,7 +561,7 @@ CONTAINS
     CALL CleanSpecialCharacters(ALine)
     IF (ALine .NE. '') THEN
         CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(ALine)),cWorkingDirectory,cAbsPathFileName)
-        CALL LWUseZoneBudRawFile_New(IsForInquiry,cAbsPathFileName,TimeStep,NTIME,TRIM(cVersionFull),lElemFlowToSubregions,RootZone%Flags,AppGrid,RootZone%LWUZoneBudRawFile,iStat)
+        CALL LWUseZoneBudRawFile_New(RootZone%Logger,IsForInquiry,cAbsPathFileName,TimeStep,NTIME,TRIM(cVersionFull),lElemFlowToSubregions,RootZone%Flags,AppGrid,RootZone%LWUZoneBudRawFile,iStat)
         IF (iStat .EQ. -1) RETURN
         RootZone%Flags%LWUseZoneBudRawFile_Defined = .TRUE.      
     END IF
@@ -585,7 +572,7 @@ CONTAINS
     CALL CleanSpecialCharacters(ALine)
     IF (ALine .NE. '') THEN
         CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(ALine)),cWorkingDirectory,cAbsPathFileName)
-        CALL RootZoneZoneBudRawFile_New(IsForInquiry,cAbsPathFileName,TimeStep,NTIME,TRIM(cVersionFull),lElemFlowToSubregions,RootZone%Flags,AppGrid,RootZone%RootZoneZoneBudRawFile,iStat)
+        CALL RootZoneZoneBudRawFile_New(RootZone%Logger,IsForInquiry,cAbsPathFileName,TimeStep,NTIME,TRIM(cVersionFull),lElemFlowToSubregions,RootZone%Flags,AppGrid,RootZone%RootZoneZoneBudRawFile,iStat)
         IF (iStat .EQ. -1) RETURN
         RootZone%Flags%RootZoneZoneBudRawFile_Defined = .TRUE.
     END IF
@@ -839,7 +826,8 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- NEW HDF5 LAND AND WATER USE ZONE BUDGET FILE FOR POST-PROCESSING
   ! -------------------------------------------------------------
-  SUBROUTINE LWUseZoneBudRawFile_New(IsForInquiry,cFileName,TimeStep,NTIME,cVersion,lElemFlowToSubregions,Flags,AppGrid,ZBudFile,iStat)
+  SUBROUTINE LWUseZoneBudRawFile_New(Logger,IsForInquiry,cFileName,TimeStep,NTIME,cVersion,lElemFlowToSubregions,Flags,AppGrid,ZBudFile,iStat)
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT) :: Logger
     LOGICAL,INTENT(IN)              :: IsForInquiry
     CHARACTER(LEN=*),INTENT(IN)     :: cFileName
     TYPE(TimeStepType),INTENT(IN)   :: TimeStep
@@ -864,7 +852,7 @@ CONTAINS
     
     !If this is for inquiry, open file for reading and return
     IF (IsForInquiry) THEN
-        IF (cFileName .NE. '') CALL ZBudFile%New(ModuleLogger,cFileName,iStat)
+        IF (cFileName .NE. '') CALL ZBudFile%New(Logger,cFileName,iStat)
         RETURN
     END IF
     
@@ -927,7 +915,7 @@ CONTAINS
               Header%ASCIIOutput%cColumnTitles(5)                              , &
               STAT = ErrorCode                                                 )
     IF (ErrorCode .NE. 0) THEN
-        CALL ModuleLogger%SetLastMessage('Error allocating memory for land and water use Z-Budget file!',f_iFatal,ThisProcedure)
+        CALL Logger%SetLastMessage('Error allocating memory for land and water use Z-Budget file!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -999,7 +987,7 @@ CONTAINS
                          'URB_SHORTAGE'    ]
                              
     !Instantiate Z-Budget file
-    CALL ZBudFile%New(ModuleLogger,cFileName,NTIME,TimeStepLocal,Header,SystemData,iStat)
+    CALL ZBudFile%New(Logger,cFileName,NTIME,TimeStepLocal,Header,SystemData,iStat)
     
   END SUBROUTINE LWUseZoneBudRawFile_New
   
@@ -1185,7 +1173,8 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- NEW HDF5 ROOT ZONE ZONE BUDGET FILE FOR POST-PROCESSING
   ! -------------------------------------------------------------
-  SUBROUTINE RootZoneZoneBudRawFile_New(IsForInquiry,cFileName,TimeStep,NTIME,cVersion,lElemFlowToSubregions,Flags,AppGrid,ZBudFile,iStat)
+  SUBROUTINE RootZoneZoneBudRawFile_New(Logger,IsForInquiry,cFileName,TimeStep,NTIME,cVersion,lElemFlowToSubregions,Flags,AppGrid,ZBudFile,iStat)
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT) :: Logger
     LOGICAL,INTENT(IN)            :: IsForInquiry
     CHARACTER(LEN=*),INTENT(IN)   :: cFileName
     TYPE(TimeStepType),INTENT(IN) :: TimeStep
@@ -1210,7 +1199,7 @@ CONTAINS
     
     !If this is for inquiry, open file for reading and return
     IF (IsForInquiry) THEN
-        IF (cFileName .NE. '') CALL ZBudFile%New(ModuleLogger,cFileName,iStat)
+        IF (cFileName .NE. '') CALL ZBudFile%New(Logger,cFileName,iStat)
         RETURN
     END IF
     
@@ -1273,7 +1262,7 @@ CONTAINS
               Header%ASCIIOutput%cColumnTitles(5)                                 , &
               STAT = ErrorCode                                                    )
     IF (ErrorCode .NE. 0) THEN
-        CALL ModuleLogger%SetLastMessage('Error allocating memory for root zone Z-Budget file!',f_iFatal,ThisProcedure)
+        CALL Logger%SetLastMessage('Error allocating memory for root zone Z-Budget file!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -1426,7 +1415,7 @@ CONTAINS
                          'NRV_DISCREPANCY'   ]
                              
     !Instantiate Z-Budget file
-    CALL ZBudFile%New(ModuleLogger,cFileName,NTIME,TimeStepLocal,Header,SystemData,iStat)
+    CALL ZBudFile%New(Logger,cFileName,NTIME,TimeStepLocal,Header,SystemData,iStat)
     
   END SUBROUTINE RootZoneZoneBudRawFile_New
   
@@ -1941,14 +1930,15 @@ CONTAINS
   ! --- GET MONTHLY BUDGET FLOWS FROM A DEFINED BUDGET FILE
   ! --- (Assumes cBeginDate and cEndDate are adjusted properly)
   ! -------------------------------------------------------------
-  SUBROUTINE RootZone_v50_GetBudget_MonthlyFlows_GivenFile(Budget,iBudgetType,iLUType,iSubregionIndex,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
-    TYPE(BudgetType),INTENT(IN)              :: Budget      !Assumes Budget file is already open
-    CHARACTER(LEN=*),INTENT(IN)              :: cBeginDate,cEndDate
-    INTEGER,INTENT(IN)                       :: iBudgetType,iLUType,iSubregionIndex
-    REAL(8),INTENT(IN)                       :: rFactVL
-    REAL(8),ALLOCATABLE,INTENT(OUT)          :: rFlows(:,:)  !In (column,month) format
-    CHARACTER(LEN=*),ALLOCATABLE,INTENT(OUT) :: cFlowNames(:)
-    INTEGER,INTENT(OUT)                      :: iStat
+  SUBROUTINE RootZone_v50_GetBudget_MonthlyFlows_GivenFile(Budget,iBudgetType,iLUType,iSubregionIndex,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat,Logger)
+    TYPE(BudgetType),INTENT(IN)                        :: Budget      !Assumes Budget file is already open
+    CHARACTER(LEN=*),INTENT(IN)                        :: cBeginDate,cEndDate
+    INTEGER,INTENT(IN)                                 :: iBudgetType,iLUType,iSubregionIndex
+    REAL(8),INTENT(IN)                                 :: rFactVL
+    REAL(8),ALLOCATABLE,INTENT(OUT)                    :: rFlows(:,:)  !In (column,month) format
+    CHARACTER(LEN=*),ALLOCATABLE,INTENT(OUT)           :: cFlowNames(:)
+    INTEGER,INTENT(OUT)                                :: iStat
+    TYPE(MessageLoggerType),OPTIONAL,INTENT(INOUT) :: Logger
     
     !Local variables
     CHARACTER(LEN=ModNameLen+45) :: ThisProcedure = ModName // 'RootZone_v50_GetBudget_MonthlyFlows_GivenFile'
@@ -1984,19 +1974,19 @@ CONTAINS
             CASE (f_iLandUse_Urb)
                 piReadCols => iReadCols_LWU_Urb
             CASE (f_iLandUse_NonPondedAg) 
-                CALL ModuleLogger%SetLastMessage('Non-ponded-crop-specific Land & Water Use Budget cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
+                CALL Logger%SetLastMessage('Non-ponded-crop-specific Land & Water Use Budget cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             CASE (f_iLandUse_Rice)
-                CALL ModuleLogger%SetLastMessage('Land & Water Use Budget for rice cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
+                CALL Logger%SetLastMessage('Land & Water Use Budget for rice cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             CASE (f_iLandUse_Refuge)
-                CALL ModuleLogger%SetLastMessage('Land & Water Use Budget for refuges cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
+                CALL Logger%SetLastMessage('Land & Water Use Budget for refuges cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             CASE (f_iLandUse_NVRV)
-                CALL ModuleLogger%SetLastMessage('Land & Water Use Budget does not exist for native and riparian vegetation!',f_iFatal,ThisProcedure)
+                CALL Logger%SetLastMessage('Land & Water Use Budget does not exist for native and riparian vegetation!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
         END SELECT
@@ -2039,17 +2029,17 @@ CONTAINS
                 piReadCols => iReadCols_RZ_NVRV
 
             CASE (f_iLandUse_NonPondedAg) 
-                CALL ModuleLogger%SetLastMessage('Non-ponded-crop-specific Root Zone Budget cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
+                CALL Logger%SetLastMessage('Non-ponded-crop-specific Root Zone Budget cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             
             CASE (f_iLandUse_Rice)
-                CALL ModuleLogger%SetLastMessage('Root Zone Budget for rice cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
+                CALL Logger%SetLastMessage('Root Zone Budget for rice cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             
             CASE (f_iLandUse_Refuge)
-                CALL ModuleLogger%SetLastMessage('Root Zone Budget for refuges cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
+                CALL Logger%SetLastMessage('Root Zone Budget for refuges cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
         END SELECT
@@ -2115,14 +2105,15 @@ CONTAINS
   ! --- GET ANNUAL BUDGET FLOWS FROM A DEFINED BUDGET FILE
   ! --- (Assumes cBeginDate and cEndDate are adjusted properly)
   ! -------------------------------------------------------------
-  SUBROUTINE RootZone_v50_GetBudget_AnnualFlows_GivenFile(Budget,iBudgetType,iLUType,iSubregionIndex,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
-    TYPE(BudgetType),INTENT(IN)              :: Budget      !Assumes Budget file is already open
-    CHARACTER(LEN=*),INTENT(IN)              :: cBeginDate,cEndDate
-    INTEGER,INTENT(IN)                       :: iBudgetType,iLUType,iSubregionIndex
-    REAL(8),INTENT(IN)                       :: rFactVL
-    REAL(8),ALLOCATABLE,INTENT(OUT)          :: rFlows(:,:)  !In (column,month) format
-    CHARACTER(LEN=*),ALLOCATABLE,INTENT(OUT) :: cFlowNames(:)
-    INTEGER,INTENT(OUT)                      :: iStat
+  SUBROUTINE RootZone_v50_GetBudget_AnnualFlows_GivenFile(Budget,iBudgetType,iLUType,iSubregionIndex,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat,Logger)
+    TYPE(BudgetType),INTENT(IN)                        :: Budget      !Assumes Budget file is already open
+    CHARACTER(LEN=*),INTENT(IN)                        :: cBeginDate,cEndDate
+    INTEGER,INTENT(IN)                                 :: iBudgetType,iLUType,iSubregionIndex
+    REAL(8),INTENT(IN)                                 :: rFactVL
+    REAL(8),ALLOCATABLE,INTENT(OUT)                    :: rFlows(:,:)  !In (column,month) format
+    CHARACTER(LEN=*),ALLOCATABLE,INTENT(OUT)           :: cFlowNames(:)
+    INTEGER,INTENT(OUT)                                :: iStat
+    TYPE(MessageLoggerType),OPTIONAL,INTENT(INOUT) :: Logger
     
     !Local variables
     CHARACTER(LEN=ModNameLen+44) :: ThisProcedure = ModName // 'RootZone_v50_GetBudget_AnnualFlows_GivenFile'
@@ -2158,19 +2149,19 @@ CONTAINS
             CASE (f_iLandUse_Urb)
                 piReadCols => iReadCols_LWU_Urb
             CASE (f_iLandUse_NonPondedAg) 
-                CALL ModuleLogger%SetLastMessage('Non-ponded-crop-specific Land & Water Use Budget cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
+                CALL Logger%SetLastMessage('Non-ponded-crop-specific Land & Water Use Budget cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             CASE (f_iLandUse_Rice)
-                CALL ModuleLogger%SetLastMessage('Land & Water Use Budget for rice cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
+                CALL Logger%SetLastMessage('Land & Water Use Budget for rice cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             CASE (f_iLandUse_Refuge)
-                CALL ModuleLogger%SetLastMessage('Land & Water Use Budget for refuges cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
+                CALL Logger%SetLastMessage('Land & Water Use Budget for refuges cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             CASE (f_iLandUse_NVRV)
-                CALL ModuleLogger%SetLastMessage('Land & Water Use Budget does not exist for native and riparian vegetation!',f_iFatal,ThisProcedure)
+                CALL Logger%SetLastMessage('Land & Water Use Budget does not exist for native and riparian vegetation!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
         END SELECT
@@ -2213,17 +2204,17 @@ CONTAINS
                 piReadCols => iReadCols_RZ_NVRV
 
             CASE (f_iLandUse_NonPondedAg) 
-                CALL ModuleLogger%SetLastMessage('Non-ponded-crop-specific Root Zone Budget cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
+                CALL Logger%SetLastMessage('Non-ponded-crop-specific Root Zone Budget cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             
             CASE (f_iLandUse_Rice)
-                CALL ModuleLogger%SetLastMessage('Root Zone Budget for rice cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
+                CALL Logger%SetLastMessage('Root Zone Budget for rice cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             
             CASE (f_iLandUse_Refuge)
-                CALL ModuleLogger%SetLastMessage('Root Zone Budget for refuges cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
+                CALL Logger%SetLastMessage('Root Zone Budget for refuges cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
         END SELECT
@@ -2518,7 +2509,7 @@ CONTAINS
                 iColList = [(indx,indx=12,16)]
                 
             CASE DEFAULT
-                CALL ModuleLogger%SetLastMessage('Land&Water Use ZBudget is not available for the selected land use type!',f_iFatal,ThisProcedure)
+                CALL Logger%SetLastMessage('Land&Water Use ZBudget is not available for the selected land use type!',f_iFatal,ThisProcedure)
                 DEALLOCATE (rFlows , cFlowNames , STAT=ErrorCode)
                 ALLOCATE (rFlows(0,0) , cFlowNames(0))
                 iStat = -1
@@ -2604,7 +2595,7 @@ CONTAINS
                 END DO
                 
             CASE DEFAULT
-                CALL ModuleLogger%SetLastMessage('Root Zone ZBudget is not available for the selected land use type!',f_iFatal,ThisProcedure)
+                CALL Logger%SetLastMessage('Root Zone ZBudget is not available for the selected land use type!',f_iFatal,ThisProcedure)
                 DEALLOCATE (rFlows , cFlowNames , STAT=ErrorCode)
                 ALLOCATE (rFlows(0,0) , cFlowNames(0))
                 iStat = -1
@@ -2701,7 +2692,7 @@ CONTAINS
                 iColList = [(indx,indx=12,16)]
                 
             CASE DEFAULT
-                CALL ModuleLogger%SetLastMessage('Land&Water Use ZBudget is not available for the selected land use type!',f_iFatal,ThisProcedure)
+                CALL Logger%SetLastMessage('Land&Water Use ZBudget is not available for the selected land use type!',f_iFatal,ThisProcedure)
                 DEALLOCATE (rFlows , cFlowNames , STAT=ErrorCode)
                 ALLOCATE (rFlows(0,0) , cFlowNames(0))
                 iStat = -1
@@ -2787,7 +2778,7 @@ CONTAINS
                 END DO
                 
             CASE DEFAULT
-                CALL ModuleLogger%SetLastMessage('Root Zone ZBudget is not available for the selected land use type!',f_iFatal,ThisProcedure)
+                CALL Logger%SetLastMessage('Root Zone ZBudget is not available for the selected land use type!',f_iFatal,ThisProcedure)
                 DEALLOCATE (rFlows , cFlowNames , STAT=ErrorCode)
                 ALLOCATE (rFlows(0,0) , cFlowNames(0))
                 iStat = -1
@@ -2885,13 +2876,14 @@ CONTAINS
   ! --- GET AREAS OF A LAND USE AT ALL ELEMENTS FOR A TIME PERIOD
   ! --- Note: This method is not meant to be called during a Simulation
   ! -------------------------------------------------------------
-  SUBROUTINE RootZone_v50_GetLandUseAreasForTimePeriod(cRootZoneMainFileName,cWorkingDirectory,cBeginDate,cEndDate,TimeStep,AppGrid,iLUType,iLU,rLUAreas,iStat)
+  SUBROUTINE RootZone_v50_GetLandUseAreasForTimePeriod(cRootZoneMainFileName,cWorkingDirectory,cBeginDate,cEndDate,TimeStep,AppGrid,iLUType,iLU,rLUAreas,iStat,Logger)
     CHARACTER(LEN=*),INTENT(IN)   :: cRootZoneMainFileName,cWorkingDirectory,cBeginDate,cEndDate
-    TYPE(TimeStepType),INTENT(IN) :: TimeStep 
+    TYPE(TimeStepType),INTENT(IN) :: TimeStep
     TYPE(AppGridType),INTENT(IN)  :: AppGrid
     INTEGER,INTENT(IN)            :: iLUType,iLU
     REAL(8),INTENT(OUT)           :: rLUAreas(:,:)  !For each (element,time); the array must be pre-dimensioned properly
     INTEGER,INTENT(OUT)           :: iStat
+    TYPE(MessageLoggerType),OPTIONAL,INTENT(INOUT) :: Logger
     
     !Local variables
     CHARACTER(LEN=ModNameLen+41)          :: ThisProcedure = ModName // 'RootZone_v50_GetLandUseAreasForTimePeriod'
@@ -2944,7 +2936,7 @@ CONTAINS
         CASE DEFAULT
             MessageArray(1) = 'Land use type for which element areas are being retrieved is not recognized!'
             MessageArray(2) = 'Land use type identifier must be one of the flags that describe general ag, urban or native&riparian vegetation.'
-            CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+            CALL Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
     END SELECT
 
     !Close main file
@@ -4024,11 +4016,11 @@ CONTAINS
     rRegionAreas  = AppGrid%AppSubregion%Area
 
     !Read return flow fractions
-    CALL ReadReturnFlowFractions(TimeStep,RootZone%ReturnFracFile,lReturnFracUpdated,iStat)
+    CALL ReadReturnFlowFractions(RootZone%Logger,TimeStep,RootZone%ReturnFracFile,lReturnFracUpdated,iStat)
     IF (iStat .EQ. -1) RETURN
 
     !Read re-use fractions
-    CALL ReadReuseFractions(TimeStep,RootZone%ReuseFracFile,lReuseFracUpdated,iStat)
+    CALL ReadReuseFractions(RootZone%Logger,TimeStep,RootZone%ReuseFracFile,lReuseFracUpdated,iStat)
     IF (iStat .EQ. -1) RETURN
     
     !Read generic moisture data
@@ -4236,17 +4228,18 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- READ RETURN FLOW FRACTION DATA
   ! -------------------------------------------------------------
-  SUBROUTINE ReadReturnFlowFractions(TimeStep,ReturnFracFile,lReturnFracUpdated,iStat)
+  SUBROUTINE ReadReturnFlowFractions(Logger,TimeStep,ReturnFracFile,lReturnFracUpdated,iStat)
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT) :: Logger
     TYPE(TimeStepType),INTENT(IN) :: TimeStep
     TYPE(RealTSDataInFileType)    :: ReturnFracFile
     LOGICAL,INTENT(OUT)           :: lReturnFracUpdated
     INTEGER,INTENT(OUT)           :: iStat
-    
+
     !Local variables
     INTEGER :: FileReadCode
 
     !Inform user about progress
-    CALL ModuleLogger%EchoProgress('Reading return flow fractions time series data')
+    CALL Logger%EchoProgress('Reading return flow fractions time series data')
     
     !Read data
     CALL ReturnFracFile%ReadTSData(TimeStep,'Return flow fractions data',FileReadCode,iStat)
@@ -4263,17 +4256,18 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- READ RE-USE FRACTION DATA
   ! -------------------------------------------------------------
-  SUBROUTINE ReadReuseFractions(TimeStep,ReuseFracFile,lReuseFracUpdated,iStat)
+  SUBROUTINE ReadReuseFractions(Logger,TimeStep,ReuseFracFile,lReuseFracUpdated,iStat)
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT) :: Logger
     TYPE(TimeStepType),INTENT(IN) :: TimeStep
     TYPE(RealTSDataInFileType)    :: ReuseFracFile
     LOGICAL,INTENT(OUT)           :: lReuseFracUpdated
     INTEGER,INTENT(OUT)           :: iStat
-    
+
     !Local variables
     INTEGER :: FileReadCode
 
     !Inform user about progress
-    CALL ModuleLogger%EchoProgress('Reading re-use fractions time series data')
+    CALL Logger%EchoProgress('Reading re-use fractions time series data')
     
     !Read data
     CALL ReuseFracFile%ReadTSData(TimeStep,'Applied water re-use fractions data',FileReadCode,iStat)
@@ -6729,7 +6723,7 @@ CONTAINS
         !Check for zero area
         IF (ALL(LUArea_Elem(:,indxElem) .LE. 0.0)) THEN
             iElemID = AppGrid%AppElement(indxElem)%ID
-            CALL ModuleLogger%SetLastMessage('Total land use area is zero at element ' // TRIM(IntToText(iElemID)) // '!',f_iFatal,ThisProcedure)
+            CALL RootZone%Logger%SetLastMessage('Total land use area is zero at element ' // TRIM(IntToText(iElemID)) // '!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -6794,7 +6788,7 @@ CONTAINS
       iElemID = iElem(1)
       MessageArray(1) = 'Precipitation data column for element '//TRIM(IntToText(iElemIDs(iElemID)))//' in the root zone component'
       MessageArray(2) = 'is greater than the available data columns in the Precipitation Data file!'
-      CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+      CALL RootZone%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
       iStat = -1
       RETURN
     END IF
@@ -6808,7 +6802,7 @@ CONTAINS
                 IF (iETColMax .LT. RootZone%AgRootZone%iColETcCrop(indxCrop,indxRegion)) THEN
                     MessageArray(1) = 'Evapotranspiration data column for agriculrtural crop '//TRIM(IntToText(indxCrop))//' at subregion '//TRIM(IntToText(iSubregionIDs(indxRegion)))
                     MessageArray(2) = 'is greater than the available data columns in the Evapotranspiration Data file!'
-                    CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                    CALL RootZone%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                     iStat = -1
                     RETURN
                 END IF
@@ -6824,7 +6818,7 @@ CONTAINS
             IF (iETColMax .LT. RootZone%UrbanRootZone%UrbData%iColETc(1,indxRegion)) THEN
                 MessageArray(1) = 'Evapotranspiration data column for subregion '//TRIM(IntToText(iSubregionIDs(indxRegion)))//' at urban lands '
                 MessageArray(2) = 'is greater than the available data columns in the Evapotranspiration Data file!'
-                CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                CALL RootZone%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF 
@@ -6839,7 +6833,7 @@ CONTAINS
             IF (iETColMax .LT. RootZone%NVRVRootZone%NativeVeg%iColETc(1,indxRegion)) THEN
                 MessageArray(1) = 'Evapotranspiration data column for subregion '//TRIM(IntToText(iSubregionIDs(indxRegion)))//' at native vegetation lands '
                 MessageArray(2) = 'is greater than the available data columns in the Evapotranspiration Data file!'
-                CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                CALL RootZone%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF   
@@ -6848,7 +6842,7 @@ CONTAINS
             IF (iETColMax .LT. RootZone%NVRVRootZone%RiparianVeg%iColETc(1,indxRegion)) THEN
                 MessageArray(1) = 'Evapotranspiration data column for subregion '//TRIM(IntToText(iSubregionIDs(indxRegion)))//' at riparian vegetation lands '
                 MessageArray(2) = 'is greater than the available data columns in the Evapotranspiration Data file!'
-                CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                CALL RootZone%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -6967,13 +6961,13 @@ CONTAINS
     !Rewind return flow fraction file
     IF (RootZone%ReturnFracFile%File%iGetFileType() .NE. f_iUNKNOWN) THEN
         CALL RootZone%ReturnFracFile%File%RewindFile_To_BeginningOfTSData(iStat)       ;  IF (iStat .NE. 0) RETURN  
-        CALL ReadReturnFlowFractions(TimeStep,RootZone%ReturnFracFile,lUpdated,iStat)  ;  IF (iStat .NE. 0) RETURN        
+        CALL ReadReturnFlowFractions(RootZone%Logger,TimeStep,RootZone%ReturnFracFile,lUpdated,iStat)  ;  IF (iStat .NE. 0) RETURN        
     END IF
 
     !Rewind reuse fraction file
     IF (RootZone%ReuseFracFile%File%iGetFileType() .NE. f_iUNKNOWN) THEN
         CALL RootZone%ReuseFracFile%File%RewindFile_To_BeginningOfTSData(iStat)  ;  IF (iStat .NE. 0) RETURN
-        CALL ReadReuseFractions(TimeStep,RootZone%ReuseFracFile,lUpdated,iStat)  ;  IF (iStat .NE. 0) RETURN
+        CALL ReadReuseFractions(RootZone%Logger,TimeStep,RootZone%ReuseFracFile,lUpdated,iStat)  ;  IF (iStat .NE. 0) RETURN
     END IF
 
     !Rewind generic moisture file

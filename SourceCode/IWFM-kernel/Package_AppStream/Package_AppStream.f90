@@ -59,18 +59,12 @@ MODULE Package_AppStream
                                           f_iBudgetType_StrmNode                           , &
                                           f_iBudgetType_StrmReach                          , &
                                           f_iBudgetType_DiverDetail
-  USE Class_AppStream_v40         , ONLY: AppStream_v40_Type                               , &
-                                          AppStream_v40_SetModuleLogger
-  USE Class_AppStream_v41         , ONLY: AppStream_v41_Type                               , &
-                                          AppStream_v41_SetModuleLogger
-  USE Class_AppStream_v42         , ONLY: AppStream_v42_Type                               , &
-                                          AppStream_v42_SetModuleLogger
-  USE Class_AppStream_v42_WSA     , ONLY: AppStream_v42_WSA_Type                           , &
-                                          AppStream_v42_WSA_SetModuleLogger
-  USE Class_AppStream_v421        , ONLY: AppStream_v421_Type                              , &
-                                          AppStream_v421_SetModuleLogger
-  USE Class_AppStream_v50         , ONLY: AppStream_v50_Type                               , &
-                                          AppStream_v50_SetModuleLogger
+  USE Class_AppStream_v40         , ONLY: AppStream_v40_Type
+  USE Class_AppStream_v41         , ONLY: AppStream_v41_Type
+  USE Class_AppStream_v42         , ONLY: AppStream_v42_Type
+  USE Class_AppStream_v42_WSA     , ONLY: AppStream_v42_WSA_Type
+  USE Class_AppStream_v421        , ONLY: AppStream_v421_Type
+  USE Class_AppStream_v50         , ONLY: AppStream_v50_Type
   USE Class_AppDiverBypass        , ONLY: f_iDiverRecvLoss                                 , &
                                           f_iBypassRecvLoss                                , &
                                           f_iAllRecvLoss
@@ -106,8 +100,7 @@ MODULE Package_AppStream
             f_iAllRecvLoss                                   , &
             f_iBudgetType_StrmNode                           , &
             f_iBudgetType_StrmReach                          , &
-            f_iBudgetType_DiverDetail                        , &
-            AppStream_SetAllModuleLoggers
+            f_iBudgetType_DiverDetail
   
   
   ! -------------------------------------------------------------
@@ -269,20 +262,6 @@ MODULE Package_AppStream
   
 CONTAINS
 
-
-  ! -------------------------------------------------------------
-  ! --- SET MODULE-LEVEL LOGGER AND PROPAGATE TO SUB-MODULES
-  ! -------------------------------------------------------------
-  SUBROUTINE AppStream_SetAllModuleLoggers(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(INOUT) :: Logger
-    ModuleLogger => Logger
-    CALL AppStream_v40_SetModuleLogger(Logger)
-    CALL AppStream_v41_SetModuleLogger(Logger)
-    CALL AppStream_v42_SetModuleLogger(Logger)
-    CALL AppStream_v42_WSA_SetModuleLogger(Logger)
-    CALL AppStream_v421_SetModuleLogger(Logger)
-    CALL AppStream_v50_SetModuleLogger(Logger)
-  END SUBROUTINE AppStream_SetAllModuleLoggers
 
 
 ! ******************************************************************

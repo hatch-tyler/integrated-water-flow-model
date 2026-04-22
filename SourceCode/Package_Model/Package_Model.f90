@@ -138,7 +138,6 @@ MODULE Package_Model
                                           f_iBudgetType_GW
   USE Package_AppSubsidence       , ONLY: AppSubsidenceType
   USE Package_AppStream           , ONLY: AppStreamType                               , &
-                                          AppStream_SetAllModuleLoggers               , &
                                           f_iAllRecvLoss                              , &
                                           f_iBudgetType_StrmNode                      , &
                                           f_iBudgetType_StrmReach                     , &
@@ -150,7 +149,6 @@ MODULE Package_Model
                                           AppLake_v50_SetModuleLogger                 , &
                                           f_iBudgetType_Lake
   USE Package_RootZone            , ONLY: RootZoneType                                , &
-                                          RootZone_SetAllModuleLoggers                , &
                                           f_iBudgetType_RootZone                      , &
                                           f_iBudgetType_LWU                           , &
                                           f_iBudgetType_NonPondedCrop_RZ              , &
@@ -638,8 +636,6 @@ CONTAINS
     CALL AppSWShed_v40_SetModuleLogger(DefaultLogger)
     CALL AppSWShed_v41_SetModuleLogger(DefaultLogger)
 
-    CALL AppStream_SetAllModuleLoggers(DefaultLogger)
-    CALL RootZone_SetAllModuleLoggers(DefaultLogger)
     CALL BaseFile_SetModuleLogger(DefaultLogger)
     CALL AsciiFile_SetModuleLogger(DefaultLogger)
     CALL DSSFile_SetModuleLogger(DefaultLogger)
@@ -954,8 +950,6 @@ CONTAINS
     CALL AppSWShed_v40_SetModuleLogger(DefaultLogger)
     CALL AppSWShed_v41_SetModuleLogger(DefaultLogger)
 
-    CALL AppStream_SetAllModuleLoggers(DefaultLogger)
-    CALL RootZone_SetAllModuleLoggers(DefaultLogger)
     CALL BaseFile_SetModuleLogger(DefaultLogger)
     CALL AsciiFile_SetModuleLogger(DefaultLogger)
     CALL DSSFile_SetModuleLogger(DefaultLogger)
@@ -1097,8 +1091,6 @@ CONTAINS
 
 
 
-    CALL AppStream_SetAllModuleLoggers(DefaultLogger)
-    CALL RootZone_SetAllModuleLoggers(DefaultLogger)
     CALL BaseFile_SetModuleLogger(DefaultLogger)
     CALL AsciiFile_SetModuleLogger(DefaultLogger)
     CALL DSSFile_SetModuleLogger(DefaultLogger)
@@ -1494,8 +1486,6 @@ CONTAINS
 
 
 
-    CALL AppStream_SetAllModuleLoggers(DefaultLogger)
-    CALL RootZone_SetAllModuleLoggers(DefaultLogger)
     CALL BaseFile_SetModuleLogger(DefaultLogger)
     CALL AsciiFile_SetModuleLogger(DefaultLogger)
     CALL DSSFile_SetModuleLogger(DefaultLogger)
@@ -1878,8 +1868,6 @@ CONTAINS
 
 
 
-    CALL AppStream_SetAllModuleLoggers(DefaultLogger)
-    CALL RootZone_SetAllModuleLoggers(DefaultLogger)
     CALL BaseFile_SetModuleLogger(DefaultLogger)
     CALL AsciiFile_SetModuleLogger(DefaultLogger)
     CALL DSSFile_SetModuleLogger(DefaultLogger)

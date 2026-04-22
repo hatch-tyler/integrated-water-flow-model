@@ -292,7 +292,7 @@ MODULE Class_BaseAppStream
 
      SUBROUTINE Abstract_SetStaticComponent(AppStream,cFileName,AppGrid,Stratigraphy,IsRoutedStreams,StrmGWConnector,StrmLakeConnector,iStat)
         IMPORT                                :: BaseAppStreamType,AppGridType,StratigraphyType,StrmGWConnectorType,StrmLakeConnectorType
-        CLASS(BaseAppStreamType),INTENT(OUT)  :: AppStream
+        CLASS(BaseAppStreamType),INTENT(INOUT)  :: AppStream
         CHARACTER(LEN=*),INTENT(IN)           :: cFileName
         TYPE(AppGridType),INTENT(IN)          :: AppGrid
         TYPE(StratigraphyType),INTENT(IN)     :: Stratigraphy
@@ -321,7 +321,7 @@ MODULE Class_BaseAppStream
      
      SUBROUTINE Abstract_SetStaticComponentFromBinFile(AppStream,BinFile,iStat)
         IMPORT                               :: BaseAppStreamType,GenericFileType
-        CLASS(BaseAppStreamType),INTENT(OUT) :: AppStream
+        CLASS(BaseAppStreamType),INTENT(INOUT) :: AppStream
         TYPE(GenericFileType)                :: BinFile
         INTEGER,INTENT(OUT)                  :: iStat
      END SUBROUTINE Abstract_SetStaticComponentFromBinFile
@@ -329,7 +329,7 @@ MODULE Class_BaseAppStream
     
      SUBROUTINE Abstract_SetAllComponents(AppStream,IsForInquiry,cFileName,cSimWorkingDirectory,cPackageVersion,TimeStep,NTIME,iLakeIDs,AppGrid,Stratigraphy,ETData,BinFile,StrmLakeConnector,StrmGWConnector,iStat)
         IMPORT                               :: BaseAppStreamType,TimeStepType,StratigraphyType,AppGridType,GenericFileType,StrmLakeConnectorType,StrmGWConnectorType,ETType
-        CLASS(BaseAppStreamType),INTENT(OUT) :: AppStream
+        CLASS(BaseAppStreamType),INTENT(INOUT) :: AppStream
         LOGICAL,INTENT(IN)                   :: IsForInquiry
         CHARACTER(LEN=*),INTENT(IN)          :: cFileName,cSimWorkingDirectory,cPackageVersion
         TYPE(TimeStepType),INTENT(IN)        :: TimeStep
@@ -346,7 +346,7 @@ MODULE Class_BaseAppStream
      
      SUBROUTINE Abstract_SetAllComponentsWithoutBinFile(AppStream,IsForInquiry,IsRoutedStreams,cPPFileName,cSimFileName,cSimWorkingDirectory,cPackageVersion,AppGrid,Stratigraphy,ETData,TimeStep,NTIME,iLakeIDs,StrmLakeConnector,StrmGWConnector,iStat)
         IMPORT                                :: BaseAppStreamType,TimeStepType,StratigraphyType,AppGridType,StrmLakeConnectorType,StrmGWConnectorType,ETType
-        CLASS(BaseAppStreamType),INTENT(OUT)  :: AppStream
+        CLASS(BaseAppStreamType),INTENT(INOUT)  :: AppStream
         LOGICAL,INTENT(IN)                    :: IsForInquiry,IsRoutedStreams
         CHARACTER(LEN=*),INTENT(IN)           :: cPPFileName,cSimFileName,cSimWorkingDirectory,cPackageVersion
         TYPE(AppGridType),INTENT(IN)          :: AppGrid

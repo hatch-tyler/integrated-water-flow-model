@@ -75,8 +75,7 @@ MODULE Class_AppStream_v42_WSA
   PRIVATE
   PUBLIC :: AppStream_v42_WSA_Type       , &
             ReadFractionsForGW          , &
-            CompileUpstrmNodes          , &
-            AppStream_v42_WSA_SetModuleLogger
+            CompileUpstrmNodes
  
   
   ! -------------------------------------------------------------
@@ -125,11 +124,6 @@ MODULE Class_AppStream_v42_WSA
   ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
-  ! -------------------------------------------------------------
-  ! --- MODULE-LEVEL LOGGER
-  ! -------------------------------------------------------------
-  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
-
   INTEGER,PARAMETER                   :: ModNameLen      = 25
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName         = 'Class_AppStream_v42_WSA::'
   
@@ -137,14 +131,6 @@ MODULE Class_AppStream_v42_WSA
   
 CONTAINS
 
-
-  ! -------------------------------------------------------------
-  ! --- SET MODULE-LEVEL LOGGER
-  ! -------------------------------------------------------------
-  SUBROUTINE AppStream_v42_WSA_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(INOUT) :: Logger
-    ModuleLogger => Logger
-  END SUBROUTINE AppStream_v42_WSA_SetModuleLogger
 
 
 ! ******************************************************************
@@ -161,7 +147,7 @@ CONTAINS
   ! --- INSTANTIATE COMPLETE STREAM DATA
   ! -------------------------------------------------------------
   SUBROUTINE SetAllComponents(AppStream,IsForInquiry,cFileName,cSimWorkingDirectory,cPackageVersion,TimeStep,NTIME,iLakeIDs,AppGrid,Stratigraphy,ETData,BinFile,StrmLakeConnector,StrmGWConnector,iStat)
-    CLASS(AppStream_v42_WSA_Type),INTENT(OUT) :: AppStream
+    CLASS(AppStream_v42_WSA_Type),INTENT(INOUT) :: AppStream
     LOGICAL,INTENT(IN)                        :: IsForInquiry
     CHARACTER(LEN=*),INTENT(IN)               :: cFileName,cSimWorkingDirectory,cPackageVersion
     TYPE(TimeStepType),INTENT(IN)             :: TimeStep
@@ -176,9 +162,6 @@ CONTAINS
     
     !Local variables
     CHARACTER(LEN=ModNameLen+16) :: ThisProcedure = ModName // 'SetAllComponents'
-
-    !Set Logger (INTENT(OUT) resets pointer, restore from module-level)
-    AppStream%Logger => ModuleLogger
 
     !Initialize
     iStat = 0
