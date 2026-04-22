@@ -53,7 +53,6 @@ MODULE Class_TSBCDataFile
   ! -------------------------------------------------------------
   TYPE,EXTENDS(RealTSDataInFileType) :: TSBCDataFileType
       PRIVATE
-      TYPE(MessageLoggerType),POINTER :: Logger => NULL()
       LOGICAL             :: lDefined            = .FALSE.  !Flag to check if time series data is specified
       INTEGER             :: NTSFlowBCColumns    = 0        !Number of columns to be used for time series flow b.c.
       INTEGER,ALLOCATABLE :: iTSFlowBCColumns(:)            !List of column numbers that store time series flow b.c.

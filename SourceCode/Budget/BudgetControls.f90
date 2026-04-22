@@ -67,8 +67,7 @@ MODULE BudgetControls
   ! -------------------------------------------------------------
   PRIVATE
   PUBLIC :: PrintBudgetTables  ,  &
-            EndExecution       ,  &
-            BudgetControls_SetModuleLogger
+            EndExecution
   
   
   ! -------------------------------------------------------------
@@ -108,24 +107,12 @@ MODULE BudgetControls
   ! ------------------------------------------------------------- 
   INTEGER,PARAMETER                   :: ModNameLen = 16
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName = 'BudgetControls::'
-  TYPE(MessageLoggerType),POINTER,PRIVATE :: ModuleLogger => NULL() 
 
 
 
 
   
 CONTAINS
-
-
-  ! -------------------------------------------------------------
-  ! --- SET MODULE LOGGER
-  ! -------------------------------------------------------------
-  SUBROUTINE BudgetControls_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType),TARGET,INTENT(INOUT) :: Logger
-
-    ModuleLogger => Logger
-
-  END SUBROUTINE BudgetControls_SetModuleLogger
 
 
   ! -------------------------------------------------------------
@@ -194,7 +181,7 @@ CONTAINS
         IF (IsTimeStampValid(ALine)) THEN
           PrintInterval%PrintEndDateAndTime = StripTimeStamp(ALine)
         ELSE
-          CALL ModuleLogger%SetLastMessage('Budget output ending time should be in MM/DD/YYYY_hh:mm format!',f_iFatal,ThisProcedure)
+          CALL DefaultLogger%SetLastMessage('Budget output ending time should be in MM/DD/YYYY_hh:mm format!',f_iFatal,ThisProcedure)
           iStat = -1
           RETURN
         END IF
@@ -204,7 +191,7 @@ CONTAINS
         !Set the budget output beginning time
         READ (ALine,*,IOSTAT=ErrorCode) PrintInterval%PrintBeginTime
         IF (ErrorCode .NE. 0) THEN
-            CALL ModuleLogger%SetLastMessage('Error in reading the budget output beginning time!',f_iFatal,ThisProcedure) 
+            CALL DefaultLogger%SetLastMessage('Error in reading the budget output beginning time!',f_iFatal,ThisProcedure) 
             iStat = -1
             RETURN
         END IF
@@ -251,7 +238,7 @@ CONTAINS
     MessageArray(2) = '  IWFM       : '//TRIM(IWFMVersion%GetVersion())
     MessageArray(3) = '  IWFM Kernel: '//TRIM(IWFMKernelVersion%GetVersion())
     
-    CALL ModuleLogger%LogMessage(MessageArray(1:3),f_iMessage,'',iDestination=f_iSCREEN)
+    CALL DefaultLogger%LogMessage(MessageArray(1:3),f_iMessage,'',iDestination=f_iSCREEN)
   
   END SUBROUTINE PrintVersionNumbers
   
@@ -280,7 +267,7 @@ CONTAINS
     
     !If NBUdget is zero, message to the user and return
     IF (NBudget .EQ. 0) THEN
-        CALL ModuleLogger%LogMessage('Number of budget tables to be processed is set to zero!',f_iWarn,ThisProcedure)
+        CALL DefaultLogger%LogMessage('Number of budget tables to be processed is set to zero!',f_iWarn,ThisProcedure)
         RETURN
     END IF
     
@@ -315,11 +302,11 @@ CONTAINS
     IF (BudgetClass%cBudgetOutputFileName .EQ. '') RETURN
     
     !Instantiate the budget data
-    CALL Budget%New(ModuleLogger,BudgetClass%cBudgetInputFileName,iStat)
+    CALL Budget%New(DefaultLogger,BudgetClass%cBudgetInputFileName,iStat)
     IF (iStat .EQ. -1) RETURN
     
     !Inform user
-    CALL ModuleLogger%LogMessage('Processing '//TRIM(Budget%GetDescriptor())//'.',f_iMessage,'')
+    CALL DefaultLogger%LogMessage('Processing '//TRIM(Budget%GetDescriptor())//'.',f_iMessage,'')
     
     !Print locations
     IF (BudgetClass%iPrintLocs(1) .EQ. -1) THEN
@@ -332,7 +319,7 @@ CONTAINS
       iPrintLocations = BudgetClass%iPrintLocs
       !Make sure that all print location indices are in range
       IF (ANY(iPrintLocations .GT. Budget%GetNLocations()) .OR. ANY(iPrintLocations .LT. -1)) THEN
-          CALL ModuleLogger%SetLastMessage('One or more location indices for '//TRIM(Budget%GetDescriptor())//' printing is out of range!',f_iFatal,ThisProcedure) 
+          CALL DefaultLogger%SetLastMessage('One or more location indices for '//TRIM(Budget%GetDescriptor())//' printing is out of range!',f_iFatal,ThisProcedure) 
           iStat = -1
           RETURN
       END IF
@@ -357,7 +344,7 @@ CONTAINS
      IF (iStat .EQ. -1) THEN
          CALL LogLastMessage()
      ELSE
-         CALL ModuleLogger%LogMessage(f_cLineFeed//'Program completed successfully.',f_iMessage,'')
+         CALL DefaultLogger%LogMessage(f_cLineFeed//'Program completed successfully.',f_iMessage,'')
      END IF
      CALL DefaultTimer%Stop()
      CALL DefaultLogger%PrintRunTime()

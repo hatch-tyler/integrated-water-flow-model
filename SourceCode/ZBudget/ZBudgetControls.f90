@@ -79,8 +79,7 @@ MODULE ZBudgetControls
   ! -------------------------------------------------------------
   PRIVATE
   PUBLIC :: ProcessZBudgets   , &
-            EndExecution      , &
-            ZBudgetControls_SetModuleLogger
+            EndExecution
   
          
   ! -------------------------------------------------------------
@@ -105,22 +104,10 @@ MODULE ZBudgetControls
   ! -------------------------------------------------------------
   INTEGER,PARAMETER                   :: ModNameLen = 17
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'ZBudgetControls::'
-  TYPE(MessageLoggerType),POINTER,PRIVATE :: ModuleLogger => NULL()
 
 
 
 CONTAINS
-
-
-  ! -------------------------------------------------------------
-  ! --- SET MODULE LOGGER
-  ! -------------------------------------------------------------
-  SUBROUTINE ZBudgetControls_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType),TARGET,INTENT(INOUT) :: Logger
-
-    ModuleLogger => Logger
-
-  END SUBROUTINE ZBudgetControls_SetModuleLogger
 
 
   ! -------------------------------------------------------------
@@ -171,7 +158,7 @@ CONTAINS
     IF (IsTimeStampValid(ALine)) cPrintBeginDateAndTime = StripTimeStamp(ALine)
     CALL MainControlFile%ReadData(ALine,iStat)  ;  IF (iStat .EQ. -1) RETURN  ;  ALine = ADJUSTL(StripTextUntilCharacter(ALine,f_cInlineCommentChar,Back=.TRUE.)) 
     IF (IsTimeStampValid(ALine)) cPrintEndDateAndTime = StripTimeStamp(ALine)
-    IF (cPrintBeginDateAndTime .TSGT. cPrintEndDateAndTime) CALL ModuleLogger%LogMessage('Print-out end date and time cannot be less than the beginning date and time!',f_iFatal,ThisProcedure)
+    IF (cPrintBeginDateAndTime .TSGT. cPrintEndDateAndTime) CALL DefaultLogger%LogMessage('Print-out end date and time cannot be less than the beginning date and time!',f_iFatal,ThisProcedure)
 
     !Number of Z-Budgets to process
     CALL MainControlFile%ReadData(NZBudget,iStat)  ;  IF (iStat .EQ. -1) RETURN
@@ -226,8 +213,8 @@ CONTAINS
       IF (cOutFileName .EQ. '') RETURN
       
       !Check that Z-Budget input file is an HDF file and instantate the Z-Budget object
-      IF (iGetFileType_FromName(cHDFFileName) .NE. f_iHDF) CALL ModuleLogger%LogMessage(TRIM(cHDFFileName)//' is not an HDF5 file!',f_iFatal,ThisProcedure)
-      CALL ZBudget%New(ModuleLogger,cHDFFileName,iStat)
+      IF (iGetFileType_FromName(cHDFFileName) .NE. f_iHDF) CALL DefaultLogger%LogMessage(TRIM(cHDFFileName)//' is not an HDF5 file!',f_iFatal,ThisProcedure)
+      CALL ZBudget%New(DefaultLogger,cHDFFileName,iStat)
       IF (iStat .EQ. -1) RETURN
       
       !If the print interval is provided as empty, set it to the time interval of the data
@@ -237,10 +224,10 @@ CONTAINS
       END IF
 
       !Let the user know
-      CALL ModuleLogger%LogMessage('Processing '//TRIM(LowerCase(ZBudget%Header%cDescriptor)),f_iMessage,'',Destination=f_iSCREEN_FILE)
+      CALL DefaultLogger%LogMessage('Processing '//TRIM(LowerCase(ZBudget%Header%cDescriptor)),f_iMessage,'',Destination=f_iSCREEN_FILE)
       
       !Create the zone list
-      CALL ZoneList%New(ModuleLogger,ZBudget%Header%iNData,ZBudget%Header%lFaceFlows_Defined,ZBudget%SystemData,TRIM(cZoneDefFileName),iStat)
+      CALL ZoneList%New(DefaultLogger,ZBudget%Header%iNData,ZBudget%Header%lFaceFlows_Defined,ZBudget%SystemData,TRIM(cZoneDefFileName),iStat)
       IF (iStat .EQ. -1) RETURN
       
       !Read the zones to be processed
@@ -274,7 +261,7 @@ CONTAINS
       !Make sure that undefined zones is not asked for processing
       iLoc = LocateInList(f_iUndefinedZone,iZonesToProcess)
       IF (iLoc .GT. 0) THEN
-          CALL ModuleLogger%LogMessage('An undefined zone (-99) cannot be processed!',f_iWarn,ThisProcedure)
+          CALL DefaultLogger%LogMessage('An undefined zone (-99) cannot be processed!',f_iWarn,ThisProcedure)
           IF (SIZE(iZonesToProcess)-1 .EQ. 0) GOTO 100
           DEALLOCATE(iTempZonesToProcess,STAT=ErrorCode)
           ALLOCATE (iTempZonesToProcess(SIZE(iZonesToProcess)-1))
@@ -302,7 +289,7 @@ CONTAINS
     MessageArray(2) = '  IWFM       : '//TRIM(IWFMVersion%GetVersion())
     MessageArray(3) = '  IWFM Kernel: '//TRIM(IWFMKernelVersion%GetVersion())
 
-    CALL ModuleLogger%LogMessage(MessageArray(1:3),f_iMessage,'',iDestination=f_iSCREEN)
+    CALL DefaultLogger%LogMessage(MessageArray(1:3),f_iMessage,'',iDestination=f_iSCREEN)
   
   END SUBROUTINE PrintVersionNumbers
   
@@ -317,7 +304,7 @@ CONTAINS
     IF (iStat .EQ. -1) THEN
         CALL LogLastMessage()
     ELSE
-        CALL ModuleLogger%LogMessage(f_cLineFeed//'Program completed successfully.',f_iMessage,'')
+        CALL DefaultLogger%LogMessage(f_cLineFeed//'Program completed successfully.',f_iMessage,'')
     END IF
     
     CALL DefaultTimer%Stop()

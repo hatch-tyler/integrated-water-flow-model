@@ -8,6 +8,7 @@
 MODULE Class_SMP2SMP
 
   USE MessageLogger    , ONLY: MessageLoggerType , &
+                               DefaultLogger     , &
                                f_iFatal       , &
                                f_iWarn        , &
                                f_iInfo
@@ -26,8 +27,7 @@ MODULE Class_SMP2SMP
             SMPIDGroupType       , &
             TokenizeSMPLine      , &
             ExpandObsIDsToLayers , &
-            ExpandSMPDataToLayers, &
-            SMP2SMP_SetModuleLogger
+            ExpandSMPDataToLayers
 
   ! =====================================================================
   ! SMPRecordType - one record in an SMP file (ID + time + value)
@@ -69,20 +69,8 @@ MODULE Class_SMP2SMP
 
   ! Module-level parameters
   CHARACTER(LEN=25), PARAMETER :: cModName = 'Class_SMP2SMP'
-  TYPE(MessageLoggerType),POINTER,PRIVATE :: ModuleLogger => NULL()
 
 CONTAINS
-
-
-  ! -------------------------------------------------------------
-  ! --- SET MODULE LOGGER
-  ! -------------------------------------------------------------
-  SUBROUTINE SMP2SMP_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType),TARGET,INTENT(INOUT) :: Logger
-
-    ModuleLogger => Logger
-
-  END SUBROUTINE SMP2SMP_SetModuleLogger
 
   ! =====================================================================
   ! TokenizeSMPLine - Split a line into whitespace-delimited tokens
@@ -1229,7 +1217,7 @@ CONTAINS
     iMaxNew = iNBase * iNLayers + iNSuffixed
     ALLOCATE(cNewIDs(iMaxNew), STAT=iErr)
     IF (iErr /= 0) THEN
-      CALL ModuleLogger%SetLastMessage('Cannot allocate expanded ID array', f_iFatal, cModName)
+      CALL DefaultLogger%SetLastMessage('Cannot allocate expanded ID array', f_iFatal, cModName)
       iStat = -1
       RETURN
     END IF
@@ -1261,14 +1249,14 @@ CONTAINS
     DEALLOCATE(cIDs)
     ALLOCATE(cIDs(iNewCount), STAT=iErr)
     IF (iErr /= 0) THEN
-      CALL ModuleLogger%SetLastMessage('Cannot allocate replacement ID array', f_iFatal, cModName)
+      CALL DefaultLogger%SetLastMessage('Cannot allocate replacement ID array', f_iFatal, cModName)
       iStat = -1
       DEALLOCATE(cNewIDs)
       RETURN
     END IF
     cIDs(1:iNewCount) = cNewIDs(1:iNewCount)
 
-    CALL ModuleLogger%LogMessage('Expanded '//TRIM(IntToText(iNBase))//' base obs IDs to '// &
+    CALL DefaultLogger%LogMessage('Expanded '//TRIM(IntToText(iNBase))//' base obs IDs to '// &
          TRIM(IntToText(iNewCount))//' per-layer IDs ('// &
          TRIM(IntToText(iNLayers))//' layers)', f_iInfo, cModName)
 

@@ -55,7 +55,6 @@ MODULE Class_LandUseDataFile
   ! --- LAND USE DATA FILE TYPE
   ! -------------------------------------------------------------
   TYPE,EXTENDS(Real2DTSDataInFileType) :: LandUseDataFileType
-    TYPE(MessageLoggerType),POINTER :: Logger => NULL()
     REAL(8) :: Fact  = 1.0     !Conversion factor for land use areas
   CONTAINS
     PROCEDURE,PASS :: New        

@@ -20,6 +20,7 @@
 MODULE Class_ResultsExtract
 
   USE MessageLogger        , ONLY: MessageLoggerType , &
+                                    DefaultLogger     , &
                                     f_iFatal          , &
                                     f_iWarn           , &
                                     f_iInfo
@@ -54,10 +55,8 @@ MODULE Class_ResultsExtract
 
   PRIVATE
   PUBLIC :: ResultsExtractType
-  PUBLIC :: ResultsExtract_SetModuleLogger
 
   CHARACTER(LEN=25), PARAMETER :: cModName = 'Class_ResultsExtract'
-  TYPE(MessageLoggerType),POINTER,PRIVATE :: ModuleLogger => NULL()
 
   ! Data type flags
   INTEGER, PARAMETER :: f_iDataType_HEAD        = 1
@@ -132,17 +131,6 @@ MODULE Class_ResultsExtract
   END TYPE ResultsExtractType
 
 CONTAINS
-
-
-  ! -------------------------------------------------------------
-  ! --- SET MODULE LOGGER
-  ! -------------------------------------------------------------
-  SUBROUTINE ResultsExtract_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType),TARGET,INTENT(INOUT) :: Logger
-
-    ModuleLogger => Logger
-
-  END SUBROUTINE ResultsExtract_SetModuleLogger
 
 
   ! =====================================================================
@@ -224,7 +212,7 @@ CONTAINS
         This%cDataType    = 'SUBSIDENCE'
         This%lIncremental = .FALSE.  ! Keep cumulative
       CASE DEFAULT
-        CALL ModuleLogger%SetLastMessage('Unknown DATATYPE: '//TRIM(cClean)// &
+        CALL DefaultLogger%SetLastMessage('Unknown DATATYPE: '//TRIM(cClean)// &
              '. Must be HEAD, SUBSIDENCE, or SUBSIDENCE_CUM.', &
              f_iFatal, ThisProcedure)
         iStat = -1; RETURN
@@ -247,7 +235,7 @@ CONTAINS
     CALL CleanSpecialCharacters(cClean)
     READ(cClean, *, IOSTAT=iErr) iNHyd
     IF (iErr /= 0 .OR. iNHyd <= 0) THEN
-      CALL ModuleLogger%SetLastMessage('Invalid NHYD value in input file', &
+      CALL DefaultLogger%SetLastMessage('Invalid NHYD value in input file', &
            f_iFatal, ThisProcedure)
       iStat = -1; RETURN
     END IF
@@ -270,7 +258,7 @@ CONTAINS
     DO i = 1, iNHyd
       CALL InFile%ReadData(cLine, iStat)
       IF (iStat == -1) THEN
-        CALL ModuleLogger%SetLastMessage('Unexpected end of input at hydrograph '// &
+        CALL DefaultLogger%SetLastMessage('Unexpected end of input at hydrograph '// &
              TRIM(IntToText(i)), f_iFatal, ThisProcedure)
         RETURN
       END IF
@@ -278,7 +266,7 @@ CONTAINS
       CALL CleanSpecialCharacters(cClean)
       READ(cClean, *, IOSTAT=iErr) iID, iHydTyp
       IF (iErr /= 0) THEN
-        CALL ModuleLogger%SetLastMessage('Cannot parse hydrograph spec line '// &
+        CALL DefaultLogger%SetLastMessage('Cannot parse hydrograph spec line '// &
              TRIM(IntToText(i)), f_iFatal, ThisProcedure)
         iStat = -1; RETURN
       END IF
@@ -348,9 +336,9 @@ CONTAINS
     END DO
     CALL InFile%Kill()
 
-    CALL ModuleLogger%LogMessage('  Input file: '//TRIM(cInputFile), f_iInfo, ThisProcedure)
-    CALL ModuleLogger%LogMessage('  Data type: '//TRIM(This%cDataType), f_iInfo, ThisProcedure)
-    CALL ModuleLogger%LogMessage('  '//TRIM(IntToText(iNHyd))//' hydrographs specified ('// &
+    CALL DefaultLogger%LogMessage('  Input file: '//TRIM(cInputFile), f_iInfo, ThisProcedure)
+    CALL DefaultLogger%LogMessage('  Data type: '//TRIM(This%cDataType), f_iInfo, ThisProcedure)
+    CALL DefaultLogger%LogMessage('  '//TRIM(IntToText(iNHyd))//' hydrographs specified ('// &
          TRIM(IntToText(This%NHyd_AtXY))//' AtXY, '// &
          TRIM(IntToText(This%NHyd_AtNode))//' AtNode)', f_iInfo, ThisProcedure)
 
@@ -384,7 +372,7 @@ CONTAINS
     CALL PrepareOutputFile(This, iStat)
     IF (iStat == -1) RETURN
 
-    CALL ModuleLogger%LogMessage('  Initialization complete.', f_iInfo, ThisProcedure)
+    CALL DefaultLogger%LogMessage('  Initialization complete.', f_iInfo, ThisProcedure)
 
   END SUBROUTINE New
 
@@ -468,7 +456,7 @@ CONTAINS
     ! Convert time unit to DeltaT_InMinutes
     CALL CTimeStep_To_RTimeStep(cTimeUnit, rDeltaT, iDeltaT_InMinutes, iErr)
     IF (iErr /= 0) THEN
-      CALL ModuleLogger%SetLastMessage('Cannot parse time unit: '//TRIM(cTimeUnit), &
+      CALL DefaultLogger%SetLastMessage('Cannot parse time unit: '//TRIM(cTimeUnit), &
            f_iFatal, ThisProcedure)
       iStat = -1; RETURN
     END IF
@@ -491,18 +479,18 @@ CONTAINS
                           This%TimeStep%CurrentDateAndTime, &
                           This%TimeStep%EndDateAndTime)
     IF (This%NTIME <= 0) THEN
-      CALL ModuleLogger%SetLastMessage('Computed NTIME <= 0. Check BDT/EDT/TimeUnit.', &
+      CALL DefaultLogger%SetLastMessage('Computed NTIME <= 0. Check BDT/EDT/TimeUnit.', &
            f_iFatal, ThisProcedure)
       iStat = -1; RETURN
     END IF
 
-    CALL ModuleLogger%LogMessage('  Simulation file: '//TRIM(This%cSimMainFile), &
+    CALL DefaultLogger%LogMessage('  Simulation file: '//TRIM(This%cSimMainFile), &
          f_iInfo, ThisProcedure)
-    CALL ModuleLogger%LogMessage('  PP binary: '//TRIM(This%cPPBinaryFile), &
+    CALL DefaultLogger%LogMessage('  PP binary: '//TRIM(This%cPPBinaryFile), &
          f_iInfo, ThisProcedure)
-    CALL ModuleLogger%LogMessage('  GW main: '//TRIM(This%cGWMainFile), &
+    CALL DefaultLogger%LogMessage('  GW main: '//TRIM(This%cGWMainFile), &
          f_iInfo, ThisProcedure)
-    CALL ModuleLogger%LogMessage('  BDT='//TRIM(This%TimeStep%CurrentDateAndTime)// &
+    CALL DefaultLogger%LogMessage('  BDT='//TRIM(This%TimeStep%CurrentDateAndTime)// &
          '  EDT='//TRIM(This%TimeStep%EndDateAndTime)// &
          '  NTIME='//TRIM(IntToText(This%NTIME)), f_iInfo, ThisProcedure)
 
@@ -576,7 +564,7 @@ CONTAINS
         ! Data line 14: All-heads output file path
         CALL GWFile%ReadData(cLine, iStat)
         IF (iStat == -1) THEN
-          CALL ModuleLogger%SetLastMessage('Cannot read all-heads file path from GW main', &
+          CALL DefaultLogger%SetLastMessage('Cannot read all-heads file path from GW main', &
                f_iFatal, ThisProcedure)
           RETURN
         END IF
@@ -585,7 +573,7 @@ CONTAINS
         CALL GWFile%Kill()
 
         IF (LEN_TRIM(ADJUSTL(cClean)) == 0) THEN
-          CALL ModuleLogger%SetLastMessage('All-heads output file path is blank in GW main. '// &
+          CALL DefaultLogger%SetLastMessage('All-heads output file path is blank in GW main. '// &
                'Simulation must have all-heads output enabled.', &
                f_iFatal, ThisProcedure)
           iStat = -1; RETURN
@@ -601,9 +589,9 @@ CONTAINS
 
     END SELECT
 
-    CALL ModuleLogger%LogMessage('  All-data file: '//TRIM(This%cAllDataFile), &
+    CALL DefaultLogger%LogMessage('  All-data file: '//TRIM(This%cAllDataFile), &
          f_iInfo, ThisProcedure)
-    CALL ModuleLogger%LogMessage('  Output unit: '//TRIM(This%cUnitOutput)// &
+    CALL DefaultLogger%LogMessage('  Output unit: '//TRIM(This%cUnitOutput)// &
          '  Factor: '//TRIM(IntToText(INT(This%rFactOutput))), &
          f_iInfo, ThisProcedure)
 
@@ -643,7 +631,7 @@ CONTAINS
     ! AllSubsOut file path (first data line after version; matches v51.f90:148)
     CALL SubsFile%ReadData(cLine, iStat)
     IF (iStat == -1) THEN
-      CALL ModuleLogger%SetLastMessage('Cannot read AllSubsOut file path from subsidence file. '// &
+      CALL DefaultLogger%SetLastMessage('Cannot read AllSubsOut file path from subsidence file. '// &
            'Subsidence version must be >= 4.1.', f_iFatal, ThisProcedure)
       RETURN
     END IF
@@ -652,7 +640,7 @@ CONTAINS
     CALL SubsFile%Kill()
 
     IF (LEN_TRIM(ADJUSTL(cClean)) == 0) THEN
-      CALL ModuleLogger%SetLastMessage('AllSubsOut file path is blank in subsidence file. '// &
+      CALL DefaultLogger%SetLastMessage('AllSubsOut file path is blank in subsidence file. '// &
            'Check subsidence version (must be >= 4.1 with AllSubsOut enabled).', &
            f_iFatal, ThisProcedure)
       iStat = -1; RETURN
@@ -662,9 +650,9 @@ CONTAINS
     CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(cClean)), TRIM(This%cSimDir), cAbsPathFileName)
     This%cAllDataFile = cAbsPathFileName
 
-    CALL ModuleLogger%LogMessage('  Subsidence file: '//TRIM(cSubsFile), &
+    CALL DefaultLogger%LogMessage('  Subsidence file: '//TRIM(cSubsFile), &
          f_iInfo, ThisProcedure)
-    CALL ModuleLogger%LogMessage('  AllSubsOut: '//TRIM(This%cAllDataFile), &
+    CALL DefaultLogger%LogMessage('  AllSubsOut: '//TRIM(This%cAllDataFile), &
          f_iInfo, ThisProcedure)
 
   END SUBROUTINE ParseSubsidenceFile
@@ -688,15 +676,15 @@ CONTAINS
                        iStat=iStat)
     IF (iStat == -1) RETURN
 
-    CALL This%AppGrid%New(ModuleLogger, PPBinFile, iStat)
+    CALL This%AppGrid%New(DefaultLogger, PPBinFile, iStat)
     IF (iStat == -1) RETURN
 
-    CALL This%Stratigraphy%New(ModuleLogger, This%AppGrid%NNodes, PPBinFile, iStat)
+    CALL This%Stratigraphy%New(DefaultLogger, This%AppGrid%NNodes, PPBinFile, iStat)
     IF (iStat == -1) RETURN
 
     CALL PPBinFile%Kill()
 
-    CALL ModuleLogger%LogMessage('  Grid: '//TRIM(IntToText(This%AppGrid%NNodes))//' nodes, '// &
+    CALL DefaultLogger%LogMessage('  Grid: '//TRIM(IntToText(This%AppGrid%NNodes))//' nodes, '// &
          TRIM(IntToText(This%AppGrid%NElements))//' elements, '// &
          TRIM(IntToText(This%Stratigraphy%NLayers))//' layers', &
          f_iInfo, ThisProcedure)
@@ -728,7 +716,7 @@ CONTAINS
       CALL This%AppGrid%FEInterpolate(This%Hyd_AtXY(i)%X, This%Hyd_AtXY(i)%Y, &
                                        iElem, iNodes, rCoeff)
       IF (iElem == 0) THEN
-        CALL ModuleLogger%LogMessage('  WARNING: Hydrograph '//TRIM(IntToText(This%Hyd_AtXY(i)%ID))// &
+        CALL DefaultLogger%LogMessage('  WARNING: Hydrograph '//TRIM(IntToText(This%Hyd_AtXY(i)%ID))// &
              ' ('//TRIM(This%Hyd_AtXY(i)%cName)//') is outside the model grid - skipping.', &
              f_iWarn, ThisProcedure)
         This%Hyd_AtXY(i)%lSkip = .TRUE.
@@ -739,7 +727,7 @@ CONTAINS
       This%Hyd_AtXY(i)%rFactors = rCoeff
 
       IF (This%Hyd_AtXY(i)%iLayer > This%Stratigraphy%NLayers) THEN
-        CALL ModuleLogger%SetLastMessage('Hydrograph '//TRIM(IntToText(This%Hyd_AtXY(i)%ID))// &
+        CALL DefaultLogger%SetLastMessage('Hydrograph '//TRIM(IntToText(This%Hyd_AtXY(i)%ID))// &
              ': layer '//TRIM(IntToText(This%Hyd_AtXY(i)%iLayer))// &
              ' exceeds model layers ('// &
              TRIM(IntToText(This%Stratigraphy%NLayers))//')', &
@@ -752,7 +740,7 @@ CONTAINS
     DO i = 1, This%NHyd_AtNode
       CALL ConvertID_To_Index(This%Hyd_AtNode(i)%iNode, iNodeIDs, iNodeIndex)
       IF (iNodeIndex == 0) THEN
-        CALL ModuleLogger%SetLastMessage('Hydrograph '//TRIM(IntToText(This%Hyd_AtNode(i)%ID))// &
+        CALL DefaultLogger%SetLastMessage('Hydrograph '//TRIM(IntToText(This%Hyd_AtNode(i)%ID))// &
              ': node ID '//TRIM(IntToText(This%Hyd_AtNode(i)%iNode))// &
              ' not found in model grid.', f_iFatal, ThisProcedure)
         iStat = -1; RETURN
@@ -762,7 +750,7 @@ CONTAINS
       This%Hyd_AtNode(i)%iNode    = iNodeIndex   ! Replace user ID with internal index
 
       IF (This%Hyd_AtNode(i)%iLayer > This%Stratigraphy%NLayers) THEN
-        CALL ModuleLogger%SetLastMessage('Hydrograph '//TRIM(IntToText(This%Hyd_AtNode(i)%ID))// &
+        CALL DefaultLogger%SetLastMessage('Hydrograph '//TRIM(IntToText(This%Hyd_AtNode(i)%ID))// &
              ': layer '//TRIM(IntToText(This%Hyd_AtNode(i)%iLayer))// &
              ' exceeds model layers ('// &
              TRIM(IntToText(This%Stratigraphy%NLayers))//')', &
@@ -771,7 +759,7 @@ CONTAINS
       END IF
     END DO
 
-    CALL ModuleLogger%LogMessage('  All hydrograph specifications processed successfully.', &
+    CALL DefaultLogger%LogMessage('  All hydrograph specifications processed successfully.', &
          f_iInfo, ThisProcedure)
 
   END SUBROUTINE ProcessHydSpecs
@@ -907,7 +895,7 @@ CONTAINS
       IF (iStat == -1) RETURN
     END IF
 
-    CALL ModuleLogger%LogMessage('  Output file: '//TRIM(This%cOutputFile), &
+    CALL DefaultLogger%LogMessage('  Output file: '//TRIM(This%cOutputFile), &
          f_iInfo, ThisProcedure)
 
   END SUBROUTINE PrepareOutputFile
@@ -1010,7 +998,7 @@ CONTAINS
     END IF
     IF (iStat == -1) RETURN
 
-    CALL ModuleLogger%LogMessage('  Processing '//TRIM(IntToText(This%NTIME+1))// &
+    CALL DefaultLogger%LogMessage('  Processing '//TRIM(IntToText(This%NTIME+1))// &
          ' timesteps...', f_iInfo, ThisProcedure)
 
     TSLocal = This%TimeStep
@@ -1025,7 +1013,7 @@ CONTAINS
       CALL AllDataInFile%ReadTSData(TSLocal, TRIM(This%cDataType), iFileReadError, iStat)
       IF (iStat == -1) RETURN
       IF (iFileReadError /= 0) THEN
-        CALL ModuleLogger%SetLastMessage('Error reading all-data file at timestep '// &
+        CALL DefaultLogger%SetLastMessage('Error reading all-data file at timestep '// &
              TRIM(IntToText(iTime)), f_iFatal, ThisProcedure)
         iStat = -1; RETURN
       END IF
@@ -1161,7 +1149,7 @@ CONTAINS
 
     CALL AllDataInFile%Close()
 
-    CALL ModuleLogger%LogMessage('  Extraction complete. '//TRIM(IntToText(This%NHyd))// &
+    CALL DefaultLogger%LogMessage('  Extraction complete. '//TRIM(IntToText(This%NHyd))// &
          ' hydrographs written.', f_iInfo, ThisProcedure)
 
   END SUBROUTINE Run

@@ -24,12 +24,10 @@ MODULE GeneralUtilities
   !$ USE OMP_LIB
   USE ISO_C_BINDING , ONLY: C_CHAR      , &
                             C_NULL_CHAR 
-  USE MessageLogger , ONLY: MessageLoggerType , &
+  USE MessageLogger , ONLY: DefaultLogger     , &
                             f_iFatal
   IMPLICIT NONE
 
-  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
-  
   
   PRIVATE
   PUBLIC :: IntToText                     , &
@@ -83,8 +81,7 @@ MODULE GeneralUtilities
             ConvertID_To_Index            , &
             PrepareIDIndex                , &
             LookupIDInIndex               , &
-            FEXP                          , &
-            GeneralUtils_SetModuleLogger
+            FEXP
 
 
   !Data type for a generic string
@@ -386,7 +383,7 @@ CONTAINS
     
     !Make sure that string to be replaced and string to replace with has the same length
     IF (LEN(StringToReplace) .NE. LEN(StringToReplaceWith)) THEN
-        CALL ModuleLogger%SetLastMessage('String to be replaced with must have the same length as the replacing string!',f_iFatal,ThisProcedure)
+        CALL DefaultLogger%SetLastMessage('String to be replaced with must have the same length as the replacing string!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -1057,7 +1054,7 @@ CONTAINS
     INTEGER,INTENT(OUT)         :: iStat
 
     IF (iErrorCode .NE. 0) THEN
-        CALL ModuleLogger%SetLastMessage('Error in allocating memory in '//TRIM(ADJUSTL(cSendingProcedure)),f_iFatal,ThisProcedure)
+        CALL DefaultLogger%SetLastMessage('Error in allocating memory in '//TRIM(ADJUSTL(cSendingProcedure)),f_iFatal,ThisProcedure)
         iStat = -1
     ELSE
         iStat = 0
@@ -1645,7 +1642,7 @@ CONTAINS
     
     !MAke sure arrays are matched properly
     IF (iSizeA - iRewound*iSizeSA .GT. 0) THEN
-        CALL ModuleLogger%SetLastMessage('Sizes of source array and destination arrays are not matched properly!',f_iFatal,cProcess)
+        CALL DefaultLogger%SetLastMessage('Sizes of source array and destination arrays are not matched properly!',f_iFatal,cProcess)
         iStat = -1
         RETURN
     END IF
@@ -1682,7 +1679,7 @@ CONTAINS
     
     !MAke sure arrays are matched properly
     IF (iSizeA - iRewound*iSizeSA .GT. 0) THEN
-        CALL ModuleLogger%SetLastMessage('Sizes of source array and destination arrays are not matched properly!',f_iFatal,cProcess)
+        CALL DefaultLogger%SetLastMessage('Sizes of source array and destination arrays are not matched properly!',f_iFatal,cProcess)
         iStat = -1
         RETURN
     END IF
@@ -1719,7 +1716,7 @@ CONTAINS
     
     !MAke sure arrays are matched properly
     IF (iSizeA - iRewound*iSizeSA .GT. 0) THEN
-        CALL ModuleLogger%SetLastMessage('Sizes of source array and destination arrays are not matched properly!',f_iFatal,cProcess)
+        CALL DefaultLogger%SetLastMessage('Sizes of source array and destination arrays are not matched properly!',f_iFatal,cProcess)
         iStat = -1
         RETURN
     END IF
@@ -1756,7 +1753,7 @@ CONTAINS
     
     !Make sure arrays are matched properly
     IF (iSizeA - iRewound*iSizeSA .GT. 0) THEN
-        CALL ModuleLogger%SetLastMessage('Sizes of source array and destination arrays are not matched properly!',f_iFatal,cProcess)
+        CALL DefaultLogger%SetLastMessage('Sizes of source array and destination arrays are not matched properly!',f_iFatal,cProcess)
         iStat = -1
         RETURN
     END IF
@@ -1796,7 +1793,7 @@ CONTAINS
       READ (SourceString,*) rArray(indx)
       iLoc         = FirstLocation(' ',SourceString)
       IF (iLoc .EQ. 0) THEN
-          CALL ModuleLogger%SetLastMessage('Error in data entry for '//TRIM(cProcess)//'!',f_iFatal,ThisProcedure)
+          CALL DefaultLogger%SetLastMessage('Error in data entry for '//TRIM(cProcess)//'!',f_iFatal,ThisProcedure)
           iStat = -1
           RETURN
       END IF
@@ -1830,7 +1827,7 @@ CONTAINS
       READ (SourceString,*) iArray(indx)
       iLoc         = FirstLocation(' ',SourceString)
       IF (iLoc .EQ. 0) THEN
-          CALL ModuleLogger%SetLastMessage('Error in data entry for '//TRIM(cProcess)//'!',f_iFatal,ThisProcedure)
+          CALL DefaultLogger%SetLastMessage('Error in data entry for '//TRIM(cProcess)//'!',f_iFatal,ThisProcedure)
           iStat = -1
           RETURN
       END IF
@@ -2293,10 +2290,5 @@ CONTAINS
 
   END SUBROUTINE LookupIDInIndex
 
-
-  SUBROUTINE GeneralUtils_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(INOUT) :: Logger
-    ModuleLogger => Logger
-  END SUBROUTINE GeneralUtils_SetModuleLogger
 
 END MODULE

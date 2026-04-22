@@ -57,7 +57,6 @@ MODULE Class_StrmInflow
   ! --- STREAM INFLOW DATA TYPE
   ! -------------------------------------------------------------
   TYPE,EXTENDS(RealTSDataInFileType) :: StrmInflowType
-    TYPE(MessageLoggerType),POINTER :: Logger => NULL()
     LOGICAL             :: lDefined            = .FALSE.   !Flag to check if stream inflows are specified
     REAL(8)             :: Fact                = 1.0       !Conversion factor for the stream inflows that are read from file
     INTEGER,ALLOCATABLE :: IDs(:)                          !Inflow ID numbers 

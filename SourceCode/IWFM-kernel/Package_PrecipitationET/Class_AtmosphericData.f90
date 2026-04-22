@@ -51,7 +51,6 @@ MODULE Class_AtmosphericData
   ! --- RELATED DATA TYPE
   ! -------------------------------------------------------------
   TYPE,EXTENDS(RealTSDataInFileType) :: AtmosphericDataType
-      TYPE(MessageLoggerType),POINTER,PUBLIC :: Logger => NULL()
       REAL(8)                  :: Fact      = 1.0        !Conversion factor
       CHARACTER(:),ALLOCATABLE :: cDataName              !Name of data
   CONTAINS

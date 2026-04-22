@@ -63,7 +63,6 @@ MODULE Class_BudgetInputFile
   ! --- BUDGET INPUT FILE TYPE
   ! -------------------------------------------------------------
   TYPE,EXTENDS(GenericFileType) :: BudgetInputFileType
-      TYPE(MessageLoggerType),POINTER :: Logger => NULL()
   CONTAINS
       PROCEDURE,PASS :: SetLogger => BudgetInputFile_SetLogger
       PROCEDURE,PASS :: Create

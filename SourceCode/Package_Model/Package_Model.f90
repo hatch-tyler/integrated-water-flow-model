@@ -75,17 +75,8 @@ MODULE Package_Model
                                           f_iUNKNOWN                                     
   USE IWFM_Kernel_Version         , ONLY: IWFMKernelVersion
   USE IWFM_Version                , ONLY: IWFMVersion
-  USE Class_BaseFileType          , ONLY: BaseFile_SetModuleLogger
-  USE Class_AsciiFileType         , ONLY: AsciiFile_SetModuleLogger
-  USE Class_DSSFileType           , ONLY: DSSFile_SetModuleLogger
-  USE Class_FortBinaryFileType    , ONLY: FortBinFile_SetModuleLogger
-  USE Class_HDF5FileType          , ONLY: HDF5File_SetModuleLogger
-  USE IOInterface                 , ONLY: IOInterface_SetModuleLogger
-  USE TSDFileHandler              , ONLY: TSDFileHandler_SetModuleLogger
-  USE GeneralUtilities            , ONLY: GeneralUtils_SetModuleLogger
-  USE TimeSeriesUtilities         , ONLY: TimeSeries_SetModuleLogger
+  ! I/O layer SetModuleLogger calls removed - Logger now propagated via type components
   USE Class_BudgetInputFile       , ONLY: BudgetInputFile_SetModuleLogger
-  USE Opening_screen              , ONLY: OpeningScreen_SetModuleLogger
   USE Class_GWZBudget             , ONLY: GWZBudget_SetModuleLogger
   USE Package_Misc                , ONLY: FlowDestinationType                         , &
                                           SolverDataType                              , &
@@ -636,21 +627,13 @@ CONTAINS
     CALL AppSWShed_v40_SetModuleLogger(DefaultLogger)
     CALL AppSWShed_v41_SetModuleLogger(DefaultLogger)
 
-    CALL BaseFile_SetModuleLogger(DefaultLogger)
-    CALL AsciiFile_SetModuleLogger(DefaultLogger)
-    CALL DSSFile_SetModuleLogger(DefaultLogger)
-    CALL FortBinFile_SetModuleLogger(DefaultLogger)
-    CALL HDF5File_SetModuleLogger(DefaultLogger)
-    CALL IOInterface_SetModuleLogger(DefaultLogger)
-    CALL TSDFileHandler_SetModuleLogger(DefaultLogger)
-    CALL GeneralUtils_SetModuleLogger(DefaultLogger)
-    CALL TimeSeries_SetModuleLogger(DefaultLogger)
+    ! I/O layer Logger now propagated via type components (BaseFileType%Logger, GenericFileType%Logger)
     CALL BudgetInputFile_SetModuleLogger(DefaultLogger)
 
     CALL GWZBudget_SetModuleLogger(DefaultLogger)
 
 
-    CALL OpeningScreen_SetModuleLogger(DefaultLogger)
+
 
   END SUBROUTINE IWFM_InitAllModuleLoggers
 
@@ -950,21 +933,13 @@ CONTAINS
     CALL AppSWShed_v40_SetModuleLogger(DefaultLogger)
     CALL AppSWShed_v41_SetModuleLogger(DefaultLogger)
 
-    CALL BaseFile_SetModuleLogger(DefaultLogger)
-    CALL AsciiFile_SetModuleLogger(DefaultLogger)
-    CALL DSSFile_SetModuleLogger(DefaultLogger)
-    CALL FortBinFile_SetModuleLogger(DefaultLogger)
-    CALL HDF5File_SetModuleLogger(DefaultLogger)
-    CALL IOInterface_SetModuleLogger(DefaultLogger)
-    CALL TSDFileHandler_SetModuleLogger(DefaultLogger)
-    CALL GeneralUtils_SetModuleLogger(DefaultLogger)
-    CALL TimeSeries_SetModuleLogger(DefaultLogger)
+    ! I/O layer Logger now propagated via type components (BaseFileType%Logger, GenericFileType%Logger)
     CALL BudgetInputFile_SetModuleLogger(DefaultLogger)
 
     CALL GWZBudget_SetModuleLogger(DefaultLogger)
 
 
-    CALL OpeningScreen_SetModuleLogger(DefaultLogger)
+
 
 
     !Matrix data
@@ -1091,21 +1066,13 @@ CONTAINS
 
 
 
-    CALL BaseFile_SetModuleLogger(DefaultLogger)
-    CALL AsciiFile_SetModuleLogger(DefaultLogger)
-    CALL DSSFile_SetModuleLogger(DefaultLogger)
-    CALL FortBinFile_SetModuleLogger(DefaultLogger)
-    CALL HDF5File_SetModuleLogger(DefaultLogger)
-    CALL IOInterface_SetModuleLogger(DefaultLogger)
-    CALL TSDFileHandler_SetModuleLogger(DefaultLogger)
-    CALL GeneralUtils_SetModuleLogger(DefaultLogger)
-    CALL TimeSeries_SetModuleLogger(DefaultLogger)
+    ! I/O layer Logger now propagated via type components (BaseFileType%Logger, GenericFileType%Logger)
     CALL BudgetInputFile_SetModuleLogger(DefaultLogger)
 
     CALL GWZBudget_SetModuleLogger(DefaultLogger)
 
 
-    CALL OpeningScreen_SetModuleLogger(DefaultLogger)
+
 
 
     !Solution scheme control data
@@ -1486,21 +1453,13 @@ CONTAINS
 
 
 
-    CALL BaseFile_SetModuleLogger(DefaultLogger)
-    CALL AsciiFile_SetModuleLogger(DefaultLogger)
-    CALL DSSFile_SetModuleLogger(DefaultLogger)
-    CALL FortBinFile_SetModuleLogger(DefaultLogger)
-    CALL HDF5File_SetModuleLogger(DefaultLogger)
-    CALL IOInterface_SetModuleLogger(DefaultLogger)
-    CALL TSDFileHandler_SetModuleLogger(DefaultLogger)
-    CALL GeneralUtils_SetModuleLogger(DefaultLogger)
-    CALL TimeSeries_SetModuleLogger(DefaultLogger)
+    ! I/O layer Logger now propagated via type components (BaseFileType%Logger, GenericFileType%Logger)
     CALL BudgetInputFile_SetModuleLogger(DefaultLogger)
 
     CALL GWZBudget_SetModuleLogger(DefaultLogger)
 
 
-    CALL OpeningScreen_SetModuleLogger(DefaultLogger)
+
 
 
     !Solution scheme control data
@@ -1868,21 +1827,13 @@ CONTAINS
 
 
 
-    CALL BaseFile_SetModuleLogger(DefaultLogger)
-    CALL AsciiFile_SetModuleLogger(DefaultLogger)
-    CALL DSSFile_SetModuleLogger(DefaultLogger)
-    CALL FortBinFile_SetModuleLogger(DefaultLogger)
-    CALL HDF5File_SetModuleLogger(DefaultLogger)
-    CALL IOInterface_SetModuleLogger(DefaultLogger)
-    CALL TSDFileHandler_SetModuleLogger(DefaultLogger)
-    CALL GeneralUtils_SetModuleLogger(DefaultLogger)
-    CALL TimeSeries_SetModuleLogger(DefaultLogger)
+    ! I/O layer Logger now propagated via type components (BaseFileType%Logger, GenericFileType%Logger)
     CALL BudgetInputFile_SetModuleLogger(DefaultLogger)
 
     CALL GWZBudget_SetModuleLogger(DefaultLogger)
 
 
-    CALL OpeningScreen_SetModuleLogger(DefaultLogger)
+
 
 
     !Solution scheme control data

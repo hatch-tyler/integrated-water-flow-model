@@ -22,8 +22,7 @@
 !***********************************************************************
 MODULE Class_HDF5FileType
   USE ISO_C_BINDING
-  USE MessageLogger       , ONLY: MessageLoggerType       , &
-                                  f_iWarn                 , &
+  USE MessageLogger       , ONLY: f_iWarn                 , &
                                   f_iFatal
   USE TimeSeriesUtilities , ONLY: TimeStepType            , &
                                   NPeriods                
@@ -32,8 +31,6 @@ MODULE Class_HDF5FileType
   USE Class_BaseFileType  , ONLY: BaseFileType
   USE HDF5
   IMPLICIT NONE
-
-  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
   
   
 
@@ -56,8 +53,7 @@ MODULE Class_HDF5FileType
             f_iGroup             , &
             f_iDataSet           , &
             f_iAttribute         , &
-            f_iMaxDatasetNameLen , &
-            HDF5File_SetModuleLogger
+            f_iMaxDatasetNameLen
 
 
   ! -------------------------------------------------------------
@@ -218,7 +214,7 @@ CONTAINS
             FileOpenCode = -1
             RETURN
         ELSE
-            CALL ModuleLogger%SetLastMessage('File '//TRIM(ADJUSTL(FileName))//' has already been opened!',f_iFatal,ThisProcedure)
+            CALL ThisFile%Logger%SetLastMessage('File '//TRIM(ADJUSTL(FileName))//' has already been opened!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -235,7 +231,7 @@ CONTAINS
         !Create dataset access property list
         CALL H5PCREATE_F(H5P_DATASET_ACCESS_F,iDataAccessPropListID,ErrorCode)
         IF (ErrorCode .NE. 0) THEN
-            CALL ModuleLogger%SetLastMessage('Error in creating dataset access property list!',f_iFatal,ThisProcedure)
+            CALL ThisFile%Logger%SetLastMessage('Error in creating dataset access property list!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -247,7 +243,7 @@ CONTAINS
                 FileOpenCode = ErrorCode
                 RETURN
             ELSE
-                CALL ModuleLogger%SetLastMessage('Error in opening HDF5 file '//TRIM(FileName)//'!',f_iFatal,ThisProcedure)
+                CALL ThisFile%Logger%SetLastMessage('Error in opening HDF5 file '//TRIM(FileName)//'!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -292,7 +288,7 @@ CONTAINS
                 iChunkCacheSize = MIN(PRODUCT(iChunkDims)*iBytes , f_iMaxCacheSize)
                 CALL H5PSET_CHUNK_CACHE_F(iDataAccessPropListID,INT(101,SIZE_T),iChunkCacheSize,1.0,ErrorCode)
                 IF (ErrorCode .NE. 0) THEN
-                    CALL ModuleLogger%SetLastMessage('Error in setting chunk cache size for dataset '//TRIM(cDatasetNames(indx))//'!',f_iFatal,ThisProcedure) 
+                    CALL ThisFile%Logger%SetLastMessage('Error in setting chunk cache size for dataset '//TRIM(cDatasetNames(indx))//'!',f_iFatal,ThisProcedure) 
                     iStat = -1
                     RETURN
                 END IF
@@ -335,7 +331,7 @@ CONTAINS
                 FileOpenCode = ErrorCode
                 RETURN
             ELSE
-                CALL ModuleLogger%SetLastMessage('Error in opening HDF5 file '//TRIM(FileName)//'!',f_iFatal,ThisProcedure)
+                CALL ThisFile%Logger%SetLastMessage('Error in opening HDF5 file '//TRIM(FileName)//'!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -484,7 +480,7 @@ CONTAINS
     !Open group or dataset
     CALL H5OOPEN_F(ThisFile%FileID,cGrpOrDset,obj_id,ErrorCode)
     IF (ErrorCode .NE. 0) THEN
-        CALL ModuleLogger%SetLastMessage('Group/dataset '//cGrpOrDset//' cannot be found in file '//ThisFile%Name//'!',f_iFatal,ThisProcedure)
+        CALL ThisFile%Logger%SetLastMessage('Group/dataset '//cGrpOrDset//' cannot be found in file '//ThisFile%Name//'!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -492,7 +488,7 @@ CONTAINS
     !Open attribute
     CALL H5AOPEN_F(obj_id,cAttrName,attr_id,ErrorCode)    
     IF (ErrorCode .NE. 0) THEN
-        CALL ModuleLogger%SetLastMessage('Attribute '//cAttrName//' cannot be found in file '//ThisFile%Name//'!',f_iFatal,ThisProcedure)
+        CALL ThisFile%Logger%SetLastMessage('Attribute '//cAttrName//' cannot be found in file '//ThisFile%Name//'!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -529,7 +525,7 @@ CONTAINS
                 ScalarAttrData = lLogiScalar
                 
             CLASS DEFAULT    
-                CALL ModuleLogger%SetLastMessage('Attribute '//cAttrName//' with the specified data type cannot be read from file '//ThisFile%Name//'!',f_iFatal,ThisProcedure)
+                CALL ThisFile%Logger%SetLastMessage('Attribute '//cAttrName//' with the specified data type cannot be read from file '//ThisFile%Name//'!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
                 
@@ -567,7 +563,7 @@ CONTAINS
                 ArrayAttrData = lLogiArray
                 
             CLASS DEFAULT    
-                CALL ModuleLogger%SetLastMessage('Attribute '//cAttrName//' with the specified data type cannot be read from file '//ThisFile%Name//'!',f_iFatal,ThisProcedure)
+                CALL ThisFile%Logger%SetLastMessage('Attribute '//cAttrName//' with the specified data type cannot be read from file '//ThisFile%Name//'!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
                 
@@ -575,12 +571,12 @@ CONTAINS
         
     !No data to be read is defined
     ELSE
-        CALL ModuleLogger%SetLastMessage('Either a scalar or an array attribute must be specified!',f_iFatal,ThisProcedure)   
+        CALL ThisFile%Logger%SetLastMessage('Either a scalar or an array attribute must be specified!',f_iFatal,ThisProcedure)   
         iStat = -1
         RETURN
     END IF
     IF (ErrorCode .NE. 0) THEN
-        CALL ModuleLogger%SetLastMessage('Error in reading attribute '//cAttrName//' from file '//ThisFile%Name//'!',f_iFatal,ThisProcedure)
+        CALL ThisFile%Logger%SetLastMessage('Error in reading attribute '//cAttrName//' from file '//ThisFile%Name//'!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -616,7 +612,7 @@ CONTAINS
     !Open dataset
     CALL H5DOPEN_F(ThisFile%FileID,cPath,iDataSetID,ErrorCode)
     IF (ErrorCode .NE. 0) THEN
-        CALL ModuleLogger%SetLastMessage("Can't find "//cPath//" dataset in file "//TRIM(ThisFile%Name), f_iFatal,ThisProcedure)
+        CALL ThisFile%Logger%SetLastMessage("Can't find "//cPath//" dataset in file "//TRIM(ThisFile%Name), f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -675,7 +671,7 @@ CONTAINS
     !Open dataset
     CALL H5DOPEN_F(ThisFile%FileID,cPath,iDataSetID,ErrorCode)
     IF (ErrorCode .NE. 0) THEN
-        CALL ModuleLogger%SetLastMessage("Can't find "//cPath//" dataset in file "//TRIM(ThisFile%Name), f_iFatal,ThisProcedure)
+        CALL ThisFile%Logger%SetLastMessage("Can't find "//cPath//" dataset in file "//TRIM(ThisFile%Name), f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -1137,7 +1133,7 @@ CONTAINS
             CALL H5DWRITE_F(ThisFile%Datasets(indxDataset)%iDataSetID,ThisFile%iIntegerTypeID,Data,iBlock,ErrorCode,ThisFile%Datasets(indxDataset)%iDataSpaceID_OneTimeStep,ThisFile%Datasets(indxDataset)%iDataSpaceID)
         
         CLASS DEFAULT
-            CALL ModuleLogger%LogMessage('Selected data type cannot be written to file '//ThisFile%Name//'!',f_iWarn,ThisProcedure)
+            CALL ThisFile%Logger%LogMessage('Selected data type cannot be written to file '//ThisFile%Name//'!',f_iWarn,ThisProcedure)
             RETURN
     END SELECT
 
@@ -1183,7 +1179,7 @@ CONTAINS
                 CALL H5DWRITE_F(ThisFile%Datasets(indxDataset)%iDataSetID,ThisFile%iIntegerTypeID,Data(1:nColumns,indxDataset),iBlock,ErrorCode,ThisFile%Datasets(indxDataset)%iDataSpaceID_OneTimeStep,ThisFile%Datasets(indxDataset)%iDataSpaceID)
             
             CLASS DEFAULT
-                CALL ModuleLogger%LogMessage('Selected data type cannot be written to file '//ThisFile%Name//'!',f_iWarn,ThisProcedure)
+                CALL ThisFile%Logger%LogMessage('Selected data type cannot be written to file '//ThisFile%Name//'!',f_iWarn,ThisProcedure)
                 RETURN
         END SELECT
 
@@ -1229,7 +1225,7 @@ CONTAINS
         CALL H5SGET_SIMPLE_EXTENT_DIMS_F(iExistingDataSpaceID,HExistingDims,HMaxDims,ErrorCode)
         CALL H5SCLOSE_F(iExistingDataSpaceID,ErrorCode)
         IF (HDims(1) .NE. HExistingDims(1)) THEN
-            CALL ModuleLogger%LogMessage('An existing array is being written with different dimensions!',f_iWarn,ThisProcedure)
+            CALL ThisFile%Logger%LogMessage('An existing array is being written with different dimensions!',f_iWarn,ThisProcedure)
             RETURN
         END IF
         
@@ -1313,7 +1309,7 @@ CONTAINS
         CALL H5SGET_SIMPLE_EXTENT_DIMS_F(iExistingDataSpaceID,HExistingDims,HMaxDims,ErrorCode)
         CALL H5SCLOSE_F(iExistingDataSpaceID,ErrorCode)
         IF (HDims(1).NE.HExistingDims(1) .OR. HDims(2).NE.HExistingDims(2)) THEN
-            CALL ModuleLogger%LogMessage('An existing array is being written with different dimensions!',f_iWarn,ThisProcedure)
+            CALL ThisFile%Logger%LogMessage('An existing array is being written with different dimensions!',f_iWarn,ThisProcedure)
             RETURN
         END IF
         
@@ -1396,7 +1392,7 @@ CONTAINS
     
     CALL H5GCREATE_F(ThisFile%FileID,cPathName,grp_id,ErrorCode,gcpl_id=grpcrpl_id)
     IF (ErrorCode .NE. 0) THEN
-        CALL ModuleLogger%LogMessage('Error in creating group '//cPathName//' in file '//ThisFile%Name//'!',f_iWarn,ThisProcedure)
+        CALL ThisFile%Logger%LogMessage('Error in creating group '//cPathName//' in file '//ThisFile%Name//'!',f_iWarn,ThisProcedure)
         RETURN
     END IF
     
@@ -1432,7 +1428,7 @@ CONTAINS
     !First make sure that number of timesteps are the same for all datasets
     IF (ALLOCATED(ThisFile%Datasets)) THEN
         IF (ThisFile%nTime .NE. NTime) THEN
-            CALL ModuleLogger%SetLastMessage('Number of timesteps for all datasets must be the same in file '//ThisFile%Name//'!',f_iFatal,ThisProcedure)
+            CALL ThisFile%Logger%SetLastMessage('Number of timesteps for all datasets must be the same in file '//ThisFile%Name//'!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -1474,7 +1470,7 @@ CONTAINS
             HDims = [NColumns(indx) , NTime]
             CALL H5SCREATE_SIMPLE_F(2,HDims,pDataset%iDataSpaceID,ErrorCode)
             IF (ErrorCode .NE. 0) THEN
-                CALL ModuleLogger%SetLastMessage('Error in creating file data space for '//TRIM(cPathNames(indx))//'!',f_iFatal,ThisProcedure)
+                CALL ThisFile%Logger%SetLastMessage('Error in creating file data space for '//TRIM(cPathNames(indx))//'!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -1483,7 +1479,7 @@ CONTAINS
             iDims(1) = NColumns(indx)
             CALL H5SCREATE_SIMPLE_F(1,iDims,pDataset%iDataSpaceID_OneTimeStep,ErrorCode)
             IF (ErrorCode .NE. 0) THEN
-                CALL ModuleLogger%SetLastMessage('Error in creating one-timestep data space for '//TRIM(cPathNames(indx))//'!',f_iFatal,ThisProcedure)
+                CALL ThisFile%Logger%SetLastMessage('Error in creating one-timestep data space for '//TRIM(cPathNames(indx))//'!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -1491,7 +1487,7 @@ CONTAINS
             iDims(1) = NTime
             CALL H5SCREATE_SIMPLE_F(1,iDims,pDataset%iDataSpaceID_OneColumn,ErrorCode)
             IF (ErrorCode .NE. 0) THEN
-                CALL ModuleLogger%SetLastMessage('Error in creating one-column data space for '//TRIM(cPathNames(indx))//'!',f_iFatal,ThisProcedure)
+                CALL ThisFile%Logger%SetLastMessage('Error in creating one-column data space for '//TRIM(cPathNames(indx))//'!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -1520,13 +1516,13 @@ CONTAINS
                     CALL H5DCREATE_F(ThisFile%FileID,cPathNames(indx),ThisFile%iIntegerTypeID,pDataset%iDataSpaceID,pDataset%iDataSetID,ErrorCode,dcpl_id=iChunkPropID,dapl_id=iAccessPropID)
                         
                 CLASS DEFAULT
-                    CALL ModuleLogger%SetLastMessage('Specified data type cannot be written to file '//ThisFile%Name//'!',f_iFatal,ThisProcedure)
+                    CALL ThisFile%Logger%SetLastMessage('Specified data type cannot be written to file '//ThisFile%Name//'!',f_iFatal,ThisProcedure)
                     iStat = -1
                     RETURN
                     
             END SELECT
             IF (ErrorCode .NE. 0) THEN
-                CALL ModuleLogger%SetLastMessage('Error in creating data set '//cPathNames(indx)//' in file '//ThisFile%Name//'!',f_iFatal,ThisProcedure)
+                CALL ThisFile%Logger%SetLastMessage('Error in creating data set '//cPathNames(indx)//' in file '//ThisFile%Name//'!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -1652,11 +1648,11 @@ CONTAINS
                 CALL H5AWRITE_F(attr_id,ThisFile%iIntegerTypeID,pData,ErrorCode)
                 
             CLASS DEFAULT
-                CALL ModuleLogger%LogMessage('Data type is not supported for attribute definition for file '//ThisFile%Name//'!',f_iWarn,ThisProcedure)
+                CALL ThisFile%Logger%LogMessage('Data type is not supported for attribute definition for file '//ThisFile%Name//'!',f_iWarn,ThisProcedure)
                 RETURN
         END SELECT
         IF (ErrorCode .NE. 0) THEN
-            CALL ModuleLogger%LogMessage('Error in writing attribute '//cAttrName//' to file '//ThisFile%Name//'!',f_iWarn,ThisProcedure)
+            CALL ThisFile%Logger%LogMessage('Error in writing attribute '//cAttrName//' to file '//ThisFile%Name//'!',f_iWarn,ThisProcedure)
             RETURN
         END IF
             
@@ -1712,11 +1708,11 @@ CONTAINS
                 CALL H5AWRITE_F(attr_id,ThisFile%iIntegerTypeID,pData,ErrorCode)
                 
             CLASS DEFAULT
-                CALL ModuleLogger%LogMessage('Data type is not supported for attribute definition for file '//ThisFile%Name//'!',f_iWarn,ThisProcedure)
+                CALL ThisFile%Logger%LogMessage('Data type is not supported for attribute definition for file '//ThisFile%Name//'!',f_iWarn,ThisProcedure)
                 RETURN
         END SELECT
         IF (ErrorCode .NE. 0) THEN
-            CALL ModuleLogger%LogMessage('Error in writing attribute '//cAttrName//' to file '//ThisFile%Name//'!',f_iWarn,ThisProcedure)
+            CALL ThisFile%Logger%LogMessage('Error in writing attribute '//cAttrName//' to file '//ThisFile%Name//'!',f_iWarn,ThisProcedure)
             RETURN
         END IF
         
@@ -1725,7 +1721,7 @@ CONTAINS
         
     !No data to be written is defined
     ELSE
-        CALL ModuleLogger%LogMessage('Either a scalar or an array attribute must be specified!',f_iWarn,ThisProcedure)
+        CALL ThisFile%Logger%LogMessage('Either a scalar or an array attribute must be specified!',f_iWarn,ThisProcedure)
         RETURN
     END IF
        
@@ -1905,7 +1901,7 @@ CONTAINS
     !Create dataset access property list
     CALL H5PCREATE_F(H5P_DATASET_ACCESS_F,iDataAccessPropListID,iErrorCode)
     IF (iErrorCode .NE. 0) THEN
-        CALL ModuleLogger%SetLastMessage('Error in creating dataset access property list!',f_iFatal,ThisProcedure)
+        CALL ThisFile%Logger%SetLastMessage('Error in creating dataset access property list!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -1917,7 +1913,7 @@ CONTAINS
     !Open file
     CALL H5FOPEN_F(cFileName,H5F_ACC_RDWR_F,ThisFile%FileID,iErrorCode,iFileAccessPropListID)  
     IF (iErrorCode .NE. 0) THEN
-        CALL ModuleLogger%SetLastMessage('Error in re-opening HDF5 file '//TRIM(cFileName)//'!',f_iFatal,ThisProcedure)
+        CALL ThisFile%Logger%SetLastMessage('Error in re-opening HDF5 file '//TRIM(cFileName)//'!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -1953,7 +1949,7 @@ CONTAINS
             iChunkCacheSize = MIN(PRODUCT(iChunkDims)*iBytes , f_iMaxCacheSize)
             CALL H5PSET_CHUNK_CACHE_F(iDataAccessPropListID,INT(101,SIZE_T),iChunkCacheSize,1.0,iErrorCode)
             IF (iErrorCode .NE. 0) THEN
-                CALL ModuleLogger%SetLastMessage('Error in setting chunk cache size for dataset '//TRIM(cDatasetNames(indx))//'!',f_iFatal,ThisProcedure) 
+                CALL ThisFile%Logger%SetLastMessage('Error in setting chunk cache size for dataset '//TRIM(cDatasetNames(indx))//'!',f_iFatal,ThisProcedure) 
                 iStat = -1
                 RETURN
             END IF
@@ -2069,10 +2065,5 @@ CONTAINS
 
   END SUBROUTINE RemoveOpenHDFFile
 
-
-  SUBROUTINE HDF5File_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(INOUT) :: Logger
-    ModuleLogger => Logger
-  END SUBROUTINE HDF5File_SetModuleLogger
 
 END MODULE

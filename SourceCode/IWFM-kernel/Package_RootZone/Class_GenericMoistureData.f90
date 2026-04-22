@@ -51,7 +51,6 @@ MODULE Class_GenericMoistureData
   ! --- GENERIC MOISTURE DATA TYPE
   ! -------------------------------------------------------------
   TYPE,EXTENDS(RealTSDataInFileType) :: GenericMoistureDataType
-    TYPE(MessageLoggerType),POINTER :: Logger => NULL()
     REAL(8)             :: Fact  = 1.0               !Conversion factor for generic moisture
     INTEGER,ALLOCATABLE :: iColGenericMoisture(:,:)  !Column number in the generic moisture data file for each (soil,location) combination
     REAL(8),ALLOCATABLE :: rGenericMoisture(:,:)     !Generic moisture read from file for each (soil,location) combination

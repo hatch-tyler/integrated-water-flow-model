@@ -57,7 +57,6 @@ MODULE Class_IrigFracFile
   ! -------------------------------------------------------------
   TYPE,EXTENDS(RealTSDataInFileType) :: IrigFracFileType
     PRIVATE
-    TYPE(MessageLoggerType),POINTER :: Logger => NULL()  !Logger instance
   CONTAINS
     PROCEDURE,PASS :: SetLogger
     PROCEDURE,PASS :: New

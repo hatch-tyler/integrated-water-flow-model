@@ -51,7 +51,6 @@ MODULE Class_RootDepthFracDataFile
   ! --- ROOT DEPTH FRACTION DATA FILE TYPE
   ! -------------------------------------------------------------
   TYPE,EXTENDS(RealTSDataInFileType) :: RootDepthFracDataFileType
-    TYPE(MessageLoggerType),POINTER :: Logger => NULL()
   CONTAINS
       PROCEDURE,PASS :: New
       PROCEDURE,PASS :: Kill
