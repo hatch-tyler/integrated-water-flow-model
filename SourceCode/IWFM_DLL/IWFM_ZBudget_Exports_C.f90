@@ -24,7 +24,7 @@ MODULE IWFM_ZBudget_Exports
   USE,INTRINSIC :: ISO_C_BINDING , ONLY: C_INT                   , &
                                          C_DOUBLE                , &
                                          C_CHAR                  
-  USE MessageLogger              , ONLY: MessageLoggerType       , &
+  USE MessageLogger              , ONLY: DefaultLogger           , &
                                          f_iFatal
   USE TimeSeriesUtilities        , ONLY: TimeStepType            , &
                                          IncrementTimeStamp      , &
@@ -61,24 +61,12 @@ MODULE IWFM_ZBudget_Exports
   ! -------------------------------------------------------------
   INTEGER,PARAMETER                   :: ModNameLen = 22
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'IWFM_ZBudget_Exports::'
-  TYPE(MessageLoggerType),POINTER,PRIVATE :: ModuleLogger => NULL()
 
 
 CONTAINS
 
 
-  ! -------------------------------------------------------------
-  ! --- SET MODULE LOGGER
-  ! -------------------------------------------------------------
-  SUBROUTINE IWFM_ZBudget_Exports_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType),TARGET,INTENT(IN) :: Logger
 
-    ModuleLogger => Logger
-
-  END SUBROUTINE IWFM_ZBudget_Exports_SetModuleLogger
-
-
-    
 
 ! ******************************************************************
 ! ******************************************************************
@@ -112,7 +100,7 @@ CONTAINS
     END IF
 
     !Open file
-    CALL ZBudget%New(ModuleLogger,cFileName_F,iStat)
+    CALL ZBudget%New(DefaultLogger,cFileName_F,iStat)
     IF (iStat .EQ. -1) THEN
         CALL ZBudget%Kill()
         !$OMP END CRITICAL(IWFM_ZBUDGET_MGMT)
@@ -143,7 +131,7 @@ CONTAINS
     CALL ZoneList%Kill()
     
     !Then create the zone list
-    CALL ZoneList%New(ModuleLogger,ZBudget%Header%iNData,ZBudget%Header%lFaceFlows_Defined,ZBudget%SystemData,TRIM(cFileName_F),iStat)
+    CALL ZoneList%New(DefaultLogger,ZBudget%Header%iNData,ZBudget%Header%lFaceFlows_Defined,ZBudget%SystemData,TRIM(cFileName_F),iStat)
     
   END SUBROUTINE IW_ZBudget_GenerateZoneList_FromFile
   
@@ -176,7 +164,7 @@ CONTAINS
     cZoneNamesArray(nZonesWithNames) = cZoneNames_F(iLocArray(nZonesWithNames):iLenZoneNames)
     
     !Then create the zone list
-    CALL ZoneList%New(ModuleLogger,ZBudget%Header%iNData,ZBudget%Header%lFaceFlows_Defined,ZBudget%SystemData,iZExtent,iElems,iLayers,iZones,iZonesWithNames,cZoneNamesArray,iStat)
+    CALL ZoneList%New(DefaultLogger,ZBudget%Header%iNData,ZBudget%Header%lFaceFlows_Defined,ZBudget%SystemData,iZExtent,iElems,iLayers,iZones,iZonesWithNames,cZoneNamesArray,iStat)
     
   END SUBROUTINE IW_ZBudget_GenerateZoneList
 
@@ -624,7 +612,7 @@ CONTAINS
         TYPE IS (ZoneType)
             CALL ZBudget%GetTitleLines(iZone,pZone%Area*rFact_AR,pZone%cName,ZBudget%Header%ASCIIOutput%iLenTitles,cUnit_AR_F,cUnit_VL_F,cTitles_Work)
         CLASS DEFAULT
-            CALL ModuleLogger%SetLastMessage(TRIM(IntToText(iZone)) // ' cannot be located in the zone list!',f_iFatal,ThisProcedure)
+            CALL DefaultLogger%SetLastMessage(TRIM(IntToText(iZone)) // ' cannot be located in the zone list!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
     END SELECT

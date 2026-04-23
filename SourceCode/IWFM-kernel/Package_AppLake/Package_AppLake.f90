@@ -25,6 +25,7 @@ MODULE Package_AppLake
                                           IWFMKernelVersion
   USE MessageLogger               , ONLY: MessageArray            , &
                                           MessageLoggerType       , &
+                                          DefaultLogger           , &
                                           f_iFatal
   USE IOInterface                 , ONLY: GenericFileType         , &
                                           f_iUNKNOWN
@@ -39,12 +40,9 @@ MODULE Package_AppLake
   USE Package_PrecipitationET     , ONLY: ETType                  , &
                                           PrecipitationType
   USE Class_BaseAppLake           , ONLY: BaseAppLakeType                  , &
-                                          BaseAppLake_SetModuleLogger      , &
                                           f_iBudgetType_Lake
-  USE Class_AppLake_v40           , ONLY: AppLake_v40_Type                 , &
-                                          AppLake_v40_SetModuleLogger
-  USE Class_AppLake_v50           , ONLY: AppLake_v50_Type                 , &
-                                          AppLake_v50_SetModuleLogger
+  USE Class_AppLake_v40           , ONLY: AppLake_v40_Type
+  USE Class_AppLake_v50           , ONLY: AppLake_v50_Type
   USE Package_Budget              , ONLY: BudgetType
   IMPLICIT NONE
 
@@ -66,10 +64,6 @@ MODULE Package_AppLake
   ! -------------------------------------------------------------
   PRIVATE
   PUBLIC :: AppLakeType                         , &
-            AppLake_SetModuleLogger            , &
-            BaseAppLake_SetModuleLogger        , &
-            AppLake_v40_SetModuleLogger        , &
-            AppLake_v50_SetModuleLogger        , &
             f_iBudgetType_Lake
   
   
@@ -134,12 +128,6 @@ MODULE Package_AppLake
   ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
-  ! -------------------------------------------------------------
-  ! --- MODULE-LEVEL LOGGER
-  ! -------------------------------------------------------------
-  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
-
-
   INTEGER,PARAMETER                   :: ModNameLen = 17
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'Package_AppLake::'
   
@@ -149,13 +137,6 @@ MODULE Package_AppLake
 CONTAINS
 
 
-  ! -------------------------------------------------------------
-  ! --- SET MODULE-LEVEL LOGGER
-  ! -------------------------------------------------------------
-  SUBROUTINE AppLake_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(INOUT) :: Logger
-    ModuleLogger => Logger
-  END SUBROUTINE AppLake_SetModuleLogger
 
 
 
@@ -192,7 +173,7 @@ CONTAINS
     iStat = 0
 
     !Set Logger
-    AppLake%Logger => ModuleLogger
+    AppLake%Logger => DefaultLogger
 
     !Return if no filename is defined
     IF (cFileName .EQ. '') RETURN
@@ -258,7 +239,7 @@ CONTAINS
     iStat = 0
 
     !Set Logger
-    AppLake%Logger => ModuleLogger
+    AppLake%Logger => DefaultLogger
 
     !Read version number from binary file
     CALL BinFile%ReadData(iVersion,iStat)
@@ -402,7 +383,7 @@ CONTAINS
     INTEGER                      :: iVersion,ErrorCode
     
     !Set Logger
-    AppLake%Logger => ModuleLogger
+    AppLake%Logger => DefaultLogger
 
     !If a binary file is supplied, read the flag to see if lake are simulated
     IF (BinFile%iGetFileType() .NE. f_iUNKNOWN) THEN
@@ -478,7 +459,7 @@ CONTAINS
     iStat = 0
 
     !Set Logger
-    AppLake%Logger => ModuleLogger
+    AppLake%Logger => DefaultLogger
 
     !Return if a Simulation filename is not specified
     IF (cSimFileName .EQ. ''  .OR.  cPPFileName .EQ. '') RETURN
@@ -865,12 +846,12 @@ CONTAINS
     iStat = 0
     
     !Set Logger on local AppLake and allocate base lake type as v40 type just to allocate
-    AppLake%Logger => ModuleLogger
+    AppLake%Logger => DefaultLogger
     ALLOCATE(AppLake_v40_Type :: AppLake%Me)
     AppLake%Me%Logger => AppLake%Logger
     
     !Get the lake elements
-    CALL AppLake%Me%GetLakeElements_FromFile(cFileName,ModuleLogger,iLakeElems,iStat)
+    CALL AppLake%Me%GetLakeElements_FromFile(cFileName,DefaultLogger,iLakeElems,iStat)
     
     !Kill AppLake
     CALL AppLake%Kill()

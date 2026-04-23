@@ -23,6 +23,7 @@
 MODULE Class_AppSmallWatershed_v41
   USE MessageLogger               , ONLY: MessageArray                  , &
                                           MessageLoggerType             , &
+                                          DefaultLogger                 , &
                                           f_iFatal
   USE IOInterface                 , ONLY: GenericFileType                   
   USE GeneralUtilities            , ONLY: StripTextUntilCharacter       , &
@@ -58,8 +59,7 @@ MODULE Class_AppSmallWatershed_v41
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: AppSmallWatershed_v41_Type                  , &
-            AppSWShed_v41_SetModuleLogger
+  PUBLIC :: AppSmallWatershed_v41_Type
   
   
   ! -------------------------------------------------------------
@@ -78,12 +78,6 @@ MODULE Class_AppSmallWatershed_v41
   ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
-  ! -------------------------------------------------------------
-  ! --- MODULE-LEVEL LOGGER
-  ! -------------------------------------------------------------
-  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
-
-
   INTEGER,PARAMETER                      :: f_iModNameLen = 29
   CHARACTER(LEN=f_iModNameLen),PARAMETER :: f_cModName    = 'Class_AppSmallWatershed_v41::'
   CHARACTER(LEN=3),PARAMETER             :: f_cVersion    = '4.1'
@@ -93,13 +87,6 @@ MODULE Class_AppSmallWatershed_v41
 CONTAINS
 
 
-  ! -------------------------------------------------------------
-  ! --- SET MODULE-LEVEL LOGGER
-  ! -------------------------------------------------------------
-  SUBROUTINE AppSWShed_v41_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(INOUT) :: Logger
-    ModuleLogger => Logger
-  END SUBROUTINE AppSWShed_v41_SetModuleLogger
 
 
 
@@ -139,7 +126,7 @@ CONTAINS
     INTEGER,ALLOCATABLE             :: iSWShedIDs(:)
     
     !Set logger from module-level pointer (abstract interface constrains signature)
-    AppSWShed%Logger => ModuleLogger
+    AppSWShed%Logger => DefaultLogger
 
     !Initialize
     iStat      = 0

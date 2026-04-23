@@ -37,15 +37,11 @@ PROGRAM ZBudget
   USE IWFM_Version      , ONLY: IWFMVersion
   USE ZBudgetControls   , ONLY: ProcessZBudgets       , &
                                 EndExecution
-  USE Package_Model     , ONLY: IWFM_InitAllModuleLoggers
   IMPLICIT NONE
 
   !Local variables
   TYPE(GenericFileType) :: StandardOutputFile
   INTEGER               :: iStat
-
-  !Initialize all module-level loggers before any I/O
-  CALL IWFM_InitAllModuleLoggers()
 
   !Start timer
   CALL DefaultTimer%Start()

@@ -24,7 +24,7 @@ MODULE IWFM_Misc_Exports
   USE,INTRINSIC :: ISO_C_BINDING  , ONLY: C_INT                                    , &
                                           C_CHAR                                   , &
                                           C_DOUBLE
-  USE MessageLogger               , ONLY: MessageLoggerType                        , &
+  USE MessageLogger               , ONLY: DefaultLogger                            , &
                                           SetLogFileName                           , &
                                           KillLogFile                              , &
                                           GetLastMessage                           , &
@@ -108,24 +108,9 @@ MODULE IWFM_Misc_Exports
   PUBLIC
 
 
-  ! -------------------------------------------------------------
-  ! --- MISC. DATA
-  ! -------------------------------------------------------------
-  TYPE(MessageLoggerType),POINTER,PRIVATE :: ModuleLogger => NULL()
 
 
 CONTAINS
-
-
-  ! -------------------------------------------------------------
-  ! --- SET MODULE LOGGER
-  ! -------------------------------------------------------------
-  SUBROUTINE IWFM_Misc_Exports_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType),TARGET,INTENT(IN) :: Logger
-
-    ModuleLogger => Logger
-
-  END SUBROUTINE IWFM_Misc_Exports_SetModuleLogger
 
 
     
@@ -1124,7 +1109,7 @@ CONTAINS
     
     !Make sure interval is recognized
     IF (IsTimeIntervalValid(cInterval_F) .EQ. 0) THEN
-        CALL ModuleLogger%SetLastMessage(cInterval_F // ' is not a recognized time interval!',f_iFatal,'IWFM_DLL')
+        CALL DefaultLogger%SetLastMessage(cInterval_F // ' is not a recognized time interval!',f_iFatal,'IWFM_DLL')
         iStat = -1
         RETURN
     END IF

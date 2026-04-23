@@ -24,6 +24,7 @@ MODULE Class_AppLake_v40
   USE IWFM_Kernel_Version          , ONLY: ReadVersion            
   USE MessageLogger                , ONLY: MessageArray                  , &
                                            MessageLoggerType             , &
+                                           DefaultLogger                 , &
                                            f_iFatal
   USE GeneralUtilities             , ONLY: StripTextUntilCharacter       , &
                                            IntToText                     , &
@@ -77,8 +78,7 @@ MODULE Class_AppLake_v40
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: AppLake_v40_Type                              , &
-            AppLake_v40_SetModuleLogger
+  PUBLIC :: AppLake_v40_Type
 
 
   ! -------------------------------------------------------------
@@ -104,12 +104,6 @@ MODULE Class_AppLake_v40
   ! -------------------------------------------------------------
   ! --- MISC. DATA 
   ! -------------------------------------------------------------
-  ! -------------------------------------------------------------
-  ! --- MODULE-LEVEL LOGGER
-  ! -------------------------------------------------------------
-  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
-
-
   INTEGER,PARAMETER                   :: ModNameLen = 19
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'Class_AppLake_v40::'
 
@@ -119,13 +113,6 @@ MODULE Class_AppLake_v40
 CONTAINS
 
 
-  ! -------------------------------------------------------------
-  ! --- SET MODULE-LEVEL LOGGER
-  ! -------------------------------------------------------------
-  SUBROUTINE AppLake_v40_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(INOUT) :: Logger
-    ModuleLogger => Logger
-  END SUBROUTINE AppLake_v40_SetModuleLogger
 
 
 
@@ -167,7 +154,7 @@ CONTAINS
     iElemIDs = AppGrid%AppElement%ID
 
     !Set Logger (INTENT(OUT) resets pointer, restore from module-level)
-    AppLake%Logger => ModuleLogger
+    AppLake%Logger => DefaultLogger
 
     !Return if filename is empty
     IF (cFileName .EQ. '') RETURN
@@ -318,7 +305,7 @@ CONTAINS
     iStat = 0
 
     !Set Logger (INTENT(OUT) resets pointer, restore from module-level)
-    AppLake%Logger => ModuleLogger
+    AppLake%Logger => DefaultLogger
 
     !Read the preprocessed data for lakes
     CALL AppLake%ReadPreprocessedData(BinFile,iStat)
@@ -526,7 +513,7 @@ CONTAINS
     iStat = 0
 
     !Set Logger (INTENT(OUT) resets pointer, restore from module-level)
-    AppLake%Logger => ModuleLogger
+    AppLake%Logger => DefaultLogger
 
     !Read the preprocessed data for lakes
     CALL AppLake%ReadPreprocessedData(BinFile,iStat)
@@ -577,7 +564,7 @@ CONTAINS
     iStat = 0
 
     !Set Logger (INTENT(OUT) resets pointer, restore from module-level)
-    AppLake%Logger => ModuleLogger
+    AppLake%Logger => DefaultLogger
 
     !Instantiate the static components of the AppLake data
     CALL AppLake%SetStaticComponent(cPPFileName,Stratigraphy,AppGrid,StrmLakeConnector,LakeGWConnector,iStat)

@@ -71,8 +71,7 @@ PROGRAM IWFM_f2_MultiModel
                                      f_iFlowDest_Lake        , &
                                      f_iLocationType_Bypass
   USE IWFM_Version           , ONLY: IWFMVersion                                      
-  USE Package_Model          , ONLY: ModelType               , &
-                                     IWFM_InitAllModuleLoggers
+  USE Package_Model          , ONLY: ModelType
   USE Coarray_Debugging
   IMPLICIT NONE
   
@@ -314,9 +313,6 @@ CONTAINS
     
     !Initialize
     iStat = 0
-
-    !Initialize all module-level loggers before any I/O
-    CALL IWFM_InitAllModuleLoggers()
 
     !Assign Master
     IF (THIS_IMAGE() .EQ. 1) lMaster = .TRUE.

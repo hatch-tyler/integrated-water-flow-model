@@ -24,6 +24,7 @@ MODULE Class_GWZBudget
   USE IWFM_Kernel_Version         , ONLY: IWFMKernelVersion
   USE MessageLogger               , ONLY: MessageLoggerType         , &
                                           MessageArray              , &
+                                          DefaultLogger             , &
                                           f_iFatal
   USE GeneralUtilities            , ONLY: IntToText                 , &
                                           AllocArray                , &
@@ -74,8 +75,6 @@ MODULE Class_GWZBudget
                                           f_iSWShedPercFlowBCID
   IMPLICIT NONE
 
-  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
-  
   
   
 ! ******************************************************************
@@ -130,8 +129,7 @@ MODULE Class_GWZBudget
   ! -------------------------------------------------------------
   PRIVATE
   PUBLIC :: GWZBudgetType     , &
-            f_iZBudgetType_GW , &
-            GWZBudget_SetModuleLogger
+            f_iZBudgetType_GW
             
   
 
@@ -455,7 +453,7 @@ CONTAINS
     CHARACTER(LEN=1)                              :: cZoneNames(0)
     
     !Compile zone information
-    CALL ZoneList%New(ModuleLogger,ZBudget%Header%iNData,ZBudget%Header%lFaceFlows_Defined,ZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)
+    CALL ZoneList%New(DefaultLogger,ZBudget%Header%iNData,ZBudget%Header%lFaceFlows_Defined,ZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)
     IF (iStat .NE. 0) RETURN
     
     !Get the sub-data; first column will be Time so that will be eliminated later
@@ -493,7 +491,7 @@ CONTAINS
     CHARACTER(LEN=f_iColumnHeaderLen),ALLOCATABLE :: cColTitles_Local(:)
     
     !Compile zone information
-    CALL ZoneList%New(ModuleLogger,ZBudget%Header%iNData,ZBudget%Header%lFaceFlows_Defined,ZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)
+    CALL ZoneList%New(DefaultLogger,ZBudget%Header%iNData,ZBudget%Header%lFaceFlows_Defined,ZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)
     IF (iStat .NE. 0) RETURN
     
     !Get the undiversified column titles; first column will be Time so that will be eliminated later
@@ -534,7 +532,7 @@ CONTAINS
     
     IF (GWZBudget%IsOutfileDefined()) THEN
         !Generate zone list
-        CALL ZoneList%New(ModuleLogger,GWZBudget%Header%iNData,GWZBudget%Header%lFaceFlows_Defined,GWZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)
+        CALL ZoneList%New(DefaultLogger,GWZBudget%Header%iNData,GWZBudget%Header%lFaceFlows_Defined,GWZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)
         IF (iStat .NE. 0) RETURN
         
         !Retrieve data
@@ -637,7 +635,7 @@ CONTAINS
     
     IF (GWZBudget%IsOutfileDefined()) THEN
         !Generate zone list
-        CALL ZoneList%New(ModuleLogger,GWZBudget%Header%iNData,GWZBudget%Header%lFaceFlows_Defined,GWZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)
+        CALL ZoneList%New(DefaultLogger,GWZBudget%Header%iNData,GWZBudget%Header%lFaceFlows_Defined,GWZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)
         IF (iStat .NE. 0) RETURN
         
         !Retrieve data
@@ -723,7 +721,7 @@ CONTAINS
     END IF
             
     !Generate zone list
-    CALL ZoneList%New(ModuleLogger,GWZBudget%Header%iNData,GWZBudget%Header%lFaceFlows_Defined,GWZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    CALL ZoneList%New(DefaultLogger,GWZBudget%Header%iNData,GWZBudget%Header%lFaceFlows_Defined,GWZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)  ;  IF (iStat .EQ. -1) RETURN
     
     !Read data
     CALL GWZBudget%ReadData(ZoneList,iZoneID,iCols,cInterval,cBeginDate,cEndDate,rFactAR,rFactVL,iDataTypes,inActualOutput,rValues,iStat)  ;  IF (iStat .EQ. -1) RETURN
@@ -891,7 +889,7 @@ CONTAINS
     Header%lComputeError = .TRUE.
     
     !Compile the flow types
-    CALL ProcessFlowTypes(TimeStep%DeltaT,lDeepPerc,lRootZone_Defined,AppGW,AppStream,AppLake,AppSWShed,StrmGWConnector,AppGrid,Stratigraphy,Header,ModelFlowTypes,iStat,ModuleLogger)
+    CALL ProcessFlowTypes(TimeStep%DeltaT,lDeepPerc,lRootZone_Defined,AppGW,AppStream,AppLake,AppSWShed,StrmGWConnector,AppGrid,Stratigraphy,Header,ModelFlowTypes,iStat,DefaultLogger)
     IF (iStat .EQ. -1) RETURN
         
     !Number of all flow types and flow names
@@ -957,7 +955,7 @@ CONTAINS
     TYPE(ZBudgetHeaderType)                :: Header
     INTEGER,ALLOCATABLE                    :: ModelFlowTypes(:)
     INTEGER,INTENT(OUT)                    :: iStat
-    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT) :: Logger
     
     !Local variables
     CHARACTER(LEN=ModNameLen+16) :: ThisProcedure = ModName // 'ProcessFlowTypes'
@@ -1828,10 +1826,5 @@ CONTAINS
            
   END SUBROUTINE ComputeVelocity
 
-
-  SUBROUTINE GWZBudget_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(INOUT) :: Logger
-    ModuleLogger => Logger
-  END SUBROUTINE GWZBudget_SetModuleLogger
 
 END MODULE

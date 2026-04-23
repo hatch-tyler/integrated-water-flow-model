@@ -24,6 +24,7 @@ MODULE Class_BaseAppLake
    USE IWFM_Kernel_Version         , ONLY: ReadVersion
    USE MessageLogger               , ONLY: MessageArray            , &
                                            MessageLoggerType       , &
+                                           DefaultLogger           , &
                                            f_iFatal
    USE GeneralUtilities            , ONLY: ArrangeText             , &
                                            UpperCase               , &
@@ -84,7 +85,6 @@ MODULE Class_BaseAppLake
   ! -------------------------------------------------------------
   PRIVATE
   PUBLIC :: BaseAppLakeType                  , &
-            BaseAppLake_SetModuleLogger     , &
             PrepareLakeBudgetHeader         , &
             GenerateRatingTable             , &
             f_iBudgetType_Lake
@@ -182,12 +182,6 @@ MODULE Class_BaseAppLake
   ! -------------------------------------------------------------
   ! --- MISC. DATA 
   ! -------------------------------------------------------------
-  ! -------------------------------------------------------------
-  ! --- MODULE-LEVEL LOGGER
-  ! -------------------------------------------------------------
-  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
-
-
   INTEGER,PARAMETER                   :: ModNameLen = 19
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'Class_BaseAppLake::'
 
@@ -312,13 +306,6 @@ MODULE Class_BaseAppLake
 CONTAINS
 
 
-  ! -------------------------------------------------------------
-  ! --- SET MODULE-LEVEL LOGGER
-  ! -------------------------------------------------------------
-  SUBROUTINE BaseAppLake_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(INOUT) :: Logger
-    ModuleLogger => Logger
-  END SUBROUTINE BaseAppLake_SetModuleLogger
 
 
 
@@ -699,8 +686,8 @@ CONTAINS
   ! --- GET LAKE ELEMENTS FROM FILE
   ! -------------------------------------------------------------
   SUBROUTINE GetLakeElements_FromFile(cFileName,Logger,iListElems,iStat)
-    CHARACTER(LEN=*),INTENT(IN)                :: cFileName
-    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
+    CHARACTER(LEN=*),INTENT(IN)                     :: cFileName
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT)    :: Logger
     INTEGER,ALLOCATABLE                        :: iListElems(:)
     INTEGER,INTENT(OUT)                        :: iStat
 
@@ -890,8 +877,8 @@ CONTAINS
     !Initailize
     iStat = 0
 
-    !Set Logger (INTENT(OUT) resets pointer, restore from module-level)
-    AppLake%Logger => ModuleLogger
+    !Set Logger (INTENT(OUT) resets pointer, restore from DefaultLogger)
+    AppLake%Logger => DefaultLogger
     
     !Read number of lakes modeled
     CALL InFile%ReadData(NLakes,iStat)  ;  IF (iStat .EQ. -1) RETURN
@@ -1478,7 +1465,7 @@ CONTAINS
     END DO  
         
     !Instantiate rating table
-    CALL RatingTable%New(ModuleLogger,Counter+1,HLake,VLake,iStat)        
+    CALL RatingTable%New(DefaultLogger,Counter+1,HLake,VLake,iStat)        
 
   END SUBROUTINE GenerateRatingTable  
 

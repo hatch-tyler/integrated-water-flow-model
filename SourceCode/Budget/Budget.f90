@@ -33,15 +33,11 @@ PROGRAM BUDGET
   USE ProgramTimer     , ONLY: DefaultTimer     , &
                                ProgramTimerType
   USE IOInterface
-  USE Package_Model    , ONLY: IWFM_InitAllModuleLoggers
   IMPLICIT NONE
 
   !Local variables
   TYPE(GenericFileType) :: DummyFile !Dummy file to re-set the standard output file
   INTEGER               :: iStat
-
-  !Initialize all module-level loggers before any I/O
-  CALL IWFM_InitAllModuleLoggers()
 
   !Start CPU timer
   CALL DefaultTimer%Start()

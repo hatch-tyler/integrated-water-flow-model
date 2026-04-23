@@ -25,6 +25,7 @@ MODULE Package_AppStream
                                           IWFMKernelVersion
   USE MessageLogger               , ONLY: MessageArray                                     , &
                                           MessageLoggerType                                , &
+                                          DefaultLogger                                    , &
                                           f_iFatal                                         , &
                                           f_iInfo                                          , &
                                           f_iWarn                                          , &
@@ -249,11 +250,6 @@ MODULE Package_AppStream
   ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
-  ! -------------------------------------------------------------
-  ! --- MODULE-LEVEL LOGGER
-  ! -------------------------------------------------------------
-  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
-
   INTEGER,PARAMETER                   :: ModNameLen = 19
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'Package_AppStream::'
 
@@ -399,7 +395,7 @@ CONTAINS
     
     !Initailize
     iStat = 0
-    IF (.NOT. ASSOCIATED(AppStream%Logger)) AppStream%Logger => ModuleLogger
+    IF (.NOT. ASSOCIATED(AppStream%Logger)) AppStream%Logger => DefaultLogger
 
     !Return if no filename is defined
     IF (cFileName .EQ. '') THEN

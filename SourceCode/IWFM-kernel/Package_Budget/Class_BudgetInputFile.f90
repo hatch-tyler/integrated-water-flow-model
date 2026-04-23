@@ -35,8 +35,6 @@ MODULE Class_BudgetInputFile
   USE Budget_Parameters
   IMPLICIT NONE
 
-  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
-  
   
 
 ! ******************************************************************
@@ -55,8 +53,7 @@ MODULE Class_BudgetInputFile
   PRIVATE
   PUBLIC :: BudgetInputFileType               , &
             LocationDataType                  , &
-            BudgetHeaderType                  , &
-            BudgetInputFile_SetModuleLogger
+            BudgetHeaderType
   
   
   ! -------------------------------------------------------------
@@ -383,7 +380,7 @@ CONTAINS
     INTEGER,INTENT(OUT)                :: iStat
     
     IF (InputFile%iGetFileType() .EQ. f_iHDF) THEN
-        CALL ReadHeader_FromHDFFile(InputFile,Header,iStat,ModuleLogger)
+        CALL ReadHeader_FromHDFFile(InputFile,Header,iStat,InputFile%Logger)
     ELSE
         CALL ReadHeader_FromBinFile(InputFile,Header,iStat)
     END IF
@@ -619,10 +616,5 @@ CONTAINS
 
   END SUBROUTINE ReadHeader_FromBinFile
 
-
-  SUBROUTINE BudgetInputFile_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(INOUT) :: Logger
-    ModuleLogger => Logger
-  END SUBROUTINE BudgetInputFile_SetModuleLogger
 
 END MODULE

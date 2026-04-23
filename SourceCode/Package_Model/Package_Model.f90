@@ -75,9 +75,7 @@ MODULE Package_Model
                                           f_iUNKNOWN                                     
   USE IWFM_Kernel_Version         , ONLY: IWFMKernelVersion
   USE IWFM_Version                , ONLY: IWFMVersion
-  ! I/O layer SetModuleLogger calls removed - Logger now propagated via type components
-  USE Class_BudgetInputFile       , ONLY: BudgetInputFile_SetModuleLogger
-  USE Class_GWZBudget             , ONLY: GWZBudget_SetModuleLogger
+  ! Logger propagated via Model%Logger type component (no module-level logger pointer)
   USE Package_Misc                , ONLY: FlowDestinationType                         , &
                                           SolverDataType                              , &
                                           Print_Screen                                , &
@@ -134,10 +132,6 @@ MODULE Package_Model
                                           f_iBudgetType_StrmReach                     , &
                                           f_iBudgetType_DiverDetail        
   USE Package_AppLake             , ONLY: AppLakeType                                 , &
-                                          AppLake_SetModuleLogger                     , &
-                                          BaseAppLake_SetModuleLogger                 , &
-                                          AppLake_v40_SetModuleLogger                 , &
-                                          AppLake_v50_SetModuleLogger                 , &
                                           f_iBudgetType_Lake
   USE Package_RootZone            , ONLY: RootZoneType                                , &
                                           f_iBudgetType_RootZone                      , &
@@ -153,8 +147,6 @@ MODULE Package_Model
                                           f_iZBudgetType_UnsatZone             
   USE Package_AppSmallWatershed   , ONLY: AppSmallWatershedType                       , &
                                           f_iBudgetType_SWShed
-  USE Class_AppSmallWatershed_v40 , ONLY: AppSWShed_v40_SetModuleLogger
-  USE Class_AppSmallWatershed_v41 , ONLY: AppSWShed_v41_SetModuleLogger
   USE Package_ComponentConnectors , ONLY: StrmLakeConnectorType                       , &
                                           StrmGWConnectorType                         , &
                                           LakeGWConnectorType                         , &
@@ -199,8 +191,6 @@ MODULE Package_Model
   ! -------------------------------------------------------------
   PRIVATE
   PUBLIC :: ModelType                    , &
-            PackageModel_SetModuleLogger , &
-            IWFM_InitAllModuleLoggers    , &
             nPP_InputFiles               , &
             PP_BinaryOutputFileID        , &    
             PP_ElementConfigFileID       , &    
@@ -567,18 +557,14 @@ MODULE Package_Model
   INTEGER,PARAMETER                   :: ModNameLen = 15
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'Package_Model::'
 
-  ! --- MODULE-LEVEL LOGGER (instance-based, replaces global wrapper calls post-construction)
-  TYPE(MessageLoggerType), POINTER, PRIVATE :: ModuleLogger => NULL()
-
-
-
 CONTAINS
 
 
   ! -------------------------------------------------------------
   ! --- LOG INITIALIZATION SECTION TIME (performance instrumentation)
   ! -------------------------------------------------------------
-  SUBROUTINE LogInitTime(cSection, iStart, iEnd)
+  SUBROUTINE LogInitTime(Logger, cSection, iStart, iEnd)
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT) :: Logger
     CHARACTER(LEN=*), INTENT(IN) :: cSection
     INTEGER, INTENT(IN)          :: iStart(8), iEnd(8)
 
@@ -594,50 +580,8 @@ CONTAINS
     IF (rElapsed < 0.0d0) rElapsed = rElapsed + 86400.0d0  ! Handle midnight rollover
 
     WRITE(cMsg, '(A,A,A,F8.3,A)') '  [PERF] ', TRIM(cSection), ': ', rElapsed, ' sec'
-    IF (ASSOCIATED(ModuleLogger)) THEN
-      CALL ModuleLogger%LogMessage(TRIM(cMsg), f_iInfo, '')
-    ELSE
-      CALL ModuleLogger%LogMessage(TRIM(cMsg), f_iInfo, '')
-    END IF
+    CALL Logger%LogMessage(TRIM(cMsg), f_iInfo, '')
   END SUBROUTINE LogInitTime
-
-
-  ! -------------------------------------------------------------
-  ! --- SET MODULE-LEVEL LOGGER
-  ! -------------------------------------------------------------
-  SUBROUTINE PackageModel_SetModuleLogger(Logger)
-    TYPE(MessageLoggerType), TARGET, INTENT(INOUT) :: Logger
-    ModuleLogger => Logger
-  END SUBROUTINE PackageModel_SetModuleLogger
-
-
-  SUBROUTINE IWFM_InitAllModuleLoggers()
-    CALL PackageModel_SetModuleLogger(DefaultLogger)
-
-
-
-
-
-
-
-    CALL AppLake_SetModuleLogger(DefaultLogger)
-    CALL BaseAppLake_SetModuleLogger(DefaultLogger)
-    CALL AppLake_v40_SetModuleLogger(DefaultLogger)
-    CALL AppLake_v50_SetModuleLogger(DefaultLogger)
-    CALL AppSWShed_v40_SetModuleLogger(DefaultLogger)
-    CALL AppSWShed_v41_SetModuleLogger(DefaultLogger)
-
-    ! I/O layer Logger now propagated via type components (BaseFileType%Logger, GenericFileType%Logger)
-    CALL BudgetInputFile_SetModuleLogger(DefaultLogger)
-
-    CALL GWZBudget_SetModuleLogger(DefaultLogger)
-
-
-
-
-  END SUBROUTINE IWFM_InitAllModuleLoggers
-
-
 
 
 ! ******************************************************************
@@ -654,7 +598,7 @@ CONTAINS
   ! --- NEW MODEL (STATIC COMPONENT)
   ! -------------------------------------------------------------
   SUBROUTINE SetStaticComponent(Model,cPPFilename,lRoutedStreams,lPrintBinFile,iStat)
-    CLASS(ModelType),INTENT(OUT) :: Model
+    CLASS(ModelType),TARGET,INTENT(OUT) :: Model
     CHARACTER(LEN=*),INTENT(IN)  :: cPPFileName
     LOGICAL,INTENT(IN)           :: lRoutedStreams,lPrintBinFile
     INTEGER,INTENT(OUT)          :: iStat
@@ -692,7 +636,7 @@ CONTAINS
     DO indx=1,SIZE(RequiredFiles)
         FileID = RequiredFiles(indx)
         IF (ProjectFileNames(FileID) .EQ. '') THEN
-            CALL ModuleLogger%SetLastMessage(TRIM(FileDescriptor(FileID))//' file is missing',f_iFatal,ThisProcedure)
+            CALL Model%Logger%SetLastMessage(TRIM(FileDescriptor(FileID))//' file is missing',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -705,20 +649,20 @@ CONTAINS
     END IF
 
     !Print out project titles and filenames
-    IF (IsLogFileDefined()) CALL PrintProjectTitleAndFiles(ProjectTitles,ProjectFileNames)
+    IF (IsLogFileDefined()) CALL PrintProjectTitleAndFiles(Model%Logger,ProjectTitles,ProjectFileNames)
     
     !Set the application grid
-    CALL Model%AppGrid%New(ModuleLogger, ProjectFileNames(PP_NodeFileID) , ProjectFileNames(PP_ElementConfigFileID) , iStat)  ;  IF (iStat .EQ. -1) RETURN
+    CALL Model%AppGrid%New(Model%Logger, ProjectFileNames(PP_NodeFileID) , ProjectFileNames(PP_ElementConfigFileID) , iStat)  ;  IF (iStat .EQ. -1) RETURN
     NNodes = Model%AppGrid%NNodes
 
     !Set the stratigraphy
-    CALL Model%Stratigraphy%New(ModuleLogger, NNodes , Model%AppGrid%AppNode%ID , ProjectFileNames(PP_StratigraphyFileID),iStat)  ;  IF (iStat .EQ. -1) RETURN  
+    CALL Model%Stratigraphy%New(Model%Logger, NNodes , Model%AppGrid%AppNode%ID , ProjectFileNames(PP_StratigraphyFileID),iStat)  ;  IF (iStat .EQ. -1) RETURN  
     NLayers = Model%Stratigraphy%NLayers
    
     !Set the application streams
     lWSA = .FALSE.
-    Model%StrmGWConnector%Logger => ModuleLogger
-    CALL Model%AppStream%New(ModuleLogger,ProjectFileNames(PP_StreamDataFileID),Model%AppGrid,Model%Stratigraphy,lRoutedStreams,lWSA,Model%StrmGWConnector,Model%StrmLakeConnector,iStat)
+    Model%StrmGWConnector%Logger => Model%Logger
+    CALL Model%AppStream%New(Model%Logger,ProjectFileNames(PP_StreamDataFileID),Model%AppGrid,Model%Stratigraphy,lRoutedStreams,lWSA,Model%StrmGWConnector,Model%StrmLakeConnector,iStat)
     IF (iStat .EQ. -1) RETURN
     NStrmNodes = Model%AppStream%GetNStrmNodes()
     ALLOCATE (iStrmNodeIDs(NStrmNodes))
@@ -744,7 +688,7 @@ CONTAINS
         IF (iStat .EQ. -1) RETURN
     END IF
     CALL Model%AppLake%RegisterWithMatrix(Model%Matrix,iStat)  ;  IF (iStat .EQ. -1) RETURN
-    CALL Model%AppGW%RegisterWithMatrix(ModuleLogger,Model%AppGrid,Model%Stratigraphy,Model%Matrix,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    CALL Model%AppGW%RegisterWithMatrix(Model%Logger,Model%AppGrid,Model%Stratigraphy,Model%Matrix,iStat)  ;  IF (iStat .EQ. -1) RETURN
     IF (lRoutedStreams) THEN
         CALL Model%AppStream%GetStrmConnectivity(StrmConnectivity)
         CALL Model%StrmGWConnector%RegisterWithMatrix(StrmConnectivity,Model%AppGrid,Model%Matrix,iStat)
@@ -772,7 +716,7 @@ CONTAINS
   ! --- NEW MODEL (STATIC COMPONENT) WITH ALL INFO SUPPLIED BY DUMMY ARGUMENTS
   ! -------------------------------------------------------------
   SUBROUTINE SetStaticComponent_AllDataSupplied(Model,cProjectTitles,cPP_FileNames,KOUT,KDEB,FACTLTOU,UNITLTOU,FACTAROU,UNITAROU,lRoutedStreams,lPrintBinFile,iStat)
-    CLASS(ModelType)            :: Model
+    CLASS(ModelType),TARGET     :: Model
     CHARACTER(LEN=*),INTENT(IN) :: cProjectTitles(3),cPP_FileNames(nPP_InputFiles),UNITLTOU,UNITAROU
     INTEGER,INTENT(IN)          :: KOUT,KDEB
     REAL(8),INTENT(IN)          :: FACTLTOU,FACTAROU
@@ -803,7 +747,7 @@ CONTAINS
     DO indx=1,SIZE(RequiredFiles)
         FileID = RequiredFiles(indx)
         IF (cPP_FileNames(FileID) .EQ. '') THEN
-            CALL ModuleLogger%SetLastMessage(TRIM(FileDescriptor(FileID))//' file is missing',f_iFatal,ThisProcedure)
+            CALL Model%Logger%SetLastMessage(TRIM(FileDescriptor(FileID))//' file is missing',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -816,20 +760,20 @@ CONTAINS
     END IF
 
     !Print out project titles and filenames
-    IF (IsLogFileDefined()) CALL PrintProjectTitleAndFiles(cProjectTitles,cPP_FileNames)
+    IF (IsLogFileDefined()) CALL PrintProjectTitleAndFiles(Model%Logger,cProjectTitles,cPP_FileNames)
     
     !Set the application grid
-    CALL Model%AppGrid%New(ModuleLogger, cPP_FileNames(PP_NodeFileID) , cPP_FileNames(PP_ElementConfigFileID) , iStat)  ;  IF (iStat .EQ. -1) RETURN
+    CALL Model%AppGrid%New(Model%Logger, cPP_FileNames(PP_NodeFileID) , cPP_FileNames(PP_ElementConfigFileID) , iStat)  ;  IF (iStat .EQ. -1) RETURN
     NNodes = Model%AppGrid%NNodes
 
     !Set the stratigraphy
-    CALL Model%Stratigraphy%New(ModuleLogger, NNodes , Model%AppGrid%AppNode%ID , cPP_FileNames(PP_StratigraphyFileID),iStat)  ;  IF (iStat .EQ. -1) RETURN
+    CALL Model%Stratigraphy%New(Model%Logger, NNodes , Model%AppGrid%AppNode%ID , cPP_FileNames(PP_StratigraphyFileID),iStat)  ;  IF (iStat .EQ. -1) RETURN
     NLayers = Model%Stratigraphy%NLayers
    
     !Set the application streams
     lWSA = .FALSE.
-    Model%StrmGWConnector%Logger => ModuleLogger
-    CALL Model%AppStream%New(ModuleLogger,cPP_FileNames(PP_StreamDataFileID),Model%AppGrid,Model%Stratigraphy,lRoutedStreams,lWSA,Model%StrmGWConnector,Model%StrmLakeConnector,iStat)
+    Model%StrmGWConnector%Logger => Model%Logger
+    CALL Model%AppStream%New(Model%Logger,cPP_FileNames(PP_StreamDataFileID),Model%AppGrid,Model%Stratigraphy,lRoutedStreams,lWSA,Model%StrmGWConnector,Model%StrmLakeConnector,iStat)
     IF (iStat .EQ. -1) RETURN
     NStrmNodes = Model%AppStream%GetNStrmNodes()
     ALLOCATE (iStrmNodeIDs(NStrmNodes))
@@ -855,7 +799,7 @@ CONTAINS
         IF (iStat .EQ. -1) RETURN
     END IF
     CALL Model%AppLake%RegisterWithMatrix(Model%Matrix,iStat)  ;  IF (iStat .EQ. -1) RETURN
-    CALL Model%AppGW%RegisterWithMatrix(ModuleLogger,Model%AppGrid,Model%Stratigraphy,Model%Matrix,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    CALL Model%AppGW%RegisterWithMatrix(Model%Logger,Model%AppGrid,Model%Stratigraphy,Model%Matrix,iStat)  ;  IF (iStat .EQ. -1) RETURN
     IF (lRoutedStreams) THEN
         CALL Model%AppStream%GetStrmConnectivity(StrmConnectivity)
         CALL Model%StrmGWConnector%RegisterWithMatrix(StrmConnectivity,Model%AppGrid,Model%Matrix,iStat)
@@ -883,7 +827,7 @@ CONTAINS
   ! --- NEW MODEL (STATIC COMPONENT FROM PRE-PROCESSED BINARY FILE)
   ! -------------------------------------------------------------
   SUBROUTINE SetStaticComponent_FromBinFile(Model,BinaryFile,iStat)
-    CLASS(ModelType)      :: Model
+    CLASS(ModelType),TARGET :: Model
     TYPE(GenericFileType) :: BinaryFile
     INTEGER,INTENT(OUT)   :: iStat
     
@@ -891,18 +835,18 @@ CONTAINS
     LOGICAL :: lWSA
     
     !Instantiate grid data 
-    CALL Model%AppGrid%New(ModuleLogger,BinaryFile,iStat)
+    CALL Model%AppGrid%New(Model%Logger,BinaryFile,iStat)
     IF (iStat .EQ. -1) RETURN
 
     !Instantiate stratigraphy data
-    CALL Model%Stratigraphy%New(ModuleLogger,Model%AppGrid%NNodes,BinaryFile,iStat)  
+    CALL Model%Stratigraphy%New(Model%Logger,Model%AppGrid%NNodes,BinaryFile,iStat)  
     IF (iStat .EQ. -1) RETURN
 
     !Instantiate component connectors
-    CALL Model%StrmLakeConnector%New(ModuleLogger,BinaryFile,iStat)  ;  IF (iStat .EQ. -1) RETURN
-    Model%StrmGWConnector%Logger => ModuleLogger
+    CALL Model%StrmLakeConnector%New(Model%Logger,BinaryFile,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    Model%StrmGWConnector%Logger => Model%Logger
     CALL Model%StrmGWConnector%New(BinaryFile,iStat)    ;  IF (iStat .EQ. -1) RETURN
-    CALL Model%LakeGWConnector%New(ModuleLogger,BinaryFile,iStat)    ;  IF (iStat .EQ. -1) RETURN
+    CALL Model%LakeGWConnector%New(Model%Logger,BinaryFile,iStat)    ;  IF (iStat .EQ. -1) RETURN
   
     !Instantiate lakes
     CALL Model%AppLake%New(BinaryFile,iStat)
@@ -910,36 +854,9 @@ CONTAINS
   
     !Instantiate streams 
     lWSA = .FALSE.
-    CALL Model%AppStream%New(ModuleLogger,BinaryFile,lWSA,iStat)
+    CALL Model%AppStream%New(Model%Logger,BinaryFile,lWSA,iStat)
     IF (iStat .EQ. -1) RETURN
     
-    !Set module-level loggers for Batch 5 packages (Package_Model and Model_ForInquiry)
-    CALL PackageModel_SetModuleLogger(DefaultLogger)
-
-    !Set module-level loggers for Batch 2 packages
-
-
-
-
-
-
-    !Set module-level loggers for Batch 3 packages
-
-
-    CALL AppLake_SetModuleLogger(DefaultLogger)
-    CALL BaseAppLake_SetModuleLogger(DefaultLogger)
-    CALL AppLake_v40_SetModuleLogger(DefaultLogger)
-    CALL AppLake_v50_SetModuleLogger(DefaultLogger)
-    CALL AppSWShed_v40_SetModuleLogger(DefaultLogger)
-    CALL AppSWShed_v41_SetModuleLogger(DefaultLogger)
-
-    ! I/O layer Logger now propagated via type components (BaseFileType%Logger, GenericFileType%Logger)
-    CALL BudgetInputFile_SetModuleLogger(DefaultLogger)
-
-    CALL GWZBudget_SetModuleLogger(DefaultLogger)
-
-
-
 
 
     !Matrix data
@@ -952,7 +869,7 @@ CONTAINS
   ! --- NEW MODEL (STATIC AND DYNAMIC COMPONENTS; STATIC PART FROM BINARY FILE)
   ! -------------------------------------------------------------
   SUBROUTINE SetAllComponents(Model,cProjectNameForDSS,cSimFileName,cWSAFileName,lForInquiry,iStat)
-    CLASS(ModelType),INTENT(OUT) :: Model
+    CLASS(ModelType),TARGET,INTENT(OUT) :: Model
     CHARACTER(LEN=*),INTENT(IN)  :: cProjectNameForDSS,cSimFileName,cWSAFileName
     LOGICAL,INTENT(IN)           :: lForInquiry
     INTEGER,INTENT(OUT)          :: iStat
@@ -1036,7 +953,7 @@ CONTAINS
    
     !Print out the simulation control information
     IF (IsLogFileDefined()) THEN
-        CALL PrintProjectTitleAndFiles(ProjectTitles,ProjectFileNames)
+        CALL PrintProjectTitleAndFiles(Model%Logger,ProjectTitles,ProjectFileNames)
 
         !Print out the supply adjustment option
         SELECT CASE (iAdjustFlag)
@@ -1049,30 +966,14 @@ CONTAINS
             CASE (f_iAdjustPumpDiver)
                 Text = 'NOTE: BOTH SURFACE WATER DIVERSION AND PUMPING WERE ADJUSTED.'
         END SELECT
-        CALL ModuleLogger%LogMessage(f_cLineFeed//Text,f_iMessage,'',f_iFILE)
+        CALL Model%Logger%LogMessage(f_cLineFeed//Text,f_iMessage,'',f_iFILE)
     END IF
 
-    !Set module-level loggers for Batch 5 packages (Package_Model and Model_ForInquiry)
-    CALL PackageModel_SetModuleLogger(DefaultLogger)
 
     !Set logger for components
     CALL Model%SupplyAdjust%SetLogger(DefaultLogger)
     CALL Model%IrigFracFile%SetLogger(DefaultLogger)
     CALL Model%GWZBudget%SetLogger(DefaultLogger)
-
-
-
-
-
-
-
-    ! I/O layer Logger now propagated via type components (BaseFileType%Logger, GenericFileType%Logger)
-    CALL BudgetInputFile_SetModuleLogger(DefaultLogger)
-
-    CALL GWZBudget_SetModuleLogger(DefaultLogger)
-
-
-
 
 
     !Solution scheme control data
@@ -1086,39 +987,39 @@ CONTAINS
     
     !Grid data
     CALL DATE_AND_TIME(VALUES=iTimerStart)
-    CALL Model%AppGrid%New(ModuleLogger,PPBinaryFile,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    CALL Model%AppGrid%New(Model%Logger,PPBinaryFile,iStat)  ;  IF (iStat .EQ. -1) RETURN
     NNodes    = Model%AppGrid%NNodes
     NElements = Model%AppGrid%NElements
     NFaces    = Model%AppGrid%NFaces
 
     !Stratigraphy data
-    CALL Model%Stratigraphy%New(ModuleLogger,NNodes,PPBinaryFile,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    CALL Model%Stratigraphy%New(Model%Logger,NNodes,PPBinaryFile,iStat)  ;  IF (iStat .EQ. -1) RETURN
     NLayers = Model%Stratigraphy%NLayers
     CALL DATE_AND_TIME(VALUES=iTimerValues)
-    CALL LogInitTime('Grid+Stratigraphy', iTimerStart, iTimerValues)
+    CALL LogInitTime(Model%Logger, 'Grid+Stratigraphy', iTimerStart, iTimerValues)
 
     !Component connectors
-    CALL Model%StrmLakeConnector%New(ModuleLogger,PPBinaryFile,iStat)  ;  IF (iStat .EQ. -1) RETURN
-    Model%StrmGWConnector%Logger => ModuleLogger
+    CALL Model%StrmLakeConnector%New(Model%Logger,PPBinaryFile,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    Model%StrmGWConnector%Logger => Model%Logger
     CALL Model%StrmGWConnector%New(PPBinaryFile,iStat)    ;  IF (iStat .EQ. -1) RETURN
-    CALL Model%LakeGWConnector%New(ModuleLogger,PPBinaryFile,iStat)    ;  IF (iStat .EQ. -1) RETURN
+    CALL Model%LakeGWConnector%New(Model%Logger,PPBinaryFile,iStat)    ;  IF (iStat .EQ. -1) RETURN
   
     !Precipitation data
     CALL DATE_AND_TIME(VALUES=iTimerStart)
-    CALL Model%PrecipData%New(ModuleLogger,ProjectFileNames(SIM_PrecipDataFileID),Model%cSIMWorkingDirectory,'precipitation',Model%TimeStep,iStat)
+    CALL Model%PrecipData%New(Model%Logger,ProjectFileNames(SIM_PrecipDataFileID),Model%cSIMWorkingDirectory,'precipitation',Model%TimeStep,iStat)
     IF (iStat .EQ. -1) RETURN
 
     !ET data
-    CALL Model%ETData%New(ModuleLogger,ProjectFileNames(SIM_ETDataFileID),Model%cSIMWorkingDirectory,'ET',Model%TimeStep,iStat,ProjectFileNames(SIM_CropCoeffFileID))
+    CALL Model%ETData%New(Model%Logger,ProjectFileNames(SIM_ETDataFileID),Model%cSIMWorkingDirectory,'ET',Model%TimeStep,iStat,ProjectFileNames(SIM_CropCoeffFileID))
     IF (iStat .EQ. -1) RETURN
     CALL DATE_AND_TIME(VALUES=iTimerValues)
-    CALL LogInitTime('Precip+ET data', iTimerStart, iTimerValues)
+    CALL LogInitTime(Model%Logger, 'Precip+ET data', iTimerStart, iTimerValues)
 
     !Lakes
     !Make sure lake component is defined, if it is defined in Preprocessor
     IF (Model%LakeGWConnector%IsDefined()) THEN
         IF (LEN_TRIM(ProjectFileNames(SIM_LakeDataFileID)) .EQ. 0) THEN
-            CALL ModuleLogger%SetLastMessage('Lake component data files must be defined when they are defined in Pre-processor!',f_iFatal,ThisProcedure)
+            CALL Model%Logger%SetLastMessage('Lake component data files must be defined when they are defined in Pre-processor!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -1128,7 +1029,7 @@ CONTAINS
     NLakes = Model%AppLake%GetNLakes()
     ALLOCATE (Model%LakeRunoff(NLakes) , Model%LakeReturnFlow(NLakes) , Model%LakePondDrain(NLakes) , iLakeIDs(NLakes) , STAT=ErrorCode , ERRMSG=cErrorMsg)
     IF (ErrorCode .NE. 0) THEN
-        CALL ModuleLogger%SetLastMessage('Error allocating memory for lake related data!'//f_cLineFeed//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
+        CALL Model%Logger%SetLastMessage('Error allocating memory for lake related data!'//f_cLineFeed//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -1142,12 +1043,12 @@ CONTAINS
     !Make sure stream component is defined if it is defined in Preprocessor
     IF (Model%StrmGWConnector%IsDefined()) THEN
         IF (LEN_TRIM(ProjectFileNames(SIM_StrmDataFileID)) .EQ. 0) THEN
-            CALL ModuleLogger%SetLastMessage('Stream component data files must be defined when they are defined in Pre-processor!',f_iFatal,ThisProcedure)
+            CALL Model%Logger%SetLastMessage('Stream component data files must be defined when they are defined in Pre-processor!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
     END IF
-    CALL Model%AppStream%New(ModuleLogger,lForInquiry,lWSA,ProjectFileNames(SIM_StrmDataFileID),Model%cSIMWorkingDirectory,Model%TimeStep,Model%NTIME,iLakeIDs,Model%AppGrid,Model%Stratigraphy,Model%ETData,PPBinaryFile,Model%StrmLakeConnector,Model%StrmGWConnector,iStat)
+    CALL Model%AppStream%New(Model%Logger,lForInquiry,lWSA,ProjectFileNames(SIM_StrmDataFileID),Model%cSIMWorkingDirectory,Model%TimeStep,Model%NTIME,iLakeIDs,Model%AppGrid,Model%Stratigraphy,Model%ETData,PPBinaryFile,Model%StrmLakeConnector,Model%StrmGWConnector,iStat)
     IF (iStat .EQ. -1) RETURN
     NStrmNodes          = Model%AppStream%GetNStrmNodes()
     lDiversions_Defined = Model%AppStream%IsDiversionsDefined()
@@ -1162,7 +1063,7 @@ CONTAINS
               STAT=ErrorCode                , &
               ERRMSG=cErrorMsg              )
     IF (ErrorCode .NE. 0) THEN
-        CALL ModuleLogger%SetLastMessage('Error allocating memory for stream related data!'//f_cLineFeed//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
+        CALL Model%Logger%SetLastMessage('Error allocating memory for stream related data!'//f_cLineFeed//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -1177,7 +1078,7 @@ CONTAINS
     Model%QRVETFRAC                 = 0.0
     
     CALL DATE_AND_TIME(VALUES=iTimerValues)
-    CALL LogInitTime('AppStream', iTimerStart, iTimerValues)
+    CALL LogInitTime(Model%Logger, 'AppStream', iTimerStart, iTimerValues)
 
     !Matrix (skip in inquiry mode — solver not needed for queries)
     CALL DATE_AND_TIME(VALUES=iTimerStart)
@@ -1188,7 +1089,7 @@ CONTAINS
 
     !Groundwater
     CALL Model%AppStream%GetStrmConnectivityInGWNodes(Model%StrmGWConnector,StrmConnectivity)
-    CALL Model%AppGW%New(ModuleLogger,lForInquiry,ProjectFileNames(SIM_GWDataFileID),Model%cSIMWorkingDirectory,Model%AppGrid,Model%Stratigraphy,StrmConnectivity,iStrmNodeIDs,Model%StrmGWConnector,iLakeIDs,Model%LakeGWConnector,Model%TimeStep,Model%NTIME,iStat)
+    CALL Model%AppGW%New(Model%Logger,lForInquiry,ProjectFileNames(SIM_GWDataFileID),Model%cSIMWorkingDirectory,Model%AppGrid,Model%Stratigraphy,StrmConnectivity,iStrmNodeIDs,Model%StrmGWConnector,iLakeIDs,Model%LakeGWConnector,Model%TimeStep,Model%NTIME,iStat)
     IF (iStat .EQ. -1) RETURN
     ALLOCATE (Model%QERELS(NElements) , Model%QPERC(NElements) , Model%QDEEPPERC(NElements) , Model%DepthToGW(NElements) , Model%SyElem(NElements) , Model%GWToRZFlows(NElements) , Model%NetElemSource(NElements) , Model%FaceFlows(NFaces,NLayers) , Model%GWHeads(NNodes,NLayers))
     Model%QERELS      = 0.0
@@ -1200,21 +1101,21 @@ CONTAINS
     CALL Model%AppGW%GetElementSy(Model%AppGrid,Model%Stratigraphy,iLayer=1,Sy=Model%SyElem)
     Model%cGWMainInputFileName = TRIM(ProjectFileNames(SIM_GWDataFileID))
     CALL DATE_AND_TIME(VALUES=iTimerValues)
-    CALL LogInitTime('Matrix+AppGW', iTimerStart, iTimerValues)
+    CALL LogInitTime(Model%Logger, 'Matrix+AppGW', iTimerStart, iTimerValues)
 
     !Unsaturated zone
     CALL DATE_AND_TIME(VALUES=iTimerStart)
-    CALL Model%AppUnsatZone%New(ModuleLogger,lForInquiry,ProjectFileNames(SIM_UnsatZoneDataFileID),Model%cSIMWorkingDirectory,Model%AppGrid,Model%Stratigraphy,Model%TimeStep,Model%NTIME,Model%DepthToGW,iStat)
+    CALL Model%AppUnsatZone%New(Model%Logger,lForInquiry,ProjectFileNames(SIM_UnsatZoneDataFileID),Model%cSIMWorkingDirectory,Model%AppGrid,Model%Stratigraphy,Model%TimeStep,Model%NTIME,Model%DepthToGW,iStat)
     IF (iStat .EQ. -1) RETURN
     Model%lAppUnsatZone_Defined = Model%AppUnsatZone%IsDefined()
 
     !Small watersheds
-    CALL Model%AppSWShed%New(ModuleLogger,lForInquiry,ProjectFileNames(SIM_SmallWatershedDataFileID),ProjectFileNames(SIM_CropCoeffFileID),Model%cSIMWorkingDirectory,Model%TimeStep,Model%NTIME,NStrmNodes,iStrmNodeIDs,Model%AppGrid,Model%Stratigraphy,Model%PrecipData,Model%ETData,iStat)
+    CALL Model%AppSWShed%New(Model%Logger,lForInquiry,ProjectFileNames(SIM_SmallWatershedDataFileID),ProjectFileNames(SIM_CropCoeffFileID),Model%cSIMWorkingDirectory,Model%TimeStep,Model%NTIME,NStrmNodes,iStrmNodeIDs,Model%AppGrid,Model%Stratigraphy,Model%PrecipData,Model%ETData,iStat)
     IF (iStat .EQ. -1) RETURN
 
     !Root zone component (must be instantiated after gw and streams)
     IF (ProjectFileNames(SIM_RootZoneDataFileID) .NE. '') THEN
-        CALL Model%RootZone%New(ModuleLogger,lForInquiry,cProjectNameForDSS,ProjectFileNames(SIM_RootZoneDataFileID),ProjectFileNames(SIM_CropCoeffFileID),Model%cSIMWorkingDirectory,Model%AppGrid,Model%TimeStep,Model%NTIME,Model%ETData,Model%PrecipData,iStat,iStrmNodeIDs=iStrmNodeIDs,iLakeIDs=iLakeIDs)
+        CALL Model%RootZone%New(Model%Logger,lForInquiry,cProjectNameForDSS,ProjectFileNames(SIM_RootZoneDataFileID),ProjectFileNames(SIM_CropCoeffFileID),Model%cSIMWorkingDirectory,Model%AppGrid,Model%TimeStep,Model%NTIME,Model%ETData,Model%PrecipData,iStat,iStrmNodeIDs=iStrmNodeIDs,iLakeIDs=iLakeIDs)
         IF (iStat .EQ. -1) RETURN
 
         !Define the lake elements
@@ -1232,12 +1133,12 @@ CONTAINS
     END IF
     Model%lRootZone_Defined = Model%RootZone%IsDefined()
     CALL DATE_AND_TIME(VALUES=iTimerValues)
-    CALL LogInitTime('UnsatZone+SWShed+RootZone', iTimerStart, iTimerValues)
+    CALL LogInitTime(Model%Logger, 'UnsatZone+SWShed+RootZone', iTimerStart, iTimerValues)
 
     !Compile destination-supply connectors
-    CALL Model%AppStream%GetDiversionDestination(SupplyDest)            ;  CALL Model%DiverDestinationConnector%New(ModuleLogger,'Diversion',Model%iDemandCalcLocation,SupplyDest,Model%AppGrid,iStat)           ;  IF (iStat .EQ. -1) RETURN
-    CALL Model%AppGW%GetPumpDestination(f_iSupply_Well,SupplyDest)      ;  CALL Model%WellDestinationConnector%New(ModuleLogger,'Well',Model%iDemandCalcLocation,SupplyDest,Model%AppGrid,iStat)                 ;  IF (iStat .EQ. -1) RETURN
-    CALL Model%AppGW%GetPumpDestination(f_iSupply_ElemPump,SupplyDest)  ;  CALL Model%ElemPumpDestinationConnector%New(ModuleLogger,'Element pumping',Model%iDemandCalcLocation,SupplyDest,Model%AppGrid,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    CALL Model%AppStream%GetDiversionDestination(SupplyDest)            ;  CALL Model%DiverDestinationConnector%New(Model%Logger,'Diversion',Model%iDemandCalcLocation,SupplyDest,Model%AppGrid,iStat)           ;  IF (iStat .EQ. -1) RETURN
+    CALL Model%AppGW%GetPumpDestination(f_iSupply_Well,SupplyDest)      ;  CALL Model%WellDestinationConnector%New(Model%Logger,'Well',Model%iDemandCalcLocation,SupplyDest,Model%AppGrid,iStat)                 ;  IF (iStat .EQ. -1) RETURN
+    CALL Model%AppGW%GetPumpDestination(f_iSupply_ElemPump,SupplyDest)  ;  CALL Model%ElemPumpDestinationConnector%New(Model%Logger,'Element pumping',Model%iDemandCalcLocation,SupplyDest,Model%AppGrid,iStat)  ;  IF (iStat .EQ. -1) RETURN
   
     !Irrigation fractions data file
     CALL Model%IrigFracFile%New(ProjectFileNames(SIM_IrigFracDataFileID),Model%cSIMWorkingDirectory,Model%TimeStep,iStat)  
@@ -1328,7 +1229,7 @@ CONTAINS
     
     !Initialize WSA
     IF (lWSA)  &
-        CALL Model%WSA%New(ModuleLogger,cWSAFileName,Model%cSIMWorkingDirectory,Model%TimeStep,Model%AppGrid,Model%AppStream,iStat)
+        CALL Model%WSA%New(Model%Logger,cWSAFileName,Model%cSIMWorkingDirectory,Model%TimeStep,Model%AppGrid,Model%AppStream,iStat)
 
     !Clear memory
     DEALLOCATE (StrmConnectivity , LakeElems , SupplyDest , cZBudRawFileName , STAT=ErrorCode)
@@ -1340,7 +1241,7 @@ CONTAINS
   ! --- NEW MODEL (STATIC AND DYNAMIC COMPONENTS)
   ! -------------------------------------------------------------
   SUBROUTINE SetAllComponents_WithoutBinFile(Model,cProjectNameForDSS,cPPFileName,cSIMFileName,cWSAFileName,lRoutedStreams,lForInquiry,iStat)
-    CLASS(ModelType),INTENT(OUT) :: Model
+    CLASS(ModelType),TARGET,INTENT(OUT) :: Model
     CHARACTER(LEN=*),INTENT(IN)  :: cProjectNameForDSS,cPPFileName,cSIMFileName,cWSAFileName
     LOGICAL,INTENT(IN)           :: lRoutedStreams,lForInquiry
     INTEGER,INTENT(OUT)          :: iStat
@@ -1423,7 +1324,7 @@ CONTAINS
    
     !Print out the simulation control information
     IF (IsLogFileDefined()) THEN
-        CALL PrintProjectTitleAndFiles(ProjectTitles,ProjectFileNames)
+        CALL PrintProjectTitleAndFiles(Model%Logger,ProjectTitles,ProjectFileNames)
 
         !Print out the supply adjustment option
         SELECT CASE (iAdjustFlag)
@@ -1436,30 +1337,14 @@ CONTAINS
             CASE (f_iAdjustPumpDiver)
                 Text = 'NOTE: BOTH SURFACE WATER DIVERSION AND PUMPING WERE ADJUSTED.'
         END SELECT
-        CALL ModuleLogger%LogMessage(f_cLineFeed//Text,f_iMessage,'',f_iFILE)
+        CALL Model%Logger%LogMessage(f_cLineFeed//Text,f_iMessage,'',f_iFILE)
     END IF
     
-    !Set module-level loggers for Batch 5 packages (Package_Model and Model_ForInquiry)
-    CALL PackageModel_SetModuleLogger(DefaultLogger)
 
     !Set logger for components
     CALL Model%SupplyAdjust%SetLogger(DefaultLogger)
     CALL Model%IrigFracFile%SetLogger(DefaultLogger)
     CALL Model%GWZBudget%SetLogger(DefaultLogger)
-
-
-
-
-
-
-
-    ! I/O layer Logger now propagated via type components (BaseFileType%Logger, GenericFileType%Logger)
-    CALL BudgetInputFile_SetModuleLogger(DefaultLogger)
-
-    CALL GWZBudget_SetModuleLogger(DefaultLogger)
-
-
-
 
 
     !Solution scheme control data
@@ -1472,18 +1357,18 @@ CONTAINS
     IF (iStat .EQ. -1) RETURN
 
     !Precipitation data
-    CALL Model%PrecipData%New(ModuleLogger,ProjectFileNames(SIM_PrecipDataFileID),Model%cSIMWorkingDirectory,'precipitation data',Model%TimeStep,iStat)
+    CALL Model%PrecipData%New(Model%Logger,ProjectFileNames(SIM_PrecipDataFileID),Model%cSIMWorkingDirectory,'precipitation data',Model%TimeStep,iStat)
     IF (iStat .EQ. -1) RETURN
 
     !ET data
-    CALL Model%ETData%New(ModuleLogger,ProjectFileNames(SIM_ETDataFileID),Model%cSIMWorkingDirectory,'ET data',Model%TimeStep,iStat,ProjectFileNames(SIM_CropCoeffFileID))
+    CALL Model%ETData%New(Model%Logger,ProjectFileNames(SIM_ETDataFileID),Model%cSIMWorkingDirectory,'ET data',Model%TimeStep,iStat,ProjectFileNames(SIM_CropCoeffFileID))
     IF (iStat .EQ. -1) RETURN
   
     !Lakes
     !Make sure lake component is defined, if it is defined in Preprocessor
     IF (Model%LakeGWConnector%IsDefined()) THEN
         IF (LEN_TRIM(ProjectFileNames(SIM_LakeDataFileID)) .EQ. 0) THEN
-            CALL ModuleLogger%SetLastMessage('Lake component data files must be defined when they are defined in Pre-processor!',f_iFatal,ThisProcedure)
+            CALL Model%Logger%SetLastMessage('Lake component data files must be defined when they are defined in Pre-processor!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -1493,7 +1378,7 @@ CONTAINS
     NLakes = Model%AppLake%GetNLakes()
     ALLOCATE (Model%LakeRunoff(NLakes) , Model%LakeReturnFlow(NLakes) , Model%LakePondDrain(NLakes) , iLakeIDs(NLakes) , STAT=ErrorCode , ERRMSG=cErrorMsg)
     IF (ErrorCode .NE. 0) THEN
-        CALL ModuleLogger%SetLastMessage('Error allocating memory for lake related data!'//f_cLineFeed//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
+        CALL Model%Logger%SetLastMessage('Error allocating memory for lake related data!'//f_cLineFeed//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -1506,7 +1391,7 @@ CONTAINS
     !Make sure stream component is defined if it is defined in Preprocessor
     IF (Model%StrmGWConnector%IsDefined()) THEN
         IF (LEN_TRIM(ProjectFileNames(SIM_StrmDataFileID)) .EQ. 0) THEN
-            CALL ModuleLogger%SetLastMessage('Stream component data files must be defined when they are defined in Pre-processor!',f_iFatal,ThisProcedure)
+            CALL Model%Logger%SetLastMessage('Stream component data files must be defined when they are defined in Pre-processor!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -1526,7 +1411,7 @@ CONTAINS
               STAT=ErrorCode                , &
               ERRMSG=cErrorMsg              )
     IF (ErrorCode .NE. 0) THEN
-        CALL ModuleLogger%SetLastMessage('Error allocating memory for stream related data!'//f_cLineFeed//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
+        CALL Model%Logger%SetLastMessage('Error allocating memory for stream related data!'//f_cLineFeed//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -1542,7 +1427,7 @@ CONTAINS
     
     !Groundwater
     CALL Model%AppStream%GetStrmConnectivityInGWNodes(Model%StrmGWConnector,StrmConnectivity)
-    CALL Model%AppGW%New(ModuleLogger,lForInquiry,ProjectFileNames(SIM_GWDataFileID),Model%cSIMWorkingDirectory,Model%AppGrid,Model%Stratigraphy,StrmConnectivity,iStrmNodeIDs,Model%StrmGWConnector,iLakeIDs,Model%LakeGWConnector,Model%TimeStep,Model%NTIME,iStat)
+    CALL Model%AppGW%New(Model%Logger,lForInquiry,ProjectFileNames(SIM_GWDataFileID),Model%cSIMWorkingDirectory,Model%AppGrid,Model%Stratigraphy,StrmConnectivity,iStrmNodeIDs,Model%StrmGWConnector,iLakeIDs,Model%LakeGWConnector,Model%TimeStep,Model%NTIME,iStat)
     IF (iStat .EQ. -1) RETURN
     NNodes    = Model%AppGrid%NNodes
     NElements = Model%AppGrid%NElements
@@ -1567,17 +1452,17 @@ CONTAINS
     Model%cGWMainInputFileName = TRIM(ProjectFileNames(SIM_GWDataFileID))
     
     !Unsaturated zone
-    CALL Model%AppUnsatZone%New(ModuleLogger,lForInquiry,ProjectFileNames(SIM_UnsatZoneDataFileID),Model%cSIMWorkingDirectory,Model%AppGrid,Model%Stratigraphy,Model%TimeStep,Model%NTIME,Model%DepthToGW,iStat)
+    CALL Model%AppUnsatZone%New(Model%Logger,lForInquiry,ProjectFileNames(SIM_UnsatZoneDataFileID),Model%cSIMWorkingDirectory,Model%AppGrid,Model%Stratigraphy,Model%TimeStep,Model%NTIME,Model%DepthToGW,iStat)
     IF (iStat .EQ. -1) RETURN
     Model%lAppUnsatZone_Defined = Model%AppUnsatZone%IsDefined()
     
     !Small watersheds
-    CALL Model%AppSWShed%New(ModuleLogger,lForInquiry,ProjectFileNames(SIM_SmallWatershedDataFileID),ProjectFileNames(SIM_CropCoeffFileID),Model%cSIMWorkingDirectory,Model%TimeStep,Model%NTIME,NStrmNodes,iStrmNodeIDs,Model%AppGrid,Model%Stratigraphy,Model%PrecipData,Model%ETData,iStat)
+    CALL Model%AppSWShed%New(Model%Logger,lForInquiry,ProjectFileNames(SIM_SmallWatershedDataFileID),ProjectFileNames(SIM_CropCoeffFileID),Model%cSIMWorkingDirectory,Model%TimeStep,Model%NTIME,NStrmNodes,iStrmNodeIDs,Model%AppGrid,Model%Stratigraphy,Model%PrecipData,Model%ETData,iStat)
     IF (iStat .EQ. -1) RETURN
     
     !Root zone component (must be instantiated after gw and streams)
     IF (ProjectFileNames(SIM_RootZoneDataFileID) .NE. '') THEN
-        CALL Model%RootZone%New(ModuleLogger,lForInquiry,cProjectNameForDSS,ProjectFileNames(SIM_RootZoneDataFileID),ProjectFileNames(SIM_CropCoeffFileID),Model%cSIMWorkingDirectory,Model%AppGrid,Model%TimeStep,Model%NTIME,Model%ETData,Model%PrecipData,iStat,iStrmNodeIDs=iStrmNodeIDs,iLakeIDs=iLakeIDs)
+        CALL Model%RootZone%New(Model%Logger,lForInquiry,cProjectNameForDSS,ProjectFileNames(SIM_RootZoneDataFileID),ProjectFileNames(SIM_CropCoeffFileID),Model%cSIMWorkingDirectory,Model%AppGrid,Model%TimeStep,Model%NTIME,Model%ETData,Model%PrecipData,iStat,iStrmNodeIDs=iStrmNodeIDs,iLakeIDs=iLakeIDs)
         IF (iStat .EQ. -1) RETURN
 
         !Define the lake elements
@@ -1596,9 +1481,9 @@ CONTAINS
     Model%lRootZone_Defined = Model%RootZone%IsDefined()
 
     !Compile destination-supply connectors
-    CALL Model%AppStream%GetDiversionDestination(SupplyDest)            ;  CALL Model%DiverDestinationConnector%New(ModuleLogger,'Diversion',Model%iDemandCalcLocation,SupplyDest,Model%AppGrid,iStat)           ;  IF (iStat .EQ. -1) RETURN
-    CALL Model%AppGW%GetPumpDestination(f_iSupply_Well,SupplyDest)      ;  CALL Model%WellDestinationConnector%New(ModuleLogger,'Well',Model%iDemandCalcLocation,SupplyDest,Model%AppGrid,iStat)                 ;  IF (iStat .EQ. -1) RETURN
-    CALL Model%AppGW%GetPumpDestination(f_iSupply_ElemPump,SupplyDest)  ;  CALL Model%ElemPumpDestinationConnector%New(ModuleLogger,'Element pumping',Model%iDemandCalcLocation,SupplyDest,Model%AppGrid,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    CALL Model%AppStream%GetDiversionDestination(SupplyDest)            ;  CALL Model%DiverDestinationConnector%New(Model%Logger,'Diversion',Model%iDemandCalcLocation,SupplyDest,Model%AppGrid,iStat)           ;  IF (iStat .EQ. -1) RETURN
+    CALL Model%AppGW%GetPumpDestination(f_iSupply_Well,SupplyDest)      ;  CALL Model%WellDestinationConnector%New(Model%Logger,'Well',Model%iDemandCalcLocation,SupplyDest,Model%AppGrid,iStat)                 ;  IF (iStat .EQ. -1) RETURN
+    CALL Model%AppGW%GetPumpDestination(f_iSupply_ElemPump,SupplyDest)  ;  CALL Model%ElemPumpDestinationConnector%New(Model%Logger,'Element pumping',Model%iDemandCalcLocation,SupplyDest,Model%AppGrid,iStat)  ;  IF (iStat .EQ. -1) RETURN
 
     !Irrigation fractions data file
     CALL Model%IrigFracFile%New(ProjectFileNames(SIM_IrigFracDataFileID),Model%cSIMWorkingDirectory,Model%TimeStep,iStat)
@@ -1694,7 +1579,7 @@ CONTAINS
   ! --- NEW MODEL (STATIC AND DYNAMIC COMPONENTS) WITH ALL INFO SUPPLIED BY DUMMY ARGUMENTS
   ! -------------------------------------------------------------
   SUBROUTINE SetAllComponents_WithoutBinFile_AllDataSupplied(Model,cProjectNameForDSS,cPP_WorkingDirectory,cSIM_WorkingDirectory,cProjectTitles,cPPFileNames,cSIMFileNames,PP_KOUT,PP_KDEB,PP_FACTLTOU,PP_UNITLTOU,PP_FACTAROU,PP_UNITAROU,cSimBeginDateAndTime,cSimEndDateAndTime,cUnitT,iGenRestartFile,iRestartOption,CACHE,SIM_KDEB,MSOLVE,Relax,iMaxIter,iMaxIterSupply,Toler,TolerSupply,iAdjustFlag,IsRoutedStreams,lForInquiry,iStat)
-    CLASS(ModelType)            :: Model
+    CLASS(ModelType),TARGET     :: Model
     CHARACTER(LEN=*),INTENT(IN) :: cProjectNameForDSS,cPP_WorkingDirectory,cSIM_WorkingDirectory,cProjectTitles(3),cPPFileNames(nPP_InputFiles),cSIMFileNames(nSIM_InputFiles),PP_UNITLTOU,PP_UNITAROU,cSimBeginDateAndTime,cSimEndDateAndTime,cUnitT
     INTEGER,INTENT(IN)          :: PP_KOUT,PP_KDEB,iGenRestartFile,iRestartOption,CACHE,SIM_KDEB,MSOLVE,iMaxIter,iMaxIterSupply,iAdjustFlag
     REAL(8),INTENT(IN)          :: PP_FACTLTOU,PP_FACTAROU,Relax,Toler,TolerSupply
@@ -1750,22 +1635,22 @@ CONTAINS
     
     !Simulation time related data
     IF (.NOT. IsTimeStampValid(cSimBeginDateAndTime)) THEN
-        CALL ModuleLogger%SetLastMessage('Simulation beginning date and time ('//TRIM(cSimBeginDateAndTime)//') is not a valid time stamp!',f_iFatal,ThisProcedure)
+        CALL Model%Logger%SetLastMessage('Simulation beginning date and time ('//TRIM(cSimBeginDateAndTime)//') is not a valid time stamp!',f_iFatal,ThisProcedure)
         iStat = - 1
         RETURN
     END IF
     IF (.NOT. IsTimeStampValid(cSimEndDateAndTime)) THEN
-        CALL ModuleLogger%SetLastMessage('Simulation end date and time ('//TRIM(cSimEndDateAndTime)//') is not a valid time stamp!',f_iFatal,ThisProcedure)
+        CALL Model%Logger%SetLastMessage('Simulation end date and time ('//TRIM(cSimEndDateAndTime)//') is not a valid time stamp!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
     IF (.NOT. IsTimeIntervalValid(cUnitT)) THEN
-        CALL ModuleLogger%SetLastMessage('Simulation time interval ('//TRIM(cUnitT)//') is not recognized!',f_iFatal,ThisProcedure)
+        CALL Model%Logger%SetLastMessage('Simulation time interval ('//TRIM(cUnitT)//') is not recognized!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
     IF (cSimBeginDateAndTime .TSGT. cSimEndDateAndTime) THEN
-        CALL ModuleLogger%SetLastMessage('Simulation ending date and time ('//cSimEndDateAndTime//') must be later than the simulation beginning date and time ('//cSimBeginDateAndTime//')!',f_iFatal,ThisProcedure)
+        CALL Model%Logger%SetLastMessage('Simulation ending date and time ('//cSimEndDateAndTime//') must be later than the simulation beginning date and time ('//cSimBeginDateAndTime//')!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -1773,7 +1658,7 @@ CONTAINS
     Model%TimeStep%TrackTime          = .TRUE.
     Model%TimeStep%Unit               = UpperCase(ADJUSTL(cUnitT))
     CALL TimeStampToJulianDateAndMinutes(cSimBeginDateAndTime,Model%JulianDate,Model%MinutesAfterMidnight)
-    CALL DELTAT_To_Minutes(Model%TimeStep,iStat)
+    CALL DELTAT_To_Minutes(Model%Logger,Model%TimeStep,iStat)
     IF (iStat .EQ. -1) RETURN
     Model%NTIME                       = NPeriods(Model%TimeStep%DELTAT_InMinutes,Model%TimeStep%CurrentDateAndTime,cSimEndDateAndTime)
 
@@ -1797,7 +1682,7 @@ CONTAINS
     
     !Print out the simulation control information
     IF (IsLogFileDefined()) THEN
-        CALL PrintProjectTitleAndFiles(cProjectTitles,cSIMFileNames)
+        CALL PrintProjectTitleAndFiles(Model%Logger,cProjectTitles,cSIMFileNames)
 
         !Print out the supply adjustment option
         SELECT CASE (iAdjustFlag)
@@ -1810,30 +1695,14 @@ CONTAINS
             CASE (f_iAdjustPumpDiver)
                 Text = 'NOTE: BOTH SURFACE WATER DIVERSION AND PUMPING WERE ADJUSTED.'
         END SELECT
-        CALL ModuleLogger%LogMessage(f_cLineFeed//Text,f_iMessage,'',f_iFILE)
+        CALL Model%Logger%LogMessage(f_cLineFeed//Text,f_iMessage,'',f_iFILE)
     END IF
     
-    !Set module-level loggers for Batch 5 packages (Package_Model and Model_ForInquiry)
-    CALL PackageModel_SetModuleLogger(DefaultLogger)
 
     !Set logger for components
     CALL Model%SupplyAdjust%SetLogger(DefaultLogger)
     CALL Model%IrigFracFile%SetLogger(DefaultLogger)
     CALL Model%GWZBudget%SetLogger(DefaultLogger)
-
-
-
-
-
-
-
-    ! I/O layer Logger now propagated via type components (BaseFileType%Logger, GenericFileType%Logger)
-    CALL BudgetInputFile_SetModuleLogger(DefaultLogger)
-
-    CALL GWZBudget_SetModuleLogger(DefaultLogger)
-
-
-
 
 
     !Solution scheme control data
@@ -1848,18 +1717,18 @@ CONTAINS
     IF (iStat .EQ. -1) RETURN
     
     !Precipitation data
-    CALL Model%PrecipData%New(ModuleLogger,cSIMFileNames(SIM_PrecipDataFileID),Model%cSIMWorkingDirectory,'precipitation data',Model%TimeStep,iStat)
+    CALL Model%PrecipData%New(Model%Logger,cSIMFileNames(SIM_PrecipDataFileID),Model%cSIMWorkingDirectory,'precipitation data',Model%TimeStep,iStat)
     IF (iStat .EQ. -1) RETURN
 
     !ET data
-    CALL Model%ETData%New(ModuleLogger,cSIMFileNames(SIM_ETDataFileID),Model%cSIMWorkingDirectory,'ET data',Model%TimeStep,iStat)
+    CALL Model%ETData%New(Model%Logger,cSIMFileNames(SIM_ETDataFileID),Model%cSIMWorkingDirectory,'ET data',Model%TimeStep,iStat)
     IF (iStat .EQ. -1) RETURN
   
     !Lakes
     !Make sure lake component is defined, if it is defined in Preprocessor
     IF (Model%LakeGWConnector%IsDefined()) THEN
         IF (LEN_TRIM(cSIMFileNames(SIM_LakeDataFileID)) .EQ. 0) THEN
-            CALL ModuleLogger%SetLastMessage('Lake component data files must be defined when they are defined for Pre-processor!',f_iFatal,ThisProcedure)
+            CALL Model%Logger%SetLastMessage('Lake component data files must be defined when they are defined for Pre-processor!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -1869,7 +1738,7 @@ CONTAINS
     NLakes = Model%AppLake%GetNLakes()
     ALLOCATE (Model%LakeRunoff(NLakes) , Model%LakeReturnFlow(NLakes) , Model%LakePondDrain(NLakes) , iLakeIDs(NLakes) , STAT=ErrorCode , ERRMSG=cErrorMsg)
     IF (ErrorCode .NE. 0) THEN
-        CALL ModuleLogger%SetLastMessage('Error allocating memory for lake related data!'//f_cLineFeed//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
+        CALL Model%Logger%SetLastMessage('Error allocating memory for lake related data!'//f_cLineFeed//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -1882,7 +1751,7 @@ CONTAINS
     !Make sure stream component is defined if it is defined in Preprocessor
     IF (Model%StrmGWConnector%IsDefined()) THEN
         IF (LEN_TRIM(cSIMFileNames(SIM_StrmDataFileID)) .EQ. 0) THEN
-            CALL ModuleLogger%SetLastMessage('Stream component data files must be defined when they are defined in Pre-processor!',f_iFatal,ThisProcedure)
+            CALL Model%Logger%SetLastMessage('Stream component data files must be defined when they are defined in Pre-processor!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -1902,7 +1771,7 @@ CONTAINS
               STAT=ErrorCode                , &
               ERRMSG=cErrorMsg              )
     IF (ErrorCode .NE. 0) THEN
-        CALL ModuleLogger%SetLastMessage('Error allocating memory for stream related data!'//f_cLineFeed//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
+        CALL Model%Logger%SetLastMessage('Error allocating memory for stream related data!'//f_cLineFeed//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -1918,7 +1787,7 @@ CONTAINS
     
     !Groundwater
     CALL Model%AppStream%GetStrmConnectivityInGWNodes(Model%StrmGWConnector,StrmConnectivity)
-    CALL Model%AppGW%New(ModuleLogger,lForInquiry,cSIMFileNames(SIM_GWDataFileID),Model%cSIMWorkingDirectory,Model%AppGrid,Model%Stratigraphy,StrmConnectivity,iStrmNodeIDs,Model%StrmGWConnector,iLakeIDs,Model%LakeGWConnector,Model%TimeStep,Model%NTIME,iStat)
+    CALL Model%AppGW%New(Model%Logger,lForInquiry,cSIMFileNames(SIM_GWDataFileID),Model%cSIMWorkingDirectory,Model%AppGrid,Model%Stratigraphy,StrmConnectivity,iStrmNodeIDs,Model%StrmGWConnector,iLakeIDs,Model%LakeGWConnector,Model%TimeStep,Model%NTIME,iStat)
     IF (iStat .EQ. -1) RETURN
     NNodes    = Model%AppGrid%NNodes
     NElements = Model%AppGrid%NElements
@@ -1943,17 +1812,17 @@ CONTAINS
     Model%cGWMainInputFileName = TRIM(cSIMFileNames(SIM_GWDataFileID))
     
     !Unsaturated zone
-    CALL Model%AppUnsatZone%New(ModuleLogger,lForInquiry,cSIMFileNames(SIM_UnsatZoneDataFileID),Model%cSIMWorkingDirectory,Model%AppGrid,Model%Stratigraphy,Model%TimeStep,Model%NTIME,Model%DepthToGW,iStat)
+    CALL Model%AppUnsatZone%New(Model%Logger,lForInquiry,cSIMFileNames(SIM_UnsatZoneDataFileID),Model%cSIMWorkingDirectory,Model%AppGrid,Model%Stratigraphy,Model%TimeStep,Model%NTIME,Model%DepthToGW,iStat)
     IF (iStat .EQ. -1) RETURN
     Model%lAppUnsatZone_Defined = Model%AppUnsatZone%IsDefined()
     
     !Small watersheds
-    CALL Model%AppSWShed%New(ModuleLogger,lForInquiry,cSIMFileNames(SIM_SmallWatershedDataFileID),cSIMFileNames(SIM_CropCoeffFileID),Model%cSIMWorkingDirectory,Model%TimeStep,Model%NTIME,NStrmNodes,iStrmNodeIDs,Model%AppGrid,Model%Stratigraphy,Model%PrecipData,Model%ETData,iStat)
+    CALL Model%AppSWShed%New(Model%Logger,lForInquiry,cSIMFileNames(SIM_SmallWatershedDataFileID),cSIMFileNames(SIM_CropCoeffFileID),Model%cSIMWorkingDirectory,Model%TimeStep,Model%NTIME,NStrmNodes,iStrmNodeIDs,Model%AppGrid,Model%Stratigraphy,Model%PrecipData,Model%ETData,iStat)
     IF (iStat .EQ. -1) RETURN
 
     !Root zone component (must be instantiated after gw and streams)
     IF (cSIMFileNames(SIM_RootZoneDataFileID) .NE. '') THEN
-        CALL Model%RootZone%New(ModuleLogger,lForInquiry,cProjectNameForDSS,cSIMFileNames(SIM_RootZoneDataFileID),cSimFileNames(SIM_CropCoeffFileID),Model%cSIMWorkingDirectory,Model%AppGrid,Model%TimeStep,Model%NTIME,Model%ETData,Model%PrecipData,iStat,iStrmNodeIDs=iStrmNodeIDs,iLakeIDs=iLakeIDs)
+        CALL Model%RootZone%New(Model%Logger,lForInquiry,cProjectNameForDSS,cSIMFileNames(SIM_RootZoneDataFileID),cSimFileNames(SIM_CropCoeffFileID),Model%cSIMWorkingDirectory,Model%AppGrid,Model%TimeStep,Model%NTIME,Model%ETData,Model%PrecipData,iStat,iStrmNodeIDs=iStrmNodeIDs,iLakeIDs=iLakeIDs)
         IF (iStat .EQ. -1) RETURN
         
         !Define the lake elements
@@ -1972,9 +1841,9 @@ CONTAINS
     Model%lRootZone_Defined = Model%RootZone%IsDefined()
 
     !Compile destination-supply connectors
-    CALL Model%AppStream%GetDiversionDestination(SupplyDest)            ;  CALL Model%DiverDestinationConnector%New(ModuleLogger,'Diversion',Model%iDemandCalcLocation,SupplyDest,Model%AppGrid,iStat)           ;  IF (iStat .EQ. -1) RETURN
-    CALL Model%AppGW%GetPumpDestination(f_iSupply_Well,SupplyDest)      ;  CALL Model%WellDestinationConnector%New(ModuleLogger,'Well',Model%iDemandCalcLocation,SupplyDest,Model%AppGrid,iStat)                 ;  IF (iStat .EQ. -1) RETURN
-    CALL Model%AppGW%GetPumpDestination(f_iSupply_ElemPump,SupplyDest)  ;  CALL Model%ElemPumpDestinationConnector%New(ModuleLogger,'Element pumping',Model%iDemandCalcLocation,SupplyDest,Model%AppGrid,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    CALL Model%AppStream%GetDiversionDestination(SupplyDest)            ;  CALL Model%DiverDestinationConnector%New(Model%Logger,'Diversion',Model%iDemandCalcLocation,SupplyDest,Model%AppGrid,iStat)           ;  IF (iStat .EQ. -1) RETURN
+    CALL Model%AppGW%GetPumpDestination(f_iSupply_Well,SupplyDest)      ;  CALL Model%WellDestinationConnector%New(Model%Logger,'Well',Model%iDemandCalcLocation,SupplyDest,Model%AppGrid,iStat)                 ;  IF (iStat .EQ. -1) RETURN
+    CALL Model%AppGW%GetPumpDestination(f_iSupply_ElemPump,SupplyDest)  ;  CALL Model%ElemPumpDestinationConnector%New(Model%Logger,'Element pumping',Model%iDemandCalcLocation,SupplyDest,Model%AppGrid,iStat)  ;  IF (iStat .EQ. -1) RETURN
 
     !Irrigation fractions data file
     CALL Model%IrigFracFile%New(cSIMFileNames(SIM_IrigFracDataFileID),Model%cSIMWorkingDirectory,Model%TimeStep,iStat)  
@@ -2082,7 +1951,7 @@ CONTAINS
   ! --- KILL MODEL
   ! -------------------------------------------------------------
   SUBROUTINE Kill(Model)
-    CLASS(ModelType) :: Model
+    CLASS(ModelType),TARGET :: Model
     
     !Local variables
     INTEGER         :: ErrorCode
@@ -2182,7 +2051,7 @@ CONTAINS
   ! --- GET NUMBER OF TILE DRAIN NODES
   ! -------------------------------------------------------------
   FUNCTION GetNTileDrainNodes(Model) RESULT(NTDNodes)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET :: Model
     INTEGER                     :: NTDNodes
     
     IF (Model%lModel_ForInquiry_Defined) THEN
@@ -2198,7 +2067,7 @@ CONTAINS
   ! --- GET TILE DRAIN IDS
   ! -------------------------------------------------------------
   PURE SUBROUTINE GetTileDrainIDs(Model,IDs)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET,INTENT(IN) :: Model
     INTEGER,INTENT(OUT)         :: IDs(:)
     
     CALL Model%AppGW%GetTileDrainIDs(IDs)
@@ -2210,7 +2079,7 @@ CONTAINS
   ! --- GET GROUNDWATER NODES CORRESPONDING TO TILE DRAINS
   ! -------------------------------------------------------------
   SUBROUTINE GetTileDrainNodes(Model,TDNodes,iStat)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET :: Model
     INTEGER,ALLOCATABLE         :: TDNodes(:)  
     INTEGER,INTENT(OUT)         :: iStat
     
@@ -2219,11 +2088,7 @@ CONTAINS
     INTEGER,ALLOCATABLE                    :: iLayers(:)
     
     IF (Model%lModel_ForInquiry_Defined) THEN
-        IF (ASSOCIATED(ModuleLogger)) THEN
-            CALL ModuleLogger%SetLastMessage('Model is instantiated only partially. Groundwater nodes for tile drains cannot be retrieved from a partially instantiated model.',f_iWarn,ThisProcedure)
-        ELSE
-            CALL ModuleLogger%SetLastMessage('Model is instantiated only partially. Groundwater nodes for tile drains cannot be retrieved from a partially instantiated model.',f_iWarn,ThisProcedure)
-        END IF
+                    CALL Model%Logger%SetLastMessage('Model is instantiated only partially. Groundwater nodes for tile drains cannot be retrieved from a partially instantiated model.',f_iWarn,ThisProcedure)
         ALLOCATE (TDNodes(Model%GetNTileDrainNodes()))
         TDNodes = 0
         iStat   = -1
@@ -2239,7 +2104,7 @@ CONTAINS
   ! --- GET NUMBER OF AVAILABLE HYDROGRAPH OUTPUT TYPES 
   ! -------------------------------------------------------------
   FUNCTION GetNHydrographTypes(Model) RESULT(iNHydTypes)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET :: Model
     INTEGER                     :: iNHydTypes
     
     !Local variables
@@ -2265,7 +2130,7 @@ CONTAINS
   ! --- GET A LIST OF AVAILABLE HYDROGRAPH OUTPUT TYPES FROM INQUIRY MODEL
   ! -------------------------------------------------------------
   SUBROUTINE GetHydrographTypeList(Model,cHydTypeList,iHydLocationTypeList,iHydCompList,cHydFileList)
-    CLASS(ModelType),INTENT(IN)              :: Model
+    CLASS(ModelType),TARGET              :: Model
     CHARACTER(LEN=*),ALLOCATABLE,INTENT(OUT) :: cHydTypeList(:),cHydFileList(:)
     INTEGER,ALLOCATABLE,INTENT(OUT)          :: iHydLocationTypeList(:),iHydCompList(:)
     
@@ -2321,7 +2186,7 @@ CONTAINS
   ! --- GET NUMBER OF A SPECIFIC TYPE OF HYDROGRAPHS
   ! -------------------------------------------------------------
   FUNCTION GetNHydrographs(Model,iLocationType) RESULT(NHydrographs)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET :: Model
     INTEGER,INTENT(IN)          :: iLocationType
     INTEGER                     :: NHydrographs
     
@@ -2367,7 +2232,7 @@ CONTAINS
   ! --- GET HYDROGRAPH IDS FOR A GIVEN TYPE OF HYDROGRAPH
   ! -------------------------------------------------------------
   PURE SUBROUTINE GetHydrographIDs(Model,iLocationType,IDs)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET,INTENT(IN) :: Model
     INTEGER,INTENT(IN)          :: iLocationType
     INTEGER,INTENT(OUT)         :: IDs(:)
     
@@ -2405,7 +2270,7 @@ CONTAINS
   ! --- GET HYDROGRAPH FOR A GIVEN HYDROGRAPH INDEX 
   ! -------------------------------------------------------------
   SUBROUTINE GetHydrograph(Model,iLocationType,iLocationIndex,iLayer,rFact_LT,rFact_VL,cBeginDate,cEndDate,cInterval,iDataUnitType,rDates,rValues,iStat)
-    CLASS(ModelType),INTENT(IN)     :: Model
+    CLASS(ModelType),TARGET     :: Model
     CHARACTER(LEN=*),INTENT(IN)     :: cBeginDate,cEndDate,cInterval
     INTEGER,INTENT(IN)              :: iLocationType,iLocationIndex,iLayer
     REAL(8),INTENT(IN)              :: rFact_LT,rFact_VL
@@ -2434,7 +2299,7 @@ CONTAINS
   ! --- GET X-Y COORDINATES OF A SPECIFIC TYPE OF HYDROGRAPHS
   ! -------------------------------------------------------------
   SUBROUTINE GetHydrographCoordinates(Model,iLocationType,X,Y,iStat)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET :: Model
     INTEGER,INTENT(IN)          :: iLocationType
     REAL(8),INTENT(OUT)         :: X(:),Y(:)
     INTEGER,INTENT(OUT)         :: iStat
@@ -2444,11 +2309,7 @@ CONTAINS
     
     !Is this full model or model for inquiry
     IF (Model%lModel_ForInquiry_Defined) THEN
-        IF (ASSOCIATED(ModuleLogger)) THEN
-            CALL ModuleLogger%SetLastMessage('Model is instantiated only partially. Hydrograph print-out coordinates cannot be retrieved from a partially instantiated model.',f_iWarn,ThisProcedure)
-        ELSE
-            CALL ModuleLogger%SetLastMessage('Model is instantiated only partially. Hydrograph print-out coordinates cannot be retrieved from a partially instantiated model.',f_iWarn,ThisProcedure)
-        END IF
+                    CALL Model%Logger%SetLastMessage('Model is instantiated only partially. Hydrograph print-out coordinates cannot be retrieved from a partially instantiated model.',f_iWarn,ThisProcedure)
         X     = 0.0
         Y     = 0.0
         iStat = -1
@@ -2474,7 +2335,7 @@ CONTAINS
   ! --- GET SIMULATION TIME RELATED DATA FROM Model OBJECT
   ! -------------------------------------------------------------
   PURE SUBROUTINE GetTimeSpecs(Model,TimeStep,nTime)
-    CLASS(ModelType),INTENT(IN)    :: Model
+    CLASS(ModelType),TARGET,INTENT(IN)    :: Model
     TYPE(TimeStepType),INTENT(OUT) :: TimeStep
     INTEGER,INTENT(OUT)            :: nTime
     
@@ -2488,7 +2349,7 @@ CONTAINS
   ! --- GET CURRENT SIMULATION DATE AND TIME
   ! -------------------------------------------------------------
   PURE SUBROUTINE GetCurrentDateAndTime(Model,cCurrentDateAndTime)
-    CLASS(ModelType),INTENT(IN)  :: Model
+    CLASS(ModelType),TARGET,INTENT(IN)  :: Model
     CHARACTER(LEN=*),INTENT(OUT) :: cCurrentDateAndTime
     
     cCurrentDateAndTime = Model%TimeStep%CurrentDateAndTime
@@ -2500,7 +2361,7 @@ CONTAINS
   ! --- GET NUMBER OF AVAILABLE BUDGET OUTPUTS
   ! -------------------------------------------------------------
   FUNCTION GetBudget_N(Model) RESULT(iNBudgets)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET :: Model
     INTEGER                     :: iNBudgets
     
     !Local variables
@@ -2525,7 +2386,7 @@ CONTAINS
   ! --- GET THE LIST OF AVAILABLE BUDGET OUTPUTS 
   ! -------------------------------------------------------------
   SUBROUTINE GetBudget_List(Model,cBudgetList,iBudgetTypeList,iBudgetCompList,iBudgetLocationTypeList,cBudgetFiles)
-    CLASS(ModelType),INTENT(IN)               :: Model
+    CLASS(ModelType),TARGET               :: Model
     CHARACTER(LEN=*),ALLOCATABLE,INTENT(OUT)  :: cBudgetList(:)
     INTEGER,ALLOCATABLE,INTENT(OUT)           :: iBudgetTypeList(:),iBudgetCompList(:),iBudgetLocationTypeList(:)
     CHARACTER(LEN=*),ALLOCATABLE,INTENT(OUT)  :: cBudgetFiles(:)
@@ -2635,7 +2496,7 @@ CONTAINS
   ! --- GET NUMBER OF COLUMNS (EXCLUDING TIME COLUMN) FOR A BUDGET FROM THE INQUIRY MODEL
   ! -------------------------------------------------------------
   SUBROUTINE GetBudget_NColumns(Model,iBudgetType,iLocationIndex,iNCols,iStat)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET :: Model
     INTEGER,INTENT(IN)          :: iBudgetType,iLocationIndex
     INTEGER,INTENT(OUT)         :: iNCols,iStat
     
@@ -2681,7 +2542,7 @@ CONTAINS
   ! --- GET BUDGET COLUMN TITLES FOR A BUDGET
   ! -------------------------------------------------------------
   SUBROUTINE GetBudget_ColumnTitles(Model,iBudgetType,iLocationIndex,cUnitLT,cUnitAR,cUnitVL,cColTitles,iStat)
-    CLASS(ModelType),INTENT(IN)              :: Model
+    CLASS(ModelType),TARGET              :: Model
     INTEGER,INTENT(IN)                       :: iBudgetType,iLocationIndex
     CHARACTER(LEN=*),INTENT(IN)              :: cUnitLT,cUnitAR,cUnitVL
     CHARACTER(LEN=*),ALLOCATABLE,INTENT(OUT) :: cColTitles(:)
@@ -2729,7 +2590,7 @@ CONTAINS
   ! --- GET AVERAGE MONTHLY BUDGET OUTPUTS FROM A BUDGET FILE FOR A SELECTED LOCATION
   ! -------------------------------------------------------------
   SUBROUTINE GetBudget_MonthlyAverageFlows(Model,iBudgetType,iLocationIndex,iLUType,iSWShedBudType,cBeginDate,cEndDate,rFactVL,rFlows,rSDFlows,cFlowNames,iStat)
-    CLASS(ModelType),INTENT(IN)              :: Model
+    CLASS(ModelType),TARGET              :: Model
     INTEGER,INTENT(IN)                       :: iBudgetType,iLocationIndex,iLUType,iSWShedBudType
     CHARACTER(LEN=*),INTENT(IN)              :: cBeginDate,cEndDate
     REAL(8),INTENT(IN)                       :: rFactVL
@@ -2788,11 +2649,7 @@ CONTAINS
     !Make sure we have at least 1 year to process
     CALL CTimeStep_To_RTimeStep('1MON',rDummy,iDeltaT_InMinutes,iStat)
     IF (NPeriods(iDeltaT_InMinutes,cAdjustedBeginDate,cAdjustedEndDate) .LT. 12) THEN
-        IF (ASSOCIATED(ModuleLogger)) THEN
-            CALL ModuleLogger%SetLastMessage('At least 1 year of simulation period must be selected to obtain monthly average Budget flows!',f_iFatal,ThisProcedure)
-        ELSE
-            CALL ModuleLogger%SetLastMessage('At least 1 year of simulation period must be selected to obtain monthly average Budget flows!',f_iFatal,ThisProcedure)
-        END IF
+                    CALL Model%Logger%SetLastMessage('At least 1 year of simulation period must be selected to obtain monthly average Budget flows!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF   
@@ -2875,7 +2732,7 @@ CONTAINS
   ! --- GET ANNUAL BUDGET OUTPUTS FROM A BUDGET FILE FOR A SELECTED LOCATION
   ! -------------------------------------------------------------
   SUBROUTINE GetBudget_AnnualFlows(Model,iBudgetType,iLocationIndex,iLUType,iSWShedBudType,cBeginDate,cEndDate,lForCalendarYear,rFactVL,rFlows,cFlowNames,iOutputYears,iStat)
-    CLASS(ModelType),INTENT(IN)              :: Model
+    CLASS(ModelType),TARGET              :: Model
     INTEGER,INTENT(IN)                       :: iBudgetType,iLocationIndex,iLUType,iSWShedBudType
     CHARACTER(LEN=*),INTENT(IN)              :: cBeginDate,cEndDate
     LOGICAL,INTENT(IN)                       :: lForCalendarYear
@@ -2948,17 +2805,9 @@ CONTAINS
     CALL CTimeStep_To_RTimeStep('1YEAR',rDummy,iDELTAT_InMinutes,iStat)
     IF (NPeriods(iDELTAT_InMinutes,cAdjustedBeginDate,cAdjustedEndDate) .LT. 1) THEN
         IF (lForCalendarYear) THEN
-            IF (ASSOCIATED(ModuleLogger)) THEN
-                CALL ModuleLogger%SetLastMessage('At least 1 calendar year of simulation period must be selected to obtain annual ZBudget flows!',f_iFatal,ThisProcedure)
-            ELSE
-                CALL ModuleLogger%SetLastMessage('At least 1 calendar year of simulation period must be selected to obtain annual ZBudget flows!',f_iFatal,ThisProcedure)
-            END IF
+                            CALL Model%Logger%SetLastMessage('At least 1 calendar year of simulation period must be selected to obtain annual ZBudget flows!',f_iFatal,ThisProcedure)
         ELSE
-            IF (ASSOCIATED(ModuleLogger)) THEN
-                CALL ModuleLogger%SetLastMessage('At least 1 water year of simulation period must be selected to obtain annual ZBudget flows!',f_iFatal,ThisProcedure)
-            ELSE
-                CALL ModuleLogger%SetLastMessage('At least 1 water year of simulation period must be selected to obtain annual ZBudget flows!',f_iFatal,ThisProcedure)
-            END IF
+                            CALL Model%Logger%SetLastMessage('At least 1 water year of simulation period must be selected to obtain annual ZBudget flows!',f_iFatal,ThisProcedure)
         END IF
         iStat = -1
         RETURN
@@ -3037,7 +2886,7 @@ CONTAINS
   ! --- GET BUDGET TIME SERIES DATA FROM A BUDGET FILE FOR A SELECTED LOCATION AND SELECTED COLUMNS
   ! -------------------------------------------------------------
   SUBROUTINE GetBudget_TSData(Model,iBudgetType,iLocationIndex,iCols,cBeginDate,cEndDate,cInterval,rFactLT,rFactAR,rFactVL,rOutputDates,rOutputValues,iDataTypes,inActualOutput,iStat)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET :: Model
     INTEGER,INTENT(IN)          :: iBudgetType,iLocationIndex,iCols(:)
     CHARACTER(LEN=*),INTENT(IN) :: cBeginDate,cEndDate,cInterval
     REAL(8),INTENT(IN)          :: rFactLT,rFactAR,rFactVL
@@ -3099,7 +2948,7 @@ CONTAINS
   ! --- GET CUMULATIVE GW STORAGE CHANGE FROM BUDGET FILE
   ! -------------------------------------------------------------
   SUBROUTINE GetBudget_CumGWStorChange(Model,iSubregionIndex,cBeginDate,cEndDate,cInterval,rFactVL,rOutputDates,rCumGWStorChange,iStat)
-    CLASS(ModelType),INTENT(IN)     :: Model
+    CLASS(ModelType),TARGET     :: Model
     INTEGER,INTENT(IN)              :: iSubregionIndex
     CHARACTER(LEN=*),INTENT(IN)     :: cBeginDate,cEndDate,cInterval
     REAL(8),INTENT(IN)              :: rFactVL
@@ -3123,7 +2972,7 @@ CONTAINS
   ! --- GET ANNUAL CUMULATIVE GW STORAGE CHANGE FROM BUDGET FILE
   ! -------------------------------------------------------------
   SUBROUTINE GetBudget_AnnualCumGWStorChange(Model,iSubregionIndex,cBeginDate,cEndDate,lForCalendarYear,rFactVL,rCumGWStorChange,iOutputYears,iStat)
-    CLASS(ModelType),INTENT(IN)     :: Model
+    CLASS(ModelType),TARGET     :: Model
     INTEGER,INTENT(IN)              :: iSubregionIndex
     CHARACTER(LEN=*),INTENT(IN)     :: cBeginDate,cEndDate
     LOGICAL,INTENT(IN)              :: lForCalendarYear
@@ -3194,17 +3043,9 @@ CONTAINS
     CALL CTimeStep_To_RTimeStep('1YEAR',rDummy,iDELTAT_InMinutes,iStat)
     IF (NPeriods(iDELTAT_InMinutes,cAdjustedBeginDate,cAdjustedEndDate) .LT. 1) THEN
         IF (lForCalendarYear) THEN
-            IF (ASSOCIATED(ModuleLogger)) THEN
-                CALL ModuleLogger%SetLastMessage('At least 1 calendar year of simulation period must be selected to obtain annual cumulative change in groundwater storage!',f_iFatal,ThisProcedure)
-            ELSE
-                CALL ModuleLogger%SetLastMessage('At least 1 calendar year of simulation period must be selected to obtain annual cumulative change in groundwater storage!',f_iFatal,ThisProcedure)
-            END IF
+                            CALL Model%Logger%SetLastMessage('At least 1 calendar year of simulation period must be selected to obtain annual cumulative change in groundwater storage!',f_iFatal,ThisProcedure)
         ELSE
-            IF (ASSOCIATED(ModuleLogger)) THEN
-                CALL ModuleLogger%SetLastMessage('At least 1 water year of simulation period must be selected to obtain annual cumulative change in groundwater storage!',f_iFatal,ThisProcedure)
-            ELSE
-                CALL ModuleLogger%SetLastMessage('At least 1 water year of simulation period must be selected to obtain annual cumulative change in groundwater storage!',f_iFatal,ThisProcedure)
-            END IF
+                            CALL Model%Logger%SetLastMessage('At least 1 water year of simulation period must be selected to obtain annual cumulative change in groundwater storage!',f_iFatal,ThisProcedure)
         END IF      
         iStat = -1
         RETURN
@@ -3241,7 +3082,7 @@ CONTAINS
   ! --- GET NUMBER OF AVAILABLE ZBUDGET OUTPUTS
   ! -------------------------------------------------------------
   FUNCTION GetZBudget_N(Model) RESULT(iNZBudgets)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET :: Model
     INTEGER                     :: iNZBudgets
     
     !Local variables
@@ -3273,7 +3114,7 @@ CONTAINS
   ! --- GET THE LIST OF AVAILABLE ZBUDGET OUTPUTS 
   ! -------------------------------------------------------------
   SUBROUTINE GetZBudget_List(Model,cZBudgetList,iZBudgetTypeList,cZBudgetFiles)
-    CLASS(ModelType),INTENT(IN)              :: Model
+    CLASS(ModelType),TARGET              :: Model
     CHARACTER(LEN=*),ALLOCATABLE,INTENT(OUT) :: cZBudgetList(:)
     INTEGER,ALLOCATABLE,INTENT(OUT)          :: iZBudgetTypeList(:)
     CHARACTER(LEN=*),ALLOCATABLE,INTENT(OUT) :: cZBudgetFiles(:)
@@ -3339,7 +3180,7 @@ CONTAINS
   ! --- GET THE NUMBER OF COLUMNS (EXCLUDING TIME COLUMN) FOR A ZBUDGET FOR A GIVEN ZONE
   ! -------------------------------------------------------------
   SUBROUTINE GetZBudget_NColumns(Model,iZBudgetType,iZoneID,iZExtent,iElems,iLayers,iZoneIDs,iNCols,iStat)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET :: Model
     INTEGER,INTENT(IN)          :: iZBudgetType,iZoneID,iZExtent,iElems(:),iLayers(:),iZoneIDs(:)
     INTEGER,INTENT(OUT)         :: iNCols,iStat
     
@@ -3371,7 +3212,7 @@ CONTAINS
   ! --- GET ZBUDGET COLUMN TITLES FOR A ZBUDGET AND A ZONE FROM THE FULL MODEL
   ! -------------------------------------------------------------
   SUBROUTINE GetZBudget_ColumnTitles(Model,iZBudgetType,iZoneID,iZExtent,iElems,iLayers,iZoneIDs,cUnitAR,cUnitVL,cColTitles,iStat)
-    CLASS(ModelType),INTENT(IN)              :: Model
+    CLASS(ModelType),TARGET              :: Model
     INTEGER,INTENT(IN)                       :: iZBudgetType,iZoneID,iZExtent,iElems(:),iLayers(:),iZoneIDs(:)
     CHARACTER(LEN=*),INTENT(IN)              :: cUnitAR,cUnitVL
     CHARACTER(LEN=*),ALLOCATABLE,INTENT(OUT) :: cColTitles(:)
@@ -3406,7 +3247,7 @@ CONTAINS
   ! --- GET FULL MONTHLY AVERAGE ZONE BUDGET FROM A ZBUDGET FILE FOR A SELECTED ZONE 
   ! -------------------------------------------------------------
   SUBROUTINE GetZBudget_MonthlyAverageFlows(Model,iZBudgetType,iZoneID,iLUType,iZExtent,iElems,iLayers,iZoneIDs,cBeginDate,cEndDate,rFactVL,rFlows,rSDFlows,cFlowNames,iStat)
-    CLASS(ModelType),TARGET,INTENT(IN)       :: Model
+    CLASS(ModelType),TARGET       :: Model
     INTEGER,INTENT(IN)                       :: iZBudgetType,iZoneID,iLUType,iZExtent,iElems(:),iLayers(:),iZoneIDs(:)
     CHARACTER(LEN=*),INTENT(IN)              :: cBeginDate,cEndDate
     REAL(8),INTENT(IN)                       :: rFactVL
@@ -3425,11 +3266,7 @@ CONTAINS
 
     !Make sure ZBudget data can be averaged monthly
     IF (TRIM(UpperCase(Model%TimeStep%Unit)) .EQ. '1YEAR') THEN
-        IF (ASSOCIATED(ModuleLogger)) THEN
-            CALL ModuleLogger%SetLastMessage('ZBudget flow information cannot be averaged to monthly interval for a model with simulation timestep of 1YEAR!',f_iFatal,ThisProcedure)
-        ELSE
-            CALL ModuleLogger%SetLastMessage('ZBudget flow information cannot be averaged to monthly interval for a model with simulation timestep of 1YEAR!',f_iFatal,ThisProcedure)
-        END IF
+                    CALL Model%Logger%SetLastMessage('ZBudget flow information cannot be averaged to monthly interval for a model with simulation timestep of 1YEAR!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -3476,11 +3313,7 @@ CONTAINS
     !Make sure we have at least 1 year to process
     CALL CTimeStep_To_RTimeStep('1MON',rDummy,iDELTAT_InMinutes,iStat)
     IF (NPeriods(iDELTAT_InMinutes,cAdjustedBeginDate,cAdjustedEndDate) .LT. 12) THEN
-        IF (ASSOCIATED(ModuleLogger)) THEN
-            CALL ModuleLogger%SetLastMessage('At least 1 year of simulation period must be selected to obtain monthly average ZBudget flows!',f_iFatal,ThisProcedure)
-        ELSE
-            CALL ModuleLogger%SetLastMessage('At least 1 year of simulation period must be selected to obtain monthly average ZBudget flows!',f_iFatal,ThisProcedure)
-        END IF
+                    CALL Model%Logger%SetLastMessage('At least 1 year of simulation period must be selected to obtain monthly average ZBudget flows!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF   
@@ -3546,7 +3379,7 @@ CONTAINS
   ! --- GET ANNUAL ZONE BUDGET FLOWS FROM A ZBUDGET FILE FOR A SELECTED ZONE 
   ! -------------------------------------------------------------
   SUBROUTINE GetZBudget_AnnualFlows(Model,iZBudgetType,iZoneID,iLUType,iZExtent,iElems,iLayers,iZoneIDs,cBeginDate,cEndDate,lForCalendarYear,rFactVL,rFlows,cFlowNames,iOutputYears,iStat)
-    CLASS(ModelType),TARGET,INTENT(IN)       :: Model
+    CLASS(ModelType),TARGET       :: Model
     INTEGER,INTENT(IN)                       :: iZBudgetType,iZoneID,iLUType,iZExtent,iElems(:),iLayers(:),iZoneIDs(:)
     CHARACTER(LEN=*),INTENT(IN)              :: cBeginDate,cEndDate
     LOGICAL,INTENT(IN)                       :: lForCalendarYear
@@ -3619,17 +3452,9 @@ CONTAINS
     CALL CTimeStep_To_RTimeStep('1YEAR',rDummy,iDELTAT_InMinutes,iStat)
     IF (NPeriods(iDELTAT_InMinutes,cAdjustedBeginDate,cAdjustedEndDate) .LT. 1) THEN
         IF (lForCalendarYear) THEN
-            IF (ASSOCIATED(ModuleLogger)) THEN
-                CALL ModuleLogger%SetLastMessage('At least 1 calendar year of simulation period must be selected to obtain annual ZBudget flows!',f_iFatal,ThisProcedure)
-            ELSE
-                CALL ModuleLogger%SetLastMessage('At least 1 calendar year of simulation period must be selected to obtain annual ZBudget flows!',f_iFatal,ThisProcedure)
-            END IF
+                            CALL Model%Logger%SetLastMessage('At least 1 calendar year of simulation period must be selected to obtain annual ZBudget flows!',f_iFatal,ThisProcedure)
         ELSE
-            IF (ASSOCIATED(ModuleLogger)) THEN
-                CALL ModuleLogger%SetLastMessage('At least 1 water year of simulation period must be selected to obtain annual ZBudget flows!',f_iFatal,ThisProcedure)
-            ELSE
-                CALL ModuleLogger%SetLastMessage('At least 1 water year of simulation period must be selected to obtain annual ZBudget flows!',f_iFatal,ThisProcedure)
-            END IF
+                            CALL Model%Logger%SetLastMessage('At least 1 water year of simulation period must be selected to obtain annual ZBudget flows!',f_iFatal,ThisProcedure)
         END IF
         iStat = -1
         RETURN
@@ -3695,7 +3520,7 @@ CONTAINS
   ! --- GET ZONE BUDGET TIME SERIES DATA FROM A ZBUDGET FILE FOR A SELECTED ZONE AND SELECTED COLUMNS
   ! -------------------------------------------------------------
   SUBROUTINE GetZBudget_TSData(Model,iZBudgetType,iZoneID,iCols,iZExtent,iElems,iLayers,iZoneIDs,cBeginDate,cEndDate,cInterval,rFactAR,rFactVL,rOutputDates,rOutputValues,iDataTypes,inActualOutput,iStat)
-    CLASS(ModelType),TARGET,INTENT(IN) :: Model
+    CLASS(ModelType),TARGET :: Model
     INTEGER,INTENT(IN)                 :: iZBudgetType,iZoneID,iCols(:),iZExtent,iElems(:),iLayers(:),iZoneIDs(:)
     CHARACTER(LEN=*),INTENT(IN)        :: cBeginDate,cEndDate,cInterval
     REAL(8),INTENT(IN)                 :: rFactAR,rFactVL
@@ -3744,7 +3569,7 @@ CONTAINS
   ! --- GET CUMULATIVE GW STORAGE CHANGE FROM Z-BUDGET FILE 
   ! -------------------------------------------------------------
   SUBROUTINE GetZBudget_CumGWStorChange(Model,iZoneID,iZExtent,iElems,iLayers,iZoneIDs,cBeginDate,cEndDate,cOutputInterval,rFactVL,rOutputDates,rCumStorChange,iStat)
-    CLASS(ModelType),TARGET,INTENT(IN) :: Model
+    CLASS(ModelType),TARGET :: Model
     INTEGER,INTENT(IN)                 :: iZoneID,iZExtent,iElems(:),iLayers(:),iZoneIDs(:)
     CHARACTER(LEN=*),INTENT(IN)        :: cBeginDate,cEndDate,cOutputInterval
     REAL(8),INTENT(IN)                 :: rFactVL
@@ -3768,7 +3593,7 @@ CONTAINS
   ! --- GET ANNUAL CUMULATIVE GW STORAGE CHANGE FROM Z-BUDGET FILE 
   ! -------------------------------------------------------------
   SUBROUTINE GetZBudget_AnnualCumGWStorChange(Model,iZoneID,iZExtent,iElems,iLayers,iZoneIDs,cBeginDate,cEndDate,lForCalendarYear,rFactVL,rCumStorChange,iOutputYears,iStat)
-    CLASS(ModelType),TARGET,INTENT(IN) :: Model
+    CLASS(ModelType),TARGET :: Model
     INTEGER,INTENT(IN)                 :: iZoneID,iZExtent,iElems(:),iLayers(:),iZoneIDs(:)
     CHARACTER(LEN=*),INTENT(IN)        :: cBeginDate,cEndDate
     LOGICAL,INTENT(IN)                 :: lForCalendarYear
@@ -3838,17 +3663,9 @@ CONTAINS
     CALL CTimeStep_To_RTimeStep('1YEAR',rDummy,iDELTAT_InMinutes,iStat)
     IF (NPeriods(iDELTAT_InMinutes,cAdjustedBeginDate,cAdjustedEndDate) .LT. 1) THEN
         IF (lForCalendarYear) THEN
-            IF (ASSOCIATED(ModuleLogger)) THEN
-                CALL ModuleLogger%SetLastMessage('At least 1 calendar year of simulation period must be selected to obtain annual cumulative change in groundwater storage!',f_iFatal,ThisProcedure)
-            ELSE
-                CALL ModuleLogger%SetLastMessage('At least 1 calendar year of simulation period must be selected to obtain annual cumulative change in groundwater storage!',f_iFatal,ThisProcedure)
-            END IF
+                            CALL Model%Logger%SetLastMessage('At least 1 calendar year of simulation period must be selected to obtain annual cumulative change in groundwater storage!',f_iFatal,ThisProcedure)
         ELSE
-            IF (ASSOCIATED(ModuleLogger)) THEN
-                CALL ModuleLogger%SetLastMessage('At least 1 water year of simulation period must be selected to obtain annual cumulative change in groundwater storage!',f_iFatal,ThisProcedure)
-            ELSE
-                CALL ModuleLogger%SetLastMessage('At least 1 water year of simulation period must be selected to obtain annual cumulative change in groundwater storage!',f_iFatal,ThisProcedure)
-            END IF
+                            CALL Model%Logger%SetLastMessage('At least 1 water year of simulation period must be selected to obtain annual cumulative change in groundwater storage!',f_iFatal,ThisProcedure)
         END IF      
         iStat = -1
         RETURN
@@ -3882,7 +3699,7 @@ CONTAINS
   ! --- GET NAME LIST FOR A SELECTED LOCATION TYPE
   ! -------------------------------------------------------------
   SUBROUTINE GetNames(Model,iLocationType,cNamesList,iStat)
-    CLASS(ModelType),INTENT(IN)  :: Model
+    CLASS(ModelType),TARGET  :: Model
     INTEGER,INTENT(IN)           :: iLocationType
     CHARACTER(LEN=*),INTENT(OUT) :: cNamesList(:)
     INTEGER,INTENT(OUT)          :: iStat
@@ -3943,7 +3760,7 @@ CONTAINS
   ! --- GET ALL GW HEADS FOR A LAYER FOR POST-PROCESSING
   ! -------------------------------------------------------------
   SUBROUTINE GetGWHeads_ForALayer(Model,iLayer,cOutputBeginDateAndTime,cOutputEndDateAndTime,rFact_LT,rOutputDates,rGWHeads,iStat)
-    CLASS(ModelType)            :: Model
+    CLASS(ModelType),TARGET     :: Model
     INTEGER,INTENT(IN)          :: iLayer
     CHARACTER(LEN=*),INTENT(IN) :: cOutputBeginDateAndTime,cOutputEndDateAndTime
     REAL(8),INTENT(IN)          :: rFact_LT
@@ -3955,11 +3772,7 @@ CONTAINS
    
     !Make sure that model is instantiated for inquiry
     IF (.NOT. Model%lIsForInquiry) THEN
-        IF (ASSOCIATED(ModuleLogger)) THEN
-            CALL ModuleLogger%SetLastMessage('Model data can be queried only if the model is instantiated for inquiry!',f_iFatal,ThisProcedure)
-        ELSE
-            CALL ModuleLogger%SetLastMessage('Model data can be queried only if the model is instantiated for inquiry!',f_iFatal,ThisProcedure)
-        END IF
+                    CALL Model%Logger%SetLastMessage('Model data can be queried only if the model is instantiated for inquiry!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -3977,7 +3790,7 @@ CONTAINS
   ! --- GET INITIAL GW HEADS
   ! -------------------------------------------------------------
   SUBROUTINE GetGWHeadsIC(Model,rGWHeadsIC,iStat)
-    CLASS(ModelType)    :: Model
+    CLASS(ModelType),TARGET :: Model
     REAL(8),INTENT(OUT) :: rGWHeadsIC(:,:)
     INTEGER,INTENT(OUT) :: iStat
     
@@ -3988,7 +3801,7 @@ CONTAINS
     CALL Model%AppGrid%GetNodeIDs(iNodeIDs)
     
     !Retrieve initial gw heads
-    CALL Model%AppGW%GetGWHeadsIC(ModuleLogger,Model%cGWMainInputFileName,iNodeIDs,Model%Stratigraphy,rGWHeadsIC,iStat)
+    CALL Model%AppGW%GetGWHeadsIC(Model%Logger,Model%cGWMainInputFileName,iNodeIDs,Model%Stratigraphy,rGWHeadsIC,iStat)
     
   END SUBROUTINE GetGWHeadsIC
   
@@ -3997,7 +3810,7 @@ CONTAINS
   ! --- GET AppGrid
   ! -------------------------------------------------------------
   SUBROUTINE GetAppGrid(Model,AppGrid)
-    CLASS(ModelType),INTENT(IN)   :: Model
+    CLASS(ModelType),TARGET   :: Model
     TYPE(AppGridType),INTENT(OUT) :: AppGrid
 
     AppGrid = Model%AppGrid
@@ -4009,7 +3822,7 @@ CONTAINS
   ! --- GET NODE IDs
   ! -------------------------------------------------------------
   PURE SUBROUTINE GetNodeIDs(Model,IDs)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET,INTENT(IN) :: Model
     INTEGER,INTENT(OUT)         :: IDs(Model%AppGrid%NNodes)
     
     IDs = Model%AppGrid%AppNode%ID
@@ -4021,7 +3834,7 @@ CONTAINS
   ! --- GET NODE COORDINATES
   ! -------------------------------------------------------------
   PURE SUBROUTINE GetNodeXY(Model,X,Y)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET,INTENT(IN) :: Model
     REAL(8),INTENT(OUT)         :: X(Model%AppGrid%NNodes),Y(Model%AppGrid%NNodes)
     
     X = Model%AppGrid%X
@@ -4034,7 +3847,7 @@ CONTAINS
   ! --- GET NUMBER OF NODES
   ! -------------------------------------------------------------
   PURE FUNCTION GetNNodes(Model) RESULT(NNodes)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET,INTENT(IN) :: Model
     INTEGER                     :: NNodes
     
     NNodes = Model%AppGrid%NNodes
@@ -4046,7 +3859,7 @@ CONTAINS
   ! --- GET BOUNDARY LENGTH ASSOCIATED WITH BOUNDARY NODE
   ! -------------------------------------------------------------
   PURE FUNCTION GetBoundaryLengthAtNode(Model,iNode) RESULT(rLength)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET,INTENT(IN) :: Model
     INTEGER,INTENT(IN)          :: iNode  !This is the node index, not ID
     REAL(8)                     :: rLength
     
@@ -4059,7 +3872,7 @@ CONTAINS
   ! --- GET NUMBER OF ELEMENTS
   ! -------------------------------------------------------------
   PURE FUNCTION GetNElements(Model) RESULT(NElem)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET,INTENT(IN) :: Model
     INTEGER                     :: NElem
     
     NElem = Model%AppGrid%NElements
@@ -4071,7 +3884,7 @@ CONTAINS
   ! --- GET ELEMENT IDs
   ! -------------------------------------------------------------
   PURE SUBROUTINE GetElementIDs(Model,IDs)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET,INTENT(IN) :: Model
     INTEGER,INTENT(OUT)         :: IDs(Model%AppGrid%NElements)
     
     IDs = Model%AppGrid%AppElement%ID
@@ -4083,7 +3896,7 @@ CONTAINS
   ! --- GET NUMBER OF LAYERS
   ! -------------------------------------------------------------
   PURE FUNCTION GetNLayers(Model) RESULT(NLayers)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET,INTENT(IN) :: Model
     INTEGER                     :: NLayers
     
     NLayers = Model%Stratigraphy%GetNLayers()
@@ -4095,7 +3908,7 @@ CONTAINS
   ! --- GET NUMBER OF SUBREGIONS
   ! -------------------------------------------------------------
   PURE FUNCTION GetNSubregions(Model) RESULT(NSubregions)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET,INTENT(IN) :: Model
     INTEGER                     :: NSubregions
     
     NSubregions = Model%AppGrid%NSubregions
@@ -4107,7 +3920,7 @@ CONTAINS
   ! --- GET SUBREGION IDs
   ! -------------------------------------------------------------
   PURE SUBROUTINE GetSubregionIDs(Model,IDs)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET,INTENT(IN) :: Model
     INTEGER,INTENT(OUT)         :: IDs(Model%AppGrid%NSubregions)
     
     IDs = Model%AppGrid%AppSubregion%ID
@@ -4119,7 +3932,7 @@ CONTAINS
   ! --- GET NAME OF A SUBREGION
   ! -------------------------------------------------------------
   PURE SUBROUTINE GetSubregionName(Model,iRegion,cName) 
-    CLASS(ModelType),INTENT(IN)  :: Model
+    CLASS(ModelType),TARGET,INTENT(IN)  :: Model
     INTEGER,INTENT(IN)           :: iRegion
     CHARACTER(LEN=*),INTENT(OUT) :: cName
     
@@ -4132,7 +3945,7 @@ CONTAINS
   ! --- GET ELEMENT SUBREGIONS
   ! -------------------------------------------------------------
   PURE SUBROUTINE GetElemSubregions(Model,ElemSubregions)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET,INTENT(IN) :: Model
     INTEGER,INTENT(OUT)         :: ElemSubregions(:)
     
     ElemSubregions = Model%AppGrid%AppElement%Subregion
@@ -4144,7 +3957,7 @@ CONTAINS
   ! --- GET STRATIGRAPHY AT X-Y COORDINATE
   ! -------------------------------------------------------------
   SUBROUTINE GetStratigraphy_AtXYCoordinate(Model,rX,rY,rGSElev,rTopElevs,rBottomElevs,iStat)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET :: Model
     REAL(8),INTENT(IN)          :: rX,rY
     REAL(8),INTENT(OUT)         :: rGSElev,rTopElevs(:),rBottomElevs(:)
     INTEGER,INTENT(OUT)         :: iStat
@@ -4158,7 +3971,7 @@ CONTAINS
   ! --- GET GROUND SURFACE ELEVATION 
   ! -------------------------------------------------------------
   PURE SUBROUTINE GetGSElev(Model,rGSElev)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET,INTENT(IN) :: Model
     REAL(8),INTENT(OUT)         :: rGSElev(:)
     
     CALL Model%Stratigraphy%GetGSElev(rGSElev)
@@ -4170,7 +3983,7 @@ CONTAINS
   ! --- GET ELEVATIONS OF AQUIFER TOPS 
   ! -------------------------------------------------------------
   PURE SUBROUTINE GetAquiferTopElev(Model,rTopElev)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET,INTENT(IN) :: Model
     REAL(8),INTENT(OUT)         :: rTopElev(:,:)
     
     CALL Model%Stratigraphy%GetAquiferTopElev(rTopElev)
@@ -4182,7 +3995,7 @@ CONTAINS
   ! --- GET ELEVATIONS OF AQUIFER BOTTOMS 
   ! -------------------------------------------------------------
   PURE SUBROUTINE GetAquiferBottomElev(Model,rBottomElev)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET,INTENT(IN) :: Model
     REAL(8),INTENT(OUT)         :: rBottomElev(:,:)
     
     CALL Model%Stratigraphy%GetAquiferBottomElev(rBottomElev)
@@ -4194,13 +4007,13 @@ CONTAINS
   ! --- GET AQUITARD VERTICAL HYDRAULIC CONDUCTIVITIES
   ! -------------------------------------------------------------
   SUBROUTINE GetAquitardVerticalK(Model,rKv,iStat)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET :: Model
     REAL(8),INTENT(OUT)         :: rKv(:,:)
     INTEGER,INTENT(OUT)         :: iStat
     
     !Is this full model or model for inquiry
     IF (Model%lModel_ForInquiry_Defined) THEN
-        CALL Model%AppGW%GetAquitardKv_FromFile(ModuleLogger                , &
+        CALL Model%AppGW%GetAquitardKv_FromFile(Model%Logger                , &
                                                 Model%cGWMainInputFileName , &
                                                 Model%cSIMWorkingDirectory , &
                                                 Model%AppGrid              , &
@@ -4221,13 +4034,13 @@ CONTAINS
   ! --- GET AQUIFER VERTICAL HYDRAULIC CONDUCTIVITIES
   ! -------------------------------------------------------------
   SUBROUTINE GetAquiferVerticalK(Model,rKv,iStat)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET :: Model
     REAL(8),INTENT(OUT)         :: rKv(:,:)
     INTEGER,INTENT(OUT)         :: iStat
     
     !Is this full model or model for inquiry
     IF (Model%lModel_ForInquiry_Defined) THEN
-        CALL Model%AppGW%GetAquiferKv_FromFile(ModuleLogger                , &
+        CALL Model%AppGW%GetAquiferKv_FromFile(Model%Logger                , &
                                                Model%cGWMainInputFileName , &
                                                Model%cSIMWorkingDirectory , &
                                                Model%AppGrid              , &
@@ -4248,13 +4061,13 @@ CONTAINS
   ! --- GET AQUIFER HORIZONTAL HYDRAULIC CONDUCTIVITIES
   ! -------------------------------------------------------------
   SUBROUTINE GetAquiferHorizontalK(Model,rKh,iStat)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET :: Model
     REAL(8),INTENT(OUT)         :: rKh(:,:)
     INTEGER,INTENT(OUT)         :: iStat
     
     !Is this full model or model for inquiry
     IF (Model%lModel_ForInquiry_Defined) THEN
-        CALL Model%AppGW%GetAquiferKh_FromFile(ModuleLogger                , &
+        CALL Model%AppGW%GetAquiferKh_FromFile(Model%Logger                , &
                                                Model%cGWMainInputFileName , &
                                                Model%cSIMWorkingDirectory , &
                                                Model%AppGrid              , &
@@ -4275,13 +4088,13 @@ CONTAINS
   ! --- GET AQUIFER SPECIFIC YIELD
   ! -------------------------------------------------------------
   SUBROUTINE GetAquiferSy(Model,rSy,iStat)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET :: Model
     REAL(8),INTENT(OUT)         :: rSy(:,:)
     INTEGER,INTENT(OUT)         :: iStat
     
     !Is this full model or model for inquiry
     IF (Model%lModel_ForInquiry_Defined) THEN
-        CALL Model%AppGW%GetAquiferSy_FromFile(ModuleLogger                , &
+        CALL Model%AppGW%GetAquiferSy_FromFile(Model%Logger                , &
                                                Model%cGWMainInputFileName , &
                                                Model%cSIMWorkingDirectory , &
                                                Model%AppGrid              , &
@@ -4302,13 +4115,13 @@ CONTAINS
   ! --- GET AQUIFER STORAGE COEFFICIENT (AFTER MULTIPLYING SPECIFIC STORAGE WITH AQUIFER THICKNESS)
   ! -------------------------------------------------------------
   SUBROUTINE GetAquiferSs(Model,rSs,iStat)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET :: Model
     REAL(8),INTENT(OUT)         :: rSs(:,:)
     INTEGER,INTENT(OUT)         :: iStat
     
     !Is this full model or model for inquiry
     IF (Model%lModel_ForInquiry_Defined) THEN
-        CALL Model%AppGW%GetAquiferSs_FromFile(ModuleLogger                , &
+        CALL Model%AppGW%GetAquiferSs_FromFile(Model%Logger                , &
                                                Model%cGWMainInputFileName , &
                                                Model%cSIMWorkingDirectory , &
                                                Model%AppGrid              , &
@@ -4329,13 +4142,13 @@ CONTAINS
   ! --- GET ALL AQUIFER PARAMETRERS IN ONE SHOT
   ! -------------------------------------------------------------
   SUBROUTINE GetAquiferParameters(Model,rKh,rAquiferKv,rAquitardKv,rSy,rSs,iStat)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET :: Model
     REAL(8),INTENT(OUT)         :: rKh(:,:),rAquiferKv(:,:),rAquitardKv(:,:),rSy(:,:),rSs(:,:)
     INTEGER,INTENT(OUT)         :: iStat
     
     !Is this full model or model for inquiry
     IF (Model%lModel_ForInquiry_Defined) THEN
-        CALL Model%AppGW%GetAquiferParameters_FromFile(ModuleLogger                , &
+        CALL Model%AppGW%GetAquiferParameters_FromFile(Model%Logger                , &
                                                        Model%cGWMainInputFileName , &
                                                        Model%cSIMWorkingDirectory , &
                                                        Model%AppGrid              , &
@@ -4364,7 +4177,7 @@ CONTAINS
   ! --- GET NUMBER OF PARAMETRIC GRIDS USED FOR GW 
   ! -------------------------------------------------------------
   SUBROUTINE GetGWNParametricGrids(Model,iNParamGrids,iStat)
-    CLASS(ModelType)    :: Model
+    CLASS(ModelType),TARGET :: Model
     INTEGER,INTENT(OUT) :: iNParamGrids,iStat
     
     !Retrieve number of gw parametric grids
@@ -4377,7 +4190,7 @@ CONTAINS
   ! --- GET NUMBER OF PARAMETRIC NODES FOR A PARAMETRIC GRID USED FOR GW 
   ! -------------------------------------------------------------
   SUBROUTINE GetGWNParametricNodes(Model,iParamGridID,iNParamGridNodes,iStat)
-    CLASS(ModelType)    :: Model
+    CLASS(ModelType),TARGET :: Model
     INTEGER,INTENT(IN)  :: iParamGridID
     INTEGER,INTENT(OUT) :: iNParamGridNodes,iStat
     
@@ -4391,7 +4204,7 @@ CONTAINS
   ! --- GET NUMBER OF PARAMETRIC ELEMENTS FOR A PARAMETRIC GRID USED FOR GW 
   ! -------------------------------------------------------------
   SUBROUTINE GetGWNParametricElements(Model,iParamGridID,iNParamGridElements,iStat)
-    CLASS(ModelType)    :: Model
+    CLASS(ModelType),TARGET :: Model
     INTEGER,INTENT(IN)  :: iParamGridID
     INTEGER,INTENT(OUT) :: iNParamGridElements,iStat
     
@@ -4405,7 +4218,7 @@ CONTAINS
   ! --- GET PARAMETRIC NODE COORDINATES FOR A PARAMETRIC GRID USED FOR GW 
   ! -------------------------------------------------------------
   SUBROUTINE GetGWParametricNodeXY(Model,iParamGridID,rX,rY,iStat)
-    CLASS(ModelType)    :: Model
+    CLASS(ModelType),TARGET :: Model
     INTEGER,INTENT(IN)  :: iParamGridID
     REAL(8),INTENT(OUT) :: rX(:),rY(:)
     INTEGER,INTENT(OUT) :: iStat
@@ -4426,7 +4239,7 @@ CONTAINS
   ! --- GET VERTICES OF A SPECIFIED PARAMETRIC ELEMENT FOR A PARAMETRIC GRID USED FOR GW 
   ! -------------------------------------------------------------
   SUBROUTINE GetGWParametricElementConfigData(Model,iParamGridID,iParamElemID,iVertices,iStat)
-    CLASS(ModelType)    :: Model
+    CLASS(ModelType),TARGET :: Model
     INTEGER,INTENT(IN)  :: iParamGridID,iParamElemID
     INTEGER,INTENT(OUT) :: iVertices(4),iStat
     
@@ -4440,7 +4253,7 @@ CONTAINS
   ! --- GET PARAMETERIC AQUIFER PARAMETERS FOR A PARAMETRIC GRID  
   ! -------------------------------------------------------------
   SUBROUTINE GetGWParametricAquiferParameters(Model,iParamGridID,rKh,rAquiferKv,rAquitardKv,rSy,rSs,iStat)
-    CLASS(ModelType)    :: Model
+    CLASS(ModelType),TARGET :: Model
     INTEGER,INTENT(IN)  :: iParamGridID
     REAL(8),INTENT(OUT) :: rKh(:,:),rAquiferKv(:,:),rAquitardKv(:,:),rSy(:,:),rSs(:,:)
     INTEGER,INTENT(OUT) :: iStat
@@ -4469,7 +4282,7 @@ CONTAINS
   ! --- GET ALL GW HEADS AT (node,Layer) COMBINATION
   ! -------------------------------------------------------------
   PURE SUBROUTINE GetGWHeads_All(Model,lPrevious,Heads)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET,INTENT(IN) :: Model
     LOGICAL,INTENT(IN)          :: lPrevious
     REAL(8),INTENT(OUT)         :: Heads(:,:)
     
@@ -4482,7 +4295,7 @@ CONTAINS
   ! --- GET GW HEAD A NODE AND LAYER
   ! -------------------------------------------------------------
   PURE FUNCTION GetGWHead_AtOneNodeLayer(Model,iGWNode,iLayer,lPrevious) RESULT(Head)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET,INTENT(IN) :: Model
     INTEGER,INTENT(IN)          :: iGWNode,iLayer
     LOGICAL,INTENT(IN)          :: lPrevious
     REAL(8)                     :: Head
@@ -4496,7 +4309,7 @@ CONTAINS
   ! --- GET ALL SUBSIDENCE AT (node,Layer) COMBINATION
   ! -------------------------------------------------------------
   PURE SUBROUTINE GetSubsidence_All(Model,Subs)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET,INTENT(IN) :: Model
     REAL(8),INTENT(OUT)         :: Subs(:,:)
     
     CALL Model%AppGW%GetSubsidence_All(Subs)
@@ -4508,7 +4321,7 @@ CONTAINS
   ! --- GET NUMBER OF WELLS 
   ! -------------------------------------------------------------
   PURE FUNCTION GetNWells(Model) RESULT(N)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET,INTENT(IN) :: Model
     INTEGER                     :: N
     
     IF (Model%lModel_ForInquiry_Defined) THEN
@@ -4524,7 +4337,7 @@ CONTAINS
   ! --- GET WELL IDs
   ! -------------------------------------------------------------
   PURE SUBROUTINE GetWellIDs(Model,IDs)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET,INTENT(IN) :: Model
     INTEGER,INTENT(OUT)         :: IDs(:)
     
     !Local variables
@@ -4544,7 +4357,7 @@ CONTAINS
   ! --- GET WELL COORDINATES
   ! -------------------------------------------------------------
   PURE SUBROUTINE GetWellCoordinates(Model,rX,rY)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET,INTENT(IN) :: Model
     REAL(8),INTENT(OUT)         :: rX(:),rY(:)
     
     IF (Model%lModel_ForInquiry_Defined) THEN
@@ -4560,7 +4373,7 @@ CONTAINS
   ! --- GET ALL WELL PERFORATION TOP AND BOTTOM ELEVATIONS
   ! -------------------------------------------------------------
   PURE SUBROUTINE GetWellPerfTopBottom(Model,rTop,rBottom)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET,INTENT(IN) :: Model
     REAL(8),INTENT(OUT)         :: rTop(:),rBottom(:)
     
     IF (Model%lModel_ForInquiry_Defined) THEN
@@ -4576,7 +4389,7 @@ CONTAINS
   ! --- GET NUMBER OF ELEMENTS SERVED BY A WELL
   ! -------------------------------------------------------------
   FUNCTION GetWellNElems(Model,iWell) RESULT(iNElems)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET :: Model
     INTEGER,INTENT(IN)          :: iWell
     INTEGER                     :: iNElems
     
@@ -4597,7 +4410,7 @@ CONTAINS
   ! --- GET INDICES OF ELEMENTS SERVED BY A WELL
   ! -------------------------------------------------------------
   SUBROUTINE GetWellElems(Model,iWell,iElems)
-    CLASS(ModelType),INTENT(IN)     :: Model
+    CLASS(ModelType),TARGET     :: Model
     INTEGER,INTENT(IN)              :: iWell
     INTEGER,ALLOCATABLE,INTENT(OUT) :: iElems(:)
     
@@ -4614,7 +4427,7 @@ CONTAINS
   ! --- GET NUMBER OF ELEMENT PUMPING 
   ! -------------------------------------------------------------
   PURE FUNCTION GetNElemPumps(Model) RESULT(N)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET,INTENT(IN) :: Model
     INTEGER                     :: N
     
     IF (Model%lModel_ForInquiry_Defined) THEN
@@ -4630,7 +4443,7 @@ CONTAINS
   ! --- GET ELEMENT PUMPING IDs
   ! -------------------------------------------------------------
   PURE SUBROUTINE GetElemPumpIDs(Model,IDs)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET,INTENT(IN) :: Model
     INTEGER,INTENT(OUT)         :: IDs(:)
     
     !Local variables
@@ -4650,7 +4463,7 @@ CONTAINS
   ! --- GET ACTUAL NODAL PUMPING
   ! -------------------------------------------------------------
   PURE SUBROUTINE GetNodalGWPumping_Actual(Model,NodalPumpActual)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET,INTENT(IN) :: Model
     REAL(8),INTENT(OUT)         :: NodalPumpActual(:,:)
     
     CALL Model%AppGW%GetNodalPumpActual(NodalPumpActual)
@@ -4662,7 +4475,7 @@ CONTAINS
   ! --- GET REQUIRED NODAL PUMPING
   ! -------------------------------------------------------------
   PURE SUBROUTINE GetNodalGWPumping_Required(Model,NodalPumpRequired)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET,INTENT(IN) :: Model
     REAL(8),INTENT(OUT)         :: NodalPumpRequired(:,:)
     
     CALL Model%AppGW%GetNodalPumpRequired(NodalPumpRequired)
@@ -4674,7 +4487,7 @@ CONTAINS
   ! --- GET PERCOLATION FLOW FOR EACH SMALL WATERSHEDS
   ! -------------------------------------------------------------
   SUBROUTINE GetSWShedPercolationFlows(Model,PercFlows)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET :: Model
     REAL(8),INTENT(OUT)         :: PercFlows(:)
     
     CALL Model%AppSWShed%GetPercFlow_ForAllSmallWatersheds(PercFlows)
@@ -4686,7 +4499,7 @@ CONTAINS
   ! --- GET PERCOLATION FOR ONE SMALL WATERSHED (PERC WITHIN THE SMALL WATERSHED)
   ! -------------------------------------------------------------
   PURE FUNCTION GetSWShedRootZonePercolation_ForOneSWShed(Model,iSWShed) RESULT(Perc)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET,INTENT(IN) :: Model
     INTEGER,INTENT(IN)          :: iSWShed
     REAL(8)                     :: Perc
     
@@ -4699,7 +4512,7 @@ CONTAINS
   ! --- GET ELEMENT NODES
   ! -------------------------------------------------------------
   PURE SUBROUTINE GetElementConfigData(Model,iElem,Nodes)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET,INTENT(IN) :: Model
     INTEGER,INTENT(IN)          :: iElem
     INTEGER,INTENT(OUT)         :: Nodes(4)
     
@@ -4712,7 +4525,7 @@ CONTAINS
   ! --- GET ELEMENT AREAS
   ! -------------------------------------------------------------
   PURE SUBROUTINE GetElementAreas(Model,Areas)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET,INTENT(IN) :: Model
     REAL(8),INTENT(OUT)         :: Areas(Model%AppGrid%NElements)
     
     Areas = Model%AppGrid%AppElement%Area
@@ -4724,7 +4537,7 @@ CONTAINS
   ! --- GET AppStream
   ! -------------------------------------------------------------
   SUBROUTINE GetAppStream(Model,AppStream)
-    CLASS(ModelType),INTENT(IN)     :: Model
+    CLASS(ModelType),TARGET     :: Model
     TYPE(AppStreamType),INTENT(OUT) :: AppStream
     
     AppStream = Model%AppStream
@@ -4736,7 +4549,7 @@ CONTAINS
   ! --- GET STREAM NODE IDS
   ! -------------------------------------------------------------
   PURE SUBROUTINE GetStrmNodeIDs(Model,IDs)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET,INTENT(IN) :: Model
     INTEGER,INTENT(OUT)         :: IDs(:)
     
     CALL Model%AppStream%GetStrmNodeIDs(IDs)
@@ -4748,7 +4561,7 @@ CONTAINS
   ! --- GET NUMBER OF STREAM NODES
   ! -------------------------------------------------------------
   PURE FUNCTION GetNStrmNodes(Model) RESULT(NStrmNodes)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET,INTENT(IN) :: Model
     INTEGER                     :: NStrmNodes
     
     NStrmNodes = Model%AppStream%GetNStrmNodes()
@@ -4760,7 +4573,7 @@ CONTAINS
   ! --- GET STREAM REACH IDS
   ! -------------------------------------------------------------
   PURE SUBROUTINE GetStrmReachIDs(Model,IDs)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET,INTENT(IN) :: Model
     INTEGER,INTENT(OUT)         :: IDs(:)
     
     CALL Model%AppStream%GetReachIDs(IDs)
@@ -4772,7 +4585,7 @@ CONTAINS
   ! --- GET REACHES FOR SOME STREAM NODES
   ! -------------------------------------------------------------
   SUBROUTINE GetReaches_ForStrmNodes(Model,iStrmNodes,iReaches,iStat)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET :: Model
     INTEGER,INTENT(IN)          :: iStrmNodes(:)
     INTEGER,INTENT(OUT)         :: iReaches(:),iStat
     
@@ -4785,7 +4598,7 @@ CONTAINS
   ! --- GET NUMBER OF STREAM NODES DRAINING INTO A NODE
   ! -------------------------------------------------------------
   FUNCTION GetStrmNUpstrmNodes(Model,iStrmNode) RESULT(iNNodes)
-     CLASS(ModelType),INTENT(IN) :: Model
+     CLASS(ModelType),TARGET :: Model
      INTEGER,INTENT(IN)          :: iStrmNode
      INTEGER                     :: iNNodes
      
@@ -4798,7 +4611,7 @@ CONTAINS
   ! --- GET STREAM NODE INDICES FLOWING INTO ANOTHER NODE 
   ! -------------------------------------------------------------
   SUBROUTINE GetStrmUpstrmNodes(Model,iStrmNode,iUpstrmNodes)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET :: Model
     INTEGER,INTENT(IN)          :: iStrmNode
     INTEGER,ALLOCATABLE         :: iUpstrmNodes(:)
     
@@ -4811,7 +4624,7 @@ CONTAINS
   ! --- CHECK IF STREAM NODE 1 IS UPSTREAM OF STREAM NODE 2, CONSIDERING THE ENTIRE NETWORK
   ! -------------------------------------------------------------
   SUBROUTINE IsStrmUpstreamNode(Model,iStrmNode1,iStrmNode2,lUpstrm,iStat)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET :: Model
     INTEGER,INTENT(IN)          :: iStrmNode1,iStrmNode2
     LOGICAL,INTENT(OUT)         :: lUpstrm
     INTEGER,INTENT(OUT)         :: iStat
@@ -4831,7 +4644,7 @@ CONTAINS
   ! --- GET NUMBER OF REACHES IMMEDIATELY UPSTREAM OF A GIVEN REACH
   ! -------------------------------------------------------------
   FUNCTION GetReachNUpstrmReaches(Model,iReach) RESULT(iNReaches)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET :: Model
     INTEGER,INTENT(IN)          :: iReach
     INTEGER                     :: iNReaches
     
@@ -4845,7 +4658,7 @@ CONTAINS
   ! --- GET REACHES IMMEDIATELY UPSTREAM OF A GIVEN REACH
   ! -------------------------------------------------------------
   SUBROUTINE GetReachUpstrmReaches(Model,iReach,iUpstrmReaches)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET :: Model
     INTEGER,INTENT(IN)          :: iReach
     INTEGER,ALLOCATABLE         :: iUpstrmReaches(:)
     
@@ -4858,7 +4671,7 @@ CONTAINS
   ! --- GET NUMBER OF STREAM REACHES
   ! -------------------------------------------------------------
   PURE FUNCTION GetNReaches(Model) RESULT(NReach)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET,INTENT(IN) :: Model
     INTEGER                     :: NReach
     
     NReach = Model%AppStream%GetNReaches()
@@ -4870,7 +4683,7 @@ CONTAINS
   ! --- GET NUMBER OF DATA POINTS IN STREAM RATING TABLE FOR A STREAM NODE
   ! -------------------------------------------------------------
   PURE FUNCTION GetNRatingTablePoints(Model,iStrmNode) RESULT(N)
-    CLASS(MOdelType),INTENT(IN) :: Model
+    CLASS(MOdelType),TARGET,INTENT(IN) :: Model
     INTEGER,INTENT(IN)          :: iStrmNode
     INTEGER                     :: N
     
@@ -4883,7 +4696,7 @@ CONTAINS
   ! --- GET ALL REACH UPSTREAM NODES
   ! -------------------------------------------------------------
   PURE SUBROUTINE GetReachUpstrmNodes(Model,iNodes)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET,INTENT(IN) :: Model
     INTEGER,INTENT(OUT)         :: iNodes(:)
     
     !Local variables
@@ -4900,7 +4713,7 @@ CONTAINS
   ! --- GET ALL REACH DOWNSTREAM NODES
   ! -------------------------------------------------------------
   SUBROUTINE GetReachDownstrmNodes(Model,iNodes)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET :: Model
     INTEGER,INTENT(OUT)         :: iNodes(:)
     
     !Local variables
@@ -4917,7 +4730,7 @@ CONTAINS
   ! --- GET ALL REACH OUTFLOW DESTINATIONS
   ! -------------------------------------------------------------
   PURE SUBROUTINE GetReachOutflowDest(Model,iDest)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET,INTENT(IN) :: Model
     INTEGER,INTENT(OUT)         :: iDest(:)
     
     !Local variables
@@ -4934,7 +4747,7 @@ CONTAINS
   ! --- GET ALL REACH OUTFLOW DESTINATION TYPES
   ! -------------------------------------------------------------
   PURE SUBROUTINE GetReachOutflowDestTypes(Model,iDestType)
-    CLASS(MOdelType),INTENT(IN) :: Model
+    CLASS(MOdelType),TARGET,INTENT(IN) :: Model
     INTEGER,INTENT(OUT)         :: iDestType(:)
     
     !Local variables
@@ -4951,7 +4764,7 @@ CONTAINS
   ! --- GET NUMBER OF NODES IN A REACH GIVEN BY ITS INDEX
   ! -------------------------------------------------------------
   PURE FUNCTION GetReachNNodes(Model,iReach) RESULT(iReachNNodes)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET,INTENT(IN) :: Model
     INTEGER,INTENT(IN)          :: iReach
     INTEGER                     :: iReachNNodes
     
@@ -4964,7 +4777,7 @@ CONTAINS
   ! --- GET NUMBER OF DIVERSIONS
   ! -------------------------------------------------------------
   FUNCTION GetNDiversions(Model) RESULT(iNDiver)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET :: Model
     INTEGER                     :: iNDiver
     
     IF (Model%lModel_ForInquiry_Defined) THEN
@@ -4980,7 +4793,7 @@ CONTAINS
   ! --- GET STREAM DIVERSION IDS
   ! -------------------------------------------------------------
   SUBROUTINE GetDiversionIDs(Model,IDs)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET :: Model
     INTEGER,INTENT(OUT)         :: IDs(:)
     
     !Local variables
@@ -5001,18 +4814,14 @@ CONTAINS
   ! --- GET NUMBER OF BYPASSES
   ! -------------------------------------------------------------
   SUBROUTINE GetNBypasses(Model,iNBypass,iStat)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET :: Model
     INTEGER,INTENT(OUT)         :: iNBypass,iStat
     
     !Local variables
     CHARACTER(LEN=ModNameLen+12),PARAMETER :: ThisProcedure = ModName // 'GetNBypasses'
     
     IF (Model%lModel_ForInquiry_Defined) THEN
-        IF (ASSOCIATED(ModuleLogger)) THEN
-            CALL ModuleLogger%SetLastMessage('Model is instantiated only partially. Number of bypasses cannot be retrieved from a partially instantiated model.',f_iWarn,ThisProcedure)
-        ELSE
-            CALL ModuleLogger%SetLastMessage('Model is instantiated only partially. Number of bypasses cannot be retrieved from a partially instantiated model.',f_iWarn,ThisProcedure)
-        END IF
+                    CALL Model%Logger%SetLastMessage('Model is instantiated only partially. Number of bypasses cannot be retrieved from a partially instantiated model.',f_iWarn,ThisProcedure)
         iNBypass = 0
         iStat    = -1
     ELSE
@@ -5027,7 +4836,7 @@ CONTAINS
   ! --- GET STREAM BYPASS IDS
   ! -------------------------------------------------------------
   PURE SUBROUTINE GetBypassIDs(Model,IDs)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET,INTENT(IN) :: Model
     INTEGER,INTENT(OUT)         :: IDs(:)
     
     CALL Model%AppStream%GetBypassIDs(IDs)
@@ -5039,7 +4848,7 @@ CONTAINS
   ! --- GET BYPASS/DIVERSION ORIGIN AND DESTINATION DATA
   ! -------------------------------------------------------------
   PURE SUBROUTINE GetBypassDiversionOriginDestData(Model,lIsBypass,iBypassOrDiver,iNodeExport,iDestType,iDest)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET,INTENT(IN) :: Model
     LOGICAL,INTENT(IN)          :: lIsBypass
     INTEGER,INTENT(IN)          :: iBypassOrDiver
     INTEGER,INTENT(OUT)         :: iNodeExport,iDestType,iDest
@@ -5053,7 +4862,7 @@ CONTAINS
   ! --- GET FLOW RECEIVED FROM A BYPASS (AFTER RECOVERABLE AND NON-RECOVERABLE LOSSES ARE TAKEN OUT)
   ! -------------------------------------------------------------
   PURE FUNCTION GetBypassReceived_FromABypass(Model,iBypass) RESULT(rFlow)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET,INTENT(IN) :: Model
     INTEGER,INTENT(IN)          :: iBypass
     REAL(8)                     :: rFlow
     
@@ -5066,7 +4875,7 @@ CONTAINS
   ! --- GET BYPASS OUTFLOWS FOR ALL BYPASSES
   ! -------------------------------------------------------------
   SUBROUTINE GetBypassOutflows(Model,rOutflows)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET :: Model
     REAL(8),INTENT(OUT)         :: rOutflows(:)
     
     CALL Model%AppStream%GetBypassOutflows(rOutflows)
@@ -5078,7 +4887,7 @@ CONTAINS
   ! --- GET BYPASS RECOVERABLE LOSS FACTOR
   ! -------------------------------------------------------------
   FUNCTION GetBypassRecoverableLossFactor(Model,iBypass) RESULT(rFactor)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET :: Model
     INTEGER,INTENT(IN)          :: iBypass
     REAL(8)                     :: rFactor
     
@@ -5091,7 +4900,7 @@ CONTAINS
   ! --- GET BYPASS NON-RECOVERABLE LOSS FACTOR
   ! -------------------------------------------------------------
   FUNCTION GetBypassNonRecoverableLossFactor(Model,iBypass) RESULT(rFactor)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET :: Model
     INTEGER,INTENT(IN)          :: iBypass
     REAL(8)                     :: rFactor
     
@@ -5104,7 +4913,7 @@ CONTAINS
   ! --- GET GROUNDWATER NODES FOR EACH STREAM NODE AT A REACH
   ! -------------------------------------------------------------
   PURE SUBROUTINE GetReachGWNodes(Model,iReach,NNodes,iGWNodes)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET,INTENT(IN) :: Model
     INTEGER,INTENT(IN)          :: iReach,NNodes
     INTEGER,INTENT(OUT)         :: iGWNodes(NNodes)
     
@@ -5129,7 +4938,7 @@ CONTAINS
   ! --- GET STREAM NODES FOR A GIVEN REACH 
   ! -------------------------------------------------------------
   SUBROUTINE GetReachStrmNodes(Model,iReach,iStrmNodes,iStat)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET :: Model
     INTEGER,INTENT(IN)          :: iReach
     INTEGER,ALLOCATABLE         :: iStrmNodes(:)
     INTEGER,INTENT(OUT)         :: iStat
@@ -5143,7 +4952,7 @@ CONTAINS
   ! --- GET STREAM BOTTOM ELEVATIONS
   ! -------------------------------------------------------------
   SUBROUTINE GetStrmBottomElevs(Model,rElevs,iStat)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET :: Model
     REAL(8),INTENT(OUT)         :: rElevs(:)
     INTEGER,INTENT(OUT)         :: iStat
     
@@ -5156,7 +4965,7 @@ CONTAINS
   ! --- GET STREAM STAGES
   ! -------------------------------------------------------------
   SUBROUTINE GetStrmStages(Model,rStages,iStat)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET :: Model
     REAL(8),INTENT(OUT)         :: rStages(:)
     INTEGER,INTENT(OUT)         :: iStat
     
@@ -5169,7 +4978,7 @@ CONTAINS
   ! --- GET STREAM FLOWS
   ! -------------------------------------------------------------
   SUBROUTINE GetStrmFlows(Model,rFlows)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET :: Model
     REAL(8),INTENT(OUT)         :: rFlows(:)
     
     CALL Model%AppStream%GetFlows(rFlows)
@@ -5181,7 +4990,7 @@ CONTAINS
   ! --- GET STREAM FLOW AT A NODE
   ! -------------------------------------------------------------
   PURE FUNCTION GetStrmFlow(Model,iStrmNode) RESULT(rFlow)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET,INTENT(IN) :: Model
     INTEGER,INTENT(IN)          :: iStrmNode 
     REAL(8)                     :: rFlow
     
@@ -5194,7 +5003,7 @@ CONTAINS
   ! --- GET STREAM INFLOWS AT A GIVEN SET OF INFLOW INDICES
   ! -------------------------------------------------------------
   PURE SUBROUTINE GetStrmInflows_AtSomeInflows(Model,iInflows,rInflows)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET,INTENT(IN) :: Model
     INTEGER,INTENT(IN)          :: iInflows(:) 
     REAL(8),INTENT(OUT)         :: rInflows(:)
     
@@ -5207,7 +5016,7 @@ CONTAINS
   ! --- GET STREAM INFLOWS AT A SET OF NODES
   ! -------------------------------------------------------------
   PURE SUBROUTINE GetStrmInflows_AtSomeNodes(Model,iStrmNodes,rInflows)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET,INTENT(IN) :: Model
     INTEGER,INTENT(IN)          :: iStrmNodes(:) 
     REAL(8),INTENT(OUT)         :: rInflows(:)
     
@@ -5220,7 +5029,7 @@ CONTAINS
   ! --- GET STREAM INFLOW AT A NODE
   ! -------------------------------------------------------------
   PURE FUNCTION GetStrmInflow_AtANode(Model,iStrmNode) RESULT(rInflow)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET,INTENT(IN) :: Model
     INTEGER,INTENT(IN)          :: iStrmNode 
     REAL(8)                     :: rInflow
     
@@ -5233,7 +5042,7 @@ CONTAINS
   ! --- GET NUMBER OF STREAM INFLOWS
   ! -------------------------------------------------------------
   PURE FUNCTION GetStrmNInflows(Model) RESULT(iNInflows)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET,INTENT(IN) :: Model
     INTEGER                     :: iNInflows
     
     iNInflows = Model%AppStream%GetNInflows()
@@ -5245,7 +5054,7 @@ CONTAINS
   ! --- GET STREAM INFLOW NODES
   ! -------------------------------------------------------------
   SUBROUTINE GetStrmInflowNodes(Model,iNodes)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET :: Model
     INTEGER,ALLOCATABLE         :: iNodes(:)
     
     CALL Model%AppStream%GetInflowNodes(iNodes)
@@ -5257,7 +5066,7 @@ CONTAINS
   ! --- GET STREAM INFLOW IDs
   ! -------------------------------------------------------------
   SUBROUTINE GetStrmInflowIDs(Model,IDs)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET :: Model
     INTEGER,ALLOCATABLE         :: IDs(:)
     
     CALL Model%AppStream%GetInflowIDs(IDs)
@@ -5269,7 +5078,7 @@ CONTAINS
   ! --- GET TRIBUTARY INFLOWS AT ALL STREAM NODES
   ! -------------------------------------------------------------
   SUBROUTINE GetStrmTributaryInflows(Model,rQTRIB,iStat)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET :: Model
     REAL(8),INTENT(OUT)         :: rQTRIB(:)
     INTEGER,INTENT(OUT)         :: iStat
     
@@ -5281,11 +5090,7 @@ CONTAINS
     
     !Make sure it is not Model_ForInquiry
     IF (Model%lModel_ForInquiry_Defined) THEN
-        IF (ASSOCIATED(ModuleLogger)) THEN
-            CALL ModuleLogger%SetLastMessage('Stream tributary inflows cannot be retrieved from the model when it is instantiated for inquiry!',f_iWarn,ThisProcedure)
-        ELSE
-            CALL ModuleLogger%SetLastMessage('Stream tributary inflows cannot be retrieved from the model when it is instantiated for inquiry!',f_iWarn,ThisProcedure)
-        END IF
+                    CALL Model%Logger%SetLastMessage('Stream tributary inflows cannot be retrieved from the model when it is instantiated for inquiry!',f_iWarn,ThisProcedure)
         rQTRIB = 0.0
         iStat  = -1
         RETURN
@@ -5300,7 +5105,7 @@ CONTAINS
   ! --- GET RAINFALL RUNOFF AT ALL STREAM NODES
   ! -------------------------------------------------------------
   SUBROUTINE GetStrmRainfallRunoff(Model,rQROFF,iStat)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET :: Model
     REAL(8),INTENT(OUT)         :: rQROFF(:)
     INTEGER,INTENT(OUT)         :: iStat
     
@@ -5312,11 +5117,7 @@ CONTAINS
     
     !Make sure it is not Model_ForInquiry
     IF (Model%lModel_ForInquiry_Defined) THEN
-        IF (ASSOCIATED(ModuleLogger)) THEN
-            CALL ModuleLogger%SetLastMessage('Rainfall runoff into stream nodes cannot be retrieved from the model when it is instantiated for inquiry!',f_iWarn,ThisProcedure)
-        ELSE
-            CALL ModuleLogger%SetLastMessage('Rainfall runoff into stream nodes cannot be retrieved from the model when it is instantiated for inquiry!',f_iWarn,ThisProcedure)
-        END IF
+                    CALL Model%Logger%SetLastMessage('Rainfall runoff into stream nodes cannot be retrieved from the model when it is instantiated for inquiry!',f_iWarn,ThisProcedure)
         rQROFF = 0.0
         iStat  = -1
         RETURN
@@ -5331,7 +5132,7 @@ CONTAINS
   ! --- GET RETURN FLOW AT ALL STREAM NODES
   ! -------------------------------------------------------------
   SUBROUTINE GetStrmReturnFlows(Model,rQRTRN,iStat)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET :: Model
     REAL(8),INTENT(OUT)         :: rQRTRN(:)
     INTEGER,INTENT(OUT)         :: iStat
     
@@ -5343,11 +5144,7 @@ CONTAINS
     
     !Make sure it is not Model_ForInquiry
     IF (Model%lModel_ForInquiry_Defined) THEN
-        IF (ASSOCIATED(ModuleLogger)) THEN
-            CALL ModuleLogger%SetLastMessage('Return flow into stream nodes cannot be retrieved from the model when it is instantiated for inquiry!',f_iWarn,ThisProcedure)
-        ELSE
-            CALL ModuleLogger%SetLastMessage('Return flow into stream nodes cannot be retrieved from the model when it is instantiated for inquiry!',f_iWarn,ThisProcedure)
-        END IF
+                    CALL Model%Logger%SetLastMessage('Return flow into stream nodes cannot be retrieved from the model when it is instantiated for inquiry!',f_iWarn,ThisProcedure)
         rQRTRN = 0.0
         iStat  = -1
         RETURN
@@ -5362,7 +5159,7 @@ CONTAINS
   ! --- GET POND DRAINS INTO ALL STREAM NODES
   ! -------------------------------------------------------------
   SUBROUTINE GetStrmPondDrains(Model,rQRPONDDRAIN,iStat)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET :: Model
     REAL(8),INTENT(OUT)         :: rQRPONDDRAIN(:)
     INTEGER,INTENT(OUT)         :: iStat
     
@@ -5374,11 +5171,7 @@ CONTAINS
     
     !Make sure it is not Model_ForInquiry
     IF (Model%lModel_ForInquiry_Defined) THEN
-        IF (ASSOCIATED(ModuleLogger)) THEN
-            CALL ModuleLogger%SetLastMessage('Pond drains into stream nodes cannot be retrieved from the model when it is instantiated for inquiry!',f_iWarn,ThisProcedure)
-        ELSE
-            CALL ModuleLogger%SetLastMessage('Pond drains into stream nodes cannot be retrieved from the model when it is instantiated for inquiry!',f_iWarn,ThisProcedure)
-        END IF
+                    CALL Model%Logger%SetLastMessage('Pond drains into stream nodes cannot be retrieved from the model when it is instantiated for inquiry!',f_iWarn,ThisProcedure)
         rQRPONDDRAIN = 0.0
         iStat        = -1
         RETURN
@@ -5393,7 +5186,7 @@ CONTAINS
   ! --- GET TILE DRAINS INTO ALL STREAM NODES
   ! -------------------------------------------------------------
   SUBROUTINE GetStrmTileDrains(Model,rQDRAIN,iStat)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET :: Model
     REAL(8),INTENT(OUT)         :: rQDRAIN(:)
     INTEGER,INTENT(OUT)         :: iStat
     
@@ -5405,11 +5198,7 @@ CONTAINS
     
     !Make sure it is not Model_ForInquiry
     IF (Model%lModel_ForInquiry_Defined) THEN
-        IF (ASSOCIATED(ModuleLogger)) THEN
-            CALL ModuleLogger%SetLastMessage('Tile drains into stream nodes cannot be retrieved from the model when it is instantiated for inquiry!',f_iWarn,ThisProcedure)
-        ELSE
-            CALL ModuleLogger%SetLastMessage('Tile drains into stream nodes cannot be retrieved from the model when it is instantiated for inquiry!',f_iWarn,ThisProcedure)
-        END IF
+                    CALL Model%Logger%SetLastMessage('Tile drains into stream nodes cannot be retrieved from the model when it is instantiated for inquiry!',f_iWarn,ThisProcedure)
         rQDRAIN = 0.0
         iStat   = -1
         RETURN
@@ -5424,7 +5213,7 @@ CONTAINS
   ! --- GET RIPARIAN ET FROM ALL STREAM NODES
   ! -------------------------------------------------------------
   SUBROUTINE GetStrmRiparianETs(Model,rQRVET,iStat)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET :: Model
     REAL(8),INTENT(OUT)         :: rQRVET(:)
     INTEGER,INTENT(OUT)         :: iStat
     
@@ -5436,11 +5225,7 @@ CONTAINS
     
     !Make sure it is not Model_ForInquiry
     IF (Model%lModel_ForInquiry_Defined) THEN
-        IF (ASSOCIATED(ModuleLogger)) THEN
-            CALL ModuleLogger%SetLastMessage('Riparian ET from stream nodes cannot be retrieved from the model when it is instantiated for inquiry!',f_iWarn,ThisProcedure)
-        ELSE
-            CALL ModuleLogger%SetLastMessage('Riparian ET from stream nodes cannot be retrieved from the model when it is instantiated for inquiry!',f_iWarn,ThisProcedure)
-        END IF
+                    CALL Model%Logger%SetLastMessage('Riparian ET from stream nodes cannot be retrieved from the model when it is instantiated for inquiry!',f_iWarn,ThisProcedure)
         rQRVET = 0.0
         iStat  = -1
         RETURN
@@ -5455,7 +5240,7 @@ CONTAINS
   ! --- GET STREAM SURFACE EVAPORATION FROM ALL STREAM NODES
   ! -------------------------------------------------------------
   SUBROUTINE GetStrmEvap(Model,rStrmEvap,iStat)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET :: Model
     REAL(8),INTENT(OUT)         :: rStrmEvap(:)
     INTEGER,INTENT(OUT)         :: iStat
     
@@ -5467,11 +5252,7 @@ CONTAINS
     
     !Make sure it is not Model_ForInquiry
     IF (Model%lModel_ForInquiry_Defined) THEN
-        IF (ASSOCIATED(ModuleLogger)) THEN
-            CALL ModuleLogger%SetLastMessage('Stream surface evaporation cannot be retrieved from the model when it is instantiated for inquiry!',f_iWarn,ThisProcedure)
-        ELSE
-            CALL ModuleLogger%SetLastMessage('Stream surface evaporation cannot be retrieved from the model when it is instantiated for inquiry!',f_iWarn,ThisProcedure)
-        END IF
+                    CALL Model%Logger%SetLastMessage('Stream surface evaporation cannot be retrieved from the model when it is instantiated for inquiry!',f_iWarn,ThisProcedure)
         rStrmEvap = 0.0
         iStat     = -1
         RETURN
@@ -5486,7 +5267,7 @@ CONTAINS
   ! --- GET GAIN FROM GROUNDWATER AT ALL STREAM NODES
   ! -------------------------------------------------------------
   SUBROUTINE GetStrmGainFromGW(Model,rGainFromGW,iStat)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET :: Model
     REAL(8),INTENT(OUT)         :: rGainFromGW(:)
     INTEGER,INTENT(OUT)         :: iStat
     
@@ -5499,11 +5280,7 @@ CONTAINS
     
     !Make sure it is not Model_ForInquiry
     IF (Model%lModel_ForInquiry_Defined) THEN
-        IF (ASSOCIATED(ModuleLogger)) THEN
-            CALL ModuleLogger%SetLastMessage('Gain from groundwater at stream nodes cannot be retrieved from the model when it is instantiated for inquiry!',f_iWarn,ThisProcedure)
-        ELSE
-            CALL ModuleLogger%SetLastMessage('Gain from groundwater at stream nodes cannot be retrieved from the model when it is instantiated for inquiry!',f_iWarn,ThisProcedure)
-        END IF
+                    CALL Model%Logger%SetLastMessage('Gain from groundwater at stream nodes cannot be retrieved from the model when it is instantiated for inquiry!',f_iWarn,ThisProcedure)
         rGainFromGW = 0.0
         iStat       = -1
         RETURN
@@ -5523,7 +5300,7 @@ CONTAINS
   ! --- GET INFLOWS FROM LAKES AT ALL STREAM NODES
   ! -------------------------------------------------------------
   SUBROUTINE GetStrmGainFromLakes(Model,rGainFromLake,iStat)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET :: Model
     REAL(8),INTENT(OUT)         :: rGainFromLake(:)
     INTEGER,INTENT(OUT)         :: iStat
     
@@ -5536,11 +5313,7 @@ CONTAINS
     
     !Make sure it is not Model_ForInquiry
     IF (Model%lModel_ForInquiry_Defined) THEN
-        IF (ASSOCIATED(ModuleLogger)) THEN
-            CALL ModuleLogger%SetLastMessage('Gain from lakes at stream nodes cannot be retrieved from the model when it is instantiated for inquiry!',f_iWarn,ThisProcedure)
-        ELSE
-            CALL ModuleLogger%SetLastMessage('Gain from lakes at stream nodes cannot be retrieved from the model when it is instantiated for inquiry!',f_iWarn,ThisProcedure)
-        END IF
+                    CALL Model%Logger%SetLastMessage('Gain from lakes at stream nodes cannot be retrieved from the model when it is instantiated for inquiry!',f_iWarn,ThisProcedure)
         rGainFromLake = 0.0
         iStat         = -1
         RETURN
@@ -5558,7 +5331,7 @@ CONTAINS
   ! --- GET NET BYPASS INFLOWS AT ALL STREAM NODES
   ! -------------------------------------------------------------
   SUBROUTINE GetStrmNetBypassInflows(Model,rBPInflows,iStat)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET :: Model
     REAL(8),INTENT(OUT)         :: rBPInflows(:)
     INTEGER,INTENT(OUT)         :: iStat
     
@@ -5570,11 +5343,7 @@ CONTAINS
     
     !Make sure it is not Model_ForInquiry
     IF (Model%lModel_ForInquiry_Defined) THEN
-        IF (ASSOCIATED(ModuleLogger)) THEN
-            CALL ModuleLogger%SetLastMessage('Net bypass inflows at stream nodes cannot be retrieved from the model when it is instantiated for inquiry!',f_iWarn,ThisProcedure)
-        ELSE
-            CALL ModuleLogger%SetLastMessage('Net bypass inflows at stream nodes cannot be retrieved from the model when it is instantiated for inquiry!',f_iWarn,ThisProcedure)
-        END IF
+                    CALL Model%Logger%SetLastMessage('Net bypass inflows at stream nodes cannot be retrieved from the model when it is instantiated for inquiry!',f_iWarn,ThisProcedure)
         rBPInflows = 0.0
         iStat      = -1
         RETURN
@@ -5590,7 +5359,7 @@ CONTAINS
   ! --- GET BYPASS INFLOWS AT ALL STREAM NODES
   ! -------------------------------------------------------------
   SUBROUTINE GetStrmBypassInflows(Model,rBPInflows,iStat)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET :: Model
     REAL(8),INTENT(OUT)         :: rBPInflows(:)
     INTEGER,INTENT(OUT)         :: iStat
     
@@ -5602,11 +5371,7 @@ CONTAINS
     
     !Make sure it is not Model_ForInquiry
     IF (Model%lModel_ForInquiry_Defined) THEN
-        IF (ASSOCIATED(ModuleLogger)) THEN
-            CALL ModuleLogger%SetLastMessage('Bypass inflows at stream nodes cannot be retrieved from the model when it is instantiated for inquiry!',f_iWarn,ThisProcedure)
-        ELSE
-            CALL ModuleLogger%SetLastMessage('Bypass inflows at stream nodes cannot be retrieved from the model when it is instantiated for inquiry!',f_iWarn,ThisProcedure)
-        END IF
+                    CALL Model%Logger%SetLastMessage('Bypass inflows at stream nodes cannot be retrieved from the model when it is instantiated for inquiry!',f_iWarn,ThisProcedure)
         rBPInflows = 0.0
         iStat      = -1
         RETURN
@@ -5622,7 +5387,7 @@ CONTAINS
   ! --- GET REQUIRED DIVERSIONS AT SOME DIVERSIONS
   ! -------------------------------------------------------------
   SUBROUTINE GetStrmRequiredDiversions_AtSomeDiversions(Model,iDivs,rDivs,iStat)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET :: Model
     INTEGER,INTENT(IN)          :: iDivs(:)
     REAL(8),INTENT(OUT)         :: rDivs(:)
     INTEGER,INTENT(OUT)         :: iStat
@@ -5635,11 +5400,7 @@ CONTAINS
     
     !Make sure it is not Model_ForInquiry
     IF (Model%lModel_ForInquiry_Defined) THEN
-        IF (ASSOCIATED(ModuleLogger)) THEN
-            CALL ModuleLogger%SetLastMessage('Required diversions cannot be retrieved from the model when it is instantiated for inquiry!',f_iWarn,ThisProcedure)
-        ELSE
-            CALL ModuleLogger%SetLastMessage('Required diversions cannot be retrieved from the model when it is instantiated for inquiry!',f_iWarn,ThisProcedure)
-        END IF
+                    CALL Model%Logger%SetLastMessage('Required diversions cannot be retrieved from the model when it is instantiated for inquiry!',f_iWarn,ThisProcedure)
         rDivs = 0.0
         iStat = -1
         RETURN
@@ -5655,7 +5416,7 @@ CONTAINS
   ! --- GET ACTUAL DIVERSIONS AT SOME DIVERSIONS
   ! -------------------------------------------------------------
   SUBROUTINE GetStrmActualDiversions_AtSomeDiversions(Model,iDivs,rDivs,iStat)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET :: Model
     INTEGER,INTENT(IN)          :: iDivs(:)
     REAL(8),INTENT(OUT)         :: rDivs(:)
     INTEGER,INTENT(OUT)         :: iStat
@@ -5668,11 +5429,7 @@ CONTAINS
     
     !Make sure it is not Model_ForInquiry
     IF (Model%lModel_ForInquiry_Defined) THEN
-        IF (ASSOCIATED(ModuleLogger)) THEN
-            CALL ModuleLogger%SetLastMessage('Actual diversions cannot be retrieved from the model when it is instantiated for inquiry!',f_iWarn,ThisProcedure)
-        ELSE
-            CALL ModuleLogger%SetLastMessage('Actual diversions cannot be retrieved from the model when it is instantiated for inquiry!',f_iWarn,ThisProcedure)
-        END IF
+                    CALL Model%Logger%SetLastMessage('Actual diversions cannot be retrieved from the model when it is instantiated for inquiry!',f_iWarn,ThisProcedure)
         rDivs = 0.0
         iStat = -1
         RETURN
@@ -5688,7 +5445,7 @@ CONTAINS
   ! --- GET DELIVERY RELATED TO A STREAM DIVERSION
   ! -------------------------------------------------------------
   PURE FUNCTION GetStrmDiversionDelivery(Model,iDiver) RESULT(rDeli)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET,INTENT(IN) :: Model
     INTEGER,INTENT(IN)          :: iDiver
     REAL(8)                     :: rDeli
     
@@ -5701,7 +5458,7 @@ CONTAINS
   ! --- GET STREAM NODE INDICES FOR A GIVEN SET OF DIVERSION INDICES
   ! -------------------------------------------------------------
   SUBROUTINE GetStrmDiversionsExportNodes(Model,iDivList,iStrmNodeList)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET :: Model
     INTEGER,INTENT(IN)          :: iDivList(:)
     INTEGER,INTENT(OUT)         :: iStrmNodeList(:)
     
@@ -5718,7 +5475,7 @@ CONTAINS
   ! --- GET NUMBER OF ELEMENTS SERVED BY A DIVERSION
   ! -------------------------------------------------------------
   FUNCTION GetStrmDiversionNElems(Model,iDiv) RESULT(iNElems)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET :: Model
     INTEGER,INTENT(IN)          :: iDiv
     INTEGER                     :: iNElems
     
@@ -5739,7 +5496,7 @@ CONTAINS
   ! --- GET INDICES OF ELEMENTS SERVED BY A DIVERSION
   ! -------------------------------------------------------------
   SUBROUTINE GetStrmDiversionElems(Model,iDiv,iElems)
-    CLASS(ModelType),INTENT(IN)     :: Model
+    CLASS(ModelType),TARGET     :: Model
     INTEGER,INTENT(IN)              :: iDiv
     INTEGER,ALLOCATABLE,INTENT(OUT) :: iElems(:)
     
@@ -5756,7 +5513,7 @@ CONTAINS
   ! --- GET RETURN FLOW LOCATION(S) GENERTAED OVER A SPECIFIED LAND USE FOR A STREAM DIVERSION
   ! -------------------------------------------------------------
   SUBROUTINE GetStrmDiversionReturnLocations(Model,iLUType,iDiv,iNLocations,iLocations,iLocationTypes,iStat)
-    CLASS(ModelType),INTENT(IN)     :: Model
+    CLASS(ModelType),TARGET     :: Model
     INTEGER,INTENT(IN)              :: iLUType,iDiv
     INTEGER,INTENT(OUT)             :: iNLocations
     INTEGER,ALLOCATABLE,INTENT(OUT) :: iLocations(:),iLocationTypes(:)
@@ -5774,11 +5531,7 @@ CONTAINS
     
     !If only partial model is instantiated for inquiry, return an error
     IF (Model%lModel_ForInquiry_Defined) THEN
-        IF (ASSOCIATED(ModuleLogger)) THEN
-            CALL ModuleLogger%SetLastMessage('Model is instantiated only partially. Return flow destinations for diversions cannot be retrieved from a partially instantiated model.',f_iFatal,ThisProcedure)
-        ELSE
-            CALL ModuleLogger%SetLastMessage('Model is instantiated only partially. Return flow destinations for diversions cannot be retrieved from a partially instantiated model.',f_iFatal,ThisProcedure)
-        END IF
+                    CALL Model%Logger%SetLastMessage('Model is instantiated only partially. Return flow destinations for diversions cannot be retrieved from a partially instantiated model.',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -5829,7 +5582,7 @@ CONTAINS
   ! --- GET RECAHRGE ZONE FOR A STREAM DIVERSION
   ! -------------------------------------------------------------
   SUBROUTINE GetStrmDiversionRechargeZone(Model,iDiv,iElems,rFracs,iStat)
-    CLASS(ModelType),INTENT(IN)     :: Model
+    CLASS(ModelType),TARGET     :: Model
     INTEGER,INTENT(IN)              :: iDiv
     INTEGER,ALLOCATABLE,INTENT(OUT) :: iElems(:)
     REAL(8),ALLOCATABLE,INTENT(OUT) :: rFracs(:)
@@ -5849,7 +5602,7 @@ CONTAINS
   ! --- GET STREAM RATING TABLE
   ! -------------------------------------------------------------
   SUBROUTINE GetStrmRatingTable(Model,iStrmNode,NPoints,Stage,Flow)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET :: Model
     INTEGER,INTENT(IN)          :: iStrmNode,NPoints
     REAL(8),INTENT(OUT)         :: Stage(NPoints),Flow(NPoints)
     
@@ -5862,7 +5615,7 @@ CONTAINS
   ! --- GET STREAM SEEPAGE TO GROUNDWATER AT A GIVEN STREAM NODE
   ! -------------------------------------------------------------
   FUNCTION GetStrmSeepToGW_AtOneNode(Model,iStrmNode,iInsideModel) RESULT(Seepage)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET :: Model
     INTEGER,INTENT(IN)          :: iStrmNode,iInsideModel
     REAL(8)                     :: Seepage
     
@@ -5879,7 +5632,7 @@ CONTAINS
   ! --- GET STREAM HEAD AT A GIVEN STREAM NODE
   ! -------------------------------------------------------------
   PURE FUNCTION GetStrmHead_AtOneNode(Model,iStrmNode,lPrevious) RESULT(Head)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET,INTENT(IN) :: Model
     INTEGER,INTENT(IN)          :: iStrmNode
     LOGICAL,INTENT(IN)          :: lPrevious
     REAL(8)                     :: Head
@@ -5893,7 +5646,7 @@ CONTAINS
   ! --- RETRIEVE WSA AT EACH STREAM NODE
   ! -------------------------------------------------------------
   SUBROUTINE GetStrmWSAs(Model,rWSAs,iStat)
-    CLASS(ModelType)    :: Model
+    CLASS(ModelType),TARGET :: Model
     REAL(8),INTENT(OUT) :: rWSAs(:)
     INTEGER,INTENT(OUT) :: iStat
     
@@ -5913,7 +5666,7 @@ CONTAINS
   ! --- GET NUMBER OF LAKES
   ! -------------------------------------------------------------
   PURE FUNCTION GetNLakes(Model) RESULT(NLakes)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET,INTENT(IN) :: Model
     INTEGER                     :: NLakes
     
     NLakes = Model%AppLake%GetNLakes()
@@ -5925,7 +5678,7 @@ CONTAINS
   ! --- GET LAKE IDs
   ! -------------------------------------------------------------
   PURE SUBROUTINE GetLakeIDs(Model,IDs)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET,INTENT(IN) :: Model
     INTEGER,INTENT(OUT)         :: IDs(:)
     
     CALL Model%AppLake%GetLakeIDs(IDs)
@@ -5937,7 +5690,7 @@ CONTAINS
   ! --- GET NUMBER OF ELEMENTS IN A LAKE
   ! -------------------------------------------------------------
   PURE FUNCTION GetNElementsInLake(Model,iLake) RESULT(NElements)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET,INTENT(IN) :: Model
     INTEGER,INTENT(IN)          :: iLake
     INTEGER                     :: NElements
     
@@ -5950,7 +5703,7 @@ CONTAINS
   ! --- GET ELEMENTS IN A LAKE
   ! -------------------------------------------------------------
   SUBROUTINE GetElementsInLake(Model,iLake,NElems,Elems)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET :: Model
     INTEGER,INTENT(IN)          :: iLake,NElems
     INTEGER,INTENT(OUT)         :: Elems(NElems)
     
@@ -5972,7 +5725,7 @@ CONTAINS
   ! --- GET ALL LAKE ELEMENTS
   ! -------------------------------------------------------------
   SUBROUTINE GetAllLakeElements(Model,Elems)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET :: Model
     INTEGER,ALLOCATABLE         :: Elems(:)
     
     CALL Model%AppLake%GetAllLakeElements(Elems)
@@ -5984,7 +5737,7 @@ CONTAINS
   ! --- GET AVERAGE AG. PUMPING-WEIGHTED DEPTH-TO-GW AT SPECIFIED ZONES DEFINED BY SETS OF ELEMENTS 
   ! -------------------------------------------------------------
   SUBROUTINE GetZoneAgPumpingAverageDepthToGW(Model,iElems,iElemZones,rAveDepthToGW,iStat)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET :: Model
     INTEGER,INTENT(IN)          :: iElems(:),iElemZones(:)
     REAL(8),INTENT(OUT)         :: rAveDepthToGW(:)
     INTEGER,INTENT(OUT)         :: iStat
@@ -5996,11 +5749,7 @@ CONTAINS
     INTEGER,ALLOCATABLE                    :: iZoneList(:)
     
     IF (Model%lModel_ForInquiry_Defined) THEN
-        IF (ASSOCIATED(ModuleLogger)) THEN
-            CALL ModuleLogger%SetLastMessage('Model is instantiated only partially. Average depth to groundwater cannot be retrieved from a partially instantiated model.',f_iWarn,ThisProcedure)
-        ELSE
-            CALL ModuleLogger%SetLastMessage('Model is instantiated only partially. Average depth to groundwater cannot be retrieved from a partially instantiated model.',f_iWarn,ThisProcedure)
-        END IF
+                    CALL Model%Logger%SetLastMessage('Model is instantiated only partially. Average depth to groundwater cannot be retrieved from a partially instantiated model.',f_iWarn,ThisProcedure)
         rAveDepthToGW = 0.0
         iStat         = -1
         RETURN
@@ -6037,7 +5786,7 @@ CONTAINS
   ! --- GET AVERAGE AG. PUMPING-WEIGHTED DEPTH-TO-GW AT EACH SUBREGION
   ! -------------------------------------------------------------
   SUBROUTINE GetSubregionAgPumpingAverageDepthToGW(Model,AveDepthToGW,iStat)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET :: Model
     REAL(8),INTENT(OUT)         :: AveDepthToGW(:)
     INTEGER,INTENT(OUT)         :: iStat
     
@@ -6046,11 +5795,7 @@ CONTAINS
     REAL(8)                                :: ElemAgAreas(Model%AppGrid%NElements), RegionAgAreas(Model%AppGrid%NSubregions)
     
     IF (Model%lModel_ForInquiry_Defined) THEN
-        IF (ASSOCIATED(ModuleLogger)) THEN
-            CALL ModuleLogger%SetLastMessage('Model is instantiated only partially. Average depth to groundwater cannot be retrieved from a partially instantiated model.',f_iWarn,ThisProcedure)
-        ELSE
-            CALL ModuleLogger%SetLastMessage('Model is instantiated only partially. Average depth to groundwater cannot be retrieved from a partially instantiated model.',f_iWarn,ThisProcedure)
-        END IF
+                    CALL Model%Logger%SetLastMessage('Model is instantiated only partially. Average depth to groundwater cannot be retrieved from a partially instantiated model.',f_iWarn,ThisProcedure)
         AveDepthToGW = 0.0
         iStat        = -1
         RETURN
@@ -6073,18 +5818,14 @@ CONTAINS
   ! --- GET NUMBER OF AG CROPS
   ! -------------------------------------------------------------
   SUBROUTINE GetNAgCrops(Model,NCrops,iStat)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET :: Model
     INTEGER,INTENT(OUT)         :: NCrops,iStat
     
     !Local variables
     CHARACTER(LEN=ModNameLen+11),PARAMETER :: ThisProcedure = ModName // 'GetNAgCrops'
     
     IF (Model%lModel_ForInquiry_Defined) THEN
-        IF (ASSOCIATED(ModuleLogger)) THEN
-            CALL ModuleLogger%SetLastMessage('Model is instantiated only partially. Number of ag. crops cannot be retrieved from a partially instantiated model.',f_iWarn,ThisProcedure)
-        ELSE
-            CALL ModuleLogger%SetLastMessage('Model is instantiated only partially. Number of ag. crops cannot be retrieved from a partially instantiated model.',f_iWarn,ThisProcedure)
-        END IF
+                    CALL Model%Logger%SetLastMessage('Model is instantiated only partially. Number of ag. crops cannot be retrieved from a partially instantiated model.',f_iWarn,ThisProcedure)
         NCrops = 0
         iStat = -1
     ELSE
@@ -6099,7 +5840,7 @@ CONTAINS
   ! --- GET MAXIMUM AND MINIMUM NET RETURN FLOW FRACTIONS USED DURING THE ENTIRE SIMULATION PERIOD
   ! -------------------------------------------------------------
   SUBROUTINE GetMaxAndMinNetReturnFlowFrac(Model,rMaxFrac,rMinFrac,iStat)
-    CLASS(ModelType)    :: Model
+    CLASS(ModelType),TARGET :: Model
     REAL(8),INTENT(OUT) :: rMaxFrac,rMinFrac
     INTEGER,INTENT(OUT) :: iStat
     
@@ -6107,11 +5848,7 @@ CONTAINS
     CHARACTER(LEN=ModNameLen+29),PARAMETER :: ThisProcedure = ModName // 'GetMaxAndMinNetReturnFlowFrac'
     
     IF (Model%lModel_ForInquiry_Defined) THEN
-        IF (ASSOCIATED(ModuleLogger)) THEN
-            CALL ModuleLogger%SetLastMessage('Model is instantiated only partially. MAximum and minimum return flow fractions cannot be retrieved from a partially instantiated model.',f_iWarn,ThisProcedure)
-        ELSE
-            CALL ModuleLogger%SetLastMessage('Model is instantiated only partially. MAximum and minimum return flow fractions cannot be retrieved from a partially instantiated model.',f_iWarn,ThisProcedure)
-        END IF
+                    CALL Model%Logger%SetLastMessage('Model is instantiated only partially. MAximum and minimum return flow fractions cannot be retrieved from a partially instantiated model.',f_iWarn,ThisProcedure)
         rMaxFrac = 1.0
         rMinFrac = 0.0
         iStat    = -1
@@ -6126,7 +5863,7 @@ CONTAINS
   ! --- GET FLAG TO CHECK IF A SUPPLY IS SERVING AG, URBAN OR BOTH
   ! -------------------------------------------------------------
   SUBROUTINE GetSupplyPurpose(Model,iSupplyType,iSupplies,iAgOrUrban,iStat)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET :: Model
     INTEGER,INTENT(IN)          :: iSupplyType,iSupplies(:)
     INTEGER,INTENT(OUT)         :: iAgOrUrban(:),iStat
     
@@ -6148,7 +5885,7 @@ CONTAINS
   ! --- GET SUPPLY REQUIREMENT AT SPECIFIED LOCATIONS
   ! -------------------------------------------------------------
   SUBROUTINE GetSupplyRequirement(Model,iLocationTypeID,iLocationList,iSupplyFor,rFactor,rSupplyReq,iStat)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET :: Model
     INTEGER,INTENT(IN)          :: iLocationTypeID,iLocationList(:),iSupplyFor
     REAL(8),INTENT(IN)          :: rFactor
     REAL(8),INTENT(OUT)         :: rSupplyReq(:)
@@ -6158,11 +5895,7 @@ CONTAINS
     CHARACTER(LEN=ModNameLen+20),PARAMETER :: ThisProcedure = ModName // 'GetSupplyRequirement'
     
     IF (Model%lModel_ForInquiry_Defined) THEN
-        IF (ASSOCIATED(ModuleLogger)) THEN
-            CALL ModuleLogger%SetLastMessage('Model is instantiated only partially. Water supply requirement cannot be retrieved from a partially instantiated model.',f_iWarn,ThisProcedure)
-        ELSE
-            CALL ModuleLogger%SetLastMessage('Model is instantiated only partially. Water supply requirement cannot be retrieved from a partially instantiated model.',f_iWarn,ThisProcedure)
-        END IF
+                    CALL Model%Logger%SetLastMessage('Model is instantiated only partially. Water supply requirement cannot be retrieved from a partially instantiated model.',f_iWarn,ThisProcedure)
         rSupplyReq = 0.0
         iStat      = -1
     ELSE
@@ -6178,7 +5911,7 @@ CONTAINS
   ! --- GET WATER SUPPLY SHORTAGE FOR SELECTED SUPPLIES AT ORIGIN INCLUDING ANY LOSSES BEFORE ITS DELIVERY LOCATION
   ! -------------------------------------------------------------
   SUBROUTINE GetSupplyShortAtOrigin_ForSomeSupplies(Model,iSupplyType,iSupplyList,iSupplyFor,rFactor,rSupplyShort,iStat)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET :: Model
     INTEGER,INTENT(IN)          :: iSupplyType,iSupplyList(:),iSupplyFor
     REAL(8),INTENT(IN)          :: rFactor
     REAL(8),INTENT(OUT)         :: rSupplyShort(:)
@@ -6189,11 +5922,7 @@ CONTAINS
     REAL(8)                                :: rSupplyShortAtDest(SIZE(iSupplyList))
     
     IF (Model%lModel_ForInquiry_Defined) THEN
-        IF (ASSOCIATED(ModuleLogger)) THEN
-            CALL ModuleLogger%SetLastMessage('Model is instantiated only partially. Water supply shortage cannot be retrieved from a partially instantiated model.',f_iWarn,ThisProcedure)
-        ELSE
-            CALL ModuleLogger%SetLastMessage('Model is instantiated only partially. Water supply shortage cannot be retrieved from a partially instantiated model.',f_iWarn,ThisProcedure)
-        END IF
+                    CALL Model%Logger%SetLastMessage('Model is instantiated only partially. Water supply shortage cannot be retrieved from a partially instantiated model.',f_iWarn,ThisProcedure)
         rSupplyShort = 0.0
         iStat        = -1
     ELSE
@@ -6219,7 +5948,7 @@ CONTAINS
   ! --- GET NUMBER OF LOCATIONS, GIVEN LOCATION TYPE
   ! -------------------------------------------------------------
   FUNCTION GetNLocations(Model,iLocationType) RESULT(iNLocations)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET :: Model
     INTEGER,INTENT(IN)          :: iLocationType
     INTEGER                     :: iNLocations
     
@@ -6307,7 +6036,7 @@ CONTAINS
   ! --- GET LOCATION IDs, GIVEN LOCATION TYPE, FROM INQUIRY MODEL
   ! -------------------------------------------------------------
   SUBROUTINE GetLocationIDs(Model,iLocationType,iLocationIDs)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET :: Model
     INTEGER,INTENT(IN)          :: iLocationType
     INTEGER,ALLOCATABLE         :: iLocationIDs(:)
     
@@ -6412,7 +6141,7 @@ CONTAINS
   ! ---       ReadTSData method was called. 
   ! -------------------------------------------------------------
   SUBROUTINE GetFutureWaterDemand_ForDiversion(Model,iDiversion,cDemandDate,rDemand,iStat)
-    CLASS(ModelType)            :: Model
+    CLASS(ModelType),TARGET     :: Model
     INTEGER,INTENT(IN)          :: iDiversion
     CHARACTER(LEN=*),INTENT(IN) :: cDemandDate
     REAL(8),INTENT(OUT)         :: rDemand
@@ -6434,11 +6163,7 @@ CONTAINS
         iDivID = iDivIDs(iDiversion)
         MessageArray(1) = 'Error in retrieving future demand for diversion '// TRIM(IntToText(iDivID)) // '!'
         MessageArray(2) = 'Future demands for '//TRIM(cDemandDate)//' have not been computed!'
-        IF (ASSOCIATED(ModuleLogger)) THEN
-            CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
-        ELSE
-            CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
-        END IF
+                    CALL Model%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
         RETURN
     END IF
     
@@ -6494,7 +6219,7 @@ CONTAINS
   ! --- Note: This method is intended to be called outside of a Simulation run
   ! -------------------------------------------------------------
   SUBROUTINE GetLandUseAreasForTimePeriod(Model,cBeginDate,cEndDate,iLUType,iLU,rFactArea,rLUAreas,iStat)
-    CLASS(ModelType),INTENT(IN)     :: Model
+    CLASS(ModelType),TARGET     :: Model
     CHARACTER(LEN=*),INTENT(IN)     :: cBeginDate,cEndDate
     INTEGER,INTENT(IN)              :: iLUType,iLU
     REAL(8),INTENT(IN)              :: rFactArea
@@ -6541,7 +6266,7 @@ CONTAINS
   ! --- SET MAXIMUM SUPPLY ADJUSTMENT ITERATIONS
   ! -------------------------------------------------------------
   SUBROUTINE SetSupplyAdjustmentMaxIters(Model,iMaxIters,iStat)
-    CLASS(ModelType)    :: Model
+    CLASS(ModelType),TARGET :: Model
     INTEGER,INTENT(IN)  :: iMaxIters
     INTEGER,INTENT(OUT) :: iStat
     
@@ -6554,7 +6279,7 @@ CONTAINS
   ! --- SET SUPPLY ADJUSTMENT TOLERANCE
   ! -------------------------------------------------------------
   SUBROUTINE SetSupplyAdjustmentTolerance(Model,rToler,iStat)
-    CLASS(ModelType)    :: Model
+    CLASS(ModelType),TARGET :: Model
     REAL(8),INTENT(IN)  :: rToler
     INTEGER,INTENT(OUT) :: iStat
     
@@ -6567,7 +6292,7 @@ CONTAINS
   ! --- SET STREAM DIVERSION READ
   ! -------------------------------------------------------------
   SUBROUTINE SetStreamDiversionRead(Model,iDiver,rDiversion)
-    CLASS(ModelType)   :: Model
+    CLASS(ModelType),TARGET :: Model
     INTEGER,INTENT(IN) :: iDiver
     REAL(8),INTENT(IN) :: rDiversion
     
@@ -6580,7 +6305,7 @@ CONTAINS
   ! --- SET GW BOUNDARY CONDITION NODES
   ! -------------------------------------------------------------
   SUBROUTINE SetGWBCNodes(Model,iNodes,iLayers,iBCType,lUpdateGWZBudget,iStat,iTSCols,iTSColsMaxBCFlow,rConductances,rConstrainingBCHeads)
-    CLASS(ModelType)            :: Model
+    CLASS(ModelType),TARGET     :: Model
     INTEGER,INTENT(IN)          :: iNodes(:),iLayers(:),iBCType
     LOGICAL,INTENT(IN)          :: lUpdateGWZBudget     !Flag to update the GWZBudget output file; if RemoveGWBCNodes and SetGWBCNodes are called multiple times, we don't want to update the ZGWZBudget everytime
     INTEGER,INTENT(OUT)         :: iStat
@@ -6625,7 +6350,7 @@ CONTAINS
   ! --- SET GW BOUNDARY CONDITION
   ! -------------------------------------------------------------
   SUBROUTINE SetGWBC(Model,iNode,iLayer,iBCType,iStat,rFlow,rHead,rMaxBCFlow,rConductance,rConstrainingHeadBC)
-    CLASS(ModelType)            :: Model
+    CLASS(ModelType),TARGET     :: Model
     INTEGER,INTENT(IN)          :: iNode,iLayer,iBCType
     INTEGER,INTENT(OUT)         :: iStat
     REAL(8),OPTIONAL,INTENT(IN) :: rFlow,rHead,rMaxBCFlow,rConductance,rConstrainingHeadBC
@@ -6639,7 +6364,7 @@ CONTAINS
   ! --- SET STREAM FLOW
   ! -------------------------------------------------------------
   SUBROUTINE SetStreamFlow(Model,iStrmNode,rFlow,iStat)
-    CLASS(ModelType)    :: Model
+    CLASS(ModelType),TARGET :: Model
     INTEGER,INTENT(IN)  :: iStrmNode
     REAL(8),INTENT(IN)  :: rFlow
     INTEGER,INTENT(OUT) :: iStat
@@ -6653,7 +6378,7 @@ CONTAINS
   ! --- SET STREAM INFLOW AT A NODE
   ! -------------------------------------------------------------
   SUBROUTINE SetStreamInflow(Model,iStrmNode,rFlow,lAdd,iStat)
-    CLASS(ModelType)    :: Model
+    CLASS(ModelType),TARGET :: Model
     INTEGER,INTENT(IN)  :: iStrmNode
     REAL(8),INTENT(IN)  :: rFlow
     LOGICAL,INTENT(IN)  :: lAdd
@@ -6668,7 +6393,7 @@ CONTAINS
   ! --- SET BYPASS ORIGINATING FLOW AS WELL AS OTHER RELATED FLOWS
   ! -------------------------------------------------------------
   SUBROUTINE SetBypassFlows_AtABypass(Model,iBypass,rOriginatingFlow)
-    CLASS(ModelType)   :: Model
+    CLASS(ModelType),TARGET :: Model
     INTEGER,INTENT(IN) :: iBypass
     REAL(8),INTENT(IN) :: rOriginatingFlow
     
@@ -6750,7 +6475,7 @@ CONTAINS
   ! --- READ IN SIMULATION MAIN CONTROL DATA
   ! -------------------------------------------------------------
   SUBROUTINE SIM_ReadMainControlData(Model,cSimFileName,ProjectTitles,ProjectFileNames,MSOLVE,MXITERSP,RELAX,STOPCSP,iAdjustFlag,CACHE,iRestartModel,iStat)
-    CLASS(ModelType)                      :: Model
+    CLASS(ModelType),TARGET               :: Model
     CHARACTER(LEN=*),INTENT(IN)           :: cSimFileName
     CHARACTER(LEN=*),INTENT(OUT)          :: ProjectTitles(:),ProjectFileNames(:)
     INTEGER,INTENT(OUT)                   :: CACHE,MSOLVE,MXITERSP,iAdjustFlag,iRestartModel
@@ -6796,12 +6521,12 @@ CONTAINS
     
     !Make sure pre-processor binary and groundwater data files are specified
     IF (ProjectFileNames(SIM_BinaryInputFileID) .EQ. '') THEN
-        CALL ModuleLogger%SetLastMessage('File name for binary data generated by Pre-processor must be specified!',f_iFatal,ThisProcedure)
+        CALL Model%Logger%SetLastMessage('File name for binary data generated by Pre-processor must be specified!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
     IF (ProjectFileNames(SIM_GWDataFileID) .EQ. '') THEN
-        CALL ModuleLogger%SetLastMessage('Groundwater component main data file name must be specified!',f_iFatal,ThisProcedure)
+        CALL Model%Logger%SetLastMessage('Groundwater component main data file name must be specified!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -6830,7 +6555,7 @@ CONTAINS
         CALL CleanSpecialCharacters(cALine)
         Model%TimeStep%Unit = UpperCase(ADJUSTL(StripTextUntilCharacter(cALine,f_cInlineCommentChar)))
         !Based on UNITT, compute DELTAT in terms of minutes
-        CALL DELTAT_To_Minutes(Model%TimeStep,iStat)
+        CALL DELTAT_To_Minutes(Model%Logger,Model%TimeStep,iStat)
         IF (iStat .EQ. -1) RETURN
         !Get the ending date and time       
         CALL MainControlFile%ReadData(cALine,iStat)  ;  IF (iStat .EQ. -1) RETURN
@@ -6840,7 +6565,7 @@ CONTAINS
         IF (IsTimeStampValid(cALine)) THEN
           Model%TimeStep%EndDateAndTime = StripTimeStamp(cALine)
         ELSE
-          CALL ModuleLogger%SetLastMessage('Simulation ending time should be in MM/DD/YYYY_hh:mm format!',f_iFatal,ThisProcedure)
+          CALL Model%Logger%SetLastMessage('Simulation ending time should be in MM/DD/YYYY_hh:mm format!',f_iFatal,ThisProcedure)
           iStat = -1
           RETURN
         END IF
@@ -6848,7 +6573,7 @@ CONTAINS
         Model%NTIME = NPeriods(Model%TimeStep%DELTAT_InMinutes,Model%TimeStep%CurrentDateAndTime,Model%TimeStep%EndDateAndTime)
         !Ending time cannot be less than begiining date
         IF (Model%NTIME .LE. 0) THEN
-            CALL ModuleLogger%SetLastMessage('Simulation ending date and time ('//Model%TimeStep%EndDateAndTime//') must be later than the simulation beginning date and time ('//Model%TimeStep%CurrentDateAndTime//')!',f_iFatal,ThisProcedure)
+            CALL Model%Logger%SetLastMessage('Simulation ending date and time ('//Model%TimeStep%EndDateAndTime//') must be later than the simulation beginning date and time ('//Model%TimeStep%CurrentDateAndTime//')!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -6870,7 +6595,7 @@ CONTAINS
         Model%NTIME = NPeriods(Model%TimeStep%DeltaT,Model%TimeStep%CurrentTime,Model%TimeStep%EndTime)
         !Ending time cannot be less than begiining date
         IF (Model%NTIME .LE. 0) THEN
-            CALL ModuleLogger%SetLastMessage('Simulation ending time must be later than the simulation beginning time!',f_iFatal,ThisProcedure)
+            CALL Model%Logger%SetLastMessage('Simulation ending time must be later than the simulation beginning time!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -6923,7 +6648,7 @@ CONTAINS
     
     !If restarting, overwrite the simulation begin time and number of simulation timesteps  
     IF (iRestartModel .EQ. iRestart) THEN
-        CALL ReadRestartDateAndTime(TRIM(Model%cSIMWorkingDirectory),Model%NTIME,Model%TimeStep,iStat)
+        CALL ReadRestartDateAndTime(Model%Logger,TRIM(Model%cSIMWorkingDirectory),Model%NTIME,Model%TimeStep,iStat)
         IF (iStat .EQ. -1) RETURN
         Model%NTIME = NPeriods(Model%TimeStep%DELTAT_InMinutes,Model%TimeStep%CurrentDateAndTime,Model%TimeStep%EndDateAndTime)
     END IF
@@ -6937,22 +6662,23 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- READ IN ONLY THE RESTART DATE AND TIME
   ! -------------------------------------------------------------
-  SUBROUTINE ReadRestartDateAndTime(cSimDir,NTIME,TimeStep,iStat)
+  SUBROUTINE ReadRestartDateAndTime(Logger,cSimDir,NTIME,TimeStep,iStat)
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT) :: Logger
     CHARACTER(LEN=*),INTENT(IN) :: cSimDir
     INTEGER,INTENT(IN)          :: NTIME
     TYPE(TimeStepType)          :: TimeStep
     INTEGER,INTENT(OUT)         :: iStat
-    
+
     !Local variables
     CHARACTER(LEN=ModNameLen+22),PARAMETER :: ThisProcedure = ModName // 'ReadRestartDateAndTime'
     INTEGER                                :: ErrorCode
     TYPE(GenericFileType)                  :: InputFile
     CHARACTER(LEN=f_iTimeStampLength)      :: EndDateAndTime,BeginDateAndTime
     CHARACTER(:),ALLOCATABLE               :: cAbsPathFileName
-    
+
     !Initialize
     iStat = 0
-    
+
     !Check if restart dta file exists, if not return
     CALL EstablishAbsolutePathFileName('IW_Restart.bin',cSIMDir,cAbsPathFileName)
     OPEN (FILE=cAbsPathFileName, UNIT=1111, STATUS='OLD' , IOSTAT=ErrorCode)
@@ -6962,30 +6688,30 @@ CONTAINS
     ELSE
         CLOSE (1111)
     END IF
-    
+
     !Original simulation begin and end date and time
     BeginDateAndTime = TimeStep%CurrentDateAndTime
     EndDateAndTime   = IncrementTimeStamp(TimeStep%CurrentDateAndTime,TimeStep%DeltaT_InMinutes,NTIME)
-    
+
     !Open output file
     CALL InputFile%New(FileName=cAbsPathFileName,InputFile=.TRUE.,IsTSFile=.FALSE.,Descriptor='Model restart file',FileType='BIN',iStat=iStat)
     IF (iStat .EQ. -1) RETURN
-    
+
     !Restart simulation date and time
     CALL InputFile%ReadData(TimeStep%CurrentTime,iStat)  ;  IF (iStat .EQ. -1) RETURN
-    CALL InputFile%ReadData(TimeStep%CurrentTimeStep,iStat)  ;  IF (iStat .EQ. -1) RETURN  
+    CALL InputFile%ReadData(TimeStep%CurrentTimeStep,iStat)  ;  IF (iStat .EQ. -1) RETURN
     CALL InputFile%ReadData(TimeStep%CurrentDateAndTime,iStat)  ;  IF (iStat .EQ. -1) RETURN
-       
+
     !Make sure that Restart file points to a date that is between the simulation period
     IF ((TimeStep%CurrentDateAndTime .TSLT. BeginDateAndTime)   .OR.   (TimeStep%CurrentDateAndTime .TSGE. EndDateAndTime)) THEN
-        CALL ModuleLogger%SetLastMessage('Restart file points to a date and time that is outside the simulation period (' // TimeStep%CurrentDateAndTime // ')!',f_iFatal,ThisProcedure)
+        CALL Logger%SetLastMessage('Restart file points to a date and time that is outside the simulation period (' // TimeStep%CurrentDateAndTime // ')!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
-    
+
     !Close file
     CALL InputFile%Kill()
-    
+
   END SUBROUTINE ReadRestartDateAndTime
 
   
@@ -7010,11 +6736,7 @@ CONTAINS
     CALL EstablishAbsolutePathFileName('IW_Restart.bin',Model%cSIMWorkingDirectory,cAbsPathFileName)
     OPEN (FILE=cAbsPathFileName, UNIT=1111, STATUS='OLD' , IOSTAT=ErrorCode)
     IF (ErrorCode .NE. 0) THEN
-        IF (ASSOCIATED(ModuleLogger)) THEN
-            CALL ModuleLogger%LogMessage('Cannot find the restart data file!'//f_cLineFeed//'Running the model from the beginning of simulation period.',f_iInfo,ThisProcedure)
-        ELSE
-            CALL ModuleLogger%LogMessage('Cannot find the restart data file!'//f_cLineFeed//'Running the model from the beginning of simulation period.',f_iInfo,ThisProcedure)
-        END IF
+                    CALL Model%Logger%LogMessage('Cannot find the restart data file!'//f_cLineFeed//'Running the model from the beginning of simulation period.',f_iInfo,ThisProcedure)
         CLOSE (1111,IOSTAT=ErrorCode)
         RETURN
     ELSE
@@ -7036,21 +6758,13 @@ CONTAINS
     
     !Make sure that Restart file points to a date that is between the simulation period
     IF ((Model%TimeStep%CurrentDateAndTime .TSLT. BeginDateAndTime)   .OR.   (Model%TimeStep%CurrentDateAndTime .TSGE. EndDateAndTime)) THEN
-        IF (ASSOCIATED(ModuleLogger)) THEN
-            CALL ModuleLogger%SetLastMessage('Restart file points to a date and time that is outside the simulation period (' // Model%TimeStep%CurrentDateAndTime // ')!',f_iFatal,ThisProcedure)
-        ELSE
-            CALL ModuleLogger%SetLastMessage('Restart file points to a date and time that is outside the simulation period (' // Model%TimeStep%CurrentDateAndTime // ')!',f_iFatal,ThisProcedure)
-        END IF
+                    CALL Model%Logger%SetLastMessage('Restart file points to a date and time that is outside the simulation period (' // Model%TimeStep%CurrentDateAndTime // ')!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
     
     !Inform user
-    IF (ASSOCIATED(ModuleLogger)) THEN
-        CALL ModuleLogger%LogMessage('Restarting model from '//TRIM(Model%TimeStep%CurrentDateAndTime)//'!',f_iMessage,'')
-    ELSE
-        CALL ModuleLogger%LogMessage('Restarting model from '//TRIM(Model%TimeStep%CurrentDateAndTime)//'!',f_iMessage,'')
-    END IF
+            CALL Model%Logger%LogMessage('Restarting model from '//TRIM(Model%TimeStep%CurrentDateAndTime)//'!',f_iMessage,'')
     
     !Groundwater 
     CALL Model%AppGW%ReadRestartData(InputFile,iStat)  ;  IF (iStat .EQ. -1) RETURN
@@ -7104,7 +6818,7 @@ CONTAINS
   ! --- PRINT SIMULATION RESULTS
   ! -------------------------------------------------------------
   SUBROUTINE PrintResults(Model,iStat)
-    CLASS(ModelType)    :: Model
+    CLASS(ModelType),TARGET :: Model
     INTEGER,INTENT(OUT) :: iStat
     
     !Local variables
@@ -7184,39 +6898,40 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- PRINT PROJECT TITLE AND FILES AS READ FROM THE MAIN FILE
   ! -------------------------------------------------------------
-  SUBROUTINE PrintProjectTitleAndFiles(ProjectTitles,ProjectFileNames)
+  SUBROUTINE PrintProjectTitleAndFiles(Logger,ProjectTitles,ProjectFileNames)
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT) :: Logger
     CHARACTER(LEN=*),INTENT(IN) :: ProjectTitles(:),ProjectFileNames(:)
-    
+
     !Local variables
     CHARACTER(LEN=130),PARAMETER :: StarLine = REPEAT('*',130)
     CHARACTER                    :: TextToPrint*250,RDATE*30,RTIME*30
     INTEGER                      :: indx
 
     !Write the title of the run
-    CALL ModuleLogger%LogMessage(StarLine,f_iMessage,'',f_iFILE)
+    CALL Logger%LogMessage(StarLine,f_iMessage,'',f_iFILE)
     DO indx=1,SIZE(ProjectTitles)
-        CALL ModuleLogger%LogMessage(REPEAT(' ',20)//ProjectTitles(indx),f_iMessage,'',f_iFILE)
+        CALL Logger%LogMessage(REPEAT(' ',20)//ProjectTitles(indx),f_iMessage,'',f_iFILE)
     END DO
-    CALL ModuleLogger%LogMessage(StarLine,f_iMessage,'',f_iFILE)
+    CALL Logger%LogMessage(StarLine,f_iMessage,'',f_iFILE)
 
     !Get the current date and time, and display
     CALL DATE_AND_TIME(DATE=RDATE,TIME=RTIME)
-    CALL ModuleLogger%LogMessage(f_cLineFeed,f_iMessage,'',f_iFILE)
-    CALL ModuleLogger%LogMessage(' THIS RUN IS MADE ON '//                       &
+    CALL Logger%LogMessage(f_cLineFeed,f_iMessage,'',f_iFILE)
+    CALL Logger%LogMessage(' THIS RUN IS MADE ON '//                       &
                     RDATE(5:6)//'/'//RDATE(7:8)//'/'//RDATE(1:4)//  &
                     ' AT '                                      //  &
                     RTIME(1:2)//':'//RTIME(3:4)//':'//RTIME(5:6),f_iMessage,'',f_iFILE)
 
     !Display the files being used for the run
-    CALL ModuleLogger%LogMessage(f_cLineFeed,f_iMessage,'',f_iFILE)
-    CALL ModuleLogger%LogMessage(' THE FOLLOWING FILES ARE USED IN THIS SIMULATION:',f_iMessage,'',f_iFILE)
+    CALL Logger%LogMessage(f_cLineFeed,f_iMessage,'',f_iFILE)
+    CALL Logger%LogMessage(' THE FOLLOWING FILES ARE USED IN THIS SIMULATION:',f_iMessage,'',f_iFILE)
     DO indx=1,SIZE(ProjectFileNames)
         IF (ProjectFileNames(indx) .EQ. '') THEN
             WRITE (TextToPrint,'(2X,A2)') IntToText(indx)
         ELSE
             WRITE (TextToPrint,'(2X,A2,5X,A)') IntToText(indx),TRIM(ProjectFileNames(indx))
         END IF
-        CALL ModuleLogger%LogMessage(TextToPrint,f_iMessage,'',f_iFILE)
+        CALL Logger%LogMessage(TextToPrint,f_iMessage,'',f_iFILE)
     END DO
 
   END SUBROUTINE PrintProjectTitleAndFiles
@@ -7226,7 +6941,7 @@ CONTAINS
   ! --- PRINT OUT PRE-PROCESSED DATA TO PRE-PROCESSOR BINARY OUTPUT FILE
   ! -------------------------------------------------------------
   SUBROUTINE PrintData_To_PPBinaryOutputFile(Model,BinaryOutputFile,iStat)
-    TYPE(ModelType),INTENT(IN) :: Model
+    TYPE(ModelType),TARGET :: Model
     TYPE(GenericFileType)      :: BinaryOutputFile 
     INTEGER,INTENT(OUT)        :: iStat
     
@@ -7234,7 +6949,7 @@ CONTAINS
     iStat = 0
   
     !Write data to binary file
-    CALL ModuleLogger%EchoProgress('Writing the binary data...')
+    CALL Model%Logger%EchoProgress('Writing the binary data...')
     
     !Grid data
     CALL Model%AppGrid%WritePreProcessedData(BinaryOutputFile)
@@ -7267,7 +6982,7 @@ CONTAINS
   ! --- PRINT OUT PRE-PROCESSED DATA TO PRE-PROCESSOR STANDARD OUTPUT FILE
   ! -------------------------------------------------------------
   SUBROUTINE PrintData_To_PPStandardOutputFile(Model,KOUT,KDEB,FACTLTOU,UNITLTOU,FACTAROU,UNITAROU,iStat)
-    TYPE(ModelType),TARGET,INTENT(IN) :: Model
+    TYPE(ModelType),TARGET :: Model
     INTEGER,INTENT(IN)                :: KOUT,KDEB
     REAL(8),INTENT(IN)                :: FACTLTOU,FACTAROU
     CHARACTER(LEN=*),INTENT(IN)       :: UNITLTOU,UNITAROU
@@ -7292,19 +7007,19 @@ CONTAINS
   
     !Write data to standard output file
     TitlePrinted = .FALSE.
-    CALL ModuleLogger%LogMessage('',f_iMessage,'',f_iFILE)
+    CALL Model%Logger%LogMessage('',f_iMessage,'',f_iFILE)
     DO indxRegion=1,Model%AppGrid%NSubregions
         WRITE (ALine,'(A,I3,F12.2,2X,A)') ' REGION = ',Model%AppGrid%AppSubregion(indxRegion)%ID,Model%AppGrid%AppSubregion(indxRegion)%Area*FACTAROU,UNITAROU
-        CALL ModuleLogger%LogMessage(TRIM(ALine),f_iMessage,'',f_iFILE)
+        CALL Model%Logger%LogMessage(TRIM(ALine),f_iMessage,'',f_iFILE)
     END DO
-    WRITE (ALine,'(A,F12.2,2X,A)')   '       TOTAL ',SUM(Model%AppGrid%AppSubregion%Area)*FACTAROU,UNITAROU ; CALL ModuleLogger%LogMessage(TRIM(ALine),f_iMessage,'',f_iFILE)
-    CALL ModuleLogger%LogMessage('',f_iMessage,'',f_iFILE)
-    CALL ModuleLogger%LogMessage(' NO. OF NODES                             ( ND): '//TRIM(IntToText(NNodes)),f_iMessage,'',f_iFILE)
-    CALL ModuleLogger%LogMessage(' NO. OF TRIANGULAR ELEMENTS               (NET): '//TRIM(IntToText(Model%AppGrid%GetNTriElements())),f_iMessage,'',f_iFILE)
-    CALL ModuleLogger%LogMessage(' NO. OF QUADRILATERAL ELEMENTS            (NEQ): '//TRIM(IntToText(Model%AppGrid%GetNQuadElements())),f_iMessage,'',f_iFILE)
-    CALL ModuleLogger%LogMessage(' NO. OF TOTAL ELEMENTS                    ( NE): '//TRIM(IntToText(Model%AppGrid%NElements)),f_iMessage,'',f_iFILE)
-    CALL ModuleLogger%LogMessage(' NO. OF LAYERS                            ( NL): '//TRIM(IntToText(Model%Stratigraphy%NLayers)),f_iMessage,'',f_iFILE)
-    CALL ModuleLogger%LogMessage(' NO. OF NON-ZERO ENTRIES OF COEFF. MATRIX ( NJ): '//TRIM(IntToText(Model%Matrix%GetConnectivitySize())),f_iMessage,'',f_iFILE)
+    WRITE (ALine,'(A,F12.2,2X,A)')   '       TOTAL ',SUM(Model%AppGrid%AppSubregion%Area)*FACTAROU,UNITAROU ; CALL Model%Logger%LogMessage(TRIM(ALine),f_iMessage,'',f_iFILE)
+    CALL Model%Logger%LogMessage('',f_iMessage,'',f_iFILE)
+    CALL Model%Logger%LogMessage(' NO. OF NODES                             ( ND): '//TRIM(IntToText(NNodes)),f_iMessage,'',f_iFILE)
+    CALL Model%Logger%LogMessage(' NO. OF TRIANGULAR ELEMENTS               (NET): '//TRIM(IntToText(Model%AppGrid%GetNTriElements())),f_iMessage,'',f_iFILE)
+    CALL Model%Logger%LogMessage(' NO. OF QUADRILATERAL ELEMENTS            (NEQ): '//TRIM(IntToText(Model%AppGrid%GetNQuadElements())),f_iMessage,'',f_iFILE)
+    CALL Model%Logger%LogMessage(' NO. OF TOTAL ELEMENTS                    ( NE): '//TRIM(IntToText(Model%AppGrid%NElements)),f_iMessage,'',f_iFILE)
+    CALL Model%Logger%LogMessage(' NO. OF LAYERS                            ( NL): '//TRIM(IntToText(Model%Stratigraphy%NLayers)),f_iMessage,'',f_iFILE)
+    CALL Model%Logger%LogMessage(' NO. OF NON-ZERO ENTRIES OF COEFF. MATRIX ( NJ): '//TRIM(IntToText(Model%Matrix%GetConnectivitySize())),f_iMessage,'',f_iFILE)
   
     !Identify effective nodes that are not connected to surrounding nodes
     ALLOCATE (ActiveLayerAbove(NNodes) , ActiveLayerBelow(NNodes) , AllNodes(NNodes))
@@ -7318,14 +7033,14 @@ CONTAINS
                 pConnectedNode => Model%AppGrid%AppNode(indxNode)%ConnectedNode
                 IF (ALL(pActiveNode(pConnectedNode) .EQ. .FALSE.)) THEN
                     IF (.NOT. TitlePrinted) THEN
-                        CALL ModuleLogger%LogMessage('',f_iMessage,'',f_iFILE)
-                        CALL ModuleLogger%LogMessage('***** WARNING ******',f_iMessage,'',f_iFILE)
-                        CALL ModuleLogger%LogMessage('ACTIVE NODES NOT CONNECTED TO SURROUNDING NODES',f_iMessage,'',f_iFILE)
-                        CALL ModuleLogger%LogMessage('       LAYER'//'    NODE',f_iMessage,'',f_iFILE)
+                        CALL Model%Logger%LogMessage('',f_iMessage,'',f_iFILE)
+                        CALL Model%Logger%LogMessage('***** WARNING ******',f_iMessage,'',f_iFILE)
+                        CALL Model%Logger%LogMessage('ACTIVE NODES NOT CONNECTED TO SURROUNDING NODES',f_iMessage,'',f_iFILE)
+                        CALL Model%Logger%LogMessage('       LAYER'//'    NODE',f_iMessage,'',f_iFILE)
                         TitlePrinted = .TRUE.
                     END IF
                     WRITE (ALine,'(2I10)') indxLayer,iGWNodeIDs(indxNode)
-                    CALL ModuleLogger%LogMessage(TRIM(ALine),f_iMessage,'',f_iFILE)
+                    CALL Model%Logger%LogMessage(TRIM(ALine),f_iMessage,'',f_iFILE)
                 END IF
             END IF
         END DO
@@ -7334,35 +7049,35 @@ CONTAINS
     !If desired, print stratigraphic and geometric data
     IF (KOUT .EQ. 1) THEN
         !Node coordinates and associated area
-        CALL ModuleLogger%LogMessage(f_cLineFeed,f_iMessage,'',f_iFILE)
+        CALL Model%Logger%LogMessage(f_cLineFeed,f_iMessage,'',f_iFILE)
         WRITE (ALine,'(2X,A7,13X,A1,13X,A1,6X,A5,A,A1)') 'NODE','X','Y','AREA(',TRIM(UNITAROU),')'
-        CALL ModuleLogger%LogMessage(TRIM(ALine),f_iMessage,'',f_iFILE)
+        CALL Model%Logger%LogMessage(TRIM(ALine),f_iMessage,'',f_iFILE)
         DO indxNode=1,NNodes
             WRITE (ALine,'(2X,I7,2X,F12.2,2X,F12.2,2X,F12.2)') iGWNodeIDs(indxNode),Model%AppGrid%X(indxNode)*FACTLTOU,Model%AppGrid%Y(indxNode)*FACTLTOU,Model%AppGrid%AppNode(indxNode)%Area*FACTAROU
-            CALL ModuleLogger%LogMessage(TRIM(ALine),f_iMessage,'',f_iFILE)
+            CALL Model%Logger%LogMessage(TRIM(ALine),f_iMessage,'',f_iFILE)
         END DO
 
         !Elements, surrounding nodes, element areas and boundary nodes
-        CALL ModuleLogger%LogMessage(f_cLineFeed,f_iMessage,'',f_iFILE)
+        CALL Model%Logger%LogMessage(f_cLineFeed,f_iMessage,'',f_iFILE)
         WRITE (ALine,'(2X,A9,16X,A5,17X,A5,A,A1)') 'ELEMENT','NODES','AREA(',TRIM(UNITAROU),')'
-        CALL ModuleLogger%LogMessage(TRIM(ALine),f_iMessage,'',f_iFILE)
+        CALL Model%Logger%LogMessage(TRIM(ALine),f_iMessage,'',f_iFILE)
         DO indxElem=1,NElements
             IF (Model%AppGrid%NVertex(indxElem) .EQ. 4) THEN
                 WRITE (ALine,'(3X,I7,4(2X,I7),F12.2)') iElemIDs(indxElem),iGWNodeIDs(Model%AppGrid%Vertex(:,indxElem)),Model%AppGrid%AppElement(indxElem)%Area*FACTAROU 
             ELSE
                 WRITE (ALine,'(3X,I7,4(2X,I7),F12.2)') iElemIDs(indxElem),iGWNodeIDs(Model%AppGrid%Vertex(1:3,indxElem)),0,Model%AppGrid%AppElement(indxElem)%Area*FACTAROU 
             END IF
-            CALL ModuleLogger%LogMessage(TRIM(ALine),f_iMessage,'',f_iFILE)
+            CALL Model%Logger%LogMessage(TRIM(ALine),f_iMessage,'',f_iFILE)
         END DO
 
         !Stratigraphic data
         ALLOCATE (iActiveNode(NLayers))
-        CALL ModuleLogger%LogMessage(f_cLineFeed,f_iMessage,'',f_iFILE)
-        WRITE (ALine,'(4X,A50,A,A5)') '*** TOP AND BOTTOM ELEVATIONS OF AQUIFER LAYERS (',TRIM(UNITLTOU),') ***'       ; CALL ModuleLogger%LogMessage(TRIM(ALine),f_iMessage,'',f_iFILE)          
+        CALL Model%Logger%LogMessage(f_cLineFeed,f_iMessage,'',f_iFILE)
+        WRITE (ALine,'(4X,A50,A,A5)') '*** TOP AND BOTTOM ELEVATIONS OF AQUIFER LAYERS (',TRIM(UNITLTOU),') ***'       ; CALL Model%Logger%LogMessage(TRIM(ALine),f_iMessage,'',f_iFILE)          
         cFormat = '(3X,A4,2X,A10,' // TRIM(IntToText(NLayers)) // '(10X,A6,I2,11X))'
-        WRITE (ALine,TRIM(cFormat)) 'NODE','GRND.SURF.',('LAYER ',indxLayer,indxLayer=1,NLayers)  ; CALL ModuleLogger%LogMessage(TRIM(ALine),f_iMessage,'',f_iFILE)    
+        WRITE (ALine,TRIM(cFormat)) 'NODE','GRND.SURF.',('LAYER ',indxLayer,indxLayer=1,NLayers)  ; CALL Model%Logger%LogMessage(TRIM(ALine),f_iMessage,'',f_iFILE)    
         cFormat = '(19X,' // TRIM(IntToText(NLayers)) // '(2X,A3,8X,A3,5X,A6,2X))'
-        WRITE (ALine,TRIM(cFormat)) ('IUD','TOP','BOTTOM',indxLayer=1,NLayers)                    ; CALL ModuleLogger%LogMessage(TRIM(ALine),f_iMessage,'',f_iFILE) 
+        WRITE (ALine,TRIM(cFormat)) ('IUD','TOP','BOTTOM',indxLayer=1,NLayers)                    ; CALL Model%Logger%LogMessage(TRIM(ALine),f_iMessage,'',f_iFILE) 
         cFormat = '(I7, 2X, F10.2,' // TRIM(IntToText(NLayers)) // '(2X,I3,2X,F9.2,2X,F9.2,2X))'
         DO indxNode=1,NNodes
             iActiveNode = 1
@@ -7372,11 +7087,11 @@ CONTAINS
                          (iActiveNode(indxLayer)                                           , &
                          Model%Stratigraphy%TopElev(indxNode,indxLayer)*FACTLTOU           , &
                          Model%Stratigraphy%BottomElev(indxNode,indxLayer)*FACTLTOU ,indxLayer=1,NLayers)
-            CALL ModuleLogger%LogMessage(TRIM(ALine),f_iMessage,'',f_iFILE)
+            CALL Model%Logger%LogMessage(TRIM(ALine),f_iMessage,'',f_iFILE)
         END DO
 
         !Stream nodes and characteristics
-        CALL ModuleLogger%LogMessage(f_cLineFeed,f_iMessage,'',f_iFILE)
+        CALL Model%Logger%LogMessage(f_cLineFeed,f_iMessage,'',f_iFILE)
         CALL Model%AppStream%WriteDataToTextFile(iGWNodeIDs,UNITLTOU,FACTLTOU,Model%Stratigraphy,Model%StrmGWConnector,iStat)
         IF (iStat .EQ. -1) RETURN
 
@@ -7385,24 +7100,24 @@ CONTAINS
     ! ***** IF DESIRED, PRINT CONNECTING NODES 
     IF (KDEB .EQ. PP_KDEB_PrintFEStiffness) THEN
         !Connecting nodes
-        CALL ModuleLogger%LogMessage(f_cLineFeed,f_iMessage,'',f_iFILE)
+        CALL Model%Logger%LogMessage(f_cLineFeed,f_iMessage,'',f_iFILE)
         WRITE (ALine,'(2X,A4,3X,A18,3X,A16,3X,A20)') 'NODE','# OF ACTIVE LAYERS','TOP ACTIVE LAYER','SURROUNDING GW NODES'
-        CALL ModuleLogger%LogMessage(TRIM(ALine),f_iMessage,'',f_iFILE)
+        CALL Model%Logger%LogMessage(TRIM(ALine),f_iMessage,'',f_iFILE)
         DO indxNode=1,NNodes
             WRITE (ALine,'(I6,3X,I18,3X,I16,3X,20I6)') iGWNodeIDs(indxNode)                                    , &
                                                        Model%Stratigraphy%GetNActiveLayers(indxNode)           , &
                                                        Model%Stratigraphy%GetTopActiveLayer(indxNode)          , &
                                                        iGWNodeIDs(Model%AppGrid%AppNode(indxNode)%ConnectedNode)
-            CALL ModuleLogger%LogMessage(TRIM(ALine),f_iMessage,'',f_iFILE)
+            CALL Model%Logger%LogMessage(TRIM(ALine),f_iMessage,'',f_iFILE)
         END DO
     
         !Non-zero components of stiffness matrix
-        CALL ModuleLogger%LogMessage(f_cLineFeed,f_iMessage,'',f_iFILE)
+        CALL Model%Logger%LogMessage(f_cLineFeed,f_iMessage,'',f_iFILE)
         WRITE (ALine,'(2X,A7,15X,A25)') 'ELEMENT','ELEMENT MATRIX COMPONENTS'
-        CALL ModuleLogger%LogMessage(TRIM(ALine),f_iMessage,'',f_iFILE)
+        CALL Model%Logger%LogMessage(TRIM(ALine),f_iMessage,'',f_iFILE)
         DO indxElem=1,NElements
             WRITE (ALine,'(I7,4X,6F10.2)') iElemIDs(indxElem),Model%AppGrid%AppElement(indxElem)%Integral_DELShpI_DELShpJ
-            CALL ModuleLogger%LogMessage(TRIM(ALine),f_iMessage,'',f_iFILE)
+            CALL Model%Logger%LogMessage(TRIM(ALine),f_iMessage,'',f_iFILE)
         END DO
     END IF
 
@@ -7413,16 +7128,16 @@ CONTAINS
   ! --- SUBROUTINE THAT PRINTS OUT COMPONENT VERSION NUMBERS
   ! -------------------------------------------------------------
   SUBROUTINE PrintVersionNumbers()
-  
+
     !Local variables
     CHARACTER(:),ALLOCATABLE :: cVersionNumbers
-    
+
     CALL GetVersion(cVersionNumbers)
-  
+
     MessageArray(1) = f_cLineFeed // 'VERSION NUMBERS FOR IWFM AND ITS COMPONENTS:' // f_cLineFeed
     MessageArray(2) = cVersionNumbers
-    
-    CALL ModuleLogger%LogMessage(MessageArray(1:2),f_iMessage,'',iDestination=f_iSCREEN)
+
+    CALL DefaultLogger%LogMessage(MessageArray(1:2),f_iMessage,'',iDestination=f_iSCREEN)
 
   END SUBROUTINE PrintVersionNumbers
   
@@ -7431,7 +7146,7 @@ CONTAINS
   ! --- PRINT OUT RESTART DATA
   ! -------------------------------------------------------------
   SUBROUTINE PrintRestartData(Model,iStat)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET :: Model
     INTEGER,INTENT(OUT)         :: iStat
     
     !Local variables
@@ -7489,7 +7204,7 @@ CONTAINS
   ! --- READ TIME-SERIES DATA 
   ! -------------------------------------------------------------
   SUBROUTINE ReadTSData(Model,iStat,RegionLUAreas,iDiversionsOW,rDiversionsOW,iStrmInflowsOW,rStrmInflowsOW,iBypassesOW,rBypassesOW)
-    CLASS(ModelType)            :: Model
+    CLASS(ModelType),TARGET     :: Model
     INTEGER,INTENT(OUT)         :: iStat
     REAL(8),OPTIONAL,INTENT(IN) :: RegionLUAreas(:,:)                                          !Should come in (subregion,land use) format; can come in with zero dimension
     INTEGER,OPTIONAL,INTENT(IN) :: iDiversionsOW(:),iStrmInflowsOW(:),iBypassesOW(:)           !Can come in with zero dimension
@@ -7594,7 +7309,7 @@ CONTAINS
   ! --- CHECK CONSISTENCY BETWEEN MODEL COMPONENTS
   ! -------------------------------------------------------------
   SUBROUTINE CheckModelConsistency(Model,iStat)
-    TYPE(ModelType),INTENT(IN) :: Model
+    TYPE(ModelType),TARGET :: Model
     INTEGER,INTENT(OUT)        :: iStat
     
     !Local variables
@@ -7613,14 +7328,14 @@ CONTAINS
         IF (.NOT. Model%PrecipData%IsDefined()) THEN
             MessageArray(1) = 'Precipitation data must be specified when root zone and'
             MessageArray(2) = 'land surface flow processes or lakes are simulated!'
-            CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+            CALL Model%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
         IF (.NOT. Model%ETData%IsDefined()) THEN
             MessageArray(1) = 'Evapotranspiration data must be specified when root zone'
             MessageArray(2) = 'and land surface flow processes or lakes are simulated!'
-            CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+            CALL Model%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -7632,7 +7347,7 @@ CONTAINS
         IF (.NOT. Model%lRootZone_Defined) THEN
             MessageArray(1) = 'Root zone component must be defined when pumping is defined and goes to'
             MessageArray(2) = 'model domain!' 
-            CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+            CALL Model%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -7640,7 +7355,7 @@ CONTAINS
         IF (Model%IrigFracFile%File%iGetFileType() .EQ. f_iUNKNOWN) THEN
             MessageArray(1) = 'Irrigation fractions data file must be specified when pumping'
             MessageArray(2) = ' is delivered within the model domain.'
-            CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+            CALL Model%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -7652,7 +7367,7 @@ CONTAINS
         IF (.NOT. Model%lRootZone_Defined) THEN
             MessageArray(1) = 'Root zone component must be defined when diversions are defined'
             MessageArray(2) = 'and they are used within the model domain!' 
-            CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+            CALL Model%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -7660,7 +7375,7 @@ CONTAINS
         IF (Model%IrigFracFile%File%iGetFileType() .EQ. f_iUNKNOWN) THEN
             MessageArray(1) = 'Irrigation fractions data file must be specified when diversions'
             MessageArray(2) = ' are delivered within the model domain.'
-            CALL ModuleLogger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+            CALL Model%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -7669,7 +7384,7 @@ CONTAINS
     !Root zone must be defined if unsaturated zone is being modeled
     IF (Model%lAppUnsatZone_Defined) THEN
         IF (.NOT. Model%lRootZone_Defined) THEN
-            CALL ModuleLogger%SetLastMessage('Root zone must be simulated if unsaturated zone is simulated!',f_iFatal,ThisProcedure)
+            CALL Model%Logger%SetLastMessage('Root zone must be simulated if unsaturated zone is simulated!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -7688,14 +7403,15 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- CONVERT DELTAT TO MINUTES
   ! -------------------------------------------------------------
-  SUBROUTINE DELTAT_To_Minutes(TimeStep,iStat)
+  SUBROUTINE DELTAT_To_Minutes(Logger,TimeStep,iStat)
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT) :: Logger
     TYPE(TimeStepType)  :: TimeStep
     INTEGER,INTENT(OUT) :: iStat
 
     !Local variables
     CHARACTER(LEN=ModNameLen+17),PARAMETER :: ThisProcedure = ModNAme // 'DELTAT_To_Minutes'
     INTEGER                                :: indx,TimeStepIndex
-    
+
     !Initialize
     iStat = 0
 
@@ -7708,7 +7424,7 @@ CONTAINS
         END IF
     END DO
     IF (TimeStepIndex .EQ. 0) THEN
-        CALL ModuleLogger%SetLastMessage('UNITT is not a recognized time step',f_iFatal,ThisProcedure) 
+        CALL Logger%SetLastMessage('UNITT is not a recognized time step',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -7726,7 +7442,7 @@ CONTAINS
   ! --- CONVERT STREAM FLOWS TO HEADS
   ! -------------------------------------------------------------
   SUBROUTINE ConvertStreamFlowsToHeads(Model)
-    CLASS(ModelType) :: Model
+    CLASS(ModelType),TARGET :: Model
     
     CALL Model%AppStream%ConvertFlowToElev()                       
     
@@ -7737,7 +7453,7 @@ CONTAINS
   ! --- MAKE TIME UNITS IN ALL COMPONENTS CONSISTENT
   ! -------------------------------------------------------------
   SUBROUTINE ConvertTimeUnit(Model)
-    CLASS(ModelType) :: Model
+    CLASS(ModelType),TARGET :: Model
     
     CALL Model%AppStream%ConvertTimeUnit(Model%TimeStep%Unit)                       !Streams
     CALL Model%StrmGWConnector%ConvertTimeUnit(Model%TimeStep%Unit)                 !Stream-gw connector
@@ -7755,7 +7471,7 @@ CONTAINS
   ! --- ADVANCE TIME IN SIMULATION
   ! -------------------------------------------------------------
   SUBROUTINE AdvanceTime(Model)
-    CLASS(ModelType) :: Model
+    CLASS(ModelType),TARGET :: Model
 
     !Local variables
     CHARACTER(LEN=10) :: CharCurrentTime
@@ -7771,18 +7487,10 @@ CONTAINS
             WRITE (CharCurrentTime,'(F10.2)') Model%TimeStep%CurrentTime
             WRITE (MessageArray(1),'(4A,1X,A)') '*   TIME STEP ',TRIM(IntToText(Model%TimeStep%CurrentTimeStep)),' AT ',TRIM(ADJUSTL(CharCurrentTime)),TRIM(ADJUSTL(Model%TimeStep%Unit))
             IF (Model%KDEB .NE. Sim_KDEB_NoPrintTimeStep) THEN
-                IF (ASSOCIATED(ModuleLogger)) THEN
-                    CALL ModuleLogger%LogMessage(MessageArray(1),f_iMessage,'',Destination=f_iSCREEN)
-                ELSE
-                    CALL ModuleLogger%LogMessage(MessageArray(1),f_iMessage,'',Destination=f_iSCREEN)
-                END IF
+                                    CALL Model%Logger%LogMessage(MessageArray(1),f_iMessage,'',Destination=f_iSCREEN)
             END IF
             MessageArray(1) = f_cLineFeed//REPEAT('-',50)//f_cLineFeed//TRIM(MessageArray(1))//f_cLineFeed//REPEAT('-',50)
-            IF (ASSOCIATED(ModuleLogger)) THEN
-                CALL ModuleLogger%LogMessage(MessageArray(1),f_iMessage,'',Destination=f_iFILE)
-            ELSE
-                CALL ModuleLogger%LogMessage(MessageArray(1),f_iMessage,'',Destination=f_iFILE)
-            END IF
+                            CALL Model%Logger%LogMessage(MessageArray(1),f_iMessage,'',Destination=f_iFILE)
             IF (Model%TimeStep%CurrentTime .EQ. Model%TimeStep%EndTime) Model%lEndOfSimulation = .TRUE.
         
         !Time is tracked
@@ -7791,18 +7499,10 @@ CONTAINS
             CALL TimeStampToJulianDateAndMinutes(Model%TimeStep%CurrentDateAndTime,Model%JulianDate,Model%MinutesAfterMidnight)
             WRITE (MessageArray(1),'(A)') '*   TIME STEP '//TRIM(IntToText(Model%TimeStep%CurrentTimeStep))//' AT '//TRIM(Model%TimeStep%CurrentDateAndTime)
             IF (Model%KDEB .NE. Sim_KDEB_NoPrintTimeStep) THEN
-                IF (ASSOCIATED(ModuleLogger)) THEN
-                    CALL ModuleLogger%LogMessage(MessageArray(1),f_iMessage,'',Destination=f_iSCREEN)
-                ELSE
-                    CALL ModuleLogger%LogMessage(MessageArray(1),f_iMessage,'',Destination=f_iSCREEN)
-                END IF
+                                    CALL Model%Logger%LogMessage(MessageArray(1),f_iMessage,'',Destination=f_iSCREEN)
             END IF
             MessageArray(1) = f_cLineFeed//REPEAT('-',50)//f_cLineFeed//TRIM(MessageArray(1))//f_cLineFeed//REPEAT('-',50)
-            IF (ASSOCIATED(ModuleLogger)) THEN
-                CALL ModuleLogger%LogMessage(MessageArray(1),f_iMessage,'',Destination=f_iFILE)
-            ELSE
-                CALL ModuleLogger%LogMessage(MessageArray(1),f_iMessage,'',Destination=f_iFILE)
-            END IF
+                            CALL Model%Logger%LogMessage(MessageArray(1),f_iMessage,'',Destination=f_iFILE)
             IF (Model%TimeStep%CurrentDateAndTime .EQ. Model%TimeStep%EndDateAndTime) Model%lEndOfSimulation = .TRUE.
 
     END SELECT
@@ -7814,7 +7514,7 @@ CONTAINS
   ! --- SIMULATE THE ENTIRE PERIOD
   ! -------------------------------------------------------------
   SUBROUTINE SimulateAll(Model,iDummy,iStat)
-    CLASS(ModelType)    :: Model
+    CLASS(ModelType),TARGET :: Model
     INTEGER,INTENT(IN)  :: iDummy   !Dummy argument to differentiate the procedure interface from that of SimulateForOneTimeStep
     INTEGER,INTENT(OUT) :: iStat
     
@@ -7842,7 +7542,7 @@ CONTAINS
   ! --- SIMULATE MULTIPLE TIME STEPS
   ! -------------------------------------------------------------
   SUBROUTINE SimulateForAnInterval(Model,cPeriod,iStat)
-    CLASS(ModelType)            :: Model
+    CLASS(ModelType),TARGET     :: Model
     CHARACTER(LEN=*),INTENT(IN) :: cPeriod
     INTEGER,INTENT(OUT)         :: iStat
     
@@ -7867,11 +7567,7 @@ CONTAINS
                 END IF
             END DO
             IF (TimeStepIndex .EQ. 0) THEN
-                IF (ASSOCIATED(ModuleLogger)) THEN
-                    CALL ModuleLogger%SetLastMessage('Time interval to simulate multiple timesteps is not a recognized time step',f_iFatal,ThisProcedure)
-                ELSE
-                    CALL ModuleLogger%SetLastMessage('Time interval to simulate multiple timesteps is not a recognized time step',f_iFatal,ThisProcedure)
-                END IF
+                                    CALL Model%Logger%SetLastMessage('Time interval to simulate multiple timesteps is not a recognized time step',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -7882,11 +7578,7 @@ CONTAINS
                 MessageArray(1) = 'Time interval to simulate multiple timesteps must be greater than or equal to the model simulation timestep!'
                 MessageArray(2) = 'Time interval to simulate multiple timesteps = ' // ADJUSTL(TRIM(UpperCase(cPeriod)))
                 MessageArray(3) = 'Model simulation timestep                    = ' // ADJUSTL(TRIM(UpperCase(Model%TimeStep%Unit)))
-                IF (ASSOCIATED(ModuleLogger)) THEN
-                    CALL ModuleLogger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
-                ELSE
-                    CALL ModuleLogger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
-                END IF
+                                    CALL Model%Logger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -7897,11 +7589,7 @@ CONTAINS
 
         !Simulation date and time is NOT tracked
         CASE (.FALSE.)
-            IF (ASSOCIATED(ModuleLogger)) THEN
-                CALL ModuleLogger%SetLastMessage('SimulateForAPeriod method is only supported for time-tracking simulations!',f_iFatal,ThisProcedure)
-            ELSE
-                CALL ModuleLogger%SetLastMessage('SimulateForAPeriod method is only supported for time-tracking simulations!',f_iFatal,ThisProcedure)
-            END IF
+                            CALL Model%Logger%SetLastMessage('SimulateForAPeriod method is only supported for time-tracking simulations!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
     END SELECT
@@ -7935,7 +7623,7 @@ CONTAINS
   ! --- SIMULATE A SINGLE TIME STEP
   ! -------------------------------------------------------------
   SUBROUTINE SimulateOneTimeStep(Model,iStat)
-    CLASS(ModelType)    :: Model
+    CLASS(ModelType),TARGET :: Model
     INTEGER,INTENT(OUT) :: iStat
     
     !Local variables
@@ -7994,11 +7682,7 @@ CONTAINS
         !For supply adjustment option, restore the groundwater and stream heads to those at the beginning of the time step
         IF (Model%SupplyAdjust%IsAdjust()) THEN
             WRITE (MessageArray(1),'(A,14X,A,1X,A,I6,1X,A)') f_cLineFeed,REPEAT('*',3),'SUPPLY ADJUSTMENT ITERATION:',Model%SupplyAdjust%GetAdjustIter(),REPEAT('*',3)
-            IF (ASSOCIATED(ModuleLogger)) THEN
-                CALL ModuleLogger%LogMessage(MessageArray(1),f_iMessage,'',Destination=f_iFILE)
-            ELSE
-                CALL ModuleLogger%LogMessage(MessageArray(1),f_iMessage,'',Destination=f_iFILE)
-            END IF
+                            CALL Model%Logger%LogMessage(MessageArray(1),f_iMessage,'',Destination=f_iFILE)
         END IF
 
         !Zero out WSAs
@@ -8010,11 +7694,7 @@ CONTAINS
         lBackTrack = .FALSE.
         WRITE (MessageArray(1),'(3X,A)')       '          HEAD                                               VOLUMETRIC'
         WRITE (MessageArray(2),'(3X,2A,3X,A)') 'ITER      CONVERGENCE      MAX.DIFF       VARIABLE           CONVERGENCE',f_cLineFeed,REPEAT('-',73)
-        IF (ASSOCIATED(ModuleLogger)) THEN
-            CALL ModuleLogger%LogMessage(MessageArray(1:2),f_iMessage,'',iDestination=f_iFILE)
-        ELSE
-            CALL ModuleLogger%LogMessage(MessageArray(1:2),f_iMessage,'',iDestination=f_iFILE)
-        END IF
+                    CALL Model%Logger%LogMessage(MessageArray(1:2),f_iMessage,'',iDestination=f_iFILE)
         Newton_Raphson_Loop:  &
         DO
             CALL Model%Matrix%ResetToZero()
@@ -8043,7 +7723,7 @@ CONTAINS
                      
             IF (Model%lRootZone_Defined) THEN      
 ! ***** COMPUTE THE ACTUAL WATER SUPPLY TO AGRICULTURAL AND URBAN LANDS
-                CALL Supply(Model%AppGrid,Model%AppGW,Model%AppStream,Model%DiverDestinationConnector,Model%WellDestinationConnector,Model%ElemPumpDestinationConnector,Model%RootZone,ModuleLogger)
+                CALL Supply(Model%AppGrid,Model%AppGW,Model%AppStream,Model%DiverDestinationConnector,Model%WellDestinationConnector,Model%ElemPumpDestinationConnector,Model%RootZone,Model%Logger)
 
 ! ***** SIMULATE ROOT ZONE AND LAND SURFACE FLOW PROCESSES
                 CALL Model%RootZone%SetActualRiparianET_AtStrmNodes(Model%QRVETFRAC)
@@ -8114,11 +7794,7 @@ CONTAINS
                      
 ! ***** SOLVE THE SET OF EQUATION
             IF (ITERX .EQ. 1) THEN
-              IF (ASSOCIATED(ModuleLogger)) THEN
-                CALL ModuleLogger%EchoProgress('Solving set of equations')
-              ELSE
-                CALL ModuleLogger%EchoProgress('Solving set of equations')
-              END IF
+                              CALL Model%Logger%EchoProgress('Solving set of equations')
             END IF
             CALL Model%Matrix%Solve(ITERX,iStrmNodeIDs,iLakeIDs,iGWNodeIDs,iStat)
             IF (iStat .EQ. -1) RETURN
@@ -8199,7 +7875,7 @@ CONTAINS
         IF (RHSL2 .GT. RHSL2_BT) THEN
             !!Print RHS_L2
             !WRITE (MessageArray(1),'(12X,I6,55X,G13.6)') ITERX_BT+1,RHSL2
-            !CALL ModuleLogger%LogMessage(MessageArray(1),f_iMessage,'',Destination=FILE)
+            !CALL Model%Logger%LogMessage(MessageArray(1),f_iMessage,'',Destination=FILE)
             lBackTrack = .FALSE.
             ITERX_BT   = 0
             RETURN
@@ -8239,12 +7915,12 @@ CONTAINS
         
         !!Print RHS_L2
         !WRITE (MessageArray(1),'(12X,I6,55X,G13.6)') iPrintIter,RHSL2
-        !CALL ModuleLogger%LogMessage(MessageArray(1),f_iMessage,'',Destination=FILE)
+        !CALL Model%Logger%LogMessage(MessageArray(1),f_iMessage,'',Destination=FILE)
     ELSE
         !!Print RHS_L2
         !IF (ITERX_BT .GT. 0) THEN
         !    WRITE (MessageArray(1),'(12X,I6,55X,G13.6)') ITERX_BT+1,RHSL2
-        !    CALL ModuleLogger%LogMessage(MessageArray(1),f_iMessage,'',Destination=FILE)
+        !    CALL Model%Logger%LogMessage(MessageArray(1),f_iMessage,'',Destination=FILE)
         !END IF
         lBackTrack = .FALSE.
         ITERX_BT   = 0
@@ -8436,11 +8112,7 @@ CONTAINS
                     END DO
             END SELECT
             WRITE (MessageArray(3),'(A,G10.3)') 'Difference = ',-DIFFMAX
-            IF (ASSOCIATED(ModuleLogger)) THEN
-                CALL ModuleLogger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
-            ELSE
-                CALL ModuleLogger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
-            END IF
+                            CALL Model%Logger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -8468,11 +8140,7 @@ CONTAINS
         
         WRITE (MessageArray(1),'(1X,I6,4X,G13.6,4X,G13.6,4X,A15,2X,G13.6)') ITERX,DIFF_L2,-DIFFMAX,cNodeMax,pMatrix%RHSL2(ITERX)/pMatrix%RHSL2(1)
         !WRITE (MessageArray(1),'(1X,I6,4X,G13.6,4X,G13.6,4X,A15)') ITERX,DIFF_L2,-DIFFMAX,cNodeMax
-        IF (ASSOCIATED(ModuleLogger)) THEN
-            CALL ModuleLogger%LogMessage(MessageArray(1),f_iMessage,'',Destination=f_iFILE)
-        ELSE
-            CALL ModuleLogger%LogMessage(MessageArray(1),f_iMessage,'',Destination=f_iFILE)
-        END IF
+                    CALL Model%Logger%LogMessage(MessageArray(1),f_iMessage,'',Destination=f_iFILE)
     END ASSOCIATE
     
   END SUBROUTINE Convergence
@@ -8482,7 +8150,7 @@ CONTAINS
   ! --- CHECK IF END OF SIMULATION
   ! -------------------------------------------------------------
   PURE FUNCTION IsEndOfSimulation(Model) RESULT(lEndOfSimulation)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET,INTENT(IN) :: Model
     LOGICAL                     :: lEndOfSimulation
     
     lEndOfSimulation = Model%lEndOfSimulation
@@ -8494,7 +8162,7 @@ CONTAINS
   ! --- ADVANCE MODEL STATE IN TIME
   ! -------------------------------------------------------------
   SUBROUTINE AdvanceState(Model)
-    CLASS(ModelType) :: Model
+    CLASS(ModelType),TARGET :: Model
  
     CALL Model%AppGW%AdvanceState(Model%Stratigraphy)
     CALL Model%RootZone%AdvanceState()
@@ -8524,7 +8192,7 @@ CONTAINS
   ! --- CEHCK IF A NODE IS BOUNDARY NODE
   ! -------------------------------------------------------------
   PURE FUNCTION IsBoundaryNode(Model,iNode) RESULT(lBoundaryNode)
-    CLASS(ModelType),INTENT(IN) :: Model
+    CLASS(ModelType),TARGET,INTENT(IN) :: Model
     INTEGER,INTENT(IN)          :: iNode  !This is the index of the node, not the ID
     LOGICAL                     :: lBoundaryNode
     
@@ -8537,7 +8205,7 @@ CONTAINS
   ! --- REMOVE ALL GW BOUNDARY CONDITIONS AT A NODE, LAYER
   ! -------------------------------------------------------------
   SUBROUTINE RemoveGWBC(Model,iNodes,iLayers,lUpdateGWZBudget,iStat)
-    CLASS(ModelType)    :: Model
+    CLASS(ModelType),TARGET :: Model
     INTEGER,INTENT(IN)  :: iNodes(:),iLayers(:)
     LOGICAL,INTENT(IN)  :: lUpdateGWZBudget
     INTEGER,INTENT(OUT) :: iStat
@@ -8579,7 +8247,7 @@ CONTAINS
   ! --- ADD STREAM BYPASS
   ! -------------------------------------------------------------
   SUBROUTINE AddBypass(Model,ID,iNode_Exp,iColBypass,cName,rFracRecvLoss,rFracNonRecvLoss,iNRechargeElems,iRechargeElems,rRechargeFractions,iDestType,iDest,iStat)
-    CLASS(ModelType)            :: Model
+    CLASS(ModelType),TARGET     :: Model
     INTEGER,INTENT(IN)          :: ID,iNode_Exp,iColBypass,iNRechargeElems,iRechargeElems(iNRechargeElems),iDestType,iDest
     CHARACTER(LEN=*),INTENT(IN) :: cName
     REAL(8),INTENT(IN)          :: rFracRecvLoss,rFracNonRecvLoss,rRechargeFractions(iNRechargeElems)
@@ -8622,7 +8290,7 @@ CONTAINS
   ! --- TURN SUPPLY ADJUSTMENT ON/OFF
   ! -------------------------------------------------------------
   SUBROUTINE TurnSupplyAdjustOnOff(Model,lDivAdjustOn,lPumpAdjustOn,iStat)
-    CLASS(ModelType)    :: Model
+    CLASS(ModelType),TARGET :: Model
     LOGICAL,INTENT(IN)  :: lDivAdjustOn,lPumpAdjustOn
     INTEGER,INTENT(OUT) :: iStat
     
@@ -8632,33 +8300,17 @@ CONTAINS
     !Diversions
     Model%lDiversionAdjusted = lDivAdjustOn
     IF (lDivAdjustOn) THEN
-        IF (ASSOCIATED(ModuleLogger)) THEN
-            CALL ModuleLogger%LogMessage(f_cLineFeed//'ADJUSTMENT OF DIVERSIONS IS TURNED ON!',f_iMessage,'',f_iFILE)
-        ELSE
-            CALL ModuleLogger%LogMessage(f_cLineFeed//'ADJUSTMENT OF DIVERSIONS IS TURNED ON!',f_iMessage,'',f_iFILE)
-        END IF
+                    CALL Model%Logger%LogMessage(f_cLineFeed//'ADJUSTMENT OF DIVERSIONS IS TURNED ON!',f_iMessage,'',f_iFILE)
     ELSE
-        IF (ASSOCIATED(ModuleLogger)) THEN
-            CALL ModuleLogger%LogMessage(f_cLineFeed//'ADJUSTMENT OF DIVERSIONS IS TURNED OFF!',f_iMessage,'',f_iFILE)
-        ELSE
-            CALL ModuleLogger%LogMessage(f_cLineFeed//'ADJUSTMENT OF DIVERSIONS IS TURNED OFF!',f_iMessage,'',f_iFILE)
-        END IF
+                    CALL Model%Logger%LogMessage(f_cLineFeed//'ADJUSTMENT OF DIVERSIONS IS TURNED OFF!',f_iMessage,'',f_iFILE)
     END IF
     
     !Pumping
     Model%lPumpingAdjusted = lPumpAdjustOn
     IF (lPumpAdjustOn) THEN
-        IF (ASSOCIATED(ModuleLogger)) THEN
-            CALL ModuleLogger%LogMessage(f_cLineFeed//'ADJUSTMENT OF PUMPING IS TURNED ON!',f_iMessage,'',f_iFILE)
-        ELSE
-            CALL ModuleLogger%LogMessage(f_cLineFeed//'ADJUSTMENT OF PUMPING IS TURNED ON!',f_iMessage,'',f_iFILE)
-        END IF
+                    CALL Model%Logger%LogMessage(f_cLineFeed//'ADJUSTMENT OF PUMPING IS TURNED ON!',f_iMessage,'',f_iFILE)
     ELSE
-        IF (ASSOCIATED(ModuleLogger)) THEN
-            CALL ModuleLogger%LogMessage(f_cLineFeed//'ADJUSTMENT OF PUMPING IS TURNED OFF!',f_iMessage,'',f_iFILE)
-        ELSE
-            CALL ModuleLogger%LogMessage(f_cLineFeed//'ADJUSTMENT OF PUMPING IS TURNED OFF!',f_iMessage,'',f_iFILE)
-        END IF
+                    CALL Model%Logger%LogMessage(f_cLineFeed//'ADJUSTMENT OF PUMPING IS TURNED OFF!',f_iMessage,'',f_iFILE)
     END IF
     
     !Also update SupplyAdjust object
@@ -8684,7 +8336,7 @@ CONTAINS
   ! --- RESTORE PUMPING TO READ VALUES
   ! -------------------------------------------------------------
   SUBROUTINE RestorePumpingToReadValues(Model,iStat)
-    CLASS(ModelType)    :: Model
+    CLASS(ModelType),TARGET :: Model
     INTEGER,INTENT(OUT) :: iStat
     
     iStat = 0
@@ -8702,7 +8354,7 @@ CONTAINS
   ! ---       ReadTSData method was called. 
   ! -------------------------------------------------------------
   SUBROUTINE ComputeFutureWaterDemands(Model,cEndComputeDate,iStat)
-    CLASS(ModelType)            :: Model
+    CLASS(ModelType),TARGET     :: Model
     CHARACTER(LEN=*),INTENT(IN) :: cEndComputeDate
     INTEGER,INTENT(OUT)         :: iStat
     
@@ -8719,18 +8371,19 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- CHECK ENGINE VERSION NUMBER STORED IN PreProcessor BIN FILE AND THE SIMULATION
   ! -------------------------------------------------------------
-  FUNCTION CheckEngineVersion(PPBinFile) RESULT(iStat)
+  FUNCTION CheckEngineVersion(Logger,PPBinFile) RESULT(iStat)
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT) :: Logger
     TYPE(GenericFileType) :: PPBinFile
     INTEGER               :: iStat
-    
+
     !Local variables
     CHARACTER(LEN=ModNameLen+18) :: ThisProcedure = ModName // 'CheckEngineVersion'
     INTEGER                      :: iLen
     CHARACTER(:),ALLOCATABLE     :: cVersionRead,cVersionCurrent
-    
+
     !Initialize
     iStat = 0
-    
+
     !Compare versions
     CALL PPBinFile%ReadData(iLen,iStat)  ;  IF (iStat .EQ. -1) RETURN
     ALLOCATE (CHARACTER(LEN=iLen) :: cVersionRead)
@@ -8740,10 +8393,10 @@ CONTAINS
         MessageArray(1) = 'Engine version numbers from Preprocessor and Simulation (or IWFM DLL) do not match!'
         MessageArray(2) = 'Make sure that Preprocessor and Simulation executables (or IWFM DLL) are from the same'
         MessageArray(3) = 'IWFM engine distribution to avoid any errors in reading the Preprocessor binary file.'
-        CALL ModuleLogger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+        CALL Logger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
         iStat = -1
     END IF
-    
+
   END FUNCTION CheckEngineVersion
     
     
@@ -8751,7 +8404,7 @@ CONTAINS
   ! --- RHS VECTOR CALCULATOR
   ! -------------------------------------------------------------
   SUBROUTINE RHSFunction(Model,rHeads,rRHS,iStat)
-    CLASS(ModelType),INTENT(INOUT) :: Model
+    CLASS(ModelType),TARGET,INTENT(INOUT) :: Model
     REAL(8),INTENT(IN)             :: rHeads(:)
     REAL(8),INTENT(OUT)            :: rRHS(:)
     INTEGER,INTENT(OUT)            :: iStat 
@@ -8819,7 +8472,7 @@ CONTAINS
                      
     IF (Model%lRootZone_Defined) THEN      
 ! ***** COMPUTE THE ACTUAL WATER SUPPLY TO AGRICULTURAL AND URBAN LANDS
-        CALL Supply(Model%AppGrid,Model%AppGW,Model%AppStream,Model%DiverDestinationConnector,Model%WellDestinationConnector,Model%ElemPumpDestinationConnector,Model%RootZone,ModuleLogger)
+        CALL Supply(Model%AppGrid,Model%AppGW,Model%AppStream,Model%DiverDestinationConnector,Model%WellDestinationConnector,Model%ElemPumpDestinationConnector,Model%RootZone,Model%Logger)
 
 ! ***** SIMULATE ROOT ZONE AND LAND SURFACE FLOW PROCESSES
         CALL Model%RootZone%SetActualRiparianET_AtStrmNodes(Model%QRVETFRAC)
@@ -8929,7 +8582,7 @@ CONTAINS
   END SUBROUTINE CompileHeadsInto1DArray
     
   SUBROUTINE FEInterpolate(Model,rX,rY,iElemIndex,iNodes,rCoeff)
-    CLASS(ModelType)                :: Model
+    CLASS(ModelType),TARGET         :: Model
     REAL(8),INTENT(IN)              :: rX,rY
     INTEGER,INTENT(OUT)             :: iElemIndex
     INTEGER,ALLOCATABLE,INTENT(OUT) :: iNodes(:)
