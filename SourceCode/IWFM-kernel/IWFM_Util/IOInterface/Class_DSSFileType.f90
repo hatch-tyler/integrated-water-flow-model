@@ -93,6 +93,13 @@ MODULE Class_DSSFileType
       PROCEDURE,PASS :: New  => New_DSSFileListNode
       PROCEDURE,PASS :: Kill => Kill_DSSFileListNode
   END TYPE DSSFileListNodeType
+  ! Shared process-wide registry of open DSS files. Thread-safety is
+  ! ensured by the DLL's CRITICAL(IWFM_MODEL_MGMT) in IW_Model_New /
+  ! IW_Model_WSA_New — all DSS opens happen during model construction,
+  ! which is serialized. There are no mutations to this list outside
+  ! that path (the Kill path clears it non-concurrently at DLL teardown).
+  ! If concurrent DSS opens ever become necessary, replace this with a
+  ! per-model registry or wrap mutations in a dedicated CRITICAL.
   TYPE(DSSFileListNodeType),POINTER,SAVE :: DSSFileListHead => NULL()
   TYPE(DSSFileListNodeType),POINTER,SAVE :: DSSFileListTail => NULL()
 
