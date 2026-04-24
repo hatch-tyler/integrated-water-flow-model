@@ -80,7 +80,7 @@ MODULE IWFM_Model_Exports
 
   TYPE(ModelSlotType),PRIVATE,SAVE   :: ModelSlots(MAX_MODEL_SLOTS)
   INTEGER,PRIVATE,SAVE               :: iCurrentModelIndex = 0
-  TYPE(ModelType),POINTER,PRIVATE,SAVE :: pModel => NULL()            
+  !$OMP THREADPRIVATE(iCurrentModelIndex)            
   
   
   ! -------------------------------------------------------------
@@ -91,6 +91,19 @@ MODULE IWFM_Model_Exports
 
 
 CONTAINS
+
+
+  ! -------------------------------------------------------------
+  ! --- GET CURRENT MODEL POINTER (thread-safe via THREADPRIVATE index)
+  ! -------------------------------------------------------------
+  FUNCTION GetCurrentModel() RESULT(pMdl)
+    TYPE(ModelType),POINTER :: pMdl
+    IF (iCurrentModelIndex .GE. 1 .AND. iCurrentModelIndex .LE. MAX_MODEL_SLOTS) THEN
+        pMdl => ModelSlots(iCurrentModelIndex)%ptr
+    ELSE
+        pMdl => NULL()
+    END IF
+  END FUNCTION GetCurrentModel
 
 
 
@@ -145,7 +158,7 @@ CONTAINS
     CALL String_Copy_C_F(cSimFileName,cSimFileName_F)
     CALL String_Copy_C_F(cWSAFileName,cWSAFileName_F)
 
-    !Find an available slot (O(1) direct scan of pointer association)
+    !Find an available slot and instantiate model (O(1) direct scan of pointer association)
     !$OMP CRITICAL(IWFM_MODEL_MGMT)
     iCurrentModelIndex = 0
     DO indx=1,MAX_MODEL_SLOTS
@@ -154,37 +167,31 @@ CONTAINS
             EXIT
         END IF
     END DO
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        !$OMP END CRITICAL(IWFM_MODEL_MGMT)
+    IF (iCurrentModelIndex .NE. 0) THEN
+        !Heap-allocate a new model instance
+        ALLOCATE(ModelSlots(iCurrentModelIndex)%ptr)
+
+        !Read main control data for pre-processor and simulation (if filename is specified) and
+        !  instantiate model components
+        IF (LEN(cSimFileName_F).EQ.0  .AND. LEN(cWSAFileName_F).EQ.0) THEN
+            CALL ModelSlots(iCurrentModelIndex)%ptr%New(cPPFileName_F,lRoutedStreams=lRoutedStreams,lPrintBinFile=.FALSE.,iStat=iStat)
+        ELSE
+            CALL ModelSlots(iCurrentModelIndex)%ptr%New('IWFM',cPPFileName_F,cSimFileName_F,cWSAFileName_F,lRoutedStreams,lForInquiry,iStat=iStat)
+        END IF
+        IF (iStat .NE. 0) THEN
+            DEALLOCATE(ModelSlots(iCurrentModelIndex)%ptr)
+            iCurrentModelIndex = 0
+        ELSE
+            iModelIndex = iCurrentModelIndex
+        END IF
+    END IF
+    !$OMP END CRITICAL(IWFM_MODEL_MGMT)
+
+    !No slot available — emit error outside critical section
+    IF (iCurrentModelIndex .EQ. 0 .AND. iStat .EQ. 0) THEN
         CALL DefaultLogger%SetLastMessage('Maximum number of concurrent models reached!',f_iWarn,cModName)
         iStat = -1
-        RETURN
     END IF
-
-    !Heap-allocate a new model instance
-    ALLOCATE(ModelSlots(iCurrentModelIndex)%ptr)
-
-    !Read main control data for pre-processor and simulation (if filename is specified) and
-    !  instantiate model components
-    !  Return if any errors
-    IF (LEN(cSimFileName_F).EQ.0  .AND. LEN(cWSAFileName_F).EQ.0) THEN
-        CALL ModelSlots(iCurrentModelIndex)%ptr%New(cPPFileName_F,lRoutedStreams=lRoutedStreams,lPrintBinFile=.FALSE.,iStat=iStat)
-    ELSE
-        CALL ModelSlots(iCurrentModelIndex)%ptr%New('IWFM',cPPFileName_F,cSimFileName_F,cWSAFileName_F,lRoutedStreams,lForInquiry,iStat=iStat)
-    END IF
-    IF (iStat .NE. 0) THEN
-        DEALLOCATE(ModelSlots(iCurrentModelIndex)%ptr)
-        iCurrentModelIndex = 0
-        !$OMP END CRITICAL(IWFM_MODEL_MGMT)
-        RETURN
-    END IF
-
-    !Set active model pointer
-    pModel => ModelSlots(iCurrentModelIndex)%ptr
-
-    !New model index
-    iModelIndex = iCurrentModelIndex
-    !$OMP END CRITICAL(IWFM_MODEL_MGMT)
 
   END SUBROUTINE IW_Model_WSA_New
 
@@ -228,7 +235,7 @@ CONTAINS
     CALL String_Copy_C_F(cPPFileName,cPPFileName_F)
     CALL String_Copy_C_F(cSimFileName,cSimFileName_F)
 
-    !Find an available slot (O(1) direct scan of pointer association)
+    !Find an available slot and instantiate model (O(1) direct scan of pointer association)
     !$OMP CRITICAL(IWFM_MODEL_MGMT)
     iCurrentModelIndex = 0
     DO indx=1,MAX_MODEL_SLOTS
@@ -237,37 +244,31 @@ CONTAINS
             EXIT
         END IF
     END DO
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        !$OMP END CRITICAL(IWFM_MODEL_MGMT)
+    IF (iCurrentModelIndex .NE. 0) THEN
+        !Heap-allocate a new model instance
+        ALLOCATE(ModelSlots(iCurrentModelIndex)%ptr)
+
+        !Read main control data for pre-processor and simulation (if filename is specified) and
+        !  instantiate model components
+        IF (LEN(cSimFileName_F) .EQ. 0) THEN
+            CALL ModelSlots(iCurrentModelIndex)%ptr%New(cPPFileName_F,lRoutedStreams=lRoutedStreams,lPrintBinFile=.FALSE.,iStat=iStat)
+        ELSE
+            CALL ModelSlots(iCurrentModelIndex)%ptr%New('IWFM',cPPFileName_F,cSimFileName_F,'',lRoutedStreams,lForInquiry,iStat=iStat)
+        END IF
+        IF (iStat .NE. 0) THEN
+            DEALLOCATE(ModelSlots(iCurrentModelIndex)%ptr)
+            iCurrentModelIndex = 0
+        ELSE
+            iModelID = iCurrentModelIndex
+        END IF
+    END IF
+    !$OMP END CRITICAL(IWFM_MODEL_MGMT)
+
+    !No slot available — emit error outside critical section
+    IF (iCurrentModelIndex .EQ. 0 .AND. iStat .EQ. 0) THEN
         CALL DefaultLogger%SetLastMessage('Maximum number of concurrent models reached!',f_iWarn,cModName)
         iStat = -1
-        RETURN
     END IF
-
-    !Heap-allocate a new model instance
-    ALLOCATE(ModelSlots(iCurrentModelIndex)%ptr)
-
-    !Read main control data for pre-processor and simulation (if filename is specified) and
-    !  instantiate model components
-    !  Return if any errors
-    IF (LEN(cSimFileName_F) .EQ. 0) THEN
-        CALL ModelSlots(iCurrentModelIndex)%ptr%New(cPPFileName_F,lRoutedStreams=lRoutedStreams,lPrintBinFile=.FALSE.,iStat=iStat)
-    ELSE
-        CALL ModelSlots(iCurrentModelIndex)%ptr%New('IWFM',cPPFileName_F,cSimFileName_F,'',lRoutedStreams,lForInquiry,iStat=iStat)
-    END IF
-    IF (iStat .NE. 0) THEN
-        DEALLOCATE(ModelSlots(iCurrentModelIndex)%ptr)
-        iCurrentModelIndex = 0
-        !$OMP END CRITICAL(IWFM_MODEL_MGMT)
-        RETURN
-    END IF
-
-    !Set active model pointer
-    pModel => ModelSlots(iCurrentModelIndex)%ptr
-
-    !New model index
-    iModelID = iCurrentModelIndex
-    !$OMP END CRITICAL(IWFM_MODEL_MGMT)
 
   END SUBROUTINE IW_Model_New
   
@@ -303,9 +304,8 @@ CONTAINS
     CALL ModelSlots(iCurrentModelIndex)%ptr%Kill()
     DEALLOCATE(ModelSlots(iCurrentModelIndex)%ptr)
 
-    !Update the current model index and pointer
+    !Update the current model index
     iCurrentModelIndex =  0
-    pModel             => NULL()
     !$OMP END CRITICAL(IWFM_MODEL_MGMT)
 
   END SUBROUTINE IW_Model_Kill
@@ -344,13 +344,16 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iNWells,iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    iNWells = pModel%GetNWells()
+    iNWells = pMdl%GetNWells()
     iStat   = 0
     
   END SUBROUTINE IW_Model_GetNWells
@@ -365,13 +368,16 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: IDs(iNWells),iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetWellIDs(IDs)
+    CALL pMdl%GetWellIDs(IDs)
     iStat = 0
     
   END SUBROUTINE IW_Model_GetWellIDs
@@ -387,13 +393,16 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetWellCoordinates(rX,rY)
+    CALL pMdl%GetWellCoordinates(rX,rY)
     iStat = 0
     
   END SUBROUTINE IW_Model_GetWellCoordinates
@@ -409,13 +418,16 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetWellPerfTopBottom(rTop,rBottom)
+    CALL pMdl%GetWellPerfTopBottom(rTop,rBottom)
     iStat = 0
     
   END SUBROUTINE IW_Model_GetWellPerfTopBottom
@@ -430,14 +442,17 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iNElems,iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat   = 0
-    iNElems = pModel%GetWellNElems(iWell)
+    iNElems = pMdl%GetWellNElems(iWell)
     
   END SUBROUTINE IW_Model_GetWellNElems
 
@@ -454,14 +469,17 @@ CONTAINS
     INTEGER,ALLOCATABLE :: iElems_Local(:)
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat = 0
-    CALL pModel%GetWellElems(iWell,iElems_Local)
+    CALL pMdl%GetWellElems(iWell,iElems_Local)
     iElems = iElems_Local
     
   END SUBROUTINE IW_Model_GetWellElems
@@ -475,13 +493,16 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iNElemPumps,iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    iNElemPumps = pModel%GetNElemPumps()
+    iNElemPumps = pMdl%GetNElemPumps()
     iStat       = 0
     
   END SUBROUTINE IW_Model_GetNElemPumps
@@ -496,13 +517,16 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: IDs(iNElemPumps),iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetElemPumpIDs(IDs)
+    CALL pMdl%GetElemPumpIDs(IDs)
     iStat = 0
     
   END SUBROUTINE IW_Model_GetElemPumpIDs
@@ -528,7 +552,10 @@ CONTAINS
     CHARACTER :: cDemandDate_F*iLenDate
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
@@ -538,7 +565,7 @@ CONTAINS
     CALL String_Copy_C_F(cDemandDate,cDemandDate_F)
     
     !Retrieve
-    CALL pModel%GetFutureWaterDemand_ForDiversion(iDiversion,cDemandDate_F,rDemand,iStat)
+    CALL pMdl%GetFutureWaterDemand_ForDiversion(iDiversion,cDemandDate_F,rDemand,iStat)
     rDemand = rDemand * rFactor
     
   END SUBROUTINE IW_Model_GetFutureWaterDemand_ForDiversion
@@ -557,7 +584,10 @@ CONTAINS
     CHARACTER :: cCurrentDateAndTime_F*f_iTimeStampLength
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
@@ -567,7 +597,7 @@ CONTAINS
     iStat = 0
     
     !Get the current date and time
-    CALL pModel%GetCurrentDateAndTime(cCurrentDateAndTime_F)
+    CALL pMdl%GetCurrentDateAndTime(cCurrentDateAndTime_F)
     
     !Fortran strings to C strings
     CALL String_Copy_F_C(cCurrentDateAndTime_F , cCurrentDateAndTime)
@@ -586,7 +616,10 @@ CONTAINS
     TYPE(TimeStepType) :: TimeStep
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
@@ -596,7 +629,7 @@ CONTAINS
     iStat = 0
     
     !Get the number of time steps
-    CALL pModel%GetTimeSpecs(TimeStep,NTimeSteps)
+    CALL pMdl%GetTimeSpecs(TimeStep,NTimeSteps)
         
   END SUBROUTINE IW_Model_GetNTimeSteps
   
@@ -616,7 +649,10 @@ CONTAINS
     INTEGER            :: indx,nTime
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
@@ -627,7 +663,7 @@ CONTAINS
     cDataDatesAndTimes_F = ''
     
     !Get the time step data
-    CALL pModel%GetTimeSpecs(TimeStep,nTime)
+    CALL pMdl%GetTimeSpecs(TimeStep,nTime)
     
     !Data interval
     cInterval_F = TimeStep%Unit
@@ -668,7 +704,10 @@ CONTAINS
     CHARACTER                    :: cOutputIntervals_F*iLenOutputIntervals
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
@@ -680,7 +719,7 @@ CONTAINS
     iCount = 1
     
     !Get model time specs
-    CALL pModel%GetTimeSpecs(TimeStep,nTime)
+    CALL pMdl%GetTimeSpecs(TimeStep,nTime)
     
     !Find the index of simulation time unit in RecognizedIntervals array
     indx              = IsTimeIntervalValid(TimeStep%Unit)  
@@ -713,14 +752,17 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iNBudgets,iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat     = 0
-    iNBudgets = pModel%GetBudget_N()
+    iNBudgets = pMdl%GetBudget_N()
 
   END SUBROUTINE IW_Model_GetBudget_N
   
@@ -741,6 +783,9 @@ CONTAINS
     CHARACTER(LEN=500),ALLOCATABLE :: cFilesDummy(:)
     
     !Initialize
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
     iStat = 0
     
     !Return if number of Budgets is zero
@@ -750,14 +795,14 @@ CONTAINS
     END IF
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     !Get the list
-    CALL pModel%GetBudget_List(cBudgetList_Local,iBudgetTypeList_Local,iBudgetCompList_Local,iBudgetLocationTypeList_Local,cFilesDummy)
+    CALL pMdl%GetBudget_List(cBudgetList_Local,iBudgetTypeList_Local,iBudgetCompList_Local,iBudgetLocationTypeList_Local,cFilesDummy)
     
     !Budget location and hydrologic component list
     iBudgetLocationTypeList = iBudgetLocationTypeList_Local
@@ -779,13 +824,16 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iNCols,iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetBudget_NColumns(iBudgetType,iLocIndex,iNCols,iStat)
+    CALL pMdl%GetBudget_NColumns(iBudgetType,iLocIndex,iNCols,iStat)
 
   END SUBROUTINE IW_Model_GetBudget_NColumns  
     
@@ -805,7 +853,10 @@ CONTAINS
     CHARACTER(LEN=iLenTitles)      :: cColTitles_F*iLenTitles,cUnitLT_F*iLenUnit,cUnitAR_F*iLenUnit,cUnitVL_F*iLenUnit
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
@@ -817,7 +868,7 @@ CONTAINS
     CALL String_Copy_C_F(cUnitVL , cUnitVL_F)
     
     !Retrieve column titles
-    CALL pModel%GetBudget_ColumnTitles(iBudgetType,iLocIndex,cUnitLT_F,cUnitAR_F,cUnitVL_F,cColTitles_Local,iStat)
+    CALL pMdl%GetBudget_ColumnTitles(iBudgetType,iLocIndex,cUnitLT_F,cUnitAR_F,cUnitVL_F,cColTitles_Local,iStat)
     IF (iStat .NE. 0) RETURN
 
     !Concatenate title array into a string scalar
@@ -848,7 +899,10 @@ CONTAINS
     CHARACTER(LEN=50),ALLOCATABLE :: cFlowNames_Local(:)
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
@@ -866,7 +920,7 @@ CONTAINS
     END IF    
     
     !Get full budget
-    CALL pModel%GetBudget_MonthlyAverageFlows(iBudgetType,iLocationIndex,iLUType,iSWShedBudType,cBeginDate_F,cEndDate_F,rFactVL,rFlows_Local,rSDFlows_Local,cFlowNames_Local,iStat)
+    CALL pMdl%GetBudget_MonthlyAverageFlows(iBudgetType,iLocationIndex,iLUType,iSWShedBudType,cBeginDate_F,cEndDate_F,rFactVL,rFlows_Local,rSDFlows_Local,cFlowNames_Local,iStat)
     IF (iStat .NE. 0) RETURN
     
     !Transfer flows to return arguments
@@ -904,7 +958,10 @@ CONTAINS
     CHARACTER(LEN=50),ALLOCATABLE :: cFlowNames_Local(:)
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
@@ -925,7 +982,7 @@ CONTAINS
     lForCalendarYear = .FALSE.
     
     !Get full budget
-    CALL pModel%GetBudget_AnnualFlows(iBudgetType,iLocationIndex,iLUType,iSWShedBudType,cBeginDate_F,cEndDate_F,lForCalendarYear,rFactVL,rFlows_Local,cFlowNames_Local,iWaterYears_Local,iStat)
+    CALL pMdl%GetBudget_AnnualFlows(iBudgetType,iLocationIndex,iLUType,iSWShedBudType,cBeginDate_F,cEndDate_F,lForCalendarYear,rFactVL,rFlows_Local,cFlowNames_Local,iWaterYears_Local,iStat)
     IF (iStat .NE. 0) RETURN
     
     !Transfer flows and water years to return arguments
@@ -964,7 +1021,10 @@ CONTAINS
     CHARACTER(LEN=50),ALLOCATABLE :: cFlowNames_Local(:)
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
@@ -989,7 +1049,7 @@ CONTAINS
     END IF
     
     !Get full budget
-    CALL pModel%GetBudget_AnnualFlows(iBudgetType,iLocationIndex,iLUType,iSWShedBudType,cBeginDate_F,cEndDate_F,lForCalendarYear,rFactVL,rFlows_Local,cFlowNames_Local,iOutputYears_Local,iStat)
+    CALL pMdl%GetBudget_AnnualFlows(iBudgetType,iLocationIndex,iLUType,iSWShedBudType,cBeginDate_F,cEndDate_F,lForCalendarYear,rFactVL,rFlows_Local,cFlowNames_Local,iOutputYears_Local,iStat)
     IF (iStat .NE. 0) RETURN
     
     !Transfer flows and water years to return arguments
@@ -1022,7 +1082,10 @@ CONTAINS
     CHARACTER :: cBeginDate_F*iLenDate,cEndDate_F*iLenDate,cInterval_F*iLenInterval
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
@@ -1034,7 +1097,7 @@ CONTAINS
     CALL String_Copy_C_F(cInterval,cInterval_F)
     
     !Get the data
-    CALL pModel%GetBudget_TSData(iBudgetType,iLocationIndex,iCols,cBeginDate_F,cEndDate_F,cInterval_F,rFactLT,rFactAR,rFactVL,rOutputDates,rOutputValues,iDataTypes,iNTimes_Out,iStat)
+    CALL pMdl%GetBudget_TSData(iBudgetType,iLocationIndex,iCols,cBeginDate_F,cEndDate_F,cInterval_F,rFactLT,rFactAR,rFactVL,rOutputDates,rOutputValues,iDataTypes,iNTimes_Out,iStat)
     IF (iStat .NE. 0) RETURN
     
     !Convert Julian time to Excel-style Julian time
@@ -1059,7 +1122,10 @@ CONTAINS
     REAL(8),ALLOCATABLE :: rDates(:),rStorChange(:)
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
@@ -1071,7 +1137,7 @@ CONTAINS
     CALL String_Copy_C_F(cInterval,cInterval_F)
     
     !Get the data
-    CALL pModel%GetBudget_CumGWStorChange(iSubregionIndex,cBeginDate_F,cEndDate_F,cInterval_F,rFactVL,rDates,rStorChange,iStat)
+    CALL pMdl%GetBudget_CumGWStorChange(iSubregionIndex,cBeginDate_F,cEndDate_F,cInterval_F,rFactVL,rDates,rStorChange,iStat)
     IF (iStat .NE. 0) RETURN
     
     !Copy data to return arguments
@@ -1103,7 +1169,10 @@ CONTAINS
     REAL(8),ALLOCATABLE :: rStorChange(:)
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
@@ -1117,7 +1186,7 @@ CONTAINS
     lForCalendarYear = .FALSE.
     
     !Get the data
-    CALL pModel%GetBudget_AnnualCumGWStorChange(iSubregionIndex,cBeginDate_F,cEndDate_F,lForCalendarYear,rFactVL,rStorChange,iWaterYears_Local,iStat)
+    CALL pMdl%GetBudget_AnnualCumGWStorChange(iSubregionIndex,cBeginDate_F,cEndDate_F,lForCalendarYear,rFactVL,rStorChange,iWaterYears_Local,iStat)
     IF (iStat .NE. 0) RETURN
     
     !Copy data to return arguments
@@ -1146,7 +1215,10 @@ CONTAINS
     REAL(8),ALLOCATABLE :: rStorChange(:)
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
@@ -1164,7 +1236,7 @@ CONTAINS
     END IF
     
     !Get the data
-    CALL pModel%GetBudget_AnnualCumGWStorChange(iSubregionIndex,cBeginDate_F,cEndDate_F,lForCalendarYear,rFactVL,rStorChange,iOutputYears_Local,iStat)
+    CALL pMdl%GetBudget_AnnualCumGWStorChange(iSubregionIndex,cBeginDate_F,cEndDate_F,lForCalendarYear,rFactVL,rStorChange,iOutputYears_Local,iStat)
     IF (iStat .NE. 0) RETURN
     
     !Copy data to return arguments
@@ -1183,14 +1255,17 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iNZBudgets,iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat      = 0
-    iNZBudgets = pModel%GetZBudget_N()
+    iNZBudgets = pMdl%GetZBudget_N()
 
   END SUBROUTINE IW_Model_GetZBudget_N
   
@@ -1211,6 +1286,9 @@ CONTAINS
     CHARACTER(LEN=500),ALLOCATABLE :: cFilesDummy(:)
     
     !Initialize
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
     iStat = 0
     
     !Return if number of ZBudgets is zero
@@ -1220,14 +1298,14 @@ CONTAINS
     END IF
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     !Get the list
-    CALL pModel%GetZBudget_List(cZBudgetList_Local,iZBudgetTypeList_Local,cFilesDummy)
+    CALL pMdl%GetZBudget_List(cZBudgetList_Local,iZBudgetTypeList_Local,cFilesDummy)
     
     !ZBudget type list
     iZBudgetTypeList = iZBudgetTypeList_Local
@@ -1248,13 +1326,16 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iNCols,iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetZBudget_NColumns(iZBudgetType,iZoneID,iZExtent,iElems,iLayers,iZoneIDs,iNCols,iStat)
+    CALL pMdl%GetZBudget_NColumns(iZBudgetType,iZoneID,iZExtent,iElems,iLayers,iZoneIDs,iNCols,iStat)
 
   END SUBROUTINE IW_Model_GetZBudget_NColumns  
     
@@ -1274,7 +1355,10 @@ CONTAINS
     CHARACTER(LEN=iLenTitles)      :: cColTitles_F*iLenTitles,cUnitAR_F*iLenUnit,cUnitVL_F*iLenUnit
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
@@ -1285,7 +1369,7 @@ CONTAINS
     CALL String_Copy_C_F(cUnitVL , cUnitVL_F)
     
     !Retrieve column titles
-    CALL pModel%GetZBudget_ColumnTitles(iZBudgetType,iZoneID,iZExtent,iElems,iLayers,iZoneIDs,cUnitAR_F,cUnitVL_F,cColTitles_Local,iStat)
+    CALL pMdl%GetZBudget_ColumnTitles(iZBudgetType,iZoneID,iZExtent,iElems,iLayers,iZoneIDs,cUnitAR_F,cUnitVL_F,cColTitles_Local,iStat)
 
     !Concatenate title array into a string scalar
     CALL StringArray_To_StringScalar(cColTitles_Local,cColTitles_F,iLocArray)
@@ -1315,7 +1399,10 @@ CONTAINS
     CHARACTER(LEN=50),ALLOCATABLE :: cFlowNames_Local(:)
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
@@ -1326,7 +1413,7 @@ CONTAINS
     CALL String_Copy_C_F(cEndDate , cEndDate_F)
     
     !Get full budget
-    CALL pModel%GetZBudget_MonthlyAverageFlows(iZBudgetType,iZoneID,iLUType,iZExtent,iElems,iLayers,iZoneIDs,cBeginDate_F,cEndDate_F,rFactVL,rFlows_Local,rSDFlows_Local,cFlowNames_Local,iStat)
+    CALL pMdl%GetZBudget_MonthlyAverageFlows(iZBudgetType,iZoneID,iLUType,iZExtent,iElems,iLayers,iZoneIDs,cBeginDate_F,cEndDate_F,rFactVL,rFlows_Local,rSDFlows_Local,cFlowNames_Local,iStat)
     
     !Transfer flows to return arguments
     iNFlows_Out = SIZE(rFlows_Local,DIM=1)
@@ -1363,7 +1450,10 @@ CONTAINS
     CHARACTER(LEN=50),ALLOCATABLE :: cFlowNames_Local(:)
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
@@ -1377,7 +1467,7 @@ CONTAINS
     lForCalendarYear = .FALSE.
     
     !Get full budget
-    CALL pModel%GetZBudget_AnnualFlows(iZBudgetType,iZoneID,iLUType,iZExtent,iElems,iLayers,iZoneIDs,cBeginDate_F,cEndDate_F,lForCalendarYear,rFactVL,rFlows_Local,cFlowNames_Local,iOutputYears_Local,iStat)
+    CALL pMdl%GetZBudget_AnnualFlows(iZBudgetType,iZoneID,iLUType,iZExtent,iElems,iLayers,iZoneIDs,cBeginDate_F,cEndDate_F,lForCalendarYear,rFactVL,rFlows_Local,cFlowNames_Local,iOutputYears_Local,iStat)
     
     !Transfer flows and ouput years to return arguments
     iNFlows_Out = SIZE(rFlows_Local,DIM=1)
@@ -1415,7 +1505,10 @@ CONTAINS
     CHARACTER(LEN=50),ALLOCATABLE :: cFlowNames_Local(:)
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
@@ -1433,7 +1526,7 @@ CONTAINS
     END IF
     
     !Get full budget
-    CALL pModel%GetZBudget_AnnualFlows(iZBudgetType,iZoneID,iLUType,iZExtent,iElems,iLayers,iZoneIDs,cBeginDate_F,cEndDate_F,lForCalendarYear,rFactVL,rFlows_Local,cFlowNames_Local,iOutputYears_Local,iStat)
+    CALL pMdl%GetZBudget_AnnualFlows(iZBudgetType,iZoneID,iLUType,iZExtent,iElems,iLayers,iZoneIDs,cBeginDate_F,cEndDate_F,lForCalendarYear,rFactVL,rFlows_Local,cFlowNames_Local,iOutputYears_Local,iStat)
     
     !Transfer flows and ouput years to return arguments
     iNFlows_Out = SIZE(rFlows_Local,DIM=1)
@@ -1465,7 +1558,10 @@ CONTAINS
     CHARACTER :: cBeginDate_F*iLenDate,cEndDate_F*iLenDate,cInterval_F*iLenInterval
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
@@ -1477,7 +1573,7 @@ CONTAINS
     CALL String_Copy_C_F(cInterval,cInterval_F)
     
     !Get the data
-    CALL pModel%GetZBudget_TSData(iZBudgetType,iZoneID,iCols,iZExtent,iElems,iLayers,iZoneIDs,cBeginDate_F,cEndDate_F,cInterval_F,rFactAR,rFactVL,rOutputDates,rOutputValues,iDataTypes,iNTimes_Out,iStat)
+    CALL pMdl%GetZBudget_TSData(iZBudgetType,iZoneID,iCols,iZExtent,iElems,iLayers,iZoneIDs,cBeginDate_F,cEndDate_F,cInterval_F,rFactAR,rFactVL,rOutputDates,rOutputValues,iDataTypes,iNTimes_Out,iStat)
     IF (iStat .NE. 0) RETURN
     
     !Convert Julian time to Excel-style Julian time
@@ -1502,7 +1598,10 @@ CONTAINS
     REAL(8),ALLOCATABLE :: rDates(:),rStorChange(:)
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
@@ -1514,7 +1613,7 @@ CONTAINS
     CALL String_Copy_C_F(cInterval,cInterval_F)
     
     !Get the data
-    CALL pModel%GetZBudget_CumGWStorChange(iZoneID,iZExtent,iElems,iLayers,iZoneIDs,cBeginDate_F,cEndDate_F,cInterval_F,rFactVL,rDates,rStorChange,iStat)
+    CALL pMdl%GetZBudget_CumGWStorChange(iZoneID,iZExtent,iElems,iLayers,iZoneIDs,cBeginDate_F,cEndDate_F,cInterval_F,rFactVL,rDates,rStorChange,iStat)
     IF (iStat .NE. 0) RETURN
     
     !Copy data to return arguments
@@ -1546,7 +1645,10 @@ CONTAINS
     REAL(8),ALLOCATABLE :: rStorChange(:)
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
@@ -1560,7 +1662,7 @@ CONTAINS
     lForCalendarYear = .FALSE.
     
     !Get the data
-    CALL pModel%GetZBudget_AnnualCumGWStorChange(iZoneID,iZExtent,iElems,iLayers,iZoneIDs,cBeginDate_F,cEndDate_F,lForCalendarYear,rFactVL,rStorChange,iOutputYears_Local,iStat) 
+    CALL pMdl%GetZBudget_AnnualCumGWStorChange(iZoneID,iZExtent,iElems,iLayers,iZoneIDs,cBeginDate_F,cEndDate_F,lForCalendarYear,rFactVL,rStorChange,iOutputYears_Local,iStat) 
     IF (iStat .NE. 0) RETURN
     
     !Copy data to return arguments
@@ -1589,7 +1691,10 @@ CONTAINS
     REAL(8),ALLOCATABLE :: rStorChange(:)
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
@@ -1607,7 +1712,7 @@ CONTAINS
     END IF
     
     !Get the data
-    CALL pModel%GetZBudget_AnnualCumGWStorChange(iZoneID,iZExtent,iElems,iLayers,iZoneIDs,cBeginDate_F,cEndDate_F,lForCalendarYear,rFactVL,rStorChange,iOutputYears_Local,iStat) 
+    CALL pMdl%GetZBudget_AnnualCumGWStorChange(iZoneID,iZExtent,iElems,iLayers,iZoneIDs,cBeginDate_F,cEndDate_F,lForCalendarYear,rFactVL,rStorChange,iOutputYears_Local,iStat) 
     IF (iStat .NE. 0) RETURN
     
     !Copy data to return arguments
@@ -1632,14 +1737,17 @@ CONTAINS
     CHARACTER          :: cNamesList_F*iLenNamesList
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     !Get names
-    CALL pModel%GetNames(iLocationType,cLocalNamesList,iStat)
+    CALL pMdl%GetNames(iLocationType,cLocalNamesList,iStat)
     
     !Compile the list in a single string variable
     CALL StringArray_To_StringScalar(cLocalNamesList,cNamesList_F,iLocArray)
@@ -1658,14 +1766,17 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT)        :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     !Get data
-    CALL pModel%GetGWHeadsIC(rGWHeadsIC,iStat)
+    CALL pMdl%GetGWHeadsIC(rGWHeadsIC,iStat)
     
   END SUBROUTINE IW_Model_GetGWHeadsIC
   
@@ -1685,7 +1796,10 @@ CONTAINS
     CHARACTER :: cOutputBeginDateAndTime_F*iLenDateAndTime,cOutputEndDateAndTime_F*iLenDateAndTime
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
@@ -1699,7 +1813,7 @@ CONTAINS
     CALL String_Copy_C_F(cOutputEndDateAndTime,cOutputEndDateAndTime_F)
     
     !Get data
-    CALL pModel%GetGWHeads_ForALayer(iLayer,cOutputBeginDateAndTime_F,cOutputEndDateAndTime_F,rFact_LT,rOutputDates,rGWHeads,iStat)
+    CALL pMdl%GetGWHeads_ForALayer(iLayer,cOutputBeginDateAndTime_F,cOutputEndDateAndTime_F,rFact_LT,rOutputDates,rGWHeads,iStat)
     IF (iStat .EQ. -1) RETURN
     
     !Convert Julian time to Excel-style Julian time
@@ -1718,23 +1832,26 @@ CONTAINS
     REAL(C_DOUBLE),INTENT(OUT) :: Heads(iNNodes,iNLayers)
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
-    
+
     !Initialize
     iStat = 0
-    
+
     IF (iPrevious .EQ. 0) THEN
-        CALL pModel%GetGWHeads_All(.FALSE. , Heads)
+        CALL pMdl%GetGWHeads_All(.FALSE. , Heads)
     ELSE
-        CALL pModel%GetGWHeads_All(.TRUE. , Heads)
+        CALL pMdl%GetGWHeads_All(.TRUE. , Heads)
     END IF
     IF (rFact .NE. 1.0) Heads = Heads * rFact
-    
+
   END SUBROUTINE IW_Model_GetGWHeads_All
   
   
@@ -1748,19 +1865,22 @@ CONTAINS
     REAL(C_DOUBLE),INTENT(OUT) :: Subs(iNNodes,iNLayers)
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
-    
+
     !Initialize
     iStat = 0
-    
-    CALL pModel%GetSubsidence_All(Subs)
+
+    CALL pMdl%GetSubsidence_All(Subs)
     IF (rFact .NE. 1.0) Subs = Subs * rFact
-    
+
   END SUBROUTINE IW_Model_GetSubsidence_All
   
   
@@ -1774,16 +1894,19 @@ CONTAINS
     REAL(C_DOUBLE),INTENT(OUT) :: rFlow
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
-    
+
     iStat = 0
-    rFlow = pModel%GetStrmFlow(iStrmNode) * rFact
-    
+    rFlow = pMdl%GetStrmFlow(iStrmNode) * rFact
+
   END SUBROUTINE IW_Model_GetStrmFlow
   
   
@@ -1797,19 +1920,22 @@ CONTAINS
     REAL(C_DOUBLE),INTENT(OUT) :: Flows(iNStrmNodes)
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
-    
+
     !Initialize
     iStat = 0
-    
-    CALL pModel%GetStrmFlows(Flows)
+
+    CALL pMdl%GetStrmFlows(Flows)
     IF (rFact .NE. 1.0) Flows = Flows * rFact
-    
+
   END SUBROUTINE IW_Model_GetStrmFlows
   
   
@@ -1821,14 +1947,17 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iNInflows,iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat     = 0 
-    iNInflows = pModel%GetStrmNInflows()
+    iNInflows = pMdl%GetStrmNInflows()
     
   END SUBROUTINE IW_Model_GetStrmNInflows
   
@@ -1845,14 +1974,17 @@ CONTAINS
     INTEGER,ALLOCATABLE :: iNodes_Local(:)
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat = 0
-    CALL pModel%GetStrmInflowNodes(iNodes_Local)
+    CALL pMdl%GetStrmInflowNodes(iNodes_Local)
     iNodes = iNodes_Local
     
   END SUBROUTINE IW_Model_GetStrmInflowNodes
@@ -1870,14 +2002,17 @@ CONTAINS
     INTEGER,ALLOCATABLE :: IDs_Local(:)
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat = 0
-    CALL pModel%GetStrmInflowIDs(IDs_Local)
+    CALL pMdl%GetStrmInflowIDs(IDs_Local)
     IDs = IDs_Local
     
   END SUBROUTINE IW_Model_GetStrmInflowIDs
@@ -1894,14 +2029,17 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat = 0
-    CALL pModel%GetStrmInflows_AtSomeInflows(iInflows,rInflows) 
+    CALL pMdl%GetStrmInflows_AtSomeInflows(iInflows,rInflows) 
     rInflows = rInflows * rConvFactor
     
   END SUBROUTINE IW_Model_GetStrmInflows_AtSomeInflows
@@ -1917,16 +2055,19 @@ CONTAINS
     REAL(C_DOUBLE),INTENT(OUT) :: Stages(iNStrmNodes)
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
-    
-    CALL pModel%GetStrmStages(Stages,iStat)
+
+    CALL pMdl%GetStrmStages(Stages,iStat)
     IF (rFact .NE. 1.0) Stages = Stages * rFact
-    
+
   END SUBROUTINE IW_Model_GetStrmStages
   
   
@@ -1938,14 +2079,17 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iNHydTypes,iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat      = 0
-    iNHydTypes = pModel%GetNHydrographTypes()
+    iNHydTypes = pMdl%GetNHydrographTypes()
     
   END SUBROUTINE IW_Model_GetNHydrographTypes
   
@@ -1966,7 +2110,10 @@ CONTAINS
     CHARACTER(LEN=500),ALLOCATABLE :: cHydFileList_Local(:)
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
@@ -1976,7 +2123,7 @@ CONTAINS
     iStat = 0
     
     !Retrieve data
-    CALL pModel%GetHydrographTypeList(cHydTypeList_Local , iHydLocTypeList_Local , iHydCompList_Local , cHydFileList_Local)
+    CALL pMdl%GetHydrographTypeList(cHydTypeList_Local , iHydLocTypeList_Local , iHydCompList_Local , cHydFileList_Local)
     
     !Convert string array to string scalar
     CALL StringArray_To_StringScalar(cHydTypeList_Local,cHydTypeList_F,iLocArray)
@@ -1997,14 +2144,17 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: NHydrographs,iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat        = 0
-    NHydrographs = pModel%GetNHydrographs(iLocationType)
+    NHydrographs = pMdl%GetNHydrographs(iLocationType)
     
   END SUBROUTINE IW_Model_GetNHydrographs
   
@@ -2018,14 +2168,17 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: IDs(NHydrographs),iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat = 0
-    CALL pModel%GetHydrographIDs(iLocationType,IDs)
+    CALL pMdl%GetHydrographIDs(iLocationType,IDs)
     
   END SUBROUTINE IW_Model_GetHydrographIDs
   
@@ -2040,13 +2193,16 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iStat
       
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetHydrographCoordinates(iLocationType,X,Y,iStat)
+    CALL pMdl%GetHydrographCoordinates(iLocationType,X,Y,iStat)
     
   END SUBROUTINE IW_Model_GetHydrographCoordinates
   
@@ -2067,7 +2223,10 @@ CONTAINS
     REAL(8),ALLOCATABLE :: rDates_Local(:),rValues_Local(:) 
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
@@ -2079,7 +2238,7 @@ CONTAINS
     CALL String_Copy_C_F(cInterval , cInterval_F)
     
     !Get data
-    CALL pModel%GetHydrograph(iHydType,iHydIndex,iLayer,rFactLT,rFactVL,cBeginDate_F,cEndDate_F,cInterval_F,iDataUnitType,rDates_Local,rValues_Local,iStat)
+    CALL pMdl%GetHydrograph(iHydType,iHydIndex,iLayer,rFactLT,rFactVL,cBeginDate_F,cEndDate_F,cInterval_F,iDataUnitType,rDates_Local,rValues_Local,iStat)
     IF (iStat .NE. 0) RETURN
     
     !Copy local data to return arguments; also convert Julian date to Excel-style Julian date
@@ -2100,14 +2259,17 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat = 0
-    CALL pModel%GetNodeIDs(IDs)
+    CALL pMdl%GetNodeIDs(IDs)
     
   END SUBROUTINE IW_Model_GetNodeIDs
   
@@ -2122,14 +2284,17 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat = 0
-    CALL pModel%GetNodeXY(X,Y)
+    CALL pMdl%GetNodeXY(X,Y)
     
   END SUBROUTINE IW_Model_GetNodeXY
   
@@ -2142,14 +2307,17 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: NNodes,iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat  = 0
-    NNodes = pModel%GetNNodes()
+    NNodes = pMdl%GetNNodes()
     
   END SUBROUTINE IW_Model_GetNNodes
   
@@ -2163,14 +2331,17 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: IDs(NElem),iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat = 0
-    CALL pModel%GetElementIDs(IDs)
+    CALL pMdl%GetElementIDs(IDs)
     
   END SUBROUTINE IW_Model_GetElementIDs
   
@@ -2183,14 +2354,17 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: NElem,iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat = 0
-    NElem = pModel%GetNElements()
+    NElem = pMdl%GetNElements()
     
   END SUBROUTINE IW_Model_GetNElements
   
@@ -2204,14 +2378,17 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat = 0
-    CALL pModel%GetElementAreas(Areas)
+    CALL pMdl%GetElementAreas(Areas)
     
   END SUBROUTINE IW_Model_GetElementAreas
   
@@ -2224,14 +2401,17 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: NLayers,iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat   = 0
-    NLayers = pModel%GetNLayers()
+    NLayers = pMdl%GetNLayers()
     
   END SUBROUTINE IW_Model_GetNLayers
 
@@ -2244,14 +2424,17 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: NSubregions,iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat       = 0
-    NSubregions = pModel%GetNSubregions()
+    NSubregions = pMdl%GetNSubregions()
     
   END SUBROUTINE IW_Model_GetNSubregions
   
@@ -2265,14 +2448,17 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: IDs(NSubregion),iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat = 0
-    CALL pModel%GetSubregionIDs(IDs)
+    CALL pMdl%GetSubregionIDs(IDs)
     
   END SUBROUTINE IW_Model_GetSubregionIDs
   
@@ -2290,7 +2476,10 @@ CONTAINS
     CHARACTER :: cName_F*iLen
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
@@ -2298,7 +2487,7 @@ CONTAINS
     
     iStat = 0
     
-    CALL pModel%GetSubregionName(iRegion,cName_F)
+    CALL pMdl%GetSubregionName(iRegion,cName_F)
     
     CALL String_Copy_F_C(cName_F,cName)
     
@@ -2314,14 +2503,17 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: ElemSubregions(NElem),iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat = 0    
-    CALL pModel%GetElemSubregions(ElemSubregions)
+    CALL pMdl%GetElemSubregions(ElemSubregions)
     
   END SUBROUTINE IW_Model_GetElemSubregions
   
@@ -2337,13 +2529,16 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetStratigraphy_AtXYCoordinate(rX,rY,rGSElev,rTopElevs,rBottomElevs,iStat)
+    CALL pMdl%GetStratigraphy_AtXYCoordinate(rX,rY,rGSElev,rTopElevs,rBottomElevs,iStat)
     
   END SUBROUTINE IW_Model_GetStratigraphy_AtXYCoordinate
   
@@ -2358,14 +2553,17 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat = 0    
-    CALL pModel%GetGSElev(GSElev)
+    CALL pMdl%GetGSElev(GSElev)
     
   END SUBROUTINE IW_Model_GetGSElev
   
@@ -2380,14 +2578,17 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat = 0    
-    CALL pModel%GetAquiferTopElev(TopElev)
+    CALL pMdl%GetAquiferTopElev(TopElev)
     
   END SUBROUTINE IW_Model_GetAquiferTopElev
 
@@ -2402,14 +2603,17 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat = 0
-    CALL pModel%GetAquiferBottomElev(BottomElev)
+    CALL pMdl%GetAquiferBottomElev(BottomElev)
     
   END SUBROUTINE IW_Model_GetAquiferBottomElev
 
@@ -2424,13 +2628,16 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetAquiferHorizontalK(Kh,iStat)
+    CALL pMdl%GetAquiferHorizontalK(Kh,iStat)
     
   END SUBROUTINE IW_Model_GetAquiferHorizontalK
 
@@ -2445,13 +2652,16 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetAquitardVerticalK(Kv,iStat)
+    CALL pMdl%GetAquitardVerticalK(Kv,iStat)
     
   END SUBROUTINE IW_Model_GetAquitardVerticalK
 
@@ -2466,13 +2676,16 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetAquiferVerticalK(Kv,iStat)
+    CALL pMdl%GetAquiferVerticalK(Kv,iStat)
     
   END SUBROUTINE IW_Model_GetAquiferVerticalK
 
@@ -2487,13 +2700,16 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetAquiferSy(Sy,iStat)
+    CALL pMdl%GetAquiferSy(Sy,iStat)
     
   END SUBROUTINE IW_Model_GetAquiferSy
 
@@ -2508,13 +2724,16 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetAquiferSs(Ss,iStat)
+    CALL pMdl%GetAquiferSs(Ss,iStat)
     
   END SUBROUTINE IW_Model_GetAquiferSs
 
@@ -2529,13 +2748,16 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetAquiferParameters(Kh,AquiferKv,AquitardKv,Sy,Ss,iStat)
+    CALL pMdl%GetAquiferParameters(Kh,AquiferKv,AquitardKv,Sy,Ss,iStat)
     
   END SUBROUTINE IW_Model_GetAquiferParameters
 
@@ -2548,14 +2770,17 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iNParamGrids,iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     !Get data
-    CALL pModel%GetGWNParametricGrids(iNParamGrids,iStat)
+    CALL pMdl%GetGWNParametricGrids(iNParamGrids,iStat)
     
   END SUBROUTINE IW_Model_GetGWNParametricGrids
 
@@ -2569,14 +2794,17 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iNParamNodes,iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     !Get data
-    CALL pModel%GetGWNParametricNodes(iParamGridID,iNParamNodes,iStat)
+    CALL pMdl%GetGWNParametricNodes(iParamGridID,iNParamNodes,iStat)
     
   END SUBROUTINE IW_Model_GetGWNParametricNodes
 
@@ -2590,14 +2818,17 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iNParamElements,iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     !Get data
-    CALL pModel%GetGWNParametricElements(iParamGridID,iNParamElements,iStat)
+    CALL pMdl%GetGWNParametricElements(iParamGridID,iNParamElements,iStat)
     
   END SUBROUTINE IW_Model_GetGWNParametricElements
 
@@ -2612,14 +2843,17 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     !Get data
-    CALL pModel%GetGWParametricNodeXY(iParamGridID,rX,rY,iStat)
+    CALL pMdl%GetGWParametricNodeXY(iParamGridID,rX,rY,iStat)
     
   END SUBROUTINE IW_Model_GetGWParametricNodeXY
 
@@ -2633,14 +2867,17 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iVertices(4),iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     !Get data
-    CALL pModel%GetGWParametricElementConfigData(iParamGridID,iParamElemID,iVertices,iStat)
+    CALL pMdl%GetGWParametricElementConfigData(iParamGridID,iParamElemID,iVertices,iStat)
     
   END SUBROUTINE IW_Model_GetGWParametricElementConfigData
 
@@ -2655,14 +2892,17 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     !Get data
-    CALL pModel%GetGWParametricAquiferParameters(iParamGridID,rKh,rAquiferKv,rAquitardKv,rSy,rSs,iStat)
+    CALL pMdl%GetGWParametricAquiferParameters(iParamGridID,rKh,rAquiferKv,rAquitardKv,rSy,rSs,iStat)
     
   END SUBROUTINE IW_Model_GetGWParametricAquiferParameters
 
@@ -2676,14 +2916,17 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: Nodes(iDim),iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat = 0    
-    CALL pModel%GetElementConfigData(iElem,Nodes)
+    CALL pMdl%GetElementConfigData(iElem,Nodes)
     
   END SUBROUTINE IW_Model_GetElementConfigData
   
@@ -2697,13 +2940,16 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT)  :: iReachs(iNNodes),iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetReaches_ForStrmNodes(iStrmNodes,iReachs,iStat)
+    CALL pMdl%GetReaches_ForStrmNodes(iStrmNodes,iReachs,iStat)
     
   END SUBROUTINE IW_Model_GetReaches_ForStrmNodes
   
@@ -2717,14 +2963,17 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: IDs(NStrmNodes),iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat = 0
-    CALL pModel%GetStrmNodeIDs(IDs)
+    CALL pMdl%GetStrmNodeIDs(IDs)
     
   END SUBROUTINE IW_Model_GetStrmNodeIDs
 
@@ -2737,14 +2986,17 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: NStrmNodes,iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat      = 0
-    NStrmNodes = pModel%GetNStrmNodes()
+    NStrmNodes = pMdl%GetNStrmNodes()
     
   END SUBROUTINE IW_Model_GetNStrmNodes
 
@@ -2758,14 +3010,17 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: IDs(iNReaches),iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat = 0
-    CALL pModel%GetStrmReachIDs(IDs)
+    CALL pMdl%GetStrmReachIDs(IDs)
     
   END SUBROUTINE IW_Model_GetReachIDs
 
@@ -2779,14 +3034,17 @@ CONTAINS
      INTEGER(C_INT),INTENT(OUT) :: iNNodes, iStat
      
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
      iStat   = 0
-     iNNodes = pModel%GetStrmNUpstrmNodes(iStrmNode)
+     iNNodes = pMdl%GetStrmNUpstrmNodes(iStrmNode)
      
   END SUBROUTINE IW_Model_GetStrmNUpstrmNodes
      
@@ -2803,14 +3061,17 @@ CONTAINS
     INTEGER,ALLOCATABLE :: iNodes_Local(:)
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat = 0
-    CALL pModel%GetStrmUpstrmNodes(iStrmNode,iNodes_Local)
+    CALL pMdl%GetStrmUpstrmNodes(iStrmNode,iNodes_Local)
     iUpstrmNodes = iNodes_Local
     
   END SUBROUTINE IW_Model_GetStrmUpstrmNodes
@@ -2826,21 +3087,23 @@ CONTAINS
     
     !Local variables
     LOGICAL :: lUpstrm
-    
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
-    
-    CALL pModel%IsStrmUpstreamNode(iStrmNode1,iStrmNode2,lUpstrm,iStat)
+
+    CALL pMdl%IsStrmUpstreamNode(iStrmNode1,iStrmNode2,lUpstrm,iStat)
     IF (lUpstrm) THEN
         iUpstrm = 1
     ELSE
         iUpstrm = 0
     END IF
-    
+
   END SUBROUTINE IW_Model_IsStrmUpstreamNode
   
   
@@ -2852,14 +3115,17 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: NReach,iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat  = 0
-    NReach = pModel%GetNReaches()
+    NReach = pMdl%GetNReaches()
     
   END SUBROUTINE IW_Model_GetNReaches
 
@@ -2873,14 +3139,17 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iNReaches,iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat     = 0
-    iNReaches = pModel%GetReachNUpstrmReaches(iReach)
+    iNReaches = pMdl%GetReachNUpstrmReaches(iReach)
     
   END SUBROUTINE IW_Model_GetReachNUpstrmReaches
   
@@ -2897,14 +3166,17 @@ CONTAINS
     INTEGER,ALLOCATABLE :: iUpstrmReaches_Local(:)
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat = 0
-    CALL pModel%GetReachUpstrmReaches(iReach,iUpstrmReaches_Local)
+    CALL pMdl%GetReachUpstrmReaches(iReach,iUpstrmReaches_Local)
     iUpstrmReaches = iUpstrmReaches_Local
 
   END SUBROUTINE IW_Model_GetReachUpstrmReaches
@@ -2919,14 +3191,17 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: N,iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat = 0
-    N     = pModel%GetNRatingTablePoints(iStrmNode)
+    N     = pMdl%GetNRatingTablePoints(iStrmNode)
     
   END SUBROUTINE IW_Model_GetNStrmRatingTablePoints
 
@@ -2940,14 +3215,17 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iNodes(NReaches),iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat = 0
-    CALL pModel%GetReachUpstrmNodes(iNodes)
+    CALL pMdl%GetReachUpstrmNodes(iNodes)
         
   END SUBROUTINE IW_Model_GetReachUpstrmNodes
 
@@ -2961,14 +3239,17 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iNodes(NReaches),iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat = 0
-    CALL pModel%GetReachDownstrmNodes(iNodes)
+    CALL pMdl%GetReachDownstrmNodes(iNodes)
     
   END SUBROUTINE IW_Model_GetReachDownstrmNodes
 
@@ -2982,14 +3263,17 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iDest(NReaches),iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat = 0
-    CALL pModel%GetReachOutflowDest(iDest)
+    CALL pMdl%GetReachOutflowDest(iDest)
         
   END SUBROUTINE IW_Model_GetReachOutflowDest
 
@@ -3003,14 +3287,17 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iDestType(NReaches),iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat = 0
-    CALL pModel%GetReachOutflowDestTypes(iDestType)
+    CALL pMdl%GetReachOutflowDestTypes(iDestType)
         
   END SUBROUTINE IW_Model_GetReachOutflowDestTypes
 
@@ -3024,14 +3311,17 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iReachNNodes,iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat        = 0
-    iReachNNodes = pModel%GetReachNNodes(iReach)
+    iReachNNodes = pMdl%GetReachNNodes(iReach)
     
   END SUBROUTINE IW_Model_GetReachNNodes
 
@@ -3045,14 +3335,17 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iGWNodes(NNodes),iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat = 0
-    CALL pModel%GetReachGWNodes(iReach,NNodes,iGWNodes)
+    CALL pMdl%GetReachGWNodes(iReach,NNodes,iGWNodes)
     
   END SUBROUTINE IW_Model_GetReachGWNodes
 
@@ -3069,13 +3362,16 @@ CONTAINS
     INTEGER,ALLOCATABLE :: iStrmNodes_Local(:)
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetReachStrmNodes(iReach,iStrmNodes_Local,iStat) 
+    CALL pMdl%GetReachStrmNodes(iReach,iStrmNodes_Local,iStat) 
     IF (iStat .EQ. 0) iStrmNodes = iStrmNodes_Local
     
   END SUBROUTINE IW_Model_GetReachStrmNodes
@@ -3091,13 +3387,16 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetStrmBottomElevs(rElevs,iStat)
+    CALL pMdl%GetStrmBottomElevs(rElevs,iStat)
     
   END SUBROUTINE IW_Model_GetStrmBottomElevs
   
@@ -3112,14 +3411,17 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat = 0
-    CALL pModel%GetStrmRatingTable(iStrmNode,NPoints,Stage,Flow)
+    CALL pMdl%GetStrmRatingTable(iStrmNode,NPoints,Stage,Flow)
     
   END SUBROUTINE IW_Model_GetStrmRatingTable
 
@@ -3138,21 +3440,24 @@ CONTAINS
     REAL(8) :: rFlowsTemp(iNNodes)
         
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     !Tributary inflows
-    CALL pModel%GetStrmTributaryInflows(rFlows,iStat)
+    CALL pMdl%GetStrmTributaryInflows(rFlows,iStat)
     IF (iStat .EQ. -1) THEN
         rFlows = 0.0
         RETURN
     END IF
     
     !Rainfall runoff
-    CALL pModel%GetStrmRainfallRunoff(rFlowsTemp,iStat)
+    CALL pMdl%GetStrmRainfallRunoff(rFlowsTemp,iStat)
     IF (iStat .EQ. -1) THEN
         rFlows = 0.0
         RETURN
@@ -3160,7 +3465,7 @@ CONTAINS
     rFlows = rFlows + rFlowsTemp
     
     !Return flow
-    CALL pModel%GetStrmReturnFlows(rFlowsTemp,iStat)
+    CALL pMdl%GetStrmReturnFlows(rFlowsTemp,iStat)
     IF (iStat .EQ. -1) THEN
         rFlows = 0.0
         RETURN
@@ -3168,7 +3473,7 @@ CONTAINS
     rFlows = rFlows + rFlowsTemp
     
     !Tile drains
-    CALL pModel%GetStrmTileDrains(rFlowsTemp,iStat)
+    CALL pMdl%GetStrmTileDrains(rFlowsTemp,iStat)
     IF (iStat .EQ. -1) THEN
         rFlows = 0.0
         RETURN
@@ -3176,7 +3481,7 @@ CONTAINS
     rFlows = rFlows + rFlowsTemp
     
     !Riparian ET
-    CALL pModel%GetStrmRiparianETs(rFlowsTemp,iStat)
+    CALL pMdl%GetStrmRiparianETs(rFlowsTemp,iStat)
     IF (iStat .EQ. -1) THEN
         rFlows = 0.0
         RETURN
@@ -3184,7 +3489,7 @@ CONTAINS
     rFlows = rFlows - rFlowsTemp
     
     !Gain from GW
-    CALL pModel%GetStrmGainFromGW(rFlowsTemp,iStat)
+    CALL pMdl%GetStrmGainFromGW(rFlowsTemp,iStat)
     IF (iStat .EQ. -1) THEN
         rFlows = 0.0
         RETURN
@@ -3192,7 +3497,7 @@ CONTAINS
     rFlows = rFlows + rFlowsTemp
     
     !Gain from lakes
-    CALL pModel%GetStrmGainFromLakes(rFlowsTemp,iStat)
+    CALL pMdl%GetStrmGainFromLakes(rFlowsTemp,iStat)
     IF (iStat .EQ. -1) THEN
         rFlows = 0.0
         RETURN
@@ -3200,7 +3505,7 @@ CONTAINS
     rFlows = rFlows + rFlowsTemp
     
     !Net bypass Inflows
-    CALL pModel%GetStrmNetBypassInflows(rFlowsTemp,iStat)
+    CALL pMdl%GetStrmNetBypassInflows(rFlowsTemp,iStat)
     IF (iStat .EQ. -1) THEN
         rFlows = 0.0
         RETURN
@@ -3227,21 +3532,24 @@ CONTAINS
     REAL(8) :: rFlowsTemp(iNNodes)
         
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     !Tributary inflows
-    CALL pModel%GetStrmTributaryInflows(rFlows,iStat)
+    CALL pMdl%GetStrmTributaryInflows(rFlows,iStat)
     IF (iStat .EQ. -1) THEN
         rFlows = 0.0
         RETURN
     END IF
     
     !Rainfall runoff
-    CALL pModel%GetStrmRainfallRunoff(rFlowsTemp,iStat)
+    CALL pMdl%GetStrmRainfallRunoff(rFlowsTemp,iStat)
     IF (iStat .EQ. -1) THEN
         rFlows = 0.0
         RETURN
@@ -3249,7 +3557,7 @@ CONTAINS
     rFlows = rFlows + rFlowsTemp
     
     !Return flow
-    CALL pModel%GetStrmReturnFlows(rFlowsTemp,iStat)
+    CALL pMdl%GetStrmReturnFlows(rFlowsTemp,iStat)
     IF (iStat .EQ. -1) THEN
         rFlows = 0.0
         RETURN
@@ -3257,7 +3565,7 @@ CONTAINS
     rFlows = rFlows + rFlowsTemp
     
     !Tile drains
-    CALL pModel%GetStrmTileDrains(rFlowsTemp,iStat)
+    CALL pMdl%GetStrmTileDrains(rFlowsTemp,iStat)
     IF (iStat .EQ. -1) THEN
         rFlows = 0.0
         RETURN
@@ -3265,7 +3573,7 @@ CONTAINS
     rFlows = rFlows + rFlowsTemp
     
     !Riparian ET
-    CALL pModel%GetStrmRiparianETs(rFlowsTemp,iStat)
+    CALL pMdl%GetStrmRiparianETs(rFlowsTemp,iStat)
     IF (iStat .EQ. -1) THEN
         rFlows = 0.0
         RETURN
@@ -3273,7 +3581,7 @@ CONTAINS
     rFlows = rFlows - rFlowsTemp
     
     !Gain from lakes
-    CALL pModel%GetStrmGainFromLakes(rFlowsTemp,iStat)
+    CALL pMdl%GetStrmGainFromLakes(rFlowsTemp,iStat)
     IF (iStat .EQ. -1) THEN
         rFlows = 0.0
         RETURN
@@ -3281,7 +3589,7 @@ CONTAINS
     rFlows = rFlows + rFlowsTemp
     
     !Net bypass Inflows
-    CALL pModel%GetStrmNetBypassInflows(rFlowsTemp,iStat)
+    CALL pMdl%GetStrmNetBypassInflows(rFlowsTemp,iStat)
     IF (iStat .EQ. -1) THEN
         rFlows = 0.0
         RETURN
@@ -3305,13 +3613,16 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetStrmTributaryInflows(rFlows,iStat)
+    CALL pMdl%GetStrmTributaryInflows(rFlows,iStat)
     IF (iStat .EQ. -1) THEN
         rFlows = 0.0
         RETURN
@@ -3334,13 +3645,16 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetStrmRainfallRunoff(rFlows,iStat)
+    CALL pMdl%GetStrmRainfallRunoff(rFlows,iStat)
     IF (iStat .EQ. -1) THEN
         rFlows = 0.0
         RETURN
@@ -3363,13 +3677,16 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetStrmReturnFlows(rFlows,iStat)
+    CALL pMdl%GetStrmReturnFlows(rFlows,iStat)
     IF (iStat .EQ. -1) THEN
         rFlows = 0.0
         RETURN
@@ -3392,13 +3709,16 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetStrmPondDrains(rFlows,iStat)
+    CALL pMdl%GetStrmPondDrains(rFlows,iStat)
     IF (iStat .EQ. -1) THEN
         rFlows = 0.0
         RETURN
@@ -3421,13 +3741,16 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetStrmTileDrains(rFlows,iStat)
+    CALL pMdl%GetStrmTileDrains(rFlows,iStat)
     IF (iStat .EQ. -1) THEN
         rFlows = 0.0
         RETURN
@@ -3450,13 +3773,16 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetStrmRiparianETs(rFlows,iStat)
+    CALL pMdl%GetStrmRiparianETs(rFlows,iStat)
     IF (iStat .EQ. -1) THEN
         rFlows = 0.0
         RETURN
@@ -3479,13 +3805,16 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetStrmEvap(rEvap,iStat)
+    CALL pMdl%GetStrmEvap(rEvap,iStat)
     IF (iStat .EQ. -1) THEN
         rEvap = 0.0
         RETURN
@@ -3508,13 +3837,16 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetStrmGainFromGW(rFlows,iStat)
+    CALL pMdl%GetStrmGainFromGW(rFlows,iStat)
     IF (iStat .EQ. -1) THEN
         rFlows = 0.0
         RETURN
@@ -3537,13 +3869,16 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetStrmGainFromLakes(rFlows,iStat)
+    CALL pMdl%GetStrmGainFromLakes(rFlows,iStat)
     IF (iStat .EQ. -1) THEN
         rFlows = 0.0
         RETURN
@@ -3566,13 +3901,16 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetStrmWSAs(rWSAs,iStat)
+    CALL pMdl%GetStrmWSAs(rWSAs,iStat)
     IF (iStat .EQ. -1) THEN
         rWSAs = 0.0
         RETURN
@@ -3595,13 +3933,16 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetStrmNetBypassInflows(rFlows,iStat)
+    CALL pMdl%GetStrmNetBypassInflows(rFlows,iStat)
     IF (iStat .EQ. -1) THEN
         rFlows = 0.0
         RETURN
@@ -3624,13 +3965,16 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetStrmBypassInflows(rFlows,iStat)
+    CALL pMdl%GetStrmBypassInflows(rFlows,iStat)
     IF (iStat .EQ. -1) THEN
         rFlows = 0.0
         RETURN
@@ -3653,13 +3997,16 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetStrmRequiredDiversions_AtSomeDiversions(iDivs,rDivs,iStat)
+    CALL pMdl%GetStrmRequiredDiversions_AtSomeDiversions(iDivs,rDivs,iStat)
     IF (iStat .EQ. -1) THEN
         rDivs = 0.0
         RETURN
@@ -3682,13 +4029,16 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetStrmActualDiversions_AtSomeDiversions(iDivs,rDivs,iStat)
+    CALL pMdl%GetStrmActualDiversions_AtSomeDiversions(iDivs,rDivs,iStat)
     IF (iStat .EQ. -1) THEN
         rDivs = 0.0
         RETURN
@@ -3709,14 +4059,17 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iStrmNodeList(iNDivs),iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat = 0
-    CALL pModel%GetStrmDiversionsExportNodes(iDivList,iStrmNodeList)
+    CALL pMdl%GetStrmDiversionsExportNodes(iDivList,iStrmNodeList)
     
   END SUBROUTINE IW_Model_GetStrmDiversionsExportNodes
 
@@ -3730,14 +4083,17 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iNElems,iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat   = 0
-    iNElems = pModel%GetStrmDiversionNElems(iDiv)
+    iNElems = pMdl%GetStrmDiversionNElems(iDiv)
     
   END SUBROUTINE IW_Model_GetStrmDiversionNElems
 
@@ -3754,14 +4110,17 @@ CONTAINS
     INTEGER,ALLOCATABLE :: iELems_Local(:)
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat = 0
-    CALL pModel%GetStrmDiversionElems(iDiv,iElems_Local)
+    CALL pMdl%GetStrmDiversionElems(iDiv,iElems_Local)
     iElems = iElems_Local
     
   END SUBROUTINE IW_Model_GetStrmDiversionElems
@@ -3775,13 +4134,16 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iNDiversions,iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    iNDiversions = pModel%GetNDiversions()
+    iNDiversions = pMdl%GetNDiversions()
     iStat        = 0
         
   END SUBROUTINE IW_Model_GetNDiversions
@@ -3796,14 +4158,17 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iDiversionIDs(iNDiversions),iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat = 0
-    CALL pModel%GetDiversionIDs(iDiversionIDs)
+    CALL pMdl%GetDiversionIDs(iDiversionIDs)
         
   END SUBROUTINE IW_Model_GetDiversionIDs
 
@@ -3821,13 +4186,16 @@ CONTAINS
     REAL(8),ALLOCATABLE :: rFracs_Local(:)
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetStrmDiversionRechargeZone(iDiv,iElems_Local,rFracs_Local,iStat)
+    CALL pMdl%GetStrmDiversionRechargeZone(iDiv,iElems_Local,rFracs_Local,iStat)
     iNElems = SIZE(iElems_Local)
     
   END SUBROUTINE IW_Model_GetStrmDiversionNRechargeZoneElems
@@ -3847,13 +4215,16 @@ CONTAINS
     REAL(8),ALLOCATABLE :: rFracs_Local(:)
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetStrmDiversionRechargeZone(iDiv,iElems_Local,rFracs_Local,iStat)
+    CALL pMdl%GetStrmDiversionRechargeZone(iDiv,iElems_Local,rFracs_Local,iStat)
     iElems = iElems_Local
     rFracs = rFracs_Local
     
@@ -3868,13 +4239,16 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iNBypasses,iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetNBypasses(iNBypasses,iStat)
+    CALL pMdl%GetNBypasses(iNBypasses,iStat)
         
   END SUBROUTINE IW_Model_GetNBypasses
 
@@ -3888,14 +4262,17 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iBypassIDs(iNBypasses),iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat = 0
-    CALL pModel%GetBypassIDs(iBypassIDs)
+    CALL pMdl%GetBypassIDs(iBypassIDs)
         
   END SUBROUTINE IW_Model_GetBypassIDs
 
@@ -3912,7 +4289,10 @@ CONTAINS
     INTEGER :: indx,iDummy
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
@@ -3920,7 +4300,7 @@ CONTAINS
     
     iStat = 0
     DO indx=1,iNBypass
-        CALL pModel%GetBypassDiversionOriginDestData(.TRUE.,iBypassList(indx),iStrmNodeList(indx),iDummy,iDummy)
+        CALL pMdl%GetBypassDiversionOriginDestData(.TRUE.,iBypassList(indx),iStrmNodeList(indx),iDummy,iDummy)
     END DO
     
   END SUBROUTINE IW_Model_GetBypassExportNodes
@@ -3938,7 +4318,10 @@ CONTAINS
     INTEGER :: indx
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
@@ -3946,7 +4329,7 @@ CONTAINS
     
     iStat = 0
     DO indx=1,iNBypass
-        CALL pModel%GetBypassDiversionOriginDestData(.TRUE.,iBypassList(indx),iExpStrmNodeList(indx),iDestTypeList(indx),iDestList(indx))
+        CALL pMdl%GetBypassDiversionOriginDestData(.TRUE.,iBypassList(indx),iExpStrmNodeList(indx),iDestTypeList(indx),iDestList(indx))
     END DO
     
   END SUBROUTINE IW_Model_GetBypassExportDestinationData
@@ -3963,14 +4346,17 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat = 0
-    CALL pModel%GetBypassOutflows(rOutflows)
+    CALL pMdl%GetBypassOutflows(rOutflows)
     rOutflows = rConvFactor * rOutflows
     
   END SUBROUTINE IW_Model_GetBypassOutflows
@@ -3986,14 +4372,17 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat   = 0
-    rFactor = pModel%GetBypassRecoverableLossFactor(iBypass)
+    rFactor = pMdl%GetBypassRecoverableLossFactor(iBypass)
     
   END SUBROUTINE IW_Model_GetBypassRecoverableLossFactor
 
@@ -4008,14 +4397,17 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat   = 0
-    rFactor = pModel%GetBypassNonRecoverableLossFactor(iBypass)
+    rFactor = pMdl%GetBypassNonRecoverableLossFactor(iBypass)
     
   END SUBROUTINE IW_Model_GetBypassNonRecoverableLossFactor
 
@@ -4029,13 +4421,16 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iAgOrUrban(iNSupplies),iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetSupplyPurpose(iSupplyType,iSupplies,iAgOrUrban,iStat)
+    CALL pMdl%GetSupplyPurpose(iSupplyType,iSupplies,iAgOrUrban,iStat)
     
   END SUBROUTINE IW_Model_GetSupplyPurpose
   
@@ -4048,14 +4443,17 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: NLakes,iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat  = 0
-    NLakes = pModel%GetNLakes()
+    NLakes = pMdl%GetNLakes()
     
   END SUBROUTINE IW_Model_GetNLakes
   
@@ -4069,14 +4467,17 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: IDs(NLakes),iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat  = 0
-    CALL pModel%GetLakeIDs(IDs)
+    CALL pMdl%GetLakeIDs(IDs)
     
   END SUBROUTINE IW_Model_GetLakeIDs
   
@@ -4090,14 +4491,17 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: NElements,iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat     = 0
-    NElements = pModel%GetNElementsInLake(iLake)
+    NElements = pMdl%GetNElementsInLake(iLake)
     
   END SUBROUTINE IW_Model_GetNElementsInLake
   
@@ -4111,14 +4515,17 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: Elems(NElems),iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat = 0
-    CALL pModel%GetElementsInLake(iLake,NElems,Elems)
+    CALL pMdl%GetElementsInLake(iLake,NElems,Elems)
     
   END SUBROUTINE IW_Model_GetElementsInLake
 
@@ -4131,14 +4538,17 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: NTDNodes,iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat    = 0
-    NTDNodes = pModel%GetNTileDrainNodes()
+    NTDNodes = pMdl%GetNTileDrainNodes()
     
   END SUBROUTINE IW_Model_GetNTileDrainNodes
   
@@ -4152,14 +4562,17 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: IDs(NTDNodes),iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat = 0
-    CALL pModel%GetTileDrainIDs(IDs)
+    CALL pMdl%GetTileDrainIDs(IDs)
     
   END SUBROUTINE IW_Model_GetTileDrainIDs
   
@@ -4177,13 +4590,16 @@ CONTAINS
     INTEGER,ALLOCATABLE :: iLocalTDNodes(:)
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetTileDrainNodes(iLocalTDNodes,iStat)
+    CALL pMdl%GetTileDrainNodes(iLocalTDNodes,iStat)
     TDNodes = iLocalTDNodes
     
     DEALLOCATE (iLocalTDNodes , STAT=ErrorCode)
@@ -4208,7 +4624,10 @@ CONTAINS
     REAL(8),ALLOCATABLE     :: rLUAreasWork(:,:)
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
@@ -4218,7 +4637,7 @@ CONTAINS
     CALL String_Copy_C_F(cBeginDate,cBeginDate_F)
     CALL String_Copy_C_F(cEndDate,cEndDate_F)
 
-    CALL pModel%GetLandUseAreasForTimePeriod(cBeginDate_F,cEndDate_F,iLUType,iLU,rFactArea,rLUAreasWork,iStat)
+    CALL pMdl%GetLandUseAreasForTimePeriod(cBeginDate_F,cEndDate_F,iLUType,iLU,rFactArea,rLUAreasWork,iStat)
     rLUAreas = rLUAreasWork
     
   END SUBROUTINE IW_Model_GetLandUseAreasForTimePeriod
@@ -4234,13 +4653,16 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetSubregionAgPumpingAverageDepthToGW(AveDepthToGW,iStat)
+    CALL pMdl%GetSubregionAgPumpingAverageDepthToGW(AveDepthToGW,iStat)
     
   END SUBROUTINE IW_Model_GetSubregionAgPumpingAverageDepthToGW
   
@@ -4255,13 +4677,16 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetZoneAgPumpingAverageDepthToGW(iElems,iElemZones,rAveDepthToGW,iStat)
+    CALL pMdl%GetZoneAgPumpingAverageDepthToGW(iElems,iElemZones,rAveDepthToGW,iStat)
     
   END SUBROUTINE IW_Model_GetZoneAgPumpingAverageDepthToGW
   
@@ -4274,13 +4699,16 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: NAgCrops,iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetNAgCrops(NAgCrops,iStat)
+    CALL pMdl%GetNAgCrops(NAgCrops,iStat)
     
   END SUBROUTINE IW_Model_GetNAgCrops
   
@@ -4296,13 +4724,16 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetSupplyRequirement(iLocationTypeID,iLocationList,f_iLandUse_Ag,rFactor,rSupplyReq,iStat)
+    CALL pMdl%GetSupplyRequirement(iLocationTypeID,iLocationList,f_iLandUse_Ag,rFactor,rSupplyReq,iStat)
     
   END SUBROUTINE IW_Model_GetSupplyRequirement_Ag
   
@@ -4318,13 +4749,16 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetSupplyRequirement(iLocationTypeID,iLocationList,f_iLandUse_Urb,rFactor,rSupplyReq,iStat)
+    CALL pMdl%GetSupplyRequirement(iLocationTypeID,iLocationList,f_iLandUse_Urb,rFactor,rSupplyReq,iStat)
     
   END SUBROUTINE IW_Model_GetSupplyRequirement_Urb
  
@@ -4340,13 +4774,16 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetSupplyShortAtOrigin_ForSomeSupplies(iSupplyTypeID,iSupplyList,f_iLandUse_Ag,rFactor,rSupplyShort,iStat)
+    CALL pMdl%GetSupplyShortAtOrigin_ForSomeSupplies(iSupplyTypeID,iSupplyList,f_iLandUse_Ag,rFactor,rSupplyShort,iStat)
     
   END SUBROUTINE IW_Model_GetSupplyShortAtOrigin_Ag
   
@@ -4362,13 +4799,16 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetSupplyShortAtOrigin_ForSomeSupplies(iSupplyTypeID,iSupplyList,f_iLandUse_Urb,rFactor,rSupplyShort,iStat)
+    CALL pMdl%GetSupplyShortAtOrigin_ForSomeSupplies(iSupplyTypeID,iSupplyList,f_iLandUse_Urb,rFactor,rSupplyShort,iStat)
     
   END SUBROUTINE IW_Model_GetSupplyShortAtOrigin_Urb
   
@@ -4382,14 +4822,17 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iNLocations,iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat       = 0
-    iNLocations = pModel%GetNLocations(iLocationType)
+    iNLocations = pMdl%GetNLocations(iLocationType)
     
   END SUBROUTINE IW_Model_GetNLocations
   
@@ -4407,14 +4850,17 @@ CONTAINS
     INTEGER,ALLOCATABLE :: iIDs(:)
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat = 0
-    CALL pModel%GetLocationIDs(iLocationType,iIDs)
+    CALL pMdl%GetLocationIDs(iLocationType,iIDs)
     iLocationIDs = iIDs
     
     DEALLOCATE (iIDs , STAT=ErrorCode)
@@ -4436,7 +4882,10 @@ CONTAINS
     REAL(8),ALLOCATABLE :: rCoeff_local(:)
     INTEGER             :: iNVertices 
     
-    CALL pModel%FEInterpolate(rX,rY,iElemIndex,iNodes_local,rCoeff_local)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    CALL pMdl%FEInterpolate(rX,rY,iElemIndex,iNodes_local,rCoeff_local)
     
     iNVertices = SIZE(iNodes_local)
     iNodes(1:iNVertices) = iNodes_local
@@ -4464,13 +4913,16 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%SetSupplyAdjustmentMaxIters(iMaxIters,iStat)
+    CALL pMdl%SetSupplyAdjustmentMaxIters(iMaxIters,iStat)
   
   END SUBROUTINE IW_Model_SetSupplyAdjustmentMaxIters
   
@@ -4484,13 +4936,16 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%SetSupplyAdjustmentTolerance(rToler,iStat)
+    CALL pMdl%SetSupplyAdjustmentTolerance(rToler,iStat)
   
   END SUBROUTINE IW_Model_SetSupplyAdjustmentTolerance
   
@@ -4521,6 +4976,9 @@ CONTAINS
     CHARACTER(:),ALLOCATABLE       :: cSimWorkingDirectory
     
     !Initialize
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
     iStat = 0
     
     !C strings to Fortran strings
@@ -4530,7 +4988,7 @@ CONTAINS
     CALL GetFileDirectory(cSimFileName_F,cSIMWorkingDirectory)
 
     !Delete file location in the working directory
-    CALL pModel%DeleteModelInquiryDataFile(cSIMWorkingDirectory)
+    CALL pMdl%DeleteModelInquiryDataFile(cSIMWorkingDirectory)
     
   END SUBROUTINE IW_Model_DeleteInquiryDataFile    
 
@@ -4543,13 +5001,16 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iStat
   
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%Simulate(0,iStat)
+    CALL pMdl%Simulate(0,iStat)
                                              
   END SUBROUTINE IW_Model_SimulateAll
   
@@ -4562,13 +5023,16 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iStat
 
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%Simulate(iStat)
+    CALL pMdl%Simulate(iStat)
                                              
   END SUBROUTINE IW_Model_SimulateForOneTimeStep
   
@@ -4586,7 +5050,10 @@ CONTAINS
     CHARACTER :: cInterval_F*iLen
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
@@ -4594,7 +5061,7 @@ CONTAINS
     
     CALL String_Copy_C_F(cInterval,cInterval_F)
 
-    CALL pModel%Simulate(cInterval_F,iStat)
+    CALL pMdl%Simulate(cInterval_F,iStat)
                                              
   END SUBROUTINE IW_Model_SimulateForAnInterval
   
@@ -4607,14 +5074,17 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iStat
   
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat = 0
-    CALL pModel%AdvanceTime()
+    CALL pMdl%AdvanceTime()
                                              
   END SUBROUTINE IW_Model_AdvanceTime
   
@@ -4627,13 +5097,16 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%ReadTSData(iStat)
+    CALL pMdl%ReadTSData(iStat)
                                              
   END SUBROUTINE IW_Model_ReadTSData
 
@@ -4649,14 +5122,17 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat = 0
-    CALL pModel%ReadTSData(iStat,rRegionLUAreas,iDiversions,rDiversions,iStrmInflows,rStrmInflows,iBypasses,rBypasses)
+    CALL pMdl%ReadTSData(iStat,rRegionLUAreas,iDiversions,rDiversions,iStrmInflows,rStrmInflows,iBypasses,rBypasses)
                                              
   END SUBROUTINE IW_Model_ReadTSData_Overwrite
 
@@ -4669,13 +5145,16 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%PrintResults(iStat)
+    CALL pMdl%PrintResults(iStat)
                                              
   END SUBROUTINE IW_Model_PrintResults
   
@@ -4688,14 +5167,17 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iStat
 
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat = 0
-    CALL pModel%AdvanceState()
+    CALL pMdl%AdvanceState()
                                              
   END SUBROUTINE IW_Model_AdvanceState
   
@@ -4708,14 +5190,17 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iEndOfSimulation,iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat = 0
-    IF (pModel%IsEndOfSimulation()) THEN
+    IF (pMdl%IsEndOfSimulation()) THEN
         iEndOfSImulation = 1
     ELSE
         iEndOfSimulation = 0
@@ -4759,7 +5244,10 @@ CONTAINS
     LOGICAL :: lDivAdjustOn,lPumpAdjustOn
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
@@ -4778,7 +5266,7 @@ CONTAINS
         lPumpAdjustOn = .TRUE.
     END IF
     
-    CALL pModel%TurnSupplyAdjustOnOff(lDivAdjustOn,lPumpAdjustOn,iStat)
+    CALL pMdl%TurnSupplyAdjustOnOff(lDivAdjustOn,lPumpAdjustOn,iStat)
     
   END SUBROUTINE IW_Model_TurnSupplyAdjustOnOff
   
@@ -4791,13 +5279,16 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%RestorePumpingToReadValues(iStat)
+    CALL pMdl%RestorePumpingToReadValues(iStat)
     
   END SUBROUTINE IW_Model_RestorePumpingToReadValues
   
@@ -4820,7 +5311,10 @@ CONTAINS
     CHARACTER(LEN=iLenDate) :: cEndComputeDate_F
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetCurrentModel()
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
         CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
@@ -4830,7 +5324,7 @@ CONTAINS
     CALL String_Copy_C_F(cEndComputeDate,cEndComputeDate_F)
     
     !Compute
-    CALL pModel%ComputeFutureWaterDemands(cEndComputeDate_F,iStat)
+    CALL pMdl%ComputeFutureWaterDemands(cEndComputeDate_F,iStat)
     
   END SUBROUTINE IW_Model_ComputeFutureWaterDemands
   
@@ -4843,24 +5337,26 @@ CONTAINS
     INTEGER(C_INT),INTENT(IN)  :: iModelID
     INTEGER(C_INT),INTENT(OUT) :: iStat
 
-    !O(1) direct index validation (thread-safe)
-    !$OMP CRITICAL(IWFM_MODEL_MGMT)
+    !Validate model ID range (no shared state — no CRITICAL needed)
     IF (iModelID .LT. 1 .OR. iModelID .GT. MAX_MODEL_SLOTS) THEN
-        !$OMP END CRITICAL(IWFM_MODEL_MGMT)
         CALL DefaultLogger%SetLastMessage('Model ID out of range',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
-    IF (.NOT. ASSOCIATED(ModelSlots(iModelID)%ptr)) THEN
-        !$OMP END CRITICAL(IWFM_MODEL_MGMT)
-        CALL DefaultLogger%SetLastMessage('Model '//TRIM(IntToText(iModelID))//' not instantiated',f_iWarn,cModName)
+
+    !Check slot is populated and switch (thread-safe)
+    !$OMP CRITICAL(IWFM_MODEL_MGMT)
+    IF (ASSOCIATED(ModelSlots(iModelID)%ptr)) THEN
+        iCurrentModelIndex = iModelID
+        iStat              = 0
+    ELSE
         iStat = -1
-        RETURN
     END IF
-    iCurrentModelIndex = iModelID
-    pModel             => ModelSlots(iModelID)%ptr
-    iStat              = 0
     !$OMP END CRITICAL(IWFM_MODEL_MGMT)
+
+    IF (iStat .EQ. -1) THEN
+        CALL DefaultLogger%SetLastMessage('Model '//TRIM(IntToText(iModelID))//' not instantiated',f_iWarn,cModName)
+    END IF
 
   END SUBROUTINE IW_Model_Switch
   

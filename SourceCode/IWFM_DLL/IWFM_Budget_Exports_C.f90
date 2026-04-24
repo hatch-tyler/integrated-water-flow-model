@@ -91,10 +91,9 @@ CONTAINS
     CALL Budget%New(DefaultLogger,cFileName_F,iStat)
     IF (iStat .EQ. -1) THEN
         CALL Budget%Kill()
-        !$OMP END CRITICAL(IWFM_BUDGET_MGMT)
-        RETURN
+    ELSE
+        lBudget_Instantiated = .TRUE.
     END IF
-    lBudget_Instantiated = .TRUE.
     !$OMP END CRITICAL(IWFM_BUDGET_MGMT)
     
   END SUBROUTINE IW_Budget_OpenFile

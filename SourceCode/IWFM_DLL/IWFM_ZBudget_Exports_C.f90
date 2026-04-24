@@ -103,10 +103,9 @@ CONTAINS
     CALL ZBudget%New(DefaultLogger,cFileName_F,iStat)
     IF (iStat .EQ. -1) THEN
         CALL ZBudget%Kill()
-        !$OMP END CRITICAL(IWFM_ZBUDGET_MGMT)
-        RETURN
+    ELSE
+        lZBudget_Instantiated = .TRUE.
     END IF
-    lZBudget_Instantiated = .TRUE.
     !$OMP END CRITICAL(IWFM_ZBUDGET_MGMT)
     
   END SUBROUTINE IW_ZBudget_OpenFile
