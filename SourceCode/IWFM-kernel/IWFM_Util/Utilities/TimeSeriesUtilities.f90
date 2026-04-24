@@ -32,16 +32,16 @@ MODULE TimeSeriesUtilities
 
   INTEGER,PARAMETER :: f_iTimeStampLength=16
 
-  ! --- MODULE-LEVEL CONFIGURATION (SAVE)
-  ! These are set once during model initialization via SetCacheLimit()
-  ! and SetSimulationTimeStep(), then read during simulation. They are
-  ! safe for single-instance use but represent global state that
-  ! prevents truly concurrent multi-instance DLL operation. For multi-
-  ! instance DLL use, the DLL's CRITICAL(IWFM_MODEL_MGMT) serializes
-  ! model creation and each model sets these before simulation starts.
-  ! Future: move to a per-model configuration type for full thread safety.
+  ! --- MODULE-LEVEL CONFIGURATION (SAVE, THREADPRIVATE)
+  ! Set during model initialization via SetCacheLimit() / SetSimulation
+  ! TimeStep(), then read during simulation. Marked THREADPRIVATE so each
+  ! thread driving its own concurrent model instance through the DLL owns
+  ! its own config — previously, a second IW_Model_New on another thread
+  ! would overwrite the first model's timestep. Under non-OpenMP builds
+  ! the directive is a comment, so serial behavior is unchanged.
   INTEGER,SAVE      :: CacheLimit=500
   INTEGER,SAVE      :: SimulationTimeStep_InMinutes = 0
+  !$OMP THREADPRIVATE(CacheLimit, SimulationTimeStep_InMinutes)
 
   PRIVATE
   PUBLIC::TimeStepType                                      , &
