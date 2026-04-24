@@ -1109,7 +1109,7 @@ CONTAINS
     
     !Make sure interval is recognized
     IF (IsTimeIntervalValid(cInterval_F) .EQ. 0) THEN
-        CALL DefaultLogger%SetLastMessage(cInterval_F // ' is not a recognized time interval!',f_iFatal,'IWFM_DLL')
+        CALL DefaultLogger%SetLastMessage_ThreadSafe(cInterval_F // ' is not a recognized time interval!',f_iFatal,'IWFM_DLL')
         iStat = -1
         RETURN
     END IF

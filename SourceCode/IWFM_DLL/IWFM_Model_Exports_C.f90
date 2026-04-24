@@ -189,7 +189,7 @@ CONTAINS
 
     !No slot available — emit error outside critical section
     IF (iCurrentModelIndex .EQ. 0 .AND. iStat .EQ. 0) THEN
-        CALL DefaultLogger%SetLastMessage('Maximum number of concurrent models reached!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Maximum number of concurrent models reached!',f_iWarn,cModName)
         iStat = -1
     END IF
 
@@ -266,7 +266,7 @@ CONTAINS
 
     !No slot available — emit error outside critical section
     IF (iCurrentModelIndex .EQ. 0 .AND. iStat .EQ. 0) THEN
-        CALL DefaultLogger%SetLastMessage('Maximum number of concurrent models reached!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Maximum number of concurrent models reached!',f_iWarn,cModName)
         iStat = -1
     END IF
 
@@ -348,7 +348,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -372,7 +372,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -397,7 +397,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -422,7 +422,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -446,7 +446,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -473,7 +473,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -497,7 +497,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -521,7 +521,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -556,7 +556,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -588,7 +588,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -620,7 +620,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -653,7 +653,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -708,7 +708,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -756,7 +756,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -796,7 +796,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -828,7 +828,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -857,7 +857,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -903,7 +903,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -962,7 +962,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -1025,7 +1025,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -1086,7 +1086,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -1126,7 +1126,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -1173,7 +1173,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -1219,7 +1219,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -1259,7 +1259,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -1299,7 +1299,7 @@ CONTAINS
     
     !Make sure we have an active model
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -1330,7 +1330,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -1359,7 +1359,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -1403,7 +1403,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -1454,7 +1454,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -1509,7 +1509,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -1562,7 +1562,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -1602,7 +1602,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -1649,7 +1649,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -1695,7 +1695,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -1741,7 +1741,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -1770,7 +1770,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -1800,7 +1800,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -1837,7 +1837,7 @@ CONTAINS
 
     !Make sure we have an active model
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -1870,7 +1870,7 @@ CONTAINS
 
     !Make sure we have an active model
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -1899,7 +1899,7 @@ CONTAINS
 
     !Make sure we have an active model
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -1925,7 +1925,7 @@ CONTAINS
 
     !Make sure we have an active model
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -1951,7 +1951,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -1978,7 +1978,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2006,7 +2006,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2033,7 +2033,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2060,7 +2060,7 @@ CONTAINS
 
     !Make sure we have an active model
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2083,7 +2083,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2114,7 +2114,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2148,7 +2148,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2172,7 +2172,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2197,7 +2197,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2227,7 +2227,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2263,7 +2263,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2288,7 +2288,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2311,7 +2311,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2335,7 +2335,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2358,7 +2358,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2382,7 +2382,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2405,7 +2405,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2428,7 +2428,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2452,7 +2452,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2480,7 +2480,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2507,7 +2507,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2533,7 +2533,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2557,7 +2557,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2582,7 +2582,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2607,7 +2607,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2632,7 +2632,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2656,7 +2656,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2680,7 +2680,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2704,7 +2704,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2728,7 +2728,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2752,7 +2752,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2774,7 +2774,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2798,7 +2798,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2822,7 +2822,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2847,7 +2847,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2871,7 +2871,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2896,7 +2896,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2920,7 +2920,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2944,7 +2944,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2967,7 +2967,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2990,7 +2990,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -3014,7 +3014,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -3038,7 +3038,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -3065,7 +3065,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -3092,7 +3092,7 @@ CONTAINS
 
     !Make sure we have an active model
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -3119,7 +3119,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -3143,7 +3143,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -3170,7 +3170,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -3195,7 +3195,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -3219,7 +3219,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -3243,7 +3243,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -3267,7 +3267,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -3291,7 +3291,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -3315,7 +3315,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -3339,7 +3339,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -3366,7 +3366,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -3391,7 +3391,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -3415,7 +3415,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -3444,7 +3444,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -3536,7 +3536,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -3617,7 +3617,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -3649,7 +3649,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -3681,7 +3681,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -3713,7 +3713,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -3745,7 +3745,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -3777,7 +3777,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -3809,7 +3809,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -3841,7 +3841,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -3873,7 +3873,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -3905,7 +3905,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -3937,7 +3937,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -3969,7 +3969,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -4001,7 +4001,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -4033,7 +4033,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -4063,7 +4063,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -4087,7 +4087,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -4114,7 +4114,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -4138,7 +4138,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -4162,7 +4162,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -4190,7 +4190,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -4219,7 +4219,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -4243,7 +4243,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -4266,7 +4266,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -4293,7 +4293,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -4322,7 +4322,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -4350,7 +4350,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -4376,7 +4376,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -4401,7 +4401,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -4425,7 +4425,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -4447,7 +4447,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -4471,7 +4471,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -4495,7 +4495,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -4519,7 +4519,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -4542,7 +4542,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -4566,7 +4566,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -4594,7 +4594,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -4628,7 +4628,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -4657,7 +4657,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -4681,7 +4681,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -4703,7 +4703,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -4728,7 +4728,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -4753,7 +4753,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -4778,7 +4778,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -4803,7 +4803,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -4826,7 +4826,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -4854,7 +4854,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -4917,7 +4917,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -4940,7 +4940,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -5005,7 +5005,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -5027,7 +5027,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -5054,7 +5054,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -5078,7 +5078,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -5101,7 +5101,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -5126,7 +5126,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -5149,7 +5149,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -5171,7 +5171,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -5194,7 +5194,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -5248,7 +5248,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -5283,7 +5283,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -5315,7 +5315,7 @@ CONTAINS
     pMdl => GetCurrentModel()
 
     IF (.NOT. ASSOCIATED(pMdl)) THEN
-        CALL DefaultLogger%SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Please switch to an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -5339,7 +5339,7 @@ CONTAINS
 
     !Validate model ID range (no shared state — no CRITICAL needed)
     IF (iModelID .LT. 1 .OR. iModelID .GT. MAX_MODEL_SLOTS) THEN
-        CALL DefaultLogger%SetLastMessage('Model ID out of range',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID out of range',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -5355,7 +5355,7 @@ CONTAINS
     !$OMP END CRITICAL(IWFM_MODEL_MGMT)
 
     IF (iStat .EQ. -1) THEN
-        CALL DefaultLogger%SetLastMessage('Model '//TRIM(IntToText(iModelID))//' not instantiated',f_iWarn,cModName)
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model '//TRIM(IntToText(iModelID))//' not instantiated',f_iWarn,cModName)
     END IF
 
   END SUBROUTINE IW_Model_Switch

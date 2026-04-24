@@ -153,6 +153,7 @@ MODULE MessageLogger
       PROCEDURE,PASS :: SetLastMessage_Arr    => Logger_SetLastMessage_Array
       PROCEDURE,PASS :: SetLastMessage_Str    => Logger_SetLastMessage_Single
       GENERIC        :: SetLastMessage        => SetLastMessage_Arr, SetLastMessage_Str
+      PROCEDURE,PASS :: SetLastMessage_ThreadSafe => Logger_SetLastMessage_ThreadSafe
       PROCEDURE,PASS :: GetLastMessage        => Logger_GetLastMessage
       PROCEDURE,PASS :: GetLogFileUnit        => Logger_GetLogFileUnit
       PROCEDURE,PASS :: GetMessageCounts      => Logger_GetMessageCounts
@@ -489,6 +490,25 @@ CONTAINS
     CALL this%SetLastMessage(cMessageArray,iErrorLevel,cProgName)
 
   END SUBROUTINE Logger_SetLastMessage_Single
+
+
+  ! -------------------------------------------------------------
+  ! --- THREAD-SAFE SetLastMessage (single-string)
+  ! --- Wraps the non-thread-safe SetLastMessage in !$OMP CRITICAL.
+  ! --- Intended for callers in the DLL export layer where multiple
+  ! --- threads may drive concurrent model instances and emit errors
+  ! --- simultaneously through the shared DefaultLogger singleton.
+  ! -------------------------------------------------------------
+  SUBROUTINE Logger_SetLastMessage_ThreadSafe(this,cMessage,iErrorLevel,cProgName)
+    CLASS(MessageLoggerType),INTENT(INOUT) :: this
+    CHARACTER(LEN=*),INTENT(IN)            :: cMessage,cProgName
+    INTEGER,INTENT(IN)                     :: iErrorLevel
+
+    !$OMP CRITICAL(IWFM_DEFAULT_LOG)
+    CALL this%SetLastMessage(cMessage,iErrorLevel,cProgName)
+    !$OMP END CRITICAL(IWFM_DEFAULT_LOG)
+
+  END SUBROUTINE Logger_SetLastMessage_ThreadSafe
 
 
   ! -------------------------------------------------------------

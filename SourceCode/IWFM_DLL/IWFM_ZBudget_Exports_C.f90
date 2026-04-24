@@ -611,7 +611,7 @@ CONTAINS
         TYPE IS (ZoneType)
             CALL ZBudget%GetTitleLines(iZone,pZone%Area*rFact_AR,pZone%cName,ZBudget%Header%ASCIIOutput%iLenTitles,cUnit_AR_F,cUnit_VL_F,cTitles_Work)
         CLASS DEFAULT
-            CALL DefaultLogger%SetLastMessage(TRIM(IntToText(iZone)) // ' cannot be located in the zone list!',f_iFatal,ThisProcedure)
+            CALL DefaultLogger%SetLastMessage_ThreadSafe(TRIM(IntToText(iZone)) // ' cannot be located in the zone list!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
     END SELECT
