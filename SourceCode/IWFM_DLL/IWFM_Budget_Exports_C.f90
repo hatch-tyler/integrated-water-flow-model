@@ -44,9 +44,13 @@ MODULE IWFM_Budget_Exports
   
   ! -------------------------------------------------------------
   ! --- VARIABLES
+  ! --- Per-thread Budget singleton. THREADPRIVATE lets each thread
+  ! --- drive its own IW_Budget_OpenFile / getter sequence on its own
+  ! --- Budget instance without contention on the shared module var.
   ! -------------------------------------------------------------
   TYPE(BudgetType),SAVE    :: Budget
   LOGICAL,SAVE             :: lBudget_Instantiated = .FALSE.
+  !$OMP THREADPRIVATE(Budget, lBudget_Instantiated)
 
 
 
@@ -80,8 +84,7 @@ CONTAINS
     
     CALL String_Copy_C_F(cFileName,cFileName_F)
     
-    !If a budget file is already open, close it; then open new file (thread-safe)
-    !$OMP CRITICAL(IWFM_BUDGET_MGMT)
+    !If a budget file is already open on this thread, close it; then open new file
     IF (lBudget_Instantiated) THEN
       CALL Budget%Kill()
       lBudget_Instantiated = .FALSE.
@@ -94,7 +97,6 @@ CONTAINS
     ELSE
         lBudget_Instantiated = .TRUE.
     END IF
-    !$OMP END CRITICAL(IWFM_BUDGET_MGMT)
     
   END SUBROUTINE IW_Budget_OpenFile
   
@@ -119,10 +121,8 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     iStat = 0
-    !$OMP CRITICAL(IWFM_BUDGET_MGMT)
     CALL Budget%Kill()
     lBudget_Instantiated = .FALSE.
-    !$OMP END CRITICAL(IWFM_BUDGET_MGMT)
 
   END SUBROUTINE IW_Budget_CloseFile
   

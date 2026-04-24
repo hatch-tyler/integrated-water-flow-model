@@ -50,10 +50,15 @@ MODULE IWFM_ZBudget_Exports
   
   ! -------------------------------------------------------------
   ! --- VARIABLES
+  ! --- Per-thread ZBudget singleton + zone list. THREADPRIVATE lets
+  ! --- each thread drive its own IW_ZBudget_OpenFile / zone-list /
+  ! --- getter sequence on its own ZBudget instance without contention
+  ! --- on shared module state.
   ! -------------------------------------------------------------
   TYPE(ZBudgetType),SAVE  :: ZBudget
-  TYPE(ZoneListType),SAVE :: ZoneList 
+  TYPE(ZoneListType),SAVE :: ZoneList
   LOGICAL,SAVE            :: lZBudget_Instantiated = .FALSE.
+  !$OMP THREADPRIVATE(ZBudget, ZoneList, lZBudget_Instantiated)
   
   
   ! -------------------------------------------------------------
@@ -92,8 +97,7 @@ CONTAINS
     
     CALL String_Copy_C_F(cFileName,cFileName_F)
     
-    !If a Z-Budget file is already open, close it; then open new file (thread-safe)
-    !$OMP CRITICAL(IWFM_ZBUDGET_MGMT)
+    !If a Z-Budget file is already open on this thread, close it; then open new file
     IF (lZBudget_Instantiated) THEN
       CALL ZBudget%Kill()
       lZBudget_Instantiated = .FALSE.
@@ -106,7 +110,6 @@ CONTAINS
     ELSE
         lZBudget_Instantiated = .TRUE.
     END IF
-    !$OMP END CRITICAL(IWFM_ZBUDGET_MGMT)
     
   END SUBROUTINE IW_ZBudget_OpenFile
   
@@ -189,10 +192,8 @@ CONTAINS
 
     iStat = 0
 
-    !$OMP CRITICAL(IWFM_ZBUDGET_MGMT)
     CALL ZBudget%Kill()
     lZBudget_Instantiated = .FALSE.
-    !$OMP END CRITICAL(IWFM_ZBUDGET_MGMT)
 
   END SUBROUTINE IW_ZBudget_CloseFile
   
