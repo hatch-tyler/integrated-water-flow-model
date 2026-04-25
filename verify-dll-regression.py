@@ -42,15 +42,16 @@ def load_dll():
     ]
     lib.IW_Model_New.restype = None
 
+    # Track 7: every IW_Model_* export takes iModelID as first arg.
     for name in ("IW_Model_SimulateAll", "IW_Model_PrintResults",
                  "IW_Model_AdvanceTime", "IW_Model_AdvanceState",
-                 "IW_Model_Kill", "IW_Model_GetNTimeSteps"):
+                 "IW_Model_Kill"):
         fn = getattr(lib, name)
         fn.restype = None
-        if name == "IW_Model_GetNTimeSteps":
-            fn.argtypes = [int_p, int_p]
-        else:
-            fn.argtypes = [int_p]
+        fn.argtypes = [int_p, int_p]   # iModelID, iStat
+
+    lib.IW_Model_GetNTimeSteps.argtypes = [int_p, int_p, int_p]  # iModelID, NTimeSteps, iStat
+    lib.IW_Model_GetNTimeSteps.restype = None
 
     lib.IW_SetLogFile.argtypes = [int_p, char_buf, int_p]
     lib.IW_SetLogFile.restype = None
@@ -113,16 +114,16 @@ def run_via_dll(sample_root: pathlib.Path):
         print(f"[DLL] Model instance ID: {model_id.value}")
 
         n_steps = ctypes.c_int(0)
-        lib.IW_Model_GetNTimeSteps(ctypes.byref(n_steps), ctypes.byref(i_stat))
+        lib.IW_Model_GetNTimeSteps(ctypes.byref(model_id), ctypes.byref(n_steps), ctypes.byref(i_stat))
         check(lib, i_stat, "IW_Model_GetNTimeSteps")
         print(f"[DLL] Expecting {n_steps.value} time steps")
 
         print("[DLL] IW_Model_SimulateAll ...")
-        lib.IW_Model_SimulateAll(ctypes.byref(i_stat))
+        lib.IW_Model_SimulateAll(ctypes.byref(model_id), ctypes.byref(i_stat))
         check(lib, i_stat, "IW_Model_SimulateAll")
 
         print("[DLL] IW_Model_Kill ...")
-        lib.IW_Model_Kill(ctypes.byref(i_stat))
+        lib.IW_Model_Kill(ctypes.byref(model_id), ctypes.byref(i_stat))
         check(lib, i_stat, "IW_Model_Kill")
     finally:
         os.chdir(original_cwd)
