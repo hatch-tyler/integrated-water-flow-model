@@ -55,7 +55,7 @@ MODULE IWFM_Model_Exports
                                           f_iLocationType_SmallWatershed  
   USE Package_AppSmallWatershed   , ONLY: f_iSWShedBudComp_RZ                      , &
                                           f_iSWShedBudComp_GW 
-  USE Package_Model               , ONLY: ModelType
+  USE Package_Model               , ONLY: ModelType, DeleteModelInquiryDataFile
   IMPLICIT NONE
 
 
@@ -5101,33 +5101,32 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- DELETE MODEL INQUIRY DATA FILE
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_DeleteInquiryDataFile(iModelID,iLenSimFileName,cSimFileName,iStat) BIND(C,NAME='IW_Model_DeleteInquiryDataFile')
+  SUBROUTINE IW_Model_DeleteInquiryDataFile(iLenSimFileName,cSimFileName,iStat) BIND(C,NAME='IW_Model_DeleteInquiryDataFile')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_DeleteInquiryDataFile
-    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)         :: iLenSimFileName
     CHARACTER(KIND=C_CHAR),INTENT(IN) :: cSimFileName(iLenSimFileName)
     INTEGER(C_INT),INTENT(OUT)        :: iStat
-    
+
     !Local variables
     CHARACTER(LEN=iLenSimFileName) :: cSimFileName_F
     CHARACTER(:),ALLOCATABLE       :: cSimWorkingDirectory
-    
-    !Initialize
-    TYPE(ModelType),POINTER :: pMdl
-    pMdl => GetModelByID(iModelID)
 
+    !This is a static utility — no live model instance required.
+    !The module-level DeleteModelInquiryDataFile is imported from
+    !Package_Model and used directly so callers can clean up stale
+    !inquiry-data files before instantiating any model.
     iStat = 0
-    
+
     !C strings to Fortran strings
     CALL String_Copy_C_F(cSimFileName,cSimFileName_F)
-    
+
     !Working directory
     CALL GetFileDirectory(cSimFileName_F,cSIMWorkingDirectory)
 
     !Delete file location in the working directory
-    CALL pMdl%DeleteModelInquiryDataFile(cSIMWorkingDirectory)
-    
-  END SUBROUTINE IW_Model_DeleteInquiryDataFile    
+    CALL DeleteModelInquiryDataFile(cSIMWorkingDirectory)
+
+  END SUBROUTINE IW_Model_DeleteInquiryDataFile
 
   
   ! -------------------------------------------------------------

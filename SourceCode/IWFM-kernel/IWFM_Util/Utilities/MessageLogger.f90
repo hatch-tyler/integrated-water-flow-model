@@ -318,7 +318,7 @@ CONTAINS
         ALLOCATE (CHARACTER(LEN_TRIM(cLogFileName)) :: this%cName)
         this%cName  = cLogFileName
     END IF
-    OPEN (UNIT=this%iUnitN,FILE=this%cName,IOMSG=cErrorMsg,IOSTAT=iErrorCode)
+    OPEN (UNIT=this%iUnitN,FILE=this%cName,ACTION='WRITE',STATUS='REPLACE',IOMSG=cErrorMsg,IOSTAT=iErrorCode)
     IF (iErrorCode .NE. 0) THEN
         MessageArray(1) = 'Error in opening the log file!'
         MessageArray(2) = TRIM(cErrorMsg)

@@ -191,6 +191,7 @@ MODULE Package_Model
   ! -------------------------------------------------------------
   PRIVATE
   PUBLIC :: ModelType                    , &
+            DeleteModelInquiryDataFile   , &
             nPP_InputFiles               , &
             PP_BinaryOutputFileID        , &    
             PP_ElementConfigFileID       , &    
