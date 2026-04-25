@@ -1851,11 +1851,11 @@ CONTAINS
     CHARACTER(:),ALLOCATABLE      :: cFileName
     CHARACTER(LEN=50),ALLOCATABLE :: cNames(:)
     TYPE(GenericFileType)         :: ModelDataFile
-    
+
     !Initialize
     iStat = 0
-    
-    !Convert any text/DSS file output to HDF
+
+    !Convert any text/DSS file output to HDF (skipped per-leaf if HDF already exists)
     CALL AppGW%TransferOutputToHDF(TimeStep,NTIME,iStat)      ;  IF (iStat .EQ. -1) RETURN
     CALL AppStream%TransferOutputToHDF(TimeStep,NTIME,iStat)  ;  IF (iStat .EQ. -1) RETURN
     

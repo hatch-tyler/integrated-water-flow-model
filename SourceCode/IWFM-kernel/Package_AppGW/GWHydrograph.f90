@@ -1429,7 +1429,7 @@ CONTAINS
     TYPE(TimeStepType),INTENT(IN) :: TimeStep
     REAL(8),INTENT(IN)            :: rFactHead
     INTEGER,INTENT(OUT)           :: iStat
-    
+
     !Local variables
     INTEGER                  :: NColumns(1),FileReadCode,indxTime
     REAL(8)                  :: rGWHeads(NNodes*NLayers,1),rConvFactor
@@ -1437,13 +1437,24 @@ CONTAINS
     TYPE(GenericFileType)    :: OutFile
     CHARACTER(:),ALLOCATABLE :: cFileName
     TYPE(TimeStepType)       :: TimeStep_Local
-    
-    !Get the name of the text/DSS file 
+    LOGICAL                  :: lHDFExists
+
+    iStat = 0
+
+    !Get the name of the text/DSS file
     CALL AllHeadsInFile%GetFileName(cFileName)
-    
+
     !Name for the HDF file
     cHDFFileName = TRIM(ADJUSTL(StripTextUntilCharacter(cFileName,'.',Back=.TRUE.))) // '.hdf'
-    
+
+    !Skip the conversion if the HDF already exists. The .out file is
+    !written once by the simulation and never modified, so the .hdf
+    !built from it on a previous inquiry-mode load remains correct.
+    !Users who re-run the simulation should delete the .hdf alongside
+    !IW_ModelData_ForInquiry.bin to force a rebuild.
+    INQUIRE(FILE=TRIM(cHDFFileName), EXIST=lHDFExists)
+    IF (lHDFExists) RETURN
+
     !Open output file HDF file
     CALL OutFile%New(FileName=TRIM(cHDFFileName),InputFile=.FALSE.,IsTSFile=.TRUE.,iStat=iStat)
     IF (iStat .EQ. -1) RETURN

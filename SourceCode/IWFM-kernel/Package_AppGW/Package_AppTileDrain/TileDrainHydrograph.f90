@@ -658,19 +658,24 @@ CONTAINS
     TYPE(GenericFileType)    :: OutFile
     CHARACTER(:),ALLOCATABLE :: cFileName
     TYPE(TimeStepType)       :: TimeStep_Local
-    
+    LOGICAL                  :: lHDFExists
+
     !Initialize
     iStat = 0
-    
+
     !Return if no output
     IF (.NOT. TDHyd%InFile_ForInquiry_Defined) RETURN
-    
-    !Get the name of the text/DSS file 
+
+    !Get the name of the text/DSS file
     CALL TDHyd%InFile_ForInquiry%GetFileName(cFileName)
-    
+
     !Name for the HDF file
     cHDFFileName = TRIM(ADJUSTL(StripTextUntilCharacter(cFileName,'.',Back=.TRUE.))) // '.hdf'
-    
+
+    !Skip if the HDF already exists from a previous inquiry-mode load.
+    INQUIRE(FILE=TRIM(cHDFFileName), EXIST=lHDFExists)
+    IF (lHDFExists) RETURN
+
     !Open output file HDF file
     CALL OutFile%New(FileName=TRIM(cHDFFileName),InputFile=.FALSE.,IsTSFile=.TRUE.,iStat=iStat)
     IF (iStat .EQ. -1) RETURN

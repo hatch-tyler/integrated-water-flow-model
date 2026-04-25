@@ -1000,11 +1000,14 @@ CONTAINS
     CALL LogInitTime(Model%Logger, 'Grid+Stratigraphy', iTimerStart, iTimerValues)
 
     !Component connectors
+    CALL DATE_AND_TIME(VALUES=iTimerStart)
     CALL Model%StrmLakeConnector%New(Model%Logger,PPBinaryFile,iStat)  ;  IF (iStat .EQ. -1) RETURN
     Model%StrmGWConnector%Logger => Model%Logger
     CALL Model%StrmGWConnector%New(PPBinaryFile,iStat)    ;  IF (iStat .EQ. -1) RETURN
     CALL Model%LakeGWConnector%New(Model%Logger,PPBinaryFile,iStat)    ;  IF (iStat .EQ. -1) RETURN
-  
+    CALL DATE_AND_TIME(VALUES=iTimerValues)
+    CALL LogInitTime(Model%Logger, 'Component connectors', iTimerStart, iTimerValues)
+
     !Precipitation data
     CALL DATE_AND_TIME(VALUES=iTimerStart)
     CALL Model%PrecipData%New(Model%Logger,ProjectFileNames(SIM_PrecipDataFileID),Model%cSIMWorkingDirectory,'precipitation',Model%TimeStep,iStat)
@@ -1025,8 +1028,11 @@ CONTAINS
             RETURN
         END IF
     END IF
+    CALL DATE_AND_TIME(VALUES=iTimerStart)
     CALL Model%AppLake%New(lForInquiry,ProjectFileNames(SIM_LakeDataFileID),Model%cSIMWorkingDirectory,Model%TimeStep,Model%NTIME,Model%AppGrid,PPBinaryFile,Model%LakeGWConnector,Model%PrecipData,Model%ETData,iStat)
     IF (iStat .EQ. -1) RETURN
+    CALL DATE_AND_TIME(VALUES=iTimerValues)
+    CALL LogInitTime(Model%Logger, 'AppLake', iTimerStart, iTimerValues)
     NLakes = Model%AppLake%GetNLakes()
     ALLOCATE (Model%LakeRunoff(NLakes) , Model%LakeReturnFlow(NLakes) , Model%LakePondDrain(NLakes) , iLakeIDs(NLakes) , STAT=ErrorCode , ERRMSG=cErrorMsg)
     IF (ErrorCode .NE. 0) THEN
@@ -1137,13 +1143,19 @@ CONTAINS
     CALL LogInitTime(Model%Logger, 'UnsatZone+SWShed+RootZone', iTimerStart, iTimerValues)
 
     !Compile destination-supply connectors
+    CALL DATE_AND_TIME(VALUES=iTimerStart)
     CALL Model%AppStream%GetDiversionDestination(SupplyDest)            ;  CALL Model%DiverDestinationConnector%New(Model%Logger,'Diversion',Model%iDemandCalcLocation,SupplyDest,Model%AppGrid,iStat)           ;  IF (iStat .EQ. -1) RETURN
     CALL Model%AppGW%GetPumpDestination(f_iSupply_Well,SupplyDest)      ;  CALL Model%WellDestinationConnector%New(Model%Logger,'Well',Model%iDemandCalcLocation,SupplyDest,Model%AppGrid,iStat)                 ;  IF (iStat .EQ. -1) RETURN
     CALL Model%AppGW%GetPumpDestination(f_iSupply_ElemPump,SupplyDest)  ;  CALL Model%ElemPumpDestinationConnector%New(Model%Logger,'Element pumping',Model%iDemandCalcLocation,SupplyDest,Model%AppGrid,iStat)  ;  IF (iStat .EQ. -1) RETURN
-  
+    CALL DATE_AND_TIME(VALUES=iTimerValues)
+    CALL LogInitTime(Model%Logger, 'Supply destination connectors', iTimerStart, iTimerValues)
+
     !Irrigation fractions data file
-    CALL Model%IrigFracFile%New(ProjectFileNames(SIM_IrigFracDataFileID),Model%cSIMWorkingDirectory,Model%TimeStep,iStat)  
+    CALL DATE_AND_TIME(VALUES=iTimerStart)
+    CALL Model%IrigFracFile%New(ProjectFileNames(SIM_IrigFracDataFileID),Model%cSIMWorkingDirectory,Model%TimeStep,iStat)
     IF (iStat .EQ. -1) RETURN
+    CALL DATE_AND_TIME(VALUES=iTimerValues)
+    CALL LogInitTime(Model%Logger, 'IrigFrac + SupplyAdjust setup', iTimerStart, iTimerValues)
     
     !Automatic supply adjustment related data
     IF (.NOT. Model%lRootZone_Defined) THEN
@@ -1159,6 +1171,7 @@ CONTAINS
     Model%lPumpingAdjusted   = Model%SupplyAdjust%IsPumpingAdjusted()
     
     !GW ZBudget object
+    CALL DATE_AND_TIME(VALUES=iTimerStart)
     cZBudRawFileName  = Model%AppGW%GetZBudgetRawFileName()
     lDeepPerc_Defined = Model%lRootZone_Defined .OR. Model%lAppUnsatZone_Defined
     CALL Model%GWZBudget%New(DefaultLogger                        , &
@@ -1177,10 +1190,15 @@ CONTAINS
                              Model%lRootZone_Defined             , &
                              iStat                               )
     IF (iStat .EQ. -1) RETURN
+    CALL DATE_AND_TIME(VALUES=iTimerValues)
+    CALL LogInitTime(Model%Logger, 'GWZBudget', iTimerStart, iTimerValues)
 
     !Check consistency between model components
+    CALL DATE_AND_TIME(VALUES=iTimerStart)
     CALL CheckModelConsistency(Model,iStat)
     IF (iStat .EQ. -1) RETURN
+    CALL DATE_AND_TIME(VALUES=iTimerValues)
+    CALL LogInitTime(Model%Logger, 'CheckModelConsistency', iTimerStart, iTimerValues)
     
     !Convert time unit to a consistent unit
     CALL ConvertTimeUnit(Model)
@@ -1195,8 +1213,9 @@ CONTAINS
         CALL Model%AdvanceState()
     END IF
     
-    !If the model is instantiated for inquiry, print the model data to instantiate it faster next time 
+    !If the model is instantiated for inquiry, print the model data to instantiate it faster next time
     IF (lForInquiry) THEN
+        CALL DATE_AND_TIME(VALUES=iTimerStart)
         CALL Model%GetHydrographTypeList(cHydTypeList,iHydLocationTypeList,iHydCompList,cHydFiles)
         CALL Model%GetBudget_List(cBudgetList,iBudgetTypeList,iBudgetCompList,iBudgetLocationTypeList,cBudgetFiles)
         CALL Model%GetZBudget_List(cZBudgetList,iZBudgetTypeList,cZBudgetFiles)
@@ -1226,8 +1245,10 @@ CONTAINS
                                                    iZBudgetTypeList                , &
                                                    iStat                           )
         IF (iStat .EQ. -1) CALL Model%Model_ForInquiry%Kill()
+        CALL DATE_AND_TIME(VALUES=iTimerValues)
+        CALL LogInitTime(Model%Logger, 'Inquiry cache write (PrintModelData)', iTimerStart, iTimerValues)
     END IF
-    
+
     !Initialize WSA
     IF (lWSA)  &
         CALL Model%WSA%New(Model%Logger,cWSAFileName,Model%cSIMWorkingDirectory,Model%TimeStep,Model%AppGrid,Model%AppStream,iStat)

@@ -1057,13 +1057,22 @@ CONTAINS
     TYPE(GenericFileType)    :: OutFile
     CHARACTER(:),ALLOCATABLE :: cFileName
     TYPE(TimeStepType)       :: TimeStep_Local
-    
-    !Get the name of the text/DSS file 
+    LOGICAL                  :: lHDFExists
+
+    iStat = 0
+
+    !Get the name of the text/DSS file
     CALL HydOut%InFile_ForInquiry%GetFileName(cFileName)
-    
+
     !Name for the HDF file
     cHDFFileName = TRIM(ADJUSTL(StripTextUntilCharacter(cFileName,'.',Back=.TRUE.))) // '.hdf'
-    
+
+    !Skip the conversion if the HDF already exists from a previous
+    !inquiry-mode load. The source .out file is written once by the
+    !simulation, so a previously-built .hdf remains valid.
+    INQUIRE(FILE=TRIM(cHDFFileName), EXIST=lHDFExists)
+    IF (lHDFExists) RETURN
+
     !Open output file HDF file
     CALL OutFile%New(FileName=TRIM(cHDFFileName),InputFile=.FALSE.,IsTSFile=.TRUE.,iStat=iStat)
     IF (iStat .EQ. -1) RETURN

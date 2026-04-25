@@ -747,19 +747,24 @@ CONTAINS
     CHARACTER(:),ALLOCATABLE :: cFileName
     REAL(8),ALLOCATABLE      :: rData(:,:),rConvFactor(:)
     TYPE(TimeStepType)       :: TimeStep_Local
-    
+    LOGICAL                  :: lHDFExists
+
     !Initialize
     iStat = 0
-    
+
     !Return if no output
     IF (.NOT. StrmHyd%HydFile_Defined) RETURN
-    
-    !Get the name of the text/DSS file 
+
+    !Get the name of the text/DSS file
     CALL StrmHyd%HydFile_ForInquiry%GetFileName(cFileName)
-    
+
     !Name for the HDF file
     cHDFFileName = TRIM(ADJUSTL(StripTextUntilCharacter(cFileName,'.',Back=.TRUE.))) // '.hdf'
-    
+
+    !Skip if the HDF already exists from a previous inquiry-mode load.
+    INQUIRE(FILE=TRIM(cHDFFileName), EXIST=lHDFExists)
+    IF (lHDFExists) RETURN
+
     !Open output file HDF file
     CALL OutFile%New(FileName=TRIM(cHDFFileName),InputFile=.FALSE.,IsTSFile=.TRUE.,iStat=iStat)
     IF (iStat .EQ. -1) RETURN
