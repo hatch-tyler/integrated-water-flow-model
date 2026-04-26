@@ -76,6 +76,15 @@ Bin/ZBudget
 Bin/Simulation*
 Bin/PreProcessor
 Bin/libiwfm*
+Bin/CalcTypeHyd
+Bin/IWFM2OBS
+Bin/ResultsExtract
+
+# Cached dependencies populated by build-deps.ps1
+deps/
+
+# Per-session AI-tool state
+.claude/
 
 # Temp files
 *~
