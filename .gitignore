@@ -56,3 +56,10 @@ ZBudget/Debug/
 ZBudget/Release/
 ZBudget/x64/
 .vs/
+
+# CMake build output (any out-of-tree build dir under repo root)
+build/
+build-*/
+
+# Local Claude/IDE config
+.claude/

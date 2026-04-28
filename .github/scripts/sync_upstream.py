@@ -58,13 +58,11 @@ TAG_PREFIX = "iwfm-"
 # Paths (relative to repo root) that must never be overwritten by upstream.
 # Directories must end with '/'.
 PROTECTED_PATHS = [
-    "CMakeLists.txt",
     "BUILD.md",
     "CLAUDE.md",
     "BENCHMARK_SUMMARY.md",
     ".gitignore",
     ".github/",
-    ".claude/",
     "cmake/",
     "docker/",
     "Bin/.gitkeep",
