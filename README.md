@@ -8,7 +8,7 @@ IWFM simulates the flow of water through an integrated hydrologic system -- grou
 
 This repository is a fork of the official IWFM release (upstream source: <https://data.cnra.ca.gov/dataset/iwfm>). Active development happens on the `2025.0.1747.rev` branch; the `2025.0.1747` branch tracks the unmodified upstream import. Relative to upstream, this fork adds a cross-platform CMake build, additional post-processors, a multi-instance C-callable DLL, modern Fortran cleanup, and pre-built binary [releases](https://github.com/hatch-tyler/integrated-water-flow-model/releases). See [What's in this fork](#whats-in-this-fork) below.
 
-Version **2025.0.1747** (kernel 2025.0.107), latest binary release [`v2025.0.1747-rev2`](https://github.com/hatch-tyler/integrated-water-flow-model/releases/tag/v2025.0.1747-rev2). Written in modern Fortran (F90/F2003).
+Version **2025.0.1747** (kernel 2025.0.107), latest binary release [`v2025.0.1747-rev3`](https://github.com/hatch-tyler/integrated-water-flow-model/releases/tag/v2025.0.1747-rev3). Written in modern Fortran (F90/F2003).
 
 ## What's in this fork
 
@@ -43,7 +43,7 @@ cmake --build .
 
 Dependencies (HDF5, HEC-DSS 7, zlib) are fetched and built automatically on first configure. Output binaries go to `Bin/`.
 
-Or skip the build entirely: pre-built Windows and Linux binaries for each release are available on [GitHub Releases](https://github.com/hatch-tyler/integrated-water-flow-model/releases). Latest: **v2025.0.1747-rev2**.
+Or skip the build entirely: pre-built Windows and Linux binaries for each release are available on [GitHub Releases](https://github.com/hatch-tyler/integrated-water-flow-model/releases). Latest: **v2025.0.1747-rev3**.
 
 ## Build Targets
 
