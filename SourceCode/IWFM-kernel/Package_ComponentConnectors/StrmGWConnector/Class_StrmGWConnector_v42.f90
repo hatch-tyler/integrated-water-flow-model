@@ -96,6 +96,7 @@ MODULE Class_StrmGWConnector_v42
       PROCEDURE,PASS :: Kill                                     => StrmGWConnector_v42_Kill                          !Overrides the original method from base class
       PROCEDURE,PASS :: GetnTotalGWNodes
       PROCEDURE,PASS :: GetGWNodesAtStrmNode
+      PROCEDURE,PASS :: GetConductances                          => StrmGWConnector_v42_GetConductances               !Overrides the original method from base class
       PROCEDURE,PASS :: GetAllGWNodes                            => StrmGWConnector_v42_GetAllGWNodes                 !Overrides the original method from base class
       PROCEDURE,PASS :: GetAllLayers                             => StrmGWConnector_v42_GetAllLayers                  !Overrides the original method from base class
       PROCEDURE,PASS :: GetFlowAtGWNode                          => StrmGWConnector_v42_GetFlowAtGWNode               !Overrides the original method from base class
@@ -440,6 +441,32 @@ CONTAINS
     nTotalGWNodes = Connector%nTotalGWNodes
     
   END FUNCTION GetnTotalGWNodes
+  
+  
+  ! -------------------------------------------------------------
+  ! --- GET CONDUCTANCES 
+  ! -------------------------------------------------------------
+  SUBROUTINE StrmGWConnector_v42_GetConductances(Connector,rConductance)
+    CLASS(StrmGWConnector_v42_Type),INTENT(IN) :: Connector
+    REAL(8),ALLOCATABLE,INTENT(INOUT)          :: rConductance(:)
+    
+    !Local variables
+    INTEGER :: iErrorCode,indx,iCount
+    
+    !Initialize
+    DEALLOCATE (rConductance , STAT=iErrorCode)
+    
+    !First count how many gw nodes in total
+    ALLOCATE (rConductance(Connector%nTotalGWNodes))
+    
+    !Compile gw nodes
+    iCount = 0
+    DO indx=1,SIZE(Connector%GWNodeList)
+        rConductance(iCount+1:iCount+Connector%GWNodeList(indx)%nGWNodes) = Connector%GWNodeList(indx)%Conductance
+        iCount                                                            = iCount + Connector%GWNodeList(indx)%nGWNodes
+    END DO
+    
+  END SUBROUTINE StrmGWConnector_v42_GetConductances
   
   
   ! -------------------------------------------------------------

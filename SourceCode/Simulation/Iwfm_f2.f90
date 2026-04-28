@@ -41,11 +41,12 @@ PROGRAM IWFM_F2
   INTEGER         :: iStat
   !$ INTEGER      :: iBlockTime
 
+  !Set parallel thread environment
   !$ iBlockTime = KMP_GET_BLOCKTIME()
-  !$ CALL KMP_SET_BLOCKTIME(0)
-  
-  !Set number of threads for parallel processing
-  !$ CALL OMP_SET_NUM_THREADS(OMP_GET_NUM_PROCS())
+  !$ CALL KMP_SET_BLOCKTIME(0)                                !Let therads sleep right away
+  !$ CALL OMP_SET_NUM_THREADS(MIN(OMP_GET_NUM_PROCS() , 16))  !Set number of threads to minimum of 16 or number of available processors
+  !$ CALL OMP_SET_MAX_ACTIVE_LEVELS(2)                        !Maximum 2 levels of nested paralellization
+  !$ CALL KMP_SET_STACKSIZE_S(16777216)                       !Set thread stack size to 16MB
 
   
   !Start program timer

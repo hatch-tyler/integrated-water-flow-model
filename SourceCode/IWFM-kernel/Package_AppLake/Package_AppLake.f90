@@ -1006,15 +1006,15 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- PRINT OUT APPLICATION LAKES SIMULATION RESULTS
   ! -------------------------------------------------------------
-  SUBROUTINE PrintResults(AppLake,TimeStep,lEndOfSimulation,Runoff,ReturnFlow,PondDrain,LakeGWConnector,StrmLakeConnector)
+  SUBROUTINE PrintResults(AppLake,TimeStep,lEndOfSimulation,rGWReturnFlows,Runoff,ReturnFlow,PondDrain,LakeGWConnector,StrmLakeConnector)
     CLASS(AppLakeType)                     :: AppLake
     TYPE(TimeStepType),INTENT(IN)          :: TimeStep
     LOGICAL,INTENT(IN)                     :: lEndOfSimulation
-    REAL(8),INTENT(IN)                     :: Runoff(:),ReturnFlow(:),PondDrain(:)
+    REAL(8),INTENT(IN)                     :: rGWReturnFlows(:),Runoff(:),ReturnFlow(:),PondDrain(:)
     TYPE(LakeGWConnectorType),INTENT(IN)   :: LakeGWConnector
     TYPE(StrmLakeConnectorType),INTENT(IN) :: StrmLakeConnector
     
-    IF (AppLake%lDefined) CALL AppLake%Me%PrintResults(TimeStep,lEndOfSimulation,Runoff,ReturnFlow,PondDrain,LakeGWConnector,StrmLakeConnector)
+    IF (AppLake%lDefined) CALL AppLake%Me%PrintResults(TimeStep,lEndOfSimulation,rGWReturnFlows,Runoff,ReturnFlow,PondDrain,LakeGWConnector,StrmLakeConnector)
     
   END SUBROUTINE PrintResults
   
@@ -1063,9 +1063,9 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- SIMULATE LAKES
   ! -------------------------------------------------------------
-  SUBROUTINE Simulate(AppLake,GSElevs,GWHeads,Runoff,ReturnFlow,PondDrain,LakeGWConnector,StrmLakeConnector,Matrix)
+  SUBROUTINE Simulate(AppLake,GSElevs,GWHeads,rGWReturnFlows,Runoff,ReturnFlow,PondDrain,LakeGWConnector,StrmLakeConnector,Matrix)
     CLASS(AppLakeType)                   :: AppLake
-    REAL(8),INTENT(IN)                   :: GSElevs(:),GWHeads(:,:),Runoff(:),ReturnFlow(:),PondDrain(:)
+    REAL(8),INTENT(IN)                   :: GSElevs(:),GWHeads(:,:),rGWReturnFlows(:),Runoff(:),ReturnFlow(:),PondDrain(:)
     TYPE(LakeGWConnectorType),INTENT(IN) :: LakeGWConnector
     TYPE(StrmLakeConnectorType)          :: StrmLakeConnector
     TYPE(MatrixType)                     :: Matrix
@@ -1075,7 +1075,7 @@ CONTAINS
         CALL EchoProgress('Simulating lakes')
     
         !Simulate
-        CALL AppLake%Me%Simulate(GSElevs,GWHeads,Runoff,ReturnFlow,PondDrain,LakeGWConnector,StrmLakeConnector,Matrix)
+        CALL AppLake%Me%Simulate(GSElevs,GWHeads,rGWReturnFlows,Runoff,ReturnFlow,PondDrain,LakeGWConnector,StrmLakeConnector,Matrix)
     END IF
     
   END SUBROUTINE Simulate

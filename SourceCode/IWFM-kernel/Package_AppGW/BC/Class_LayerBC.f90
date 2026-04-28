@@ -1551,7 +1551,8 @@ CONTAINS
     
     !Convert specified flow b.c. time unit
     DO indxLayer=1,SIZE(LayerBC)
-        LayerBC(indxLayer)%SpecFlowBC%rFlow = LayerBC(indxLayer)%SpecFlowBC%rFlow * Factor 
+        LayerBC(indxLayer)%SpecFlowBC%rFlow     = LayerBC(indxLayer)%SpecFlowBC%rFlow     * Factor 
+        LayerBC(indxLayer)%SpecFlowBC%rFlowRead = LayerBC(indxLayer)%SpecFlowBC%rFlowRead * Factor 
     END DO
     
   END SUBROUTINE LayerBC_ConvertSpecifiedFlowTimeUnit
@@ -1583,12 +1584,17 @@ CONTAINS
     TYPE(LayerBCType)  :: LayerBC(:)
     
     !Local variables
-    INTEGER :: indxLayer
+    INTEGER :: indxLayer,indxBC
     
-    !Convert specified flow b.c. time unit
+    !Convert constrained general head b.c. time unit
     DO indxLayer=1,SIZE(LayerBC)
         LayerBC(indxLayer)%ConstrainedGHBC%rConductance = LayerBC(indxLayer)%ConstrainedGHBC%rConductance * Factor 
-        LayerBC(indxLayer)%ConstrainedGHBC%rMaxBCFlow   = LayerBC(indxLayer)%ConstrainedGHBC%rMaxBCFlow * Factor 
+        !Only convert timeunit of maximum b.c. flow for those that are not connected to a timeseries data (those are done through their data interval)
+        DO indxBC=1,LayerBC(indxLayer)%NConstrainedGHBC
+            IF (LayerBC(indxLayer)%ConstrainedGHBC(indxBC)%iMaxFlowTSColumn .EQ. 0) THEN
+                LayerBC(indxLayer)%ConstrainedGHBC(indxBC)%rMaxBCFlow = LayerBC(indxLayer)%ConstrainedGHBC(indxBC)%rMaxBCFlow * Factor 
+            END IF
+        END DO
     END DO
     
   END SUBROUTINE LayerBC_ConvertConstrainedGHBCTimeUnit

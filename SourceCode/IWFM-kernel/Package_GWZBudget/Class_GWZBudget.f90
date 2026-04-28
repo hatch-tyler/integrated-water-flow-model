@@ -188,7 +188,7 @@ MODULE Class_GWZBudget
   ! -------------------------------------------------------------
   ! --- FLOW ID NUMBERS FOR USE IN GW ZONE BUDGET OUTPUT
   ! -------------------------------------------------------------
-  INTEGER,PARAMETER :: f_iNFlowID             = 18 , & !Total number of flow id's
+  INTEGER,PARAMETER :: f_iNFlowID             = 19 , & !Total number of flow id's
                        f_iStorageID           = 1  , & !Storage
                        f_iStrmGWXID           = 2  , & !Stream-aquifer interaction
                        f_iTileDrainID         = 3  , & !Tile drain
@@ -206,7 +206,8 @@ MODULE Class_GWZBudget
                        f_iLakeGWXID           = 15 , & !Lake-aquifer interaction
                        f_iElemPumpID          = 16 , & !Element pumping/recharge
                        f_iWellPumpID          = 17 , & !Well pumping/recharge
-                       f_iFlowToRootZoneID    = 18     !ET from groundwater
+                       f_iGWReturnFlowID      = 18 , & !GW return flow
+                       f_iFlowToRootZoneID    = 19     !ET from groundwater
   
   
   ! -------------------------------------------------------------
@@ -229,6 +230,7 @@ MODULE Class_GWZBudget
                                                              'Lakes                      '  , &      
                                                              'Pumping by Element         '  , &      
                                                              'Pumping by Well            '  , &
+                                                             'GW Return Flow             '  , &            
                                                              'Root Water Uptake          '  ]
                 
 
@@ -252,6 +254,7 @@ MODULE Class_GWZBudget
                                                              'LAKES               ' , &      
                                                              'ELEM_PUMP           ' , &      
                                                              'WELL_PUMP           ' , &
+                                                             'GW_RETURN_FLOW      ' , &
                                                              'FLOW_TO_ROOT_ZONE   ' ]
   
   
@@ -919,7 +922,7 @@ CONTAINS
         i                                             = i + 32
     END DO
     Header%ASCIIOutput%iLenColumnTitles = i - 2
-    Header%ASCIIOutput%cNumberFormat    = '(A16,' // TRIM(IntToText(Header%iNData)) // '(2X,F14.2))'
+    Header%ASCIIOutput%cNumberFormat    = '(A16,*(2X,F14.2))'
     
     !DSS pathname F parts
     ALLOCATE (Header%cDSSFParts(Header%iNData))
@@ -1037,6 +1040,9 @@ CONTAINS
     
     !Flow ID for outflow to root zone
     IF (lRootZone_Defined) TempFlowTypes(f_iFlowToRootZoneID) = f_iFlowToRootZoneID
+    
+    !Flow ID for GW return flow
+    TempFlowTypes(f_iGWReturnFlowID) = f_iGWReturnFlowID
 
     !Number of simulated flow types
     NFlowTypes = COUNT(TempFlowTypes .GT. 0)
@@ -1071,7 +1077,7 @@ CONTAINS
       INTEGER                      :: NFlowTypeElems(NLayers,f_iNFlowID),iElemList(NElements),indxFlow,indxLayer, &
                                       FlowTypeElems(NElements,NLayers,f_iNFlowID),indxElem,indxFlowType,indxNode, &
                                       iNode,iLayer,NElemPumps,NWells,iElem,N,indxDiver,indxSWShed,indxLake,    &
-                                      indx,indxPump,indxElem1,indxLayer1,iFlowID
+                                      indx,indxPump,indxElem1,indxLayer1,iFlowID,iTopActiveLayer
       REAL(8)                      :: rPumpLayerFactors(NLayers)
       INTEGER,ALLOCATABLE          :: Nodes(:),Layers(:),ElemsWithDiverRecvLoss(:),ElemsWithBypassRecvLoss(:), &
                                       LakeElems(:),iBCNodes(:),TopNodes(:),TopLayers(:),iStrmGWNodes(:)
@@ -1086,176 +1092,181 @@ CONTAINS
       
       ASSOCIATE (pAppNode        => AppGrid%AppNode             , &
                  pTopActiveLayer => Stratigraphy%TopActiveLayer )
-      
-        !Identify top nodes and layers
-        N = COUNT(pTopActiveLayer .GT. 0)
-        CALL AllocArray(TopNodes,N,ThisProcedure,iStat)  ;  IF (iStat .EQ. -1) RETURN
-        TopNodes = PACK((/(indxNode,indxNode=1,NNodes)/) , MASK=pTopActiveLayer.GT.0)
-        CALL AllocArray(TopLayers,N,ThisProcedure,iStat)  ;  IF (iStat .EQ. -1) RETURN
-        TopLayers = PACK(pTopActiveLayer , MASK=pTopActiveLayer.GT.0)
-      
-        DO indxFlowType=1,NFlowTypes
-          SELECT CASE (ModelFlowTypes(indxFlowType))
-            !Change in storage
-            CASE (f_iStorageID)
-              DO indxLayer=1,Stratigraphy%NLayers
-                  DO indxNode=1,AppGrid%NNodes
-                      IF (Stratigraphy%ActiveNode(indxNode,indxLayer)) THEN
-                          CALL AddFlowTypeToElements_ByNode(indxNode,indxLayer,f_iStorageID,NFlowTypeElems,FlowTypeElems)
-                      END IF
-                  END DO
-              END DO
-               
-            !Stream-gw interaction
-            CASE (f_iStrmGWXID)
-              CALL StrmGWConnector%GetAllGWNodes(iStrmGWNodes)
-              CALL StrmGWConnector%GetAllLayers(Layers)
-              DO indxNode=1,SIZE(iStrmGWNodes)
-                  CALL AddFlowTypeToElements_ByNode(iStrmGWNodes(indxNode),Layers(indxNode),f_iStrmGWXID,NFlowTypeElems,FlowTypeElems)
-              END DO
-              
-            !Tile drains
-            CASE (f_iTileDrainID)
-              CALL AppGW%GetTileDrainNodesLayers(f_iTileDrain,Nodes,Layers)
-              DO indxNode=1,NDrain
-                CALL AddFlowTypeToElements_ByNode(Nodes(indxNode),Layers(indxNode),f_iTileDrainID,NFlowTypeElems,FlowTypeElems)
-              END DO
-              
-            !Subsurface irrigation
-            CASE (f_iSubIrigID)
-              CALL AppGW%GetTileDrainNodesLayers(f_iSubIrig,Nodes,Layers)
-              DO indxNode=1,NSubIrig
-                CALL AddFlowTypeToElements_ByNode(Nodes(indxNode),Layers(indxNode),f_iSubIrigID,NFlowTypeElems,FlowTypeElems)
-              END DO
+          !Identify top nodes and layers
+          N = COUNT(pTopActiveLayer .GT. 0)
+          CALL AllocArray(TopNodes,N,ThisProcedure,iStat)  ;  IF (iStat .EQ. -1) RETURN
+          TopNodes = PACK((/(indxNode,indxNode=1,NNodes)/) , MASK=pTopActiveLayer.GT.0)
+          CALL AllocArray(TopLayers,N,ThisProcedure,iStat)  ;  IF (iStat .EQ. -1) RETURN
+          TopLayers = PACK(pTopActiveLayer , MASK=pTopActiveLayer.GT.0)
           
-            !Subsidence; all elements have this
-            CASE (f_iSubsidenceID)
-              NFlowTypeElems(:,f_iSubsidenceID) = NElements
-              DO indxLayer1=1,NLayers
-                  DO indxElem1=1,NElements
-                      FlowTypeElems(indxElem1,indxLayer1,f_iSubsidenceID) = indxElem1
-                  END DO
-              END DO
-            
-            !Deep perc; only top active elements have this
-            CASE (f_iDeepPercID)
-              DO indxNode=1,SIZE(TopNodes)
-                iNode  = TopNodes(indxNode)
-                iLayer = TopLayers(indxNode)
-                CALL AddFlowTypeToElements_ByNode(iNode,iLayer,f_iDeepPercID,NFlowTypeElems,FlowTypeElems)
-              END DO
+          DO indxFlowType=1,NFlowTypes
+              SELECT CASE (ModelFlowTypes(indxFlowType))
+                !Change in storage
+                CASE (f_iStorageID)
+                    DO indxLayer=1,Stratigraphy%NLayers
+                        DO indxNode=1,AppGrid%NNodes
+                            IF (Stratigraphy%ActiveNode(indxNode,indxLayer)) THEN
+                                CALL AddFlowTypeToElements_ByNode(indxNode,indxLayer,f_iStorageID,NFlowTypeElems,FlowTypeElems)
+                            END IF
+                        END DO
+                    END DO
+                   
+                !Stream-gw interaction
+                CASE (f_iStrmGWXID)
+                    CALL StrmGWConnector%GetAllGWNodes(iStrmGWNodes)
+                    CALL StrmGWConnector%GetAllLayers(Layers)
+                    DO indxNode=1,SIZE(iStrmGWNodes)
+                        CALL AddFlowTypeToElements_ByNode(iStrmGWNodes(indxNode),Layers(indxNode),f_iStrmGWXID,NFlowTypeElems,FlowTypeElems)
+                    END DO
+                  
+                !Tile drains
+                CASE (f_iTileDrainID)
+                    CALL AppGW%GetTileDrainNodesLayers(f_iTileDrain,Nodes,Layers)
+                    DO indxNode=1,NDrain
+                        CALL AddFlowTypeToElements_ByNode(Nodes(indxNode),Layers(indxNode),f_iTileDrainID,NFlowTypeElems,FlowTypeElems)
+                    END DO
+                  
+                !Subsurface irrigation
+                CASE (f_iSubIrigID)
+                    CALL AppGW%GetTileDrainNodesLayers(f_iSubIrig,Nodes,Layers)
+                    DO indxNode=1,NSubIrig
+                        CALL AddFlowTypeToElements_ByNode(Nodes(indxNode),Layers(indxNode),f_iSubIrigID,NFlowTypeElems,FlowTypeElems)
+                    END DO
               
-            !Specified flow BC
-            CASE (f_iFlowBCID)
-              DO indxLayer=1,NLayers
-                CALL AppGW%GetNodesWithBCType(indxLayer,f_iSpFlowBCID,iBCNodes)
-                DO indxNode=1,SIZE(iBCNodes)
-                  CALL AddFlowTypeToElements_ByNode(iBCNodes(indxNode),indxLayer,f_iFlowBCID,NFlowTypeElems,FlowTypeElems)
-                END DO
-              END DO
-                 
-            !Specified head BC
-            CASE (f_iHeadBCID)
-              DO indxLayer=1,NLayers
-                CALL AppGW%GetNodesWithBCType(indxLayer,f_iSpHeadBCID,iBCNodes)
-                DO indxNode=1,SIZE(iBCNodes)
-                  CALL AddFlowTypeToElements_ByNode(iBCNodes(indxNode),indxLayer,f_iHeadBCID,NFlowTypeElems,FlowTypeElems)
-                END DO
-              END DO
-                 
-            !General head BC
-            CASE (f_iGenHeadBCID)
-              DO indxLayer=1,NLayers
-                CALL AppGW%GetNodesWithBCType(indxLayer,f_iGHBCID,iBCNodes)
-                DO indxNode=1,SIZE(iBCNodes)
-                    CALL AddFlowTypeToElements_ByNode(iBCNodes(indxNode),indxLayer,f_iGenHeadBCID,NFlowTypeElems,FlowTypeElems)
-                END DO
-              END DO
-              
-            !Constrained general head BC
-            CASE (f_iConstGenHeadBCID)
-              DO indxLayer=1,NLayers
-                CALL AppGW%GetNodesWithBCType(indxLayer,f_iConstrainedGHBCID,iBCNodes)
-                DO indxNode=1,SIZE(iBCNodes)
-                    CALL AddFlowTypeToElements_ByNode(iBCNodes(indxNode),indxLayer,f_iConstGenHeadBCID,NFlowTypeElems,FlowTypeElems)
-                END DO
-              END DO
-              
-            !Base flow from small watersheds
-            CASE (f_iSmallWShedBaseFlowID)
-              DO indxLayer=1,NLayers
-                  CALL AppSWShed%GetNodesWithBCType(indxLayer,f_iSWShedBaseFlowBCID,iBCNodes)
-                  DO indxNode=1,SIZE(iBCNodes)
-                      CALL AddFlowTypeToElements_ByNode(iBCNodes(indxNode),indxLayer,f_iSmallWShedBaseFlowID,NFlowTypeElems,FlowTypeElems)                      
-                  END DO
-              END DO
-                 
-            !Percolation from small watersheds
-            CASE (f_iSmallWShedPercID)
-              DO indxLayer=1,NLayers
-                  CALL AppSWShed%GetNodesWithBCType(indxLayer,f_iSWShedPercFlowBCID,iBCNodes)
-                  DO indxNode=1,SIZE(iBCNodes)
-                      CALL AddFlowTypeToElements_ByNode(iBCNodes(indxNode),indxLayer,f_iSmallWShedPercID,NFlowTypeElems,FlowTypeElems)                      
-                  END DO
-              END DO
-              
-            !Recoverable loss from diversions
-            CASE (f_iDivRecoverLossID)
-              DO indx=1,SIZE(ElemsWithDiverRecvLoss)
-                CALL AddFlowTypeToElements_ByElement(ElemsWithDiverRecvLoss(indx),0,f_iDivRecoverLossID,NFlowTypeElems,FlowTypeElems)
-              END DO
-                 
-            !Recoverable loss from bypasses
-            CASE (f_iBypassRecoverLossID)
-              DO indx=1,SIZE(ElemsWithBypassRecvLoss)
-                CALL AddFlowTypeToElements_ByElement(ElemsWithBypassRecvLoss(indx),0,f_iBypassRecoverLossID,NFlowTypeElems,FlowTypeElems)
-              END DO
-                 
-            !Lake-gw interaction
-            CASE (f_iLakeGWXID)
-              DO indxLake=1,AppLake%GetNLakes()
-                CALL AppLake%GetLakeElements(indxLake,LakeElems)
-                DO indxElem=1,SIZE(LakeElems)
-                  CALL AddFlowTypeToElements_ByElement(LakeElems(indxElem),0,f_iLakeGWXID,NFlowTypeElems,FlowTypeElems)
-                END DO
-              END DO
-            
-            !Element pumping
-            CASE (f_iElemPumpID)
-              DO indxPump=1,NElemPumps
-                iElem = AppGW%GetPumpElement(indxPump,f_iPump_ElemPump)
-                CALL AppGW%GetLayerPumpFactors(indxPump,f_iPump_ElemPump,rPumpLayerFactors)
-                DO iLayer=1,NLayers
-                  IF (rPumpLayerFactors(iLayer) .GT. 0.0) &
-                    CALL AddFlowTypeToElements_ByElement(iElem,iLayer,f_iElemPumpID,NFlowTypeElems,FlowTypeElems)
-                END DO
-              END DO
+                !Subsidence; all elements have this
+                CASE (f_iSubsidenceID)
+                    NFlowTypeElems(:,f_iSubsidenceID) = NElements
+                    DO indxLayer1=1,NLayers
+                        DO indxElem1=1,NElements
+                            FlowTypeElems(indxElem1,indxLayer1,f_iSubsidenceID) = indxElem1
+                        END DO
+                    END DO
                 
-            !Well pumping
-            CASE (f_iWellPumpID)
-              DO indxPump=1,NWells
-                iElem = AppGW%GetPumpElement(indxPump,f_iPump_Well)
-                CALL AppGW%GetLayerPumpFactors(indxPump,f_iPump_Well,rPumpLayerFactors)
-                DO iLayer=1,NLayers
-                  IF (rPumpLayerFactors(iLayer) .GT. 0.0) &
-                    CALL AddFlowTypeToElements_ByElement(iElem,iLayer,f_iWellPumpID,NFlowTypeElems,FlowTypeElems)
-                END DO
-              END DO
+                !Deep perc; only top active elements have this
+                CASE (f_iDeepPercID)
+                    DO indxNode=1,SIZE(TopNodes)
+                        iNode  = TopNodes(indxNode)
+                        iLayer = TopLayers(indxNode)
+                        CALL AddFlowTypeToElements_ByNode(iNode,iLayer,f_iDeepPercID,NFlowTypeElems,FlowTypeElems)
+                    END DO
+                  
+                !Specified flow BC
+                CASE (f_iFlowBCID)
+                    DO indxLayer=1,NLayers
+                        CALL AppGW%GetNodesWithBCType(indxLayer,f_iSpFlowBCID,iBCNodes)
+                        DO indxNode=1,SIZE(iBCNodes)
+                            CALL AddFlowTypeToElements_ByNode(iBCNodes(indxNode),indxLayer,f_iFlowBCID,NFlowTypeElems,FlowTypeElems)
+                        END DO
+                    END DO
+                     
+                !Specified head BC
+                CASE (f_iHeadBCID)
+                    DO indxLayer=1,NLayers
+                        CALL AppGW%GetNodesWithBCType(indxLayer,f_iSpHeadBCID,iBCNodes)
+                        DO indxNode=1,SIZE(iBCNodes)
+                            CALL AddFlowTypeToElements_ByNode(iBCNodes(indxNode),indxLayer,f_iHeadBCID,NFlowTypeElems,FlowTypeElems)
+                        END DO
+                    END DO
+                     
+                !General head BC
+                CASE (f_iGenHeadBCID)
+                    DO indxLayer=1,NLayers
+                      CALL AppGW%GetNodesWithBCType(indxLayer,f_iGHBCID,iBCNodes)
+                      DO indxNode=1,SIZE(iBCNodes)
+                          CALL AddFlowTypeToElements_ByNode(iBCNodes(indxNode),indxLayer,f_iGenHeadBCID,NFlowTypeElems,FlowTypeElems)
+                      END DO
+                    END DO
+                  
+                !Constrained general head BC
+                CASE (f_iConstGenHeadBCID)
+                    DO indxLayer=1,NLayers
+                        CALL AppGW%GetNodesWithBCType(indxLayer,f_iConstrainedGHBCID,iBCNodes)
+                        DO indxNode=1,SIZE(iBCNodes)
+                            CALL AddFlowTypeToElements_ByNode(iBCNodes(indxNode),indxLayer,f_iConstGenHeadBCID,NFlowTypeElems,FlowTypeElems)
+                        END DO
+                    END DO
+                  
+                !Base flow from small watersheds
+                CASE (f_iSmallWShedBaseFlowID)
+                    DO indxLayer=1,NLayers
+                        CALL AppSWShed%GetNodesWithBCType(indxLayer,f_iSWShedBaseFlowBCID,iBCNodes)
+                        DO indxNode=1,SIZE(iBCNodes)
+                            CALL AddFlowTypeToElements_ByNode(iBCNodes(indxNode),indxLayer,f_iSmallWShedBaseFlowID,NFlowTypeElems,FlowTypeElems)                      
+                        END DO
+                    END DO
+                     
+                !Percolation from small watersheds
+                CASE (f_iSmallWShedPercID)
+                    DO indxLayer=1,NLayers
+                        CALL AppSWShed%GetNodesWithBCType(indxLayer,f_iSWShedPercFlowBCID,iBCNodes)
+                        DO indxNode=1,SIZE(iBCNodes)
+                            CALL AddFlowTypeToElements_ByNode(iBCNodes(indxNode),indxLayer,f_iSmallWShedPercID,NFlowTypeElems,FlowTypeElems)                      
+                        END DO
+                    END DO
+                  
+                !Recoverable loss from diversions
+                CASE (f_iDivRecoverLossID)
+                    DO indx=1,SIZE(ElemsWithDiverRecvLoss)
+                        CALL AddFlowTypeToElements_ByElement(ElemsWithDiverRecvLoss(indx),0,f_iDivRecoverLossID,NFlowTypeElems,FlowTypeElems)
+                    END DO
+                     
+                !Recoverable loss from bypasses
+                CASE (f_iBypassRecoverLossID)
+                    DO indx=1,SIZE(ElemsWithBypassRecvLoss)
+                        CALL AddFlowTypeToElements_ByElement(ElemsWithBypassRecvLoss(indx),0,f_iBypassRecoverLossID,NFlowTypeElems,FlowTypeElems)
+                    END DO
+                     
+                !Lake-gw interaction
+                CASE (f_iLakeGWXID)
+                    DO indxLake=1,AppLake%GetNLakes()
+                        CALL AppLake%GetLakeElements(indxLake,LakeElems)
+                        DO indxElem=1,SIZE(LakeElems)
+                            CALL AddFlowTypeToElements_ByElement(LakeElems(indxElem),0,f_iLakeGWXID,NFlowTypeElems,FlowTypeElems)
+                        END DO
+                    END DO
+                
+                !Element pumping
+                CASE (f_iElemPumpID)
+                    DO indxPump=1,NElemPumps
+                        iElem = AppGW%GetPumpElement(indxPump,f_iPump_ElemPump)
+                        CALL AppGW%GetLayerPumpFactors(indxPump,f_iPump_ElemPump,rPumpLayerFactors)
+                        DO iLayer=1,NLayers
+                            IF (rPumpLayerFactors(iLayer) .GT. 0.0) &
+                                CALL AddFlowTypeToElements_ByElement(iElem,iLayer,f_iElemPumpID,NFlowTypeElems,FlowTypeElems)
+                        END DO
+                    END DO
+                    
+                !Well pumping
+                CASE (f_iWellPumpID)
+                    DO indxPump=1,NWells
+                        iElem = AppGW%GetPumpElement(indxPump,f_iPump_Well)
+                        CALL AppGW%GetLayerPumpFactors(indxPump,f_iPump_Well,rPumpLayerFactors)
+                        DO iLayer=1,NLayers
+                            IF (rPumpLayerFactors(iLayer) .GT. 0.0) &
+                                CALL AddFlowTypeToElements_ByElement(iElem,iLayer,f_iWellPumpID,NFlowTypeElems,FlowTypeElems)
+                        END DO
+                    END DO
+                  
+                !Outflow to root zone
+                CASE (f_iFlowToRootZoneID)
+                    DO indxNode=1,SIZE(TopNodes)
+                        iNode  = TopNodes(indxNode)
+                        iLayer = TopLayers(indxNode)
+                        CALL AddFlowTypeToElements_ByNode(iNode,iLayer,f_iFlowToRootZoneID,NFlowTypeElems,FlowTypeElems)
+                    END DO
+                   
+                !GW return flow
+                CASE (f_iGWReturnFlowID)
+                    DO indxNode=1,AppGrid%NNodes
+                        iTopActiveLayer = Stratigraphy%TopActiveLayer(indxNode)
+                        IF (iTopActiveLayer .GE. 1) CALL AddFlowTypeToElements_ByNode(indxNode,iTopActiveLayer,f_iGWReturnFlowID,NFlowTypeElems,FlowTypeElems)
+                    END DO
               
-            !Outflow to root zone
-            CASE (f_iFlowToRootZoneID)
-               DO indxNode=1,SIZE(TopNodes)
-                iNode  = TopNodes(indxNode)
-                iLayer = TopLayers(indxNode)
-                CALL AddFlowTypeToElements_ByNode(iNode,iLayer,f_iFlowToRootZoneID,NFlowTypeElems,FlowTypeElems)
-              END DO
-               
-          END SELECT
-        END DO
-      
+              END SELECT
+          END DO
       END ASSOCIATE
       
-      !Store data at persistent arrays
+      !Store data in persistent arrays
       ALLOCATE (Header%iElemDataColumns(NElements,2*NFlowTypes,NLayers) , Header%iNDataElems(2*NFlowTypes,NLayers))
       Header%iElemDataColumns = 0
       DO indxFlow=1,NFlowTypes
@@ -1289,15 +1300,13 @@ CONTAINS
       INTEGER :: indxElem,iElem,N
       
       ASSOCIATE (pSurroundingElement => AppGrid%AppNode(iNode)%SurroundingElement)
-        
-        DO indxElem=1,SIZE(pSurroundingElement)
-            iElem = pSurroundingElement(indxElem)
-            N     = NFlowTypeElems(iLayer,FlowID)
-            IF (LocateInList(iElem,FlowTypeElems(1:N,iLayer,FlowID)) .GT. 0) CYCLE
-            NFlowTypeElems(iLayer,FlowID)                              = NFlowTypeElems(iLayer,FlowID) + 1
-            FlowTypeElems(NFlowTypeElems(iLayer,FlowID),iLayer,FlowID) = iElem
-        END DO
-        
+          DO indxElem=1,SIZE(pSurroundingElement)
+              iElem = pSurroundingElement(indxElem)
+              N     = NFlowTypeElems(iLayer,FlowID)
+              IF (LocateInList(iElem,FlowTypeElems(1:N,iLayer,FlowID)) .GT. 0) CYCLE
+              NFlowTypeElems(iLayer,FlowID)                              = NFlowTypeElems(iLayer,FlowID) + 1
+              FlowTypeElems(NFlowTypeElems(iLayer,FlowID),iLayer,FlowID) = iElem
+          END DO
       END ASSOCIATE
       
     END SUBROUTINE AddFlowTypeToElements_ByNode
@@ -1399,7 +1408,8 @@ CONTAINS
                            ElemDiverRecvLosses(AppGrid%NElements),ElemBypassRecvLosses(AppGrid%NElements),              &
                            ElemStorages(AppGrid%NElements,1),Subsidence(AppGrid%NNodes),FlowPass(AppGrid%NElements,1),  &
                            FlowCollect_IN(AppGrid%NElements,GWZBudget%NModelFlowTypes,Stratigraphy%NLayers),            &
-                           FlowCollect_OUT(AppGrid%NElements,GWZBudget%NModelFlowTypes,Stratigraphy%NLayers)
+                           FlowCollect_OUT(AppGrid%NElements,GWZBudget%NModelFlowTypes,Stratigraphy%NLayers),           &
+                           rGWReturnFlows(AppGrid%NNodes)
     LOGICAL             :: lAddToRHS,lComputeZBudgetFlows,lSubsidence_Defined,lBoundaryNode,lBoundaryFlowNode,          &
                            lComputeNodalVelocities
     INTEGER,ALLOCATABLE :: iTileDrainNodes(:),iSubIrigNodes(:),iTileDrainLayers(:),iSubIrigLayers(:)
@@ -1425,9 +1435,9 @@ CONTAINS
     lComputeNodalVelocities = GWZBudget%lComputeNodalVelocities
     IF (lComputeNodalVelocities) Vz = 0.0
     DO indxLayer=1,NLayers
-      DO indxNode=1,NNodes
-        NodeRHS(indxNode,indxLayer)%RHS = 0.0
-      END DO
+        DO indxNode=1,NNodes
+            NodeRHS(indxNode,indxLayer)%RHS = 0.0
+        END DO
     END DO
     ElemDiverRecvLosses  = AppStream%GetElemRecvLosses(NElements,f_iDiverRecvLoss)
     ElemBypassRecvLosses = AppStream%GetElemRecvLosses(NElements,f_iBypassRecvLoss)
@@ -1436,6 +1446,7 @@ CONTAINS
     CALL AppGW%GetTileDrainNodesLayers(f_iSubIrig,iSubIrigNodes,iSubIrigLayers)  ;  iSubIrigNodes = (iSubIrigLayers-1)*NNodes + iSubIrigNodes
     CALL AppGW%GetTileDrainFlows(f_iSubIrig,rSubIrigFlows)
     CALL AppGW%GetHeads_All(.FALSE.,GWHeads)
+    CALL AppGW%GetGWReturnFlows(rGWReturnFlows)
  
     !Compute
     Layer_Loop :DO indxLayer=1,NLayers
@@ -1593,6 +1604,10 @@ CONTAINS
                                       IF (Stratigraphy%TopActiveLayer(iNode) .EQ. indxLayer)  &
                                         rValue = -GWToRZFlows(indxElem) * VertexAreaFrac(indxVertex)
                                                                           
+                                    !GW return flow
+                                    CASE (f_iGWReturnFlowID)
+                                      IF (Stratigraphy%TopActiveLayer(iNode) .EQ. indxLayer)  &
+                                        rValue = -rGWReturnFlows(iNode) * AreaFrac(indxVertex)
                                 END SELECT
                                 
                                 !Add flow terms to element flows and RHS vector for node

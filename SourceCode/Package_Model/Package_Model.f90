@@ -188,8 +188,6 @@ MODULE Package_Model
   ! -------------------------------------------------------------
   PRIVATE
   PUBLIC :: ModelType                    , &
-            Convergence                  , &
-            Backtrack                    , &
             nPP_InputFiles               , &
             PP_BinaryOutputFileID        , &    
             PP_ElementConfigFileID       , &    
@@ -209,6 +207,7 @@ MODULE Package_Model
             SIM_SuppAdjSpecFileID        , &     
             SIM_PrecipDataFileID         , &     
             SIM_ETDataFileID             , &
+            SIM_CropCoeffFileID          , &
             Sim_KDEB_NoPrintTimeStep     , &
             Sim_KDEB_PrintTimeStep       , &
             Sim_KDEB_PrintMessages       , &
@@ -236,6 +235,7 @@ MODULE Package_Model
   ! --- CONVERGENCE DATA TYPE
   ! -------------------------------------------------------------
   TYPE,EXTENDS(SolverDataType) :: ConvergenceType
+      REAL(8) :: rVolumeTolerance      = HUGE(0d0)          !Volumetric convergence creterion provided as a fraction of the L2-norm of RHS vector at a Newton iteration to the L2-norm of the RHS vector at the first Newton iteration at each time step
       REAL(8) :: DIFF_L2_OLD           = HUGE(0d0)          !L2-norm of the difference array from the last Newton-Raphson iteration 
       REAL(8) :: DIFFMAX_OLD           = HUGE(0d0)          !Maximum difference from the last Newton-Raphson iteration
       REAL(8) :: rCooleyFactor         = 1.0                !Damping factor computed using Cooley's method (1983)
@@ -531,7 +531,7 @@ MODULE Package_Model
   ! -------------------------------------------------------------
   ! --- SIMULATION RELATED DATA
   ! -------------------------------------------------------------
-  INTEGER,PARAMETER :: nSIM_InputFiles              = 11 , &
+  INTEGER,PARAMETER :: nSIM_InputFiles              = 12 , &
                        SIM_BinaryInputFileID        = 1  , &     !!!!
                        SIM_GWDataFileID             = 2  , &     !
                        SIM_StrmDataFileID           = 3  , &     !
@@ -542,7 +542,8 @@ MODULE Package_Model
                        SIM_IrigFracDataFileID       = 8  , &     !
                        SIM_SuppAdjSpecFileID        = 9  , &     !
                        SIM_PrecipDataFileID         = 10 , &     !
-                       SIM_ETDataFileID             = 11         !!!!
+                       SIM_ETDataFileID             = 11 , &     !
+                       SIM_CropCoeffFileID          = 12         !!!!
 
   ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
@@ -963,7 +964,7 @@ CONTAINS
     IF (iStat .EQ. -1) RETURN
 
     !ET data
-    CALL Model%ETData%New(ProjectFileNames(SIM_ETDataFileID),Model%cSIMWorkingDirectory,'ET',Model%TimeStep,iStat)
+    CALL Model%ETData%New(ProjectFileNames(SIM_ETDataFileID),Model%cSIMWorkingDirectory,'ET',Model%TimeStep,iStat,ProjectFileNames(SIM_CropCoeffFileID))
     IF (iStat .EQ. -1) RETURN
   
     !Lakes
@@ -1033,7 +1034,7 @@ CONTAINS
     
     !Groundwater
     CALL Model%AppStream%GetStrmConnectivityInGWNodes(Model%StrmGWConnector,StrmConnectivity)
-    CALL Model%AppGW%New(lForInquiry,ProjectFileNames(SIM_GWDataFileID),Model%cSIMWorkingDirectory,Model%AppGrid,Model%Stratigraphy,StrmConnectivity,iStrmNodeIDs,Model%TimeStep,Model%NTIME,iStat)
+    CALL Model%AppGW%New(lForInquiry,ProjectFileNames(SIM_GWDataFileID),Model%cSIMWorkingDirectory,Model%AppGrid,Model%Stratigraphy,StrmConnectivity,iStrmNodeIDs,Model%StrmGWConnector,iLakeIDs,Model%LakeGWConnector,Model%TimeStep,Model%NTIME,iStat)
     IF (iStat .EQ. -1) RETURN
     ALLOCATE (Model%QERELS(NElements) , Model%QPERC(NElements) , Model%QDEEPPERC(NElements) , Model%DepthToGW(NElements) , Model%SyElem(NElements) , Model%GWToRZFlows(NElements) , Model%NetElemSource(NElements) , Model%FaceFlows(NFaces,NLayers) , Model%GWHeads(NNodes,NLayers))
     Model%QERELS      = 0.0
@@ -1051,12 +1052,12 @@ CONTAINS
     Model%lAppUnsatZone_Defined = Model%AppUnsatZone%IsDefined()
     
     !Small watersheds
-    CALL Model%AppSWShed%New(lForInquiry,ProjectFileNames(SIM_SmallWatershedDataFileID),Model%cSIMWorkingDirectory,Model%TimeStep,Model%NTIME,NStrmNodes,iStrmNodeIDs,Model%AppGrid,Model%Stratigraphy,Model%PrecipData,Model%ETData,iStat)
+    CALL Model%AppSWShed%New(lForInquiry,ProjectFileNames(SIM_SmallWatershedDataFileID),ProjectFileNames(SIM_CropCoeffFileID),Model%cSIMWorkingDirectory,Model%TimeStep,Model%NTIME,NStrmNodes,iStrmNodeIDs,Model%AppGrid,Model%Stratigraphy,Model%PrecipData,Model%ETData,iStat)
     IF (iStat .EQ. -1) RETURN
 
     !Root zone component (must be instantiated after gw and streams)
     IF (ProjectFileNames(SIM_RootZoneDataFileID) .NE. '') THEN
-        CALL Model%RootZone%New(lForInquiry,cProjectNameForDSS,ProjectFileNames(SIM_RootZoneDataFileID),Model%cSIMWorkingDirectory,Model%AppGrid,Model%TimeStep,Model%NTIME,Model%ETData,Model%PrecipData,iStat,iStrmNodeIDs=iStrmNodeIDs,iLakeIDs=iLakeIDs)
+        CALL Model%RootZone%New(lForInquiry,cProjectNameForDSS,ProjectFileNames(SIM_RootZoneDataFileID),ProjectFileNames(SIM_CropCoeffFileID),Model%cSIMWorkingDirectory,Model%AppGrid,Model%TimeStep,Model%NTIME,Model%ETData,Model%PrecipData,iStat,iStrmNodeIDs=iStrmNodeIDs,iLakeIDs=iLakeIDs)
         IF (iStat .EQ. -1) RETURN
     
         !Define the lake elements
@@ -1292,7 +1293,7 @@ CONTAINS
     IF (iStat .EQ. -1) RETURN
 
     !ET data
-    CALL Model%ETData%New(ProjectFileNames(SIM_ETDataFileID),Model%cSIMWorkingDirectory,'ET data',Model%TimeStep,iStat)
+    CALL Model%ETData%New(ProjectFileNames(SIM_ETDataFileID),Model%cSIMWorkingDirectory,'ET data',Model%TimeStep,iStat,ProjectFileNames(SIM_CropCoeffFileID))
     IF (iStat .EQ. -1) RETURN
   
     !Lakes
@@ -1358,7 +1359,7 @@ CONTAINS
     
     !Groundwater
     CALL Model%AppStream%GetStrmConnectivityInGWNodes(Model%StrmGWConnector,StrmConnectivity)
-    CALL Model%AppGW%New(lForInquiry,ProjectFileNames(SIM_GWDataFileID),Model%cSIMWorkingDirectory,Model%AppGrid,Model%Stratigraphy,StrmConnectivity,iStrmNodeIDs,Model%TimeStep,Model%NTIME,iStat)
+    CALL Model%AppGW%New(lForInquiry,ProjectFileNames(SIM_GWDataFileID),Model%cSIMWorkingDirectory,Model%AppGrid,Model%Stratigraphy,StrmConnectivity,iStrmNodeIDs,Model%StrmGWConnector,iLakeIDs,Model%LakeGWConnector,Model%TimeStep,Model%NTIME,iStat)
     IF (iStat .EQ. -1) RETURN
     NNodes    = Model%AppGrid%NNodes
     NElements = Model%AppGrid%NElements
@@ -1388,12 +1389,12 @@ CONTAINS
     Model%lAppUnsatZone_Defined = Model%AppUnsatZone%IsDefined()
     
     !Small watersheds
-    CALL Model%AppSWShed%New(lForInquiry,ProjectFileNames(SIM_SmallWatershedDataFileID),Model%cSIMWorkingDirectory,Model%TimeStep,Model%NTIME,NStrmNodes,iStrmNodeIDs,Model%AppGrid,Model%Stratigraphy,Model%PrecipData,Model%ETData,iStat)
+    CALL Model%AppSWShed%New(lForInquiry,ProjectFileNames(SIM_SmallWatershedDataFileID),ProjectFileNames(SIM_CropCoeffFileID),Model%cSIMWorkingDirectory,Model%TimeStep,Model%NTIME,NStrmNodes,iStrmNodeIDs,Model%AppGrid,Model%Stratigraphy,Model%PrecipData,Model%ETData,iStat)
     IF (iStat .EQ. -1) RETURN
     
     !Root zone component (must be instantiated after gw and streams)
     IF (ProjectFileNames(SIM_RootZoneDataFileID) .NE. '') THEN
-        CALL Model%RootZone%New(lForInquiry,cProjectNameForDSS,ProjectFileNames(SIM_RootZoneDataFileID),Model%cSIMWorkingDirectory,Model%AppGrid,Model%TimeStep,Model%NTIME,Model%ETData,Model%PrecipData,iStat,iStrmNodeIDs=iStrmNodeIDs,iLakeIDs=iLakeIDs)
+        CALL Model%RootZone%New(lForInquiry,cProjectNameForDSS,ProjectFileNames(SIM_RootZoneDataFileID),ProjectFileNames(SIM_CropCoeffFileID),Model%cSIMWorkingDirectory,Model%AppGrid,Model%TimeStep,Model%NTIME,Model%ETData,Model%PrecipData,iStat,iStrmNodeIDs=iStrmNodeIDs,iLakeIDs=iLakeIDs)
         IF (iStat .EQ. -1) RETURN
     
         !Define the lake elements
@@ -1710,7 +1711,7 @@ CONTAINS
     
     !Groundwater
     CALL Model%AppStream%GetStrmConnectivityInGWNodes(Model%StrmGWConnector,StrmConnectivity)
-    CALL Model%AppGW%New(lForInquiry,cSIMFileNames(SIM_GWDataFileID),Model%cSIMWorkingDirectory,Model%AppGrid,Model%Stratigraphy,StrmConnectivity,iStrmNodeIDs,Model%TimeStep,Model%NTIME,iStat)
+    CALL Model%AppGW%New(lForInquiry,cSIMFileNames(SIM_GWDataFileID),Model%cSIMWorkingDirectory,Model%AppGrid,Model%Stratigraphy,StrmConnectivity,iStrmNodeIDs,Model%StrmGWConnector,iLakeIDs,Model%LakeGWConnector,Model%TimeStep,Model%NTIME,iStat)
     IF (iStat .EQ. -1) RETURN
     NNodes    = Model%AppGrid%NNodes
     NElements = Model%AppGrid%NElements
@@ -1740,12 +1741,12 @@ CONTAINS
     Model%lAppUnsatZone_Defined = Model%AppUnsatZone%IsDefined()
     
     !Small watersheds
-    CALL Model%AppSWShed%New(lForInquiry,cSIMFileNames(SIM_SmallWatershedDataFileID),Model%cSIMWorkingDirectory,Model%TimeStep,Model%NTIME,NStrmNodes,iStrmNodeIDs,Model%AppGrid,Model%Stratigraphy,Model%PrecipData,Model%ETData,iStat)
+    CALL Model%AppSWShed%New(lForInquiry,cSIMFileNames(SIM_SmallWatershedDataFileID),cSIMFileNames(SIM_CropCoeffFileID),Model%cSIMWorkingDirectory,Model%TimeStep,Model%NTIME,NStrmNodes,iStrmNodeIDs,Model%AppGrid,Model%Stratigraphy,Model%PrecipData,Model%ETData,iStat)
     IF (iStat .EQ. -1) RETURN
 
     !Root zone component (must be instantiated after gw and streams)
     IF (cSIMFileNames(SIM_RootZoneDataFileID) .NE. '') THEN
-        CALL Model%RootZone%New(lForInquiry,cProjectNameForDSS,cSIMFileNames(SIM_RootZoneDataFileID),Model%cSIMWorkingDirectory,Model%AppGrid,Model%TimeStep,Model%NTIME,Model%ETData,Model%PrecipData,iStat,iStrmNodeIDs=iStrmNodeIDs,iLakeIDs=iLakeIDs)
+        CALL Model%RootZone%New(lForInquiry,cProjectNameForDSS,cSIMFileNames(SIM_RootZoneDataFileID),cSimFileNames(SIM_CropCoeffFileID),Model%cSIMWorkingDirectory,Model%AppGrid,Model%TimeStep,Model%NTIME,Model%ETData,Model%PrecipData,iStat,iStrmNodeIDs=iStrmNodeIDs,iLakeIDs=iLakeIDs)
         IF (iStat .EQ. -1) RETURN
         
         !Define the lake elements
@@ -6399,9 +6400,10 @@ CONTAINS
     
     !Local variables
     CHARACTER(LEN=ModNameLen+23),PARAMETER :: ThisProcedure = ModName // 'SIM_ReadMainControlData'
-    INTEGER                                :: indx
-    CHARACTER                              :: ALine*1000
+    INTEGER                                :: indx,iLineCount,iErrorCode,iAtLine
+    CHARACTER                              :: cALine*1000
     CHARACTER(:),ALLOCATABLE               :: cAbsPathFileName
+    CHARACTER(LEN=50),ALLOCATABLE          :: cDummyArray(:)
     TYPE(GenericFileType)                  :: MainControlFile
     
     !Initialize
@@ -6417,8 +6419,14 @@ CONTAINS
        IF (iStat .EQ. -1) RETURN 
     END DO
 
+    !BACWARD COMPATIBILITY: Check if there are 11 or 12 lines of entries for filenames
+    CALL MainControlFile%ReadData(cDummyArray,iStat)  ;  IF (iStat .NE. 0) RETURN
+    iLineCount = SIZE(cDummyArray)
+    CALL MainControlFile%BackspaceFile(iLineCount)
+    
     !Read in file names and initialize the files
-    DO indx=1,nSIM_InputFiles
+    ProjectFileNames = ''
+    DO indx=1,iLineCount
         CALL MainControlFile%ReadData(ProjectFileNames(indx),iStat)  ;  IF (iStat .EQ. -1) RETURN
         CALL CleanSpecialCharacters(ProjectFileNames(indx))
         ProjectFileNames(indx) = ADJUSTL(StripTextUntilCharacter(ProjectFileNames(indx),'/'))
@@ -6441,12 +6449,12 @@ CONTAINS
     
     !Read in data related to model simulation period and time tracking options
     !Simulation begin date and time
-    CALL MainControlFile%ReadData(ALine,iStat)  ;  IF (iStat .EQ. -1) RETURN 
-    CALL CleanSpecialCharacters(ALine)
-    ALine = ADJUSTL(ALine)
-    ALine = ALine(1:f_iTimeStampLength)
-    IF (IsTimeStampValid(ALine)) THEN
-        Model%TimeStep%CurrentDateAndTime = StripTimeStamp(ALine)
+    CALL MainControlFile%ReadData(cALine,iStat)  ;  IF (iStat .EQ. -1) RETURN 
+    CALL CleanSpecialCharacters(cALine)
+    cALine = ADJUSTL(cALine)
+    cALine = cALine(1:f_iTimeStampLength)
+    IF (IsTimeStampValid(cALine)) THEN
+        Model%TimeStep%CurrentDateAndTime = StripTimeStamp(cALine)
         CALL TimeStampToJulianDateAndMinutes(Model%TimeStep%CurrentDateAndTime,Model%JulianDate,Model%MinutesAfterMidnight)
         Model%TimeStep%TrackTime          = .TRUE.
     END IF
@@ -6459,19 +6467,19 @@ CONTAINS
       !Simulation date and time is tracked
       CASE (.TRUE.)
         !Get UNITT
-        CALL MainControlFile%ReadData(ALine,iStat)  ;  IF (iStat .EQ. -1) RETURN
-        CALL CleanSpecialCharacters(ALine)
-        Model%TimeStep%Unit = UpperCase(ADJUSTL(StripTextUntilCharacter(ALine,'/')))
+        CALL MainControlFile%ReadData(cALine,iStat)  ;  IF (iStat .EQ. -1) RETURN
+        CALL CleanSpecialCharacters(cALine)
+        Model%TimeStep%Unit = UpperCase(ADJUSTL(StripTextUntilCharacter(cALine,'/')))
         !Based on UNITT, compute DELTAT in terms of minutes
         CALL DELTAT_To_Minutes(Model%TimeStep,iStat)
         IF (iStat .EQ. -1) RETURN
         !Get the ending date and time       
-        CALL MainControlFile%ReadData(ALine,iStat)  ;  IF (iStat .EQ. -1) RETURN
-        CALL CleanSpecialCharacters(ALine)
-        ALine = ADJUSTL(ALine)
-        ALine = Aline(1:f_iTimeStampLength)
-        IF (IsTimeStampValid(ALine)) THEN
-          Model%TimeStep%EndDateAndTime = StripTimeStamp(ALine)
+        CALL MainControlFile%ReadData(cALine,iStat)  ;  IF (iStat .EQ. -1) RETURN
+        CALL CleanSpecialCharacters(cALine)
+        cALine = ADJUSTL(cALine)
+        cALine = cALine(1:f_iTimeStampLength)
+        IF (IsTimeStampValid(cALine)) THEN
+          Model%TimeStep%EndDateAndTime = StripTimeStamp(cALine)
         ELSE
           CALL SetLastMessage('Simulation ending time should be in MM/DD/YYYY_hh:mm format!',f_iFatal,ThisProcedure)
           iStat = -1
@@ -6491,12 +6499,12 @@ CONTAINS
       !Simulation date and time is NOT tracked
       CASE (.FALSE.)
         !Set the simulation beginning time
-        READ (ALine,*) Model%TimeStep%CurrentTime
+        READ (cALine,*) Model%TimeStep%CurrentTime
         !Get DELTAT
         CALL MainControlFile%ReadData(Model%TimeStep%DeltaT,iStat)  ;  IF (iStat .EQ. -1) RETURN
         !Unit of DELTAT
-        CALL MainControlFile%ReadData(ALine,iStat)  ;  IF (iStat .EQ. -1) RETURN
-        Model%TimeStep%Unit=ADJUSTL(StripTextUntilCharacter(ALine,'/'))
+        CALL MainControlFile%ReadData(cALine,iStat)  ;  IF (iStat .EQ. -1) RETURN
+        Model%TimeStep%Unit=ADJUSTL(StripTextUntilCharacter(cALine,'/'))
         !Get the ending time
         CALL MainControlFile%ReadData(Model%TimeStep%EndTime,iStat)  ;  IF (iStat .EQ. -1) RETURN     
         !Compute the number of time steps in the simulation period
@@ -6517,13 +6525,39 @@ CONTAINS
     CALL MainControlFile%ReadData(Model%KDEB,iStat)  ;  IF (iStat .EQ. -1) RETURN   !Output option
     CALL MainControlFile%ReadData(CACHE,iStat)  ;  IF (iStat .EQ. -1) RETURN  !Cache size
           
+    !BACKWARD COMPATIBILITY: Check if there are 6 or 7 lines of entries for Solution Scheme Control Data
+    !But, read until the end of file in case users have commented out one or two input lines
+    iAtLine    = MainControlFile%GetLineNumber()
+    iLineCount = 0
+    DO
+        CALL MainControlFile%ReadData(cALine,iErrorCode)
+        IF (iErrorCode .NE. 0) EXIT
+        iLineCount = iLineCount + 1
+    END DO
+    CALL MainControlFile%GoToLine(iAtLine,iStat)  ;  IF (iStat .NE. 0) RETURN
+    iLineCount = iLineCount - 1   !Subtract 1 because last line is the supply adjustment flag which we are not concerned for backward compatibility check
+
+    
     !Solution scheme control data
-    CALL MainControlFile%ReadData(MSOLVE,iStat)  ;  IF (iStat .EQ. -1) RETURN  
-    CALL MainControlFile%ReadData(RELAX,iStat)  ;  IF (iStat .EQ. -1) RETURN   
-    CALL MainControlFile%ReadData(Model%Convergence%IterMax,iStat)  ;  IF (iStat .EQ. -1) RETURN    
-    CALL MainControlFile%ReadData(MXITERSP,iStat)  ;  IF (iStat .EQ. -1) RETURN 
-    CALL MainControlFile%ReadData(Model%Convergence%Tolerance,iStat)  ;  IF (iStat .EQ. -1) RETURN
-    CALL MainControlFile%ReadData(STOPCSP,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    IF (iLineCount .EQ. 6) THEN  !Flow tolerance is not specified
+        CALL MainControlFile%ReadData(MSOLVE,iStat)                            ;  IF (iStat .NE. 0) RETURN  
+        CALL MainControlFile%ReadData(RELAX,iStat)                             ;  IF (iStat .NE. 0) RETURN   
+        CALL MainControlFile%ReadData(Model%Convergence%IterMax,iStat)         ;  IF (iStat .NE. 0) RETURN    
+        CALL MainControlFile%ReadData(MXITERSP,iStat)                          ;  IF (iStat .NE. 0) RETURN 
+        CALL MainControlFile%ReadData(Model%Convergence%Tolerance,iStat)       ;  IF (iStat .NE. 0) RETURN
+        CALL MainControlFile%ReadData(STOPCSP,iStat)                           ;  IF (iStat .NE. 0) RETURN
+    ELSE      !Flow tolerance is specified                                                                 
+        CALL MainControlFile%ReadData(MSOLVE,iStat)                            ;  IF (iStat .NE. 0) RETURN  
+        CALL MainControlFile%ReadData(RELAX,iStat)                             ;  IF (iStat .NE. 0) RETURN   
+        CALL MainControlFile%ReadData(Model%Convergence%IterMax,iStat)         ;  IF (iStat .NE. 0) RETURN    
+        CALL MainControlFile%ReadData(MXITERSP,iStat)                          ;  IF (iStat .NE. 0) RETURN 
+        CALL MainControlFile%ReadData(Model%Convergence%Tolerance,iStat)       ;  IF (iStat .NE. 0) RETURN
+        CALL MainControlFile%ReadData(cALine,iStat)                            ;  IF (iStat .NE. 0) RETURN
+            CALL CleanSpecialCharacters(cALine)  
+            cALine = ADJUSTL(StripTextUntilCharacter(cALine,'/'))
+            IF (LEN_TRIM(cALine) .GT. 0) READ(cALine,*) Model%Convergence%rVolumeTolerance
+        CALL MainControlFile%ReadData(STOPCSP,iStat)                           ;  IF (iStat .NE. 0) RETURN
+    END IF
 
     !Water budget control options
     CALL MainControlFile%ReadData(iAdjustFlag,iStat)  ;  IF (iStat .EQ. -1) RETURN
@@ -6706,10 +6740,15 @@ CONTAINS
     INTEGER :: NSubregions,BndFaceLayers(Model%AppGrid%NBoundaryFaces),indxLayer
     REAL(8) :: RRecvLoss(Model%AppGrid%NSubregions)                                        , &
                RSWShedIn(Model%AppGrid%NSubregions+1)                                      , &
-               SWShedBndFaceFlows(Model%AppGrid%NBoundaryFaces,Model%Stratigraphy%NLayers) 
+               SWShedBndFaceFlows(Model%AppGrid%NBoundaryFaces,Model%Stratigraphy%NLayers) , &
+               rGWReturnFlowsIntoStrmNodes(Model%AppStream%GetNStrmNodes())                , &
+               rGWReturnFlowsIntoLakes(Model%AppLake%GetNLakes())
     
     !Initialize
     iStat = 0
+    
+    !Retrieve GW return flows into stream nodes and lakes
+    CALL Model%AppGW%GetGWReturnFlowsIntoStrmNodesAndLakes(rGWReturnFlowsIntoStrmNodes,rGWReturnFlowsIntoLakes)
     
     !Print ANN input variables
     CALL Model%WSA%PrintResults(Model%lEndOfSimulation,Model%TimeStep,Model%AppStream)
@@ -6760,10 +6799,10 @@ CONTAINS
     CALL Model%AppUnsatZone%PrintResults(Model%AppGrid,Model%TimeStep,Model%lEndOfSimulation,Model%QPERC)
     
     !Print out stream simulation results 
-    CALL Model%AppStream%PrintResults(Model%TimeStep,Model%lEndOfSimulation,Model%QTRIB,Model%QROFF,Model%QRTRN,Model%QRPONDDRAIN,Model%QTDRAIN,Model%QRVET,Model%StrmGWConnector,Model%StrmLakeConnector)
+    CALL Model%AppStream%PrintResults(Model%TimeStep,Model%lEndOfSimulation,rGWReturnFlowsIntoStrmNodes,Model%QTRIB,Model%QROFF,Model%QRTRN,Model%QRPONDDRAIN,Model%QTDRAIN,Model%QRVET,Model%StrmGWConnector,Model%StrmLakeConnector)
 
     !Print out lake simulation results 
-    CALL Model%AppLake%PrintResults(Model%TimeStep,Model%lEndOfSimulation,Model%LakeRunoff,Model%LakeReturnFlow,Model%LakePondDrain,Model%LakeGWConnector,Model%StrmLakeConnector)
+    CALL Model%AppLake%PrintResults(Model%TimeStep,Model%lEndOfSimulation,rGWReturnFlowsIntoLakes,Model%LakeRunoff,Model%LakeReturnFlow,Model%LakePondDrain,Model%LakeGWConnector,Model%StrmLakeConnector)
 
     !Print out small watersheds simulation results 
     CALL Model%AppSWShed%PrintResults(Model%TimeStep,Model%lEndOfSimulation)
@@ -7499,8 +7538,9 @@ CONTAINS
     !Local variables
     INTEGER                  :: ITERX,NStrmNodes,NLakes,ITERX_BT,iWSAStrmNodes(Model%WSA%GetNWSA())
     LOGICAL                  :: lEndIteration,lBackTrack
-    REAL(8)                  :: AgDemand(Model%RootZone%GetNDemandLocations()),UrbDemand(Model%RootZone%GetNDemandLocations()),RHSL2_BT, &
-                                rWSAStrmFlows(Model%WSA%GetNWSA()),rStrmWSAs(Model%AppStream%GetNStrmNodes()),rElemPerc(Model%AppGrid%NElements)
+    REAL(8)                  :: AgDemand(Model%RootZone%GetNDemandLocations()),UrbDemand(Model%RootZone%GetNDemandLocations()),RHSL2_BT,          &
+                                rWSAStrmFlows(Model%WSA%GetNWSA()),rStrmWSAs(Model%AppStream%GetNStrmNodes()),rElemPerc(Model%AppGrid%NElements), &
+                                rGWReturnFlowIntoStrmNodes(Model%AppStream%GetNStrmNodes()),rGWReturnFlowIntoLakes(Model%AppLake%GetNLakes())
     INTEGER,SAVE,ALLOCATABLE :: iStrmNodeIDs(:),iLakeIDs(:),iGWNodeIDs(:)
     
     !Initialize
@@ -7550,7 +7590,7 @@ CONTAINS
     DO 
         !For supply adjustment option, restore the groundwater and stream heads to those at the beginning of the time step
         IF (Model%SupplyAdjust%IsAdjust()) THEN
-            WRITE (MessageArray(1),'(A,10X,A,1X,A,I6,1X,A)') f_cLineFeed,REPEAT('*',3),'SUPPLY ADJUSTMENT ITERATION:',Model%SupplyAdjust%GetAdjustIter(),REPEAT('*',3)
+            WRITE (MessageArray(1),'(A,14X,A,1X,A,I6,1X,A)') f_cLineFeed,REPEAT('*',3),'SUPPLY ADJUSTMENT ITERATION:',Model%SupplyAdjust%GetAdjustIter(),REPEAT('*',3)
             CALL LogMessage(MessageArray(1),f_iMessage,'',Destination=f_iFILE)
         END IF
 
@@ -7561,8 +7601,9 @@ CONTAINS
         ITERX_BT   = 0
         ITERX      = 0
         lBackTrack = .FALSE.
-        WRITE (MessageArray(1),'(3X,2A,3X,A)') 'ITER      CONVERGENCE      MAX.DIFF       VARIABLE',f_cLineFeed,REPEAT('-',58)
-        CALL LogMessage(MessageArray(1),f_iMessage,'',Destination=f_iFILE)
+        WRITE (MessageArray(1),'(3X,A)')       '          HEAD                                               VOLUMETRIC'
+        WRITE (MessageArray(2),'(3X,2A,3X,A)') 'ITER      CONVERGENCE      MAX.DIFF       VARIABLE           CONVERGENCE',f_cLineFeed,REPEAT('-',73)
+        CALL LogMessage(MessageArray(1:2),f_iMessage,'',iDestination=f_iFILE)
         Newton_Raphson_Loop:  &
         DO
             CALL Model%Matrix%ResetToZero()
@@ -7570,6 +7611,9 @@ CONTAINS
       
 ! ***** GET GW HEAD VALUES TO BE USED IN DIFFERENT COMPONENTS
             CALL Model%AppGW%GetHeads_All(lPrevious=.FALSE. , Heads=Model%GWHeads)
+
+! ***** GET GW RETURN FLOWS INTO STREAM NODES AND LAKES
+            CALL Model%AppGW%GetGWReturnFlowsIntoStrmNodesAndLakes(rGWReturnFlowIntoStrmNodes,rGWReturnFlowIntoLakes)
 
 ! ***** UPDATE MATRIX RHS FOR SMALL WATERSHEDS
             CALL Model%AppSWShed%UpdateRHS(Model%AppGrid%NNodes , Model%Matrix)
@@ -7580,10 +7624,10 @@ CONTAINS
             IF (Model%WSA%IsHistoricalRun()) THEN
                 CALL Model%WSA%GetStrmNodes(iWSAStrmNodes)
                 CALL Model%WSA%GetSpecifiedStrmFlows(rWSAStrmFlows)
-                CALL Model%AppStream%Simulate(Model%GWHeads,Model%QROFF,Model%QRTRN,Model%QRPONDDRAIN,Model%QTRIB,Model%QTDRAIN,Model%QRVET,Model%ETData,Model%QRVETFRAC,Model%StrmGWConnector,Model%StrmLakeConnector,Model%Matrix,iStrmFlowNodes=iWSAStrmNodes,rStrmFlows=rWSAStrmFlows)
+                CALL Model%AppStream%Simulate(Model%GWHeads,rGWReturnFlowIntoStrmNodes,Model%QROFF,Model%QRTRN,Model%QRPONDDRAIN,Model%QTRIB,Model%QTDRAIN,Model%QRVET,Model%ETData,Model%QRVETFRAC,Model%StrmGWConnector,Model%StrmLakeConnector,Model%Matrix,iStrmFlowNodes=iWSAStrmNodes,rStrmFlows=rWSAStrmFlows)
             ELSE
                 CALL Model%WSA%GetWSAs_AtAllNodes(rStrmWSAs)
-                CALL Model%AppStream%Simulate(Model%GWHeads,Model%QROFF,Model%QRTRN,Model%QRPONDDRAIN,Model%QTRIB,Model%QTDRAIN,Model%QRVET,Model%ETData,Model%QRVETFRAC,Model%StrmGWConnector,Model%StrmLakeConnector,Model%Matrix,rWSA=rStrmWSAs)
+                CALL Model%AppStream%Simulate(Model%GWHeads,rGWReturnFlowIntoStrmNodes,Model%QROFF,Model%QRTRN,Model%QRPONDDRAIN,Model%QTRIB,Model%QTDRAIN,Model%QRVET,Model%ETData,Model%QRVETFRAC,Model%StrmGWConnector,Model%StrmLakeConnector,Model%Matrix,rWSA=rStrmWSAs)
             END IF
                      
             IF (Model%lRootZone_Defined) THEN      
@@ -7614,6 +7658,7 @@ CONTAINS
                                                 Model%Matrix                    )
             CALL Model%AppLake%Simulate(Model%Stratigraphy%GSElev  , &
                                         Model%GWHeads              , &
+                                        rGWReturnFlowIntoLakes     , &
                                         Model%LakeRunoff           , &
                                         Model%LakeReturnFlow       , &
                                         Model%LakePondDrain        , &
@@ -7663,7 +7708,7 @@ CONTAINS
 
 ! ***** CHECK CONVERGENCE OF ITERATIVE SOLUTION METHODS
             CALL EchoProgress('Checking convergence')
-            CALL Convergence(ITERX,Model%Convergence,Model%AppGrid,Model%Stratigraphy,Model%TimeStep,Model%Matrix,Model%AppStream,Model%AppLake,Model%AppGW,lEndIteration,iStat)
+            CALL Convergence(ITERX,Model,lEndIteration,iStat)
             IF (iStat .EQ. -1) RETURN
             IF (lEndIteration) EXIT
         END DO Newton_Raphson_Loop
@@ -7795,18 +7840,11 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- CHECK CONVERGENCE OF NEWTON_RAPHSON ITERATION
   ! -------------------------------------------------------------
-  SUBROUTINE Convergence(ITERX,ConvergeData,AppGrid,Stratigraphy,TimeStep,Matrix,AppStream,AppLake,AppGW,lEndIteration,iStat)
-    INTEGER,INTENT(IN)                :: ITERX
-    TYPE(ConvergenceType)             :: ConvergeData
-    TYPE(AppGridType),INTENT(IN)      :: AppGrid
-    TYPE(StratigraphyType),INTENT(IN) :: Stratigraphy
-    TYPE(TimeStepType),INTENT(IN)     :: TimeStep
-    TYPE(MatrixType)                  :: Matrix
-    TYPE(AppStreamType)               :: AppStream
-    TYPE(AppLakeType)                 :: AppLake
-    TYPE(AppGWType)                   :: AppGW
-    LOGICAL,INTENT(OUT)               :: lEndIteration
-    INTEGER,INTENT(OUT)               :: iStat
+  SUBROUTINE Convergence(ITERX,Model,lEndIteration,iStat)
+    INTEGER,INTENT(IN)  :: ITERX
+    TYPE(ModelType)     :: Model
+    LOGICAL,INTENT(OUT) :: lEndIteration
+    INTEGER,INTENT(OUT) :: iStat
 
     !Local variables
     CHARACTER(LEN=ModNameLen+11),PARAMETER :: ThisProcedure = ModName // 'Convergence'
@@ -7817,170 +7855,186 @@ CONTAINS
     CHARACTER(LEN=11)                      :: cNodeMax*15
     CHARACTER(:),ALLOCATABLE               :: cCompName
 
-    !Initialize 
-    iStat         = 0
-    DELTAT        = TimeStep%DeltaT
-    NNodes        = AppGrid%NNodes
-    NLayers       = Stratigraphy%NLayers
-    NStrmNodes    = AppStream%GetNStrmNodes()
-    NLakes        = AppLake%GetNLakes()
-    lEndIteration = .TRUE.
-
-    !Compute L2-norm of the difference vector and rhs vector
-    DIFF_L2 = SQRT(SUM(Matrix%HDelta*Matrix%HDelta))
-    
-    !Find the maximum difference
-    IF (DIFF_L2 .NE. 0D0) THEN
-        NODEMAX = MAXLOC(ABS(Matrix%HDelta) , DIM=1)
-        DIFFMAX = Matrix%HDelta(NODEMAX)
-        CALL Matrix%GlobalNode_To_LocalNode(NODEMAX,iNodeMax_CompID,iNodeMax_Local)
-    ELSE
-        NODEMAX         = 0
-        DIFFMAX         = 0D0
-        iNodeMax_CompID = 0
-        iNodeMax_Local  = 0
-    END IF
-    
-    !If convergence in the newton-raphson iteration is achieved, skip to the reporting
-    IF (DIFF_L2 .LE. ConvergeData%Tolerance) GOTO 100
-    
-    !Compute Cooley's damping factor based on his 1983 paper
-    IF (ITERX .EQ. 1) THEN
-        ConvergeData%rCooleyFactor = 1.0
-    ELSE
-        IF (ConvergeData%DIFFMAX_OLD .EQ. 0.0) THEN
-            rS = 1.0
-        ELSE
-            rS = DIFFMAX / (ConvergeData%rCooleyFactor * ConvergeData%DIFFMAX_OLD)
-        END IF
-        IF (rS .LT. -1.0) THEN
-            ConvergeData%rCooleyFactor = 0.5d0 / ABS(rS)
-        ELSE
-            ConvergeData%rCooleyFactor = (3d0 + rS) / (3d0 + ABS(rS))
-        END IF
-    END IF
-
-    !Compute damping factor computed heuristically based on previous experience 
-    Factor = 1.0
-    IF (ITERX .EQ. 1) THEN
-        ConvergeData%iCount_DampingFactor = 0
+    ASSOCIATE (pConvergeData => Model%Convergence  , &
+               pAppGrid      => Model%AppGrid      , &
+               pStratigraphy => Model%Stratigraphy , &
+               pAppStream    => Model%AppStream    , &
+               pAppLake      => Model%AppLake      , &
+               pAppGW        => Model%AppGW        , &
+               pMatrix       => Model%Matrix       , &
+               pTimeStep     => Model%TimeStep     )   
+        !Initialize 
+        iStat         = 0
+        DELTAT        = pTimeStep%DeltaT
+        NNodes        = pAppGrid%NNodes
+        NLayers       = pStratigraphy%NLayers
+        NStrmNodes    = pAppStream%GetNStrmNodes()
+        NLakes        = pAppLake%GetNLakes()
+        lEndIteration = .TRUE.
         
-    ELSEIF (ITERX .GT. 160) THEN
-        Factor = 0.03125D0
+        !Compute L2-norm of the difference vector and rhs vector
+        DIFF_L2 = SQRT(SUM(pMatrix%HDelta*pMatrix%HDelta))
         
-    ELSE IF (ITERX .GT. 30) THEN
-        IF (DIFF_L2 .GT. 2.0*ConvergeData%DIFF_L2_OLD) THEN
-            ConvergeData%iCount_DampingFactor = ConvergeData%iCount_DampingFactor + 1
+        !Find the maximum difference
+        IF (DIFF_L2 .NE. 0D0) THEN
+            NODEMAX = MAXLOC(ABS(pMatrix%HDelta) , DIM=1)
+            DIFFMAX = pMatrix%HDelta(NODEMAX)
+            CALL pMatrix%GlobalNode_To_LocalNode(NODEMAX,iNodeMax_CompID,iNodeMax_Local)
         ELSE
-            IF (Matrix%RHSL2(ITERX) .LT. Matrix%RHSL2(ITERX-1)) THEN
-                IF (Matrix%RHSL2(ITERX-1) .LT. Matrix%RHSL2(ITERX-2)) THEN
-                    ConvergeData%iCount_DampingFactor = MAX(ConvergeData%iCount_DampingFactor-1 , 0)
-                END IF
+            NODEMAX         = 0
+            DIFFMAX         = 0D0
+            iNodeMax_CompID = 0
+            iNodeMax_Local  = 0
+        END IF
+        
+        !If convergence in the newton-raphson iteration is achieved, skip to the reporting
+        IF (DIFF_L2 .LE. pConvergeData%Tolerance) THEN
+            IF (DIFF_L2 .EQ. 0.0) GOTO 100
+            IF (ITERX .GT. 1) THEN
+                IF (pMatrix%RHSL2(ITERX)/pMatrix%RHSL2(1) .LT. pConvergeData%rVolumeTolerance) GOTO 100
+            ELSE
+                GOTO 100
             END IF
         END IF
         
-        ! add damping for oscillation
-        IF (ConvergeData%NODEMAX_OLD .EQ. NODEMAX) THEN
-            IF (ConvergeData%DIFFMAX_OLD*DIFFMAX .LT. 0.0) THEN
-               IF (MAX(ABS(ConvergeData%DIFF_L2_OLD/DIFF_L2 ),ABS(DIFF_L2/ConvergeData%DIFF_L2_OLD )) .LT. 1.3) THEN
-                   ConvergeData%iCount_DampingFactor = ConvergeData%iCount_DampingFactor + 1
-               END IF
+        !Compute Cooley's damping factor based on his 1983 paper
+        IF (ITERX .EQ. 1) THEN
+            pConvergeData%rCooleyFactor = 1.0
+        ELSE
+            IF (pConvergeData%DIFFMAX_OLD .EQ. 0.0) THEN
+                rS = 1.0
+            ELSE
+                rS = DIFFMAX / (pConvergeData%rCooleyFactor * pConvergeData%DIFFMAX_OLD)
+            END IF
+            IF (rS .LT. -1.0) THEN
+                pConvergeData%rCooleyFactor = 0.5d0 / ABS(rS)
+            ELSE
+                pConvergeData%rCooleyFactor = (3d0 + rS) / (3d0 + ABS(rS))
             END IF
         END IF
-                 
-        Factor = MAX(0.5**(ConvergeData%iCount_DampingFactor/10) * 0.5  ,  9.765625D-4)       
-    
-    ELSE
-        IF (DIFF_L2 .GT. 2.0d0*ConvergeData%DIFF_L2_OLD) THEN
-            Factor = MIN(1.0 , MAX(ConvergeData%Tolerance/DIFF_L2 ,0.1))
+        
+        !Compute damping factor computed heuristically based on previous experience 
+        Factor = 1.0
+        IF (ITERX .EQ. 1) THEN
+            pConvergeData%iCount_DampingFactor = 0
             
-        ELSEIF (ConvergeData%NODEMAX_OLD .EQ. NODEMAX) THEN
-            IF (ConvergeData%DIFFMAX_OLD*DIFFMAX .LT. 0.0) THEN
-                IF (MAX(ABS(ConvergeData%DIFF_L2_OLD/DIFF_L2 ),ABS(DIFF_L2/ConvergeData%DIFF_L2_OLD )) .LT. 1.3) THEN
-                    Factor = 0.5D0
-                END IF
-            END IF  
-        ELSEIF (Matrix%RHSL2(ITERX) .GT. Matrix%RHSL2(ITERX-1)) THEN    
-            Factor = 1D0 / (1D0+1D-3*(Matrix%RHSL2(ITERX)/MAX(Matrix%RHSL2(1),Matrix%RHSL2(ITERX-1))))
-        END IF       
-    END IF
-    
-    !Apply damping factor, if needed
-    Factor = MIN(Factor , ConvergeData%rCooleyFactor)
-    IF (Factor .LT. 1.0) Matrix%HDelta = Matrix%HDelta * Factor
-    
-    !Store convergence data
-    ConvergeData%DIFF_L2_OLD = DIFF_L2
-    ConvergeData%DIFFMAX_OLD = DIFFMAX
-    ConvergeData%NODEMAX_OLD = NODEMAX
-    
-    !Update stream surface elevation
-    CALL Matrix%GetCompRowIndices(f_iStrmComp,iCompRowStart,iCompRowEnd)
-    CALL AppStream%UpdateHeads(Matrix%HDelta(iCompRowStart:iCompRowEnd))
-
-    !Update lake elevation
-    CALL Matrix%GetCompRowIndices(f_iLakeComp,iCompRowStart,iCompRowEnd)
-    CALL AppLake%UpdateHeads(Matrix%HDelta(iCompRowStart:iCompRowEnd))
-
-    !Update groundwater heads
-    CALL Matrix%GetCompRowIndices(f_iGWComp,iCompRowStart,iCompRowEnd)
-    CALL AppGW%UpdateHeads(Matrix%HDelta(iCompRowStart:iCompRowEnd))
-
-    !Check if desired convergence is achieved
-    IF (ITERX .LT. ConvergeData%IterMax) THEN
-        lEndIteration = .FALSE.
-    ELSE
-        CALL Matrix%GlobalNode_To_LocalNode(NODEMAX,iNodeMax_CompID,iNodeMax_Local)
-        CALL Matrix%GetMaxHDeltaNode_CompID(NODEMAX,cCompName)
-        MessageArray(1) = 'Desired convergence at '//TRIM(cCompName)//' node was not achieved.'
-        SELECT CASE (iNodeMax_CompID)
-            CASE (f_iStrmComp)
-                NODEMAX         = AppStream%GetStrmNodeID(iNodeMax_Local)
-                MessageArray(2) = TRIM(cCompName)//' node = '//TRIM(IntTotext(NODEMAX))
-            CASE (f_iLakeComp)
-                NODEMAX         = AppLake%GetLakeID(iNodeMax_Local)
-                MessageArray(2) = TRIM(cCompName)//' node = '//TRIM(IntTotext(NODEMAX))
-            CASE (f_iGWComp)
-                DO indxLayer=1,NLayers
-                    indxS = (indxLayer-1)*NNodes + 1
-                    indxL = indxLayer*NNodes
-                    IF (iNodeMax_Local.GE.indxS  .AND.  iNodeMax_Local.LE.indxL) THEN
-                        NODEMAX         = AppGrid%AppNode(iNodeMax_Local-indxS+1)%ID
-                        MessageArray(2) = TRIM(cCompName)//' node = '//TRIM(IntTotext(NODEMAX))//', Layer = '//TRIM(IntToText(indxLayer))
-                        EXIT
+        ELSEIF (ITERX .GT. 160) THEN
+            Factor = 0.03125D0
+            
+        ELSE IF (ITERX .GT. 30) THEN
+            IF (DIFF_L2 .GT. 2.0*pConvergeData%DIFF_L2_OLD) THEN
+                pConvergeData%iCount_DampingFactor = pConvergeData%iCount_DampingFactor + 1
+            ELSE
+                IF (pMatrix%RHSL2(ITERX) .LT. pMatrix%RHSL2(ITERX-1)) THEN
+                    IF (pMatrix%RHSL2(ITERX-1) .LT. pMatrix%RHSL2(ITERX-2)) THEN
+                        pConvergeData%iCount_DampingFactor = MAX(pConvergeData%iCount_DampingFactor-1 , 0)
                     END IF
-                END DO
-        END SELECT
-        WRITE (MessageArray(3),'(A,G10.3)') 'Difference = ',-DIFFMAX
-        CALL SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
-        iStat = -1
-        RETURN
-    END IF
-
-    
-100 CONTINUE
-
-    
-    cNodeMax = ''
-    IF (iNodeMax_Local .EQ. 0) THEN
-        cNodeMax = '0'
-    ELSE
-        SELECT CASE (iNodeMax_CompID)
-            CASE (f_iStrmComp)
-                iStrmNodeID = AppStream%GetStrmNodeID(iNodeMax_Local)
-                cNodeMax    = 'ST_' // TRIM(IntToText(iStrmNodeID))
-            CASE (f_iLakeComp)
-                iLakeID = AppLake%GetLakeID(iNodeMax_Local)
-                cNodeMax = 'LK_' // TRIM(IntToText(iLakeID))
-            CASE (f_iGWComp)
-                CALL Discretization_GetNodeLayer(NNodes,iNodeMax_Local,iNode,iLayer)
-                cNodeMax = 'GW_' // TRIM(IntToText(AppGrid%AppNode(iNode)%ID)) // '_(L' // TRIM(IntToText(iLayer)) // ')'
-        END SELECT
-    END IF
-    
-    !WRITE (MessageArray(1),'(1X,I6,4X,G13.6,4X,G13.6,4X,A15,3X,G13.6)') ITERX,DIFF_L2,-DIFFMAX,cNodeMax,Matrix%RHSL2(ITERX)
-    WRITE (MessageArray(1),'(1X,I6,4X,G13.6,4X,G13.6,4X,A15)') ITERX,DIFF_L2,-DIFFMAX,cNodeMax
-    CALL LogMessage(MessageArray(1),f_iMessage,'',Destination=f_iFILE)
+                END IF
+            END IF
+            
+            ! add damping for oscillation
+            IF (pConvergeData%NODEMAX_OLD .EQ. NODEMAX) THEN
+                IF (pConvergeData%DIFFMAX_OLD*DIFFMAX .LT. 0.0) THEN
+                   IF (MAX(ABS(pConvergeData%DIFF_L2_OLD/DIFF_L2 ),ABS(DIFF_L2/pConvergeData%DIFF_L2_OLD )) .LT. 1.3) THEN
+                       pConvergeData%iCount_DampingFactor = pConvergeData%iCount_DampingFactor + 1
+                   END IF
+                END IF
+            END IF
+                     
+            Factor = MAX(0.5**(pConvergeData%iCount_DampingFactor/10) * 0.5  ,  9.765625D-4)       
+        
+        ELSE
+            IF (DIFF_L2 .GT. 2.0d0*pConvergeData%DIFF_L2_OLD) THEN
+                Factor = MIN(1.0 , MAX(pConvergeData%Tolerance/DIFF_L2 ,0.1))
+                
+            ELSEIF (pConvergeData%NODEMAX_OLD .EQ. NODEMAX) THEN
+                IF (pConvergeData%DIFFMAX_OLD*DIFFMAX .LT. 0.0) THEN
+                    IF (MAX(ABS(pConvergeData%DIFF_L2_OLD/DIFF_L2 ),ABS(DIFF_L2/pConvergeData%DIFF_L2_OLD )) .LT. 1.3) THEN
+                        Factor = 0.5D0
+                    END IF
+                END IF  
+            ELSEIF (pMatrix%RHSL2(ITERX) .GT. pMatrix%RHSL2(ITERX-1)) THEN    
+                Factor = 1D0 / (1D0+1D-3*(pMatrix%RHSL2(ITERX)/MAX(pMatrix%RHSL2(1),pMatrix%RHSL2(ITERX-1))))
+            END IF       
+        END IF
+        
+        !Apply damping factor, if needed
+        Factor = MIN(Factor , pConvergeData%rCooleyFactor)
+        IF (Factor .LT. 1.0) pMatrix%HDelta = pMatrix%HDelta * Factor
+        
+        !Store convergence data
+        pConvergeData%DIFF_L2_OLD = DIFF_L2
+        pConvergeData%DIFFMAX_OLD = DIFFMAX
+        pConvergeData%NODEMAX_OLD = NODEMAX
+        
+        !Update stream surface elevation
+        CALL pMatrix%GetCompRowIndices(f_iStrmComp,iCompRowStart,iCompRowEnd)
+        CALL pAppStream%UpdateHeads(pMatrix%HDelta(iCompRowStart:iCompRowEnd))
+        
+        !Update lake elevation
+        CALL pMatrix%GetCompRowIndices(f_iLakeComp,iCompRowStart,iCompRowEnd)
+        CALL pAppLake%UpdateHeads(pMatrix%HDelta(iCompRowStart:iCompRowEnd))
+        
+        !Update groundwater heads
+        CALL pMatrix%GetCompRowIndices(f_iGWComp,iCompRowStart,iCompRowEnd)
+        CALL pAppGW%UpdateHeads(pMatrix%HDelta(iCompRowStart:iCompRowEnd))
+        
+        !Check if desired convergence is achieved
+        IF (ITERX .LT. pConvergeData%IterMax) THEN
+            lEndIteration = .FALSE.
+        ELSE
+            CALL pMatrix%GlobalNode_To_LocalNode(NODEMAX,iNodeMax_CompID,iNodeMax_Local)
+            CALL pMatrix%GetMaxHDeltaNode_CompID(NODEMAX,cCompName)
+            MessageArray(1) = 'Desired convergence at '//TRIM(cCompName)//' node was not achieved.'
+            SELECT CASE (iNodeMax_CompID)
+                CASE (f_iStrmComp)
+                    NODEMAX         = pAppStream%GetStrmNodeID(iNodeMax_Local)
+                    MessageArray(2) = TRIM(cCompName)//' node = '//TRIM(IntTotext(NODEMAX))
+                CASE (f_iLakeComp)
+                    NODEMAX         = pAppLake%GetLakeID(iNodeMax_Local)
+                    MessageArray(2) = TRIM(cCompName)//' node = '//TRIM(IntTotext(NODEMAX))
+                CASE (f_iGWComp)
+                    DO indxLayer=1,NLayers
+                        indxS = (indxLayer-1)*NNodes + 1
+                        indxL = indxLayer*NNodes
+                        IF (iNodeMax_Local.GE.indxS  .AND.  iNodeMax_Local.LE.indxL) THEN
+                            NODEMAX         = pAppGrid%AppNode(iNodeMax_Local-indxS+1)%ID
+                            MessageArray(2) = TRIM(cCompName)//' node = '//TRIM(IntTotext(NODEMAX))//', Layer = '//TRIM(IntToText(indxLayer))
+                            EXIT
+                        END IF
+                    END DO
+            END SELECT
+            WRITE (MessageArray(3),'(A,G10.3)') 'Difference = ',-DIFFMAX
+            CALL SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+            iStat = -1
+            RETURN
+        END IF
+        
+        
+100     CONTINUE
+        
+        
+        cNodeMax = ''
+        IF (iNodeMax_Local .EQ. 0) THEN
+            cNodeMax = '0'
+        ELSE
+            SELECT CASE (iNodeMax_CompID)
+                CASE (f_iStrmComp)
+                    iStrmNodeID = pAppStream%GetStrmNodeID(iNodeMax_Local)
+                    cNodeMax    = 'ST_' // TRIM(IntToText(iStrmNodeID))
+                CASE (f_iLakeComp)
+                    iLakeID = pAppLake%GetLakeID(iNodeMax_Local)
+                    cNodeMax = 'LK_' // TRIM(IntToText(iLakeID))
+                CASE (f_iGWComp)
+                    CALL Discretization_GetNodeLayer(NNodes,iNodeMax_Local,iNode,iLayer)
+                    cNodeMax = 'GW_' // TRIM(IntToText(pAppGrid%AppNode(iNode)%ID)) // '_(L' // TRIM(IntToText(iLayer)) // ')'
+            END SELECT
+        END IF
+        
+        WRITE (MessageArray(1),'(1X,I6,4X,G13.6,4X,G13.6,4X,A15,2X,G13.6)') ITERX,DIFF_L2,-DIFFMAX,cNodeMax,pMatrix%RHSL2(ITERX)/pMatrix%RHSL2(1)
+        !WRITE (MessageArray(1),'(1X,I6,4X,G13.6,4X,G13.6,4X,A15)') ITERX,DIFF_L2,-DIFFMAX,cNodeMax
+        CALL LogMessage(MessageArray(1),f_iMessage,'',Destination=f_iFILE)
+    END ASSOCIATE
     
   END SUBROUTINE Convergence
     
@@ -8246,12 +8300,22 @@ CONTAINS
     INTEGER,INTENT(OUT)            :: iStat 
     
     !Local variables
-    INTEGER :: iCompRowStart,iCompRowEnd,iNStrmNodes,iWSAStrmNodes(Model%WSA%GetNWSA())
-    REAL(8) :: rWSAStrmFlows(Model%WSA%GetNWSA()),rStrmWSAs(Model%AppStream%GetNStrmNodes()), &
-               rElemPerc(Model%AppGrid%NElements)
+    INTEGER :: iCompRowStart_Strm,iCompRowEnd_Strm,iCompRowStart_Lake,iCompRowEnd_Lake,iCompRowStart_GW,iCompRowEnd_GW, &
+               iNStrmNodes,iNLakes,iWSAStrmNodes(Model%WSA%GetNWSA())
+    REAL(8) :: rWSAStrmFlows(Model%WSA%GetNWSA()),rStrmWSAs(Model%AppStream%GetNStrmNodes()),                   &
+               rElemPerc(Model%AppGrid%NElements),rStrmHeads(Model%AppStream%GetNStrmNodes()),                  &
+               rLakeHeads(Model%AppLake%GetNLakes()),rGWHeads(Model%AppGrid%NNodes,Model%Stratigraphy%NLayers), &
+               rGWReturnFlowIntoStrmNodes(Model%AppStream%GetNStrmNodes()),                                     &
+               rGWReturnFlowIntoLakes(Model%AppLake%GetNLakes()) 
     
     !Initialize
     iNStrmNodes = Model%AppStream%GetNStrmNodes()
+    iNLakes     = Model%AppLake%GetNLakes()
+    
+    !Retrieve heads to restore them back later
+    CALL Model%AppStream%GetHeads(rStrmHeads)
+    rLakeHeads = Model%AppLake%GetElevs(iNLakes)
+    CALL Model%AppGW%GetHeads_All(.FALSE.,rGWHeads)
     
     !Function call counter
     Model%iNRHSFunctionCalls = Model%iNRHSFunctionCalls + 1
@@ -8261,22 +8325,25 @@ CONTAINS
     
     !Set stream heads
     IF (Model%AppStream%IsDefined()) THEN
-        CALL Model%Matrix%GetCompRowIndices(f_iStrmComp,iCompRowStart,iCompRowEnd)
-        CALL Model%AppStream%SetHeads(rHeads(iCompRowStart:iCompRowEnd))
+        CALL Model%Matrix%GetCompRowIndices(f_iStrmComp,iCompRowStart_Strm,iCompRowEnd_Strm)
+        CALL Model%AppStream%SetHeads(rHeads(iCompRowStart_Strm:iCompRowEnd_Strm))
     END IF
     
     !Set lake elevations
     IF (Model%AppLake%IsDefined()) THEN
-        CALL Model%Matrix%GetCompRowIndices(f_iLakeComp,iCompRowStart,iCompRowEnd)
-!        CALL Model%AppLake%SetHeads(rHeads(iCompRowStart:iCompRowEnd))
+        CALL Model%Matrix%GetCompRowIndices(f_iLakeComp,iCompRowStart_Lake,iCompRowEnd_Lake)
+!        CALL Model%AppLake%SetHeads(rHeads(iCompRowStart_Lake:iCompRowEnd_Lake))
     END IF
     
     !Set gw heads
-    CALL Model%Matrix%GetCompRowIndices(f_iGWComp,iCompRowStart,iCompRowEnd)
-    CALL Model%AppGW%SetHeads(rHeads(iCompRowStart:iCompRowEnd))
+    CALL Model%Matrix%GetCompRowIndices(f_iGWComp,iCompRowStart_GW,iCompRowEnd_GW)
+    CALL Model%AppGW%SetHeads(rHeads(iCompRowStart_GW:iCompRowEnd_GW))
     
 ! ***** GET GW HEAD VALUES TO BE USED IN DIFFERENT COMPONENTS
     CALL Model%AppGW%GetHeads_All(lPrevious=.FALSE. , Heads=Model%GWHeads)
+
+! ***** GET GW RETURN FLOWS INTO STREAM NODES AND LAKES
+    CALL Model%AppGW%GetGWReturnFlowsIntoStrmNodesAndLakes(rGWReturnFlowIntoStrmNodes,rGWReturnFlowIntoLakes)
 
 ! ***** UPDATE MATRIX RHS FOR SMALL WATERSHEDS
     CALL Model%AppSWShed%UpdateRHS(Model%AppGrid%NNodes , Model%Matrix)
@@ -8287,10 +8354,10 @@ CONTAINS
     IF (Model%WSA%IsHistoricalRun()) THEN
         CALL Model%WSA%GetStrmNodes(iWSAStrmNodes)
         CALL Model%WSA%GetSpecifiedStrmFlows(rWSAStrmFlows)
-        CALL Model%AppStream%ComputeRHS(Model%GWHeads,Model%QROFF,Model%QRTRN,Model%QRPONDDRAIN,Model%QTRIB,Model%QTDRAIN,Model%QRVET,Model%ETData,Model%QRVETFRAC,Model%StrmGWConnector,Model%StrmLakeConnector,Model%Matrix,iStrmFlowNodes=iWSAStrmNodes,rStrmFlows=rWSAStrmFlows)
+        CALL Model%AppStream%ComputeRHS(Model%GWHeads,rGWReturnFlowIntoStrmNodes,Model%QROFF,Model%QRTRN,Model%QRPONDDRAIN,Model%QTRIB,Model%QTDRAIN,Model%QRVET,Model%ETData,Model%QRVETFRAC,Model%StrmGWConnector,Model%StrmLakeConnector,Model%Matrix,iStrmFlowNodes=iWSAStrmNodes,rStrmFlows=rWSAStrmFlows)
     ELSE
         CALL Model%WSA%GetWSAs_AtAllNodes(rStrmWSAs)
-        CALL Model%AppStream%ComputeRHS(Model%GWHeads,Model%QROFF,Model%QRTRN,Model%QRPONDDRAIN,Model%QTRIB,Model%QTDRAIN,Model%QRVET,Model%ETData,Model%QRVETFRAC,Model%StrmGWConnector,Model%StrmLakeConnector,Model%Matrix,rWSA=rStrmWSAs)
+        CALL Model%AppStream%ComputeRHS(Model%GWHeads,rGWReturnFlowIntoStrmNodes,Model%QROFF,Model%QRTRN,Model%QRPONDDRAIN,Model%QTRIB,Model%QTDRAIN,Model%QRVET,Model%ETData,Model%QRVETFRAC,Model%StrmGWConnector,Model%StrmLakeConnector,Model%Matrix,rWSA=rStrmWSAs)
     END IF
                      
     IF (Model%lRootZone_Defined) THEN      
@@ -8358,6 +8425,13 @@ CONTAINS
 
     !Retrieve RHS
     CALL Model%Matrix%GetRHSVector(rRHS)
+    
+    !Restore process heads back to what they were
+    IF (Model%AppStream%IsDefined()) CALL Model%AppStream%SetHeads(rStrmHeads)
+    IF (Model%AppLake%IsDefined()) THEN
+!        CALL Model%AppLake%SetHeads(rLakeHeads)
+    END IF
+    CALL Model%AppGW%SetHeads(PACK(rGWHeads,MASK=.TRUE.))
     
   END SUBROUTINE RHSFunction
 

@@ -21,14 +21,17 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 MODULE LakeGWConnector
-  USE MessageLogger          , ONLY: SetLastMessage  , &
-                                     EchoProgress    , &
-                                     f_iFatal
-  USE GeneralUtilities
+  USE MessageLogger          , ONLY: SetLastMessage           , &
+                                     EchoProgress             , &
+                                     f_iFatal                 
+  USE GeneralUtilities       , ONLY: ShellSort                , &
+                                     GetUniqueArrayComponents , &
+                                     AllocArray               , &
+                                     UpperCase             
   USE TimeSeriesUtilities
   USE IOInterface
   USE Package_Discretization
-  USE Package_Misc           , ONLY: f_iLakeComp     , &
+  USE Package_Misc           , ONLY: f_iLakeComp              , &
                                      f_iGWComp
   USE Package_Matrix         , ONLY: MatrixType
   IMPLICIT NONE
@@ -89,6 +92,8 @@ MODULE LakeGWConnector
       PROCEDURE,PASS :: AddGWNodes
       PROCEDURE,PASS :: Kill 
       PROCEDURE,PASS :: IsDefined
+      PROCEDURE,PASS :: GetMaxConductances
+      PROCEDURE,PASS :: GetGWNodes
       PROCEDURE,PASS :: GetFlowAtLakes 
       PROCEDURE,PASS :: GetFlowAtLakeElements
       PROCEDURE,PASS :: GetFlowAtAllLakeElements
@@ -166,10 +171,10 @@ CONTAINS
                   pLake%ElemConnectors(indxElem)%iLayer(NVertex)      , &
                   pLake%ElemConnectors(indxElem)%Conductance(NVertex) , &
                   pLAke%ElemConnectors(indxElem)%Flow(NVertex)        )
-        pLake%ElemConnectors(indxElem)%NGWNode     = NVertex
-        pLake%ElemConnectors(indxElem)%iElemID     = iElem
-        pLake%ElemConnectors(indxElem)%iGWNode     = Vertex(1:NVertex)
-        pLake%ElemConnectors(indxElem)%iLayer      = Stratigraphy%TopActiveLayer(Vertex(1:NVertex))        
+        pLake%ElemConnectors(indxElem)%NGWNode = NVertex
+        pLake%ElemConnectors(indxElem)%iElemID = iElem
+        pLake%ElemConnectors(indxElem)%iGWNode = Vertex(1:NVertex)
+        pLake%ElemConnectors(indxElem)%iLayer  = Stratigraphy%TopActiveLayer(Vertex(1:NVertex))        
       END DO
       
     END ASSOCIATE
@@ -245,6 +250,96 @@ CONTAINS
 ! ******************************************************************
 ! ******************************************************************
 
+  ! -------------------------------------------------------------
+  ! --- GET MAXIMUM CONDUCTANCES AT ALL NODES (SINCE A NODE CAN BELONG TO MULTIPLE LAKE ELEMENTS WITH DIFFERENT CONDUCTANCE)
+  ! -------------------------------------------------------------
+  SUBROUTINE GetMaxConductances(Connector,rMaxConductance)
+    CLASS(LakeGWConnectorType),INTENT(IN) :: Connector
+    REAL(8),ALLOCATABLE,INTENT(INOUT)     :: rMaxConductance(:)
+
+    !Local variables
+    INTEGER             :: iErrorCode,indxLake,indxElem,indxNode,indxElemNode,iNode
+    INTEGER,ALLOCATABLE :: iGWNodeList(:)
+    
+    !Initialize
+    DEALLOCATE (rMaxConductance ,STAT=iErrorCode)
+    
+    !Return with an empty list if no lkaes are defined
+    IF (.NOT. Connector%lDefined) THEN
+        ALLOCATE(rMaxConductance(0))
+        RETURN
+    END IF
+    
+    !Get a list of lake gw nodes
+    CALL GetGWNodes(Connector,iGWNodeList)
+    ALLOCATE (rMaxConductance(SIZE(iGWNodeList)))
+    
+    !Loop through nodes
+    DO indxNode=1,SIZE(iGWNodeList)
+        iNode                     = iGWNodeList(indxNode)
+        rMaxConductance(indxNode) = 0.0
+        !Loop through lakes
+        DO indxLake=1,SIZE(Connector%Lakes)
+            DO indxElem=1,Connector%Lakes(indxLake)%NElems
+                DO indxElemNode=1,Connector%Lakes(indxLake)%ElemConnectors(indxElem)%NGWNode
+                    IF (iNode .EQ. Connector%Lakes(indxLake)%ElemConnectors(indxElem)%iGWNode(indxElemNode)) THEN
+                        rMaxConductance(indxNode) = MAX(rMaxConductance(indxNode) , Connector%Lakes(indxLake)%ElemConnectors(indxElem)%Conductance(indxElemNode))
+                        EXIT
+                    END IF
+                END DO
+            END DO
+        END DO
+    END DO
+    
+  END SUBROUTINE GetMaxConductances
+  
+  
+  ! -------------------------------------------------------------
+  ! --- GET A LIST OF GW NODES THAT INTERACT WITH THE LAKES
+  ! -------------------------------------------------------------
+  SUBROUTINE GetGWNodes(Connector,iGWNodeList)
+    CLASS(LakeGWConnectorType),INTENT(IN) :: Connector
+    INTEGER,ALLOCATABLE,INTENT(INOUT)     :: iGWNodeList(:)
+    
+    !Local variables
+    INTEGER             :: iErrorCode,iNTotalNodes,indxLake,indxElem,iCount,iNGWNodes
+    INTEGER,ALLOCATABLE :: iTempList(:)
+    
+    !Initialize
+    DEALLOCATE (iGWNodeList ,STAT=iErrorCode)
+    
+    !Return with an empty list if no lkaes are defined
+    IF (.NOT. Connector%lDefined) THEN
+        ALLOCATE(iGWNodeList(0))
+        RETURN
+    END IF
+    
+    !Total number of nodes
+    iNTotalNodes = 0
+    DO indxLake=1,SIZE(Connector%Lakes)
+        iNTotalNodes = iNTotalNodes + SUM(Connector%Lakes(indxLake)%ElemConnectors%NGWNode)
+    END DO
+    
+    !Compile nodes
+    ALLOCATE (iTempList(iNTotalNodes))
+    iCount = 0
+    DO indxLake=1,SIZE(Connector%Lakes)
+        DO indxElem=1,Connector%Lakes(indxLake)%NElems
+            iNGWNodes                            = Connector%Lakes(indxLake)%ElemConnectors(indxElem)%NGWNode
+            iTempList(iCount+1:iCount+iNGWNodes) = Connector%Lakes(indxLake)%ElemConnectors(indxElem)%iGWNode
+            iCount                               = iCount + iNGWNodes 
+        END DO
+    END DO
+    
+    !List of unique gw node numbers
+    CALL GetUniqueArrayComponents(iTempList,iGWNodeList)
+    
+    !Sort the node numbers
+    CALL ShellSort(iGWNodeList)
+    
+  END SUBROUTINE GetGWNodes
+  
+  
   ! -------------------------------------------------------------
   ! --- GET SUBREGIONAL LAKE-GW INTERACTIONS
   ! -------------------------------------------------------------

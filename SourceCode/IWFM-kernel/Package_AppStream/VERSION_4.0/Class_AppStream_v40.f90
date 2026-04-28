@@ -1235,9 +1235,9 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- CALCULATE STREAM FLOWS
   ! -------------------------------------------------------------
-  SUBROUTINE AppStream_v40_Simulate(AppStream,GWHeads,Runoff,ReturnFlow,PondDrain,TributaryFlow,DrainInflows,RiparianET,ETData,RiparianETFrac,StrmGWConnector,StrmLakeConnector,Matrix)
+  SUBROUTINE AppStream_v40_Simulate(AppStream,GWHeads,GWReturnFlow,Runoff,ReturnFlow,PondDrain,TributaryFlow,DrainInflows,RiparianET,ETData,RiparianETFrac,StrmGWConnector,StrmLakeConnector,Matrix)
     CLASS(AppStream_v40_Type)   :: AppStream
-    REAL(8),INTENT(IN)          :: GWHeads(:,:),Runoff(:),ReturnFlow(:),PondDrain(:),TributaryFlow(:),DrainInflows(:),RiparianET(:)
+    REAL(8),INTENT(IN)          :: GWHeads(:,:),GWReturnFlow(:),Runoff(:),ReturnFlow(:),PondDrain(:),TributaryFlow(:),DrainInflows(:),RiparianET(:)
     TYPE(ETType),INTENT(IN)     :: ETData
     REAL(8),INTENT(OUT)         :: RiparianETFrac(:)
     TYPE(StrmGWConnectorType)   :: StrmGWConnector
@@ -1299,6 +1299,7 @@ CONTAINS
             
             !Inflows at the stream node with known values
             rInflow = Inflows(indxNode)                                       &    !Inflow as defined by the user
+                    + GWReturnFlow(indxNode)                                  &    !GW return flow
                     + Runoff(indxNode)                                        &    !Direct runoff of precipitation 
                     + ReturnFlow(indxNode)                                    &    !Return flow of applied water 
                     + PondDrain(indxNode)                                     &    !Pond drain from ponded ag 
@@ -1399,9 +1400,9 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- CALCULATE EFECT OF STREAM FLOWS ON RHS VECTOR ONLY
   ! -------------------------------------------------------------
-  SUBROUTINE AppStream_v40_ComputeRHS(AppStream,GWHeads,Runoff,ReturnFlow,PondDrain,TributaryFlow,DrainInflows,RiparianET,ETData,RiparianETFrac,StrmGWConnector,StrmLakeConnector,Matrix)
+  SUBROUTINE AppStream_v40_ComputeRHS(AppStream,GWHeads,GWReturnFlow,Runoff,ReturnFlow,PondDrain,TributaryFlow,DrainInflows,RiparianET,ETData,RiparianETFrac,StrmGWConnector,StrmLakeConnector,Matrix)
     CLASS(AppStream_v40_Type)   :: AppStream
-    REAL(8),INTENT(IN)          :: GWHeads(:,:),Runoff(:),ReturnFlow(:),PondDrain(:),TributaryFlow(:),DrainInflows(:),RiparianET(:)
+    REAL(8),INTENT(IN)          :: GWHeads(:,:),GWReturnFlow(:),Runoff(:),ReturnFlow(:),PondDrain(:),TributaryFlow(:),DrainInflows(:),RiparianET(:)
     TYPE(ETType),INTENT(IN)     :: ETData
     REAL(8),INTENT(OUT)         :: RiparianETFrac(:)
     TYPE(StrmGWConnectorType)   :: StrmGWConnector
@@ -1455,6 +1456,7 @@ CONTAINS
             
             !Inflows at the stream node with known values
             rInflow = Inflows(indxNode)                                       &    !Inflow as defined by the user
+                    + GWReturnFlow(indxNode)                                  &    !GW return flow
                     + Runoff(indxNode)                                        &    !Direct runoff of precipitation 
                     + ReturnFlow(indxNode)                                    &    !Return flow of applied water 
                     + PondDrain(indxNode)                                     &    !Pond drain from ponded ag 

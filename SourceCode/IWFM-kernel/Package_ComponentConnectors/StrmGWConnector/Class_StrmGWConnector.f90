@@ -78,6 +78,7 @@ MODULE Class_StrmGWConnector
       PROCEDURE,PASS :: GetTotalFlowAtAllStrmNodes
       PROCEDURE,PASS :: GetFlowAtSomeStrmNodes
       PROCEDURE,PASS :: GetFlowAtGWNode
+      PROCEDURE,PASS :: GetConductances
       PROCEDURE,PASS :: GetLayer
       PROCEDURE,PASS :: GetAllLayers
       PROCEDURE,PASS :: GetAllGWNodes
@@ -500,6 +501,28 @@ CONTAINS
     IF (Connector%lDefined) CALL Connector%Me%GetAllLayers(Layers)
     
   END SUBROUTINE GetAllLayers
+  
+  
+  ! -------------------------------------------------------------
+  ! --- GET CONDUCTANCES
+  ! -------------------------------------------------------------
+  SUBROUTINE GetConductances(Connector,rConductance)
+    CLASS(StrmGWConnectorType),INTENT(IN) :: Connector
+    REAL(8),ALLOCATABLE,INTENT(INOUT)     :: rConductance(:)
+    
+    !Local variables
+    INTEGER             :: iErrorCode
+    REAL(8),ALLOCATABLE :: rConductanceLocal(:)
+
+    IF (Connector%lDefined) THEN
+        CALL Connector%Me%GetConductances(rConductanceLocal)
+        ALLOCATE (rConductance , SOURCE=rConductanceLocal)
+    ELSE
+        DEALLOCATE (rConductance , STAT=iErrorCode)
+        ALLOCATE (rConductance(0))
+    END IF
+    
+  END SUBROUTINE GetConductances
   
   
   ! -------------------------------------------------------------

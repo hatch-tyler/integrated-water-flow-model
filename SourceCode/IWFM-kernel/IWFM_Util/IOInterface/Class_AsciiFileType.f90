@@ -89,6 +89,7 @@ MODULE Class_AsciiFileType
       PROCEDURE,PASS :: Backspace                              => Backspace_AsciiInFile
       PROCEDURE,PASS :: SkipDataBlocks
       PROCEDURE,PASS :: Rewind                                 => Rewind_AsciiInFile
+      PROCEDURE,PASS :: GoToLine                               => GoToLine_AsciiInFile
       GENERIC        :: ReadData                               => ReadSingleData_AsciiInFile             , &
                                                                   ReadArrayData_AsciiInFile              , &
                                                                   ReadMatrixData_AsciiInFile
@@ -1183,7 +1184,7 @@ CONTAINS
           END IF
           
           !Rewind the file to the beginning of data set before the one that was just read; this allows for error-free data reading when there are multiple time steps in-between two measured data
-          CALL GoToLine(ThisFile,LineNumberToGo,iStat=iStat)  ;  IF (iStat .EQ. -1) RETURN  
+          CALL GoToLine_AsciiTSDInFile(ThisFile,LineNumberToGo,iStat=iStat)  ;  IF (iStat .EQ. -1) RETURN  
 
           !Convert the rate-type data so that the time unit matches the time step of simulation
           SELECT TYPE (Data)
@@ -1537,6 +1538,26 @@ CONTAINS
 
 
   ! -------------------------------------------------------------
+  ! --- GO TO LINE 
+  ! -------------------------------------------------------------
+  SUBROUTINE GoToLine_AsciiInFile(ThisFile,iGoToLine)
+    CLASS(AsciiInFileType) :: ThisFile
+    INTEGER,INTENT(IN)     :: iGoToLine
+    
+    !Local variables
+    INTEGER   :: indx
+    CHARACTER :: cAChar*1
+    
+    REWIND (ThisFile%UnitN)
+    DO indx=1,iGoToLine-1
+        READ (ThisFile%UnitN,'(A)') cAChar
+    END DO
+    ThisFile%AtLine = iGoToLine
+    
+  END SUBROUTINE GoToLine_AsciiInFile
+    
+  
+  ! -------------------------------------------------------------
   ! --- BACKSPACE IN FILE
   ! -------------------------------------------------------------
   SUBROUTINE Backspace_AsciiInFile(ThisFile,NBackspace)
@@ -1676,7 +1697,7 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- SUBROUTINE TO RE-POSITION THE POINTER AT A SPECIFIC LINE IN AN ASCII TSD FILE
   ! -------------------------------------------------------------
-  SUBROUTINE GoToLine(ThisFile,LineNumber,iStat)
+  SUBROUTINE GoToLine_AsciiTSDInFile(ThisFile,LineNumber,iStat)
     TYPE(AsciiTSDInFileType) :: ThisFile
     INTEGER,INTENT(IN)       :: LineNumber
     INTEGER,INTENT(OUT)      :: iStat
@@ -1694,7 +1715,7 @@ CONTAINS
       CALL ThisFile%Backspace(AtLine-LineNumber)
     END IF
 
-  END SUBROUTINE GoToLine
+  END SUBROUTINE GoToLine_AsciiTSDInFile
 
 
   ! -------------------------------------------------------------
@@ -1747,7 +1768,7 @@ CONTAINS
       CALL AssignLastDataDate(iStat)  ;  IF (iStat .EQ. -1) RETURN
       IF (LessThanJulianDate1) THEN
           JulianDate2 = JulianDate1
-          CALL GoToLine(ThisFile,LineNumber1,iStat=iStat)
+          CALL GoToLine_AsciiTSDInFile(ThisFile,LineNumber1,iStat=iStat)
           IF (iStat .EQ. -1) RETURN
       END IF
       ThisFile%JulianDate1 = JulianDate1

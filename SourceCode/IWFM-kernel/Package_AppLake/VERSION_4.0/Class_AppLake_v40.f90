@@ -681,9 +681,9 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- SIMULATE LAKES
   ! -------------------------------------------------------------
-  SUBROUTINE AppLake_v40_Simulate(AppLake,GSElevs,GWHeads,Runoff,ReturnFlow,PondDrain,LakeGWConnector,StrmLakeConnector,Matrix)
+  SUBROUTINE AppLake_v40_Simulate(AppLake,GSElevs,GWHeads,rGWReturnFlows,Runoff,ReturnFlow,PondDrain,LakeGWConnector,StrmLakeConnector,Matrix)
     CLASS(AppLake_v40_Type)              :: AppLake
-    REAL(8),INTENT(IN)                   :: GSElevs(:),GWHeads(:,:),Runoff(:),ReturnFlow(:),PondDrain(:)
+    REAL(8),INTENT(IN)                   :: GSElevs(:),GWHeads(:,:),rGWReturnFlows(:),Runoff(:),ReturnFlow(:),PondDrain(:)
     TYPE(LakeGWConnectorType),INTENT(IN) :: LakeGWConnector
     TYPE(StrmLakeConnectorType)          :: StrmLakeConnector
     TYPE(MatrixType)                     :: Matrix
@@ -717,9 +717,10 @@ CONTAINS
       !Initialize
       Elev        = AppLake%Lakes(indxLake)%Elev                                    !Lake elevation
       iNodeIDs(1) = indxLake                                                        !Lake to lake connectivity node
-      OtherInflow = StrmInflows(indxLake) &                                         !Inflows into lake
-                  + Runoff(indxLake)      &
-                  + ReturnFlow(indxLake)  &
+      OtherInflow = StrmInflows(indxLake)    &                                      !Inflows into lake
+                  + rGWReturnFlows(indxLake) &
+                  + Runoff(indxLake)         &
+                  + ReturnFlow(indxLake)     &
                   + PondDrain(indxLake)                                 
   
       !Lake storage

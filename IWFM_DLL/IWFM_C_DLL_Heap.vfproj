@@ -128,7 +128,18 @@
 					<File RelativePath="..\SourceCode\IWFM-kernel\Package_AppLake\Package_AppLake.f90"/>
 				</Filter>
 				<Filter Name="Package_AppSmallWatershed">
-					<File RelativePath="..\SourceCode\IWFM-kernel\Package_AppSmallWatershed\Package_AppSmallWatershed.f90"/>
+					<Filter Name="Version_4.0">
+						<File RelativePath="..\SourceCode\IWFM-kernel\Package_AppSmallWatershed\Version_4.0\Class_AppSmallWatershed_v40.f90">
+						</File>
+					</Filter>
+					<Filter Name="Version_4.1">
+						<File RelativePath="..\SourceCode\IWFM-kernel\Package_AppSmallWatershed\Version_4.1\Class_AppSmallWatershed_v41.f90">
+						</File>
+					</Filter>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_AppSmallWatershed\Class_BaseAppSmallWatershed.f90">
+					</File>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_AppSmallWatershed\Package_AppSmallWatershed.f90">
+					</File>
 				</Filter>
 				<Filter Name="Package_AppStream">
 					<Filter Name="Version_4.0">

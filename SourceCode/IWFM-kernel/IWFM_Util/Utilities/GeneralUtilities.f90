@@ -2082,7 +2082,7 @@ CONTAINS
     Indices = 0
     
     !$OMP PARALLEL DEFAULT(PRIVATE) SHARED(IDs,iDim,AllIDs,Indices) 
-    !$OMP DO SCHEDULE(STATIC,500) 
+    !$OMP DO SCHEDULE(STATIC,128) 
     DO indx=1,SIZE(IDs)
         IF (IDs(indx) .EQ. 0) CYCLE
         

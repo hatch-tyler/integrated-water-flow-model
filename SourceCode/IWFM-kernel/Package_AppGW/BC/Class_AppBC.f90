@@ -92,7 +92,8 @@ MODULE Class_AppBC
       LOGICAL                            :: lBCFlowOutput_Defined    = .FALSE.  !Flag to check if boundary node flow print-out is defined
   CONTAINS
       PROCEDURE,PASS :: New                               
-      PROCEDURE,PASS :: Kill                              
+      PROCEDURE,PASS :: Kill   
+      PROCEDURE,PASS :: GetConductance_AtANode
       PROCEDURE,PASS :: GetNNodesWithBCType               
       PROCEDURE,PASS :: GetNodesWithBCType    
       PROCEDURE,PASS :: GetBoundaryFlowAtFaceLayer
@@ -740,6 +741,41 @@ CONTAINS
     END SELECT
   
   END FUNCTION GetNNodesWithBCType
+  
+  
+  ! -------------------------------------------------------------
+  ! --- GET CONDUCTANCE AT A NODE AND LAYER
+  ! -------------------------------------------------------------
+  PURE FUNCTION GetConductance_AtANode(AppBC,iNode,iLayer,iBCType) RESULT(rConductance)
+    CLASS(AppBCType),INTENT(IN) :: AppBC
+    INTEGER,INTENT(IN)          :: iNode,iLayer,iBCType
+    REAL(8)                     :: rConductance
+    
+    !Local variables
+    INTEGER :: iLoc
+    
+    SELECT CASE (iBCType)
+        CASE (f_iGHBCID)
+            iLoc = LocateInList(iNode , AppBC%LayerBC(iLayer)%GHBC%iNode)
+            IF (iLoc .EQ. 0) THEN
+                rConductance = 0.0
+            ELSE
+                rConductance = AppBC%LayerBC(iLayer)%GHBC(iLoc)%rConductance
+            END IF
+            
+        CASE (f_iConstrainedGHBCID)
+            iLoc = LocateInList(iNode , AppBC%LayerBC(iLayer)%ConstrainedGHBC%iNode)
+            IF (iLoc .EQ. 0) THEN
+                rConductance = 0.0
+            ELSE
+                rConductance = AppBC%LayerBC(iLayer)%ConstrainedGHBC(iLoc)%rConductance
+            END IF
+            
+        CASE DEFAULT
+            rConductance = 0.0
+    END SELECT
+    
+  END FUNCTION GetConductance_AtANode
   
   
   

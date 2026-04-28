@@ -257,11 +257,12 @@ MODULE Class_BaseAppStream
   ! -------------------------------------------------------------
   ! --- BUDGET RELATED DATA
   ! -------------------------------------------------------------
-  INTEGER,PARAMETER           :: f_iNStrmBudColumns = 17
+  INTEGER,PARAMETER           :: f_iNStrmBudColumns = 18
   CHARACTER(LEN=30),PARAMETER :: f_cBudgetColumnTitles(f_iNStrmBudColumns) = ['Upstream Inflow (+)'             , &
                                                                               'Downstream Outflow (-)'          , &
                                                                               'Tributary Inflow (+)'            , &
                                                                               'Tile Drain (+)'                  , &
+                                                                              'GW Return Flow (+)'              , &
                                                                               'Runoff (+)'                      , &
                                                                               'Return Flow (+)'                 , &
                                                                               'Diversion Spills (+)'            , &
@@ -495,10 +496,10 @@ MODULE Class_BaseAppStream
      END SUBROUTINE Abstract_ConvertFlowToElev
      
      
-     SUBROUTINE Abstract_Simulate(AppStream,GWHeads,Runoff,ReturnFlow,PondDrain,TributaryFlow,DrainInflows,RiparianET,ETData,RiparianETFrac,StrmGWConnector,StrmLakeConnector,Matrix)
+     SUBROUTINE Abstract_Simulate(AppStream,GWHeads,GWReturnFlow,Runoff,ReturnFlow,PondDrain,TributaryFlow,DrainInflows,RiparianET,ETData,RiparianETFrac,StrmGWConnector,StrmLakeConnector,Matrix)
         IMPORT                      :: BaseAppStreamType,StrmGWConnectorType,StrmLakeConnectorType,MatrixType,ETType
         CLASS(BaseAppStreamType)    :: AppStream
-        REAL(8),INTENT(IN)          :: GWHeads(:,:),Runoff(:),ReturnFlow(:),PondDrain(:),TributaryFlow(:),DrainInflows(:),RiparianET(:)
+        REAL(8),INTENT(IN)          :: GWHeads(:,:),GWReturnFlow(:),Runoff(:),ReturnFlow(:),PondDrain(:),TributaryFlow(:),DrainInflows(:),RiparianET(:)
         TYPE(ETType),INTENT(IN)     :: ETData 
         REAL(8),INTENT(OUT)         :: RiparianETFrac(:)
         TYPE(StrmGWConnectorType)   :: StrmGWConnector
@@ -507,10 +508,10 @@ MODULE Class_BaseAppStream
      END SUBROUTINE Abstract_Simulate
      
      
-     SUBROUTINE Abstract_ComputeRHS(AppStream,GWHeads,Runoff,ReturnFlow,PondDrain,TributaryFlow,DrainInflows,RiparianET,ETData,RiparianETFrac,StrmGWConnector,StrmLakeConnector,Matrix)
+     SUBROUTINE Abstract_ComputeRHS(AppStream,GWHeads,GWReturnFlow,Runoff,ReturnFlow,PondDrain,TributaryFlow,DrainInflows,RiparianET,ETData,RiparianETFrac,StrmGWConnector,StrmLakeConnector,Matrix)
         IMPORT                      :: BaseAppStreamType,StrmGWConnectorType,StrmLakeConnectorType,MatrixType,ETType
         CLASS(BaseAppStreamType)    :: AppStream
-        REAL(8),INTENT(IN)          :: GWHeads(:,:),Runoff(:),ReturnFlow(:),PondDrain(:),TributaryFlow(:),DrainInflows(:),RiparianET(:)
+        REAL(8),INTENT(IN)          :: GWHeads(:,:),GWReturnFlow(:),Runoff(:),ReturnFlow(:),PondDrain(:),TributaryFlow(:),DrainInflows(:),RiparianET(:)
         TYPE(ETType),INTENT(IN)     :: ETData 
         REAL(8),INTENT(OUT)         :: RiparianETFrac(:)
         TYPE(StrmGWConnectorType)   :: StrmGWConnector
@@ -2071,11 +2072,11 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- PRINT OUT SIMULATION RESULTS
   ! -------------------------------------------------------------
-  SUBROUTINE PrintResults(AppStream,TimeStep,lEndOfSimulation,QTRIB,QROFF,QRTRN,QRPONDDRAIN,QTDRAIN,QRVET,BottomElev,StrmGWConnector,StrmLakeConnector)
+  SUBROUTINE PrintResults(AppStream,TimeStep,lEndOfSimulation,rGWReturnFlows,QTRIB,QROFF,QRTRN,QRPONDDRAIN,QTDRAIN,QRVET,BottomElev,StrmGWConnector,StrmLakeConnector)
     CLASS(BaseAppStreamType)               :: AppStream
     TYPE(TimeStepType),INTENT(IN)          :: TimeStep
     LOGICAL,INTENT(IN)                     :: lEndOfSimulation
-    REAL(8),INTENT(IN)                     :: QTRIB(:),QROFF(:),QRTRN(:),QRPONDDRAIN(:),QTDRAIN(:),QRVET(:),BottomElev(:)
+    REAL(8),INTENT(IN)                     :: rGWReturnFlows(:),QTRIB(:),QROFF(:),QRTRN(:),QRPONDDRAIN(:),QTDRAIN(:),QRVET(:),BottomElev(:)
     TYPE(StrmGWConnectorType),INTENT(IN)   :: StrmGWConnector
     TYPE(StrmLakeConnectorType),INTENT(IN) :: StrmLakeConnector
   
@@ -2087,10 +2088,10 @@ CONTAINS
       CALL AppStream%StrmHyd%PrintResults(AppStream%State,BottomElev,TimeStep,lEndOfSimulation)
     
     !Print stream reach budget
-    IF (AppStream%StrmReachBudRawFile_Defined) CALL WriteStrmReachFlowsToBudRawFile(QTRIB,QROFF,QRTRN,QRPONDDRAIN,QTDRAIN,QRVET,StrmGWConnector,StrmLakeConnector,AppStream)
+    IF (AppStream%StrmReachBudRawFile_Defined) CALL WriteStrmReachFlowsToBudRawFile(rGWReturnFlows,QTRIB,QROFF,QRTRN,QRPONDDRAIN,QTDRAIN,QRVET,StrmGWConnector,StrmLakeConnector,AppStream)
     
     !Print stream node budget
-    IF (AppStream%StrmNodeBudget%StrmNodeBudRawFile_Defined) CALL WriteStrmNodeFlowsToBudRawFile(QTRIB,QROFF,QRTRN,QRPONDDRAIN,QTDRAIN,QRVET,StrmGWConnector,StrmLakeConnector,AppStream)
+    IF (AppStream%StrmNodeBudget%StrmNodeBudRawFile_Defined) CALL WriteStrmNodeFlowsToBudRawFile(rGWReturnFlows,QTRIB,QROFF,QRTRN,QRPONDDRAIN,QTDRAIN,QRVET,StrmGWConnector,StrmLakeConnector,AppStream)
     
     !Print diversion details
     CALL AppStream%AppDiverBypass%PrintResults()
@@ -2101,9 +2102,9 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- WRITE RAW STREAM REACH BUDGET DATA
   ! -------------------------------------------------------------
-  SUBROUTINE WriteStrmReachFlowsToBudRawFile(QTRIB,QROFF,QRTRN,QRPONDDRAIN,QTDRAIN,QRVET,StrmGWConnector,StrmLakeConnector,AppStream)
+  SUBROUTINE WriteStrmReachFlowsToBudRawFile(rGWRtrnFlws,QTRIB,QROFF,QRTRN,QRPONDDRAIN,QTDRAIN,QRVET,StrmGWConnector,StrmLakeConnector,AppStream)
     CLASS(BaseAppStreamType)                           :: AppStream
-    REAL(8),DIMENSION(AppStream%NStrmNodes),INTENT(IN) :: QTRIB,QROFF,QRTRN,QRPONDDRAIN,QTDRAIN,QRVET
+    REAL(8),DIMENSION(AppStream%NStrmNodes),INTENT(IN) :: rGWRtrnFlws,QTRIB,QROFF,QRTRN,QRPONDDRAIN,QTDRAIN,QRVET
     TYPE(StrmGWConnectorType),INTENT(IN)               :: StrmGWConnector
     TYPE(StrmLakeConnectorType),INTENT(IN)             :: StrmLakeConnector
     
@@ -2114,7 +2115,7 @@ CONTAINS
     REAL(8),DIMENSION(AppStream%NReaches) :: UpstrmFlows,DownstrmFlows,TributaryFlows,DrainInflows,Runoff, &
                                              ReturnFlows,StrmGWFlows_InModel,StrmGWFlows_OutModel,Error,   &
                                              LakeInflows,Diversions,Bypasses,DiversionShorts,RiparianET,   &
-                                             SurfaceEvap,PondDrains,rSpills
+                                             SurfaceEvap,PondDrains,rSpills,rGWReturnFlows
     
     !Initialize           
     UpstrmFlows = 0.0
@@ -2137,6 +2138,9 @@ CONTAINS
         
         !Inflows from tile drains
         DrainInflows(indxReach) = SUM(QTDRAIN(iUpstrmNode:iDownstrmNode))
+        
+        !GW return flows
+        rGWReturnFlows(indxReach) = SUM(rGWRtrnFlws(iUpstrmNode:iDownstrmNode))
         
         !Runoff
         Runoff(indxReach) = SUM(QROFF(iUpstrmNode:iDownstrmNode))
@@ -2189,6 +2193,7 @@ CONTAINS
            - DownstrmFlows        &
            + TributaryFlows       &
            + DrainInflows         &
+           + rGWReturnFlows       &
            + Runoff               &
            + ReturnFlows          &
            + rSpills              &
@@ -2210,19 +2215,20 @@ CONTAINS
     DummyArray(2,:)  = DownstrmFlows
     DummyArray(3,:)  = TributaryFlows
     DummyArray(4,:)  = DrainInflows
-    DummyArray(5,:)  = Runoff
-    DummyArray(6,:)  = ReturnFlows
-    DummyArray(7,:)  = rSpills
-    DummyArray(8,:)  = PondDrains
-    DummyArray(9,:)  = StrmGWFlows_InModel
-    DummyArray(10,:) = StrmGWFlows_OutModel
-    DummyArray(11,:) = LakeInflows
-    DummyArray(12,:) = RiparianET
-    DummyArray(13,:) = SurfaceEvap
-    DummyArray(14,:) = Diversions
-    DummyArray(15,:) = Bypasses
-    DummyArray(16,:) = Error
-    DummyArray(17,:) = DiversionShorts
+    DummyArray(5,:)  = rGWReturnFlows
+    DummyArray(6,:)  = Runoff
+    DummyArray(7,:)  = ReturnFlows
+    DummyArray(8,:)  = rSpills
+    DummyArray(9,:)  = PondDrains
+    DummyArray(10,:) = StrmGWFlows_InModel
+    DummyArray(11,:) = StrmGWFlows_OutModel
+    DummyArray(12,:) = LakeInflows
+    DummyArray(13,:) = RiparianET
+    DummyArray(14,:) = SurfaceEvap
+    DummyArray(15,:) = Diversions
+    DummyArray(16,:) = Bypasses
+    DummyArray(17,:) = Error
+    DummyArray(18,:) = DiversionShorts
     
     !Print out values to binary file
     CALL AppStream%StrmReachBudRawFile%WriteData(DummyArray)
@@ -2233,9 +2239,9 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- WRITE RAW STREAM NODE BUDGET DATA
   ! -------------------------------------------------------------
-  SUBROUTINE WriteStrmNodeFlowsToBudRawFile(QTRIB,QROFF,QRTRN,QRPONDDRAIN,QTDRAIN,QRVET,StrmGWConnector,StrmLakeConnector,AppStream)
+  SUBROUTINE WriteStrmNodeFlowsToBudRawFile(rGWRtrnFlws,QTRIB,QROFF,QRTRN,QRPONDDRAIN,QTDRAIN,QRVET,StrmGWConnector,StrmLakeConnector,AppStream)
     CLASS(BaseAppStreamType)                           :: AppStream
-    REAL(8),DIMENSION(AppStream%NStrmNodes),INTENT(IN) :: QTRIB,QROFF,QRTRN,QRPONDDRAIN,QTDRAIN,QRVET
+    REAL(8),DIMENSION(AppStream%NStrmNodes),INTENT(IN) :: rGWRtrnFlws,QTRIB,QROFF,QRTRN,QRPONDDRAIN,QTDRAIN,QRVET
     TYPE(StrmGWConnectorType),INTENT(IN)               :: StrmGWConnector
     TYPE(StrmLakeConnectorType),INTENT(IN)             :: StrmLakeConnector
     
@@ -2245,7 +2251,7 @@ CONTAINS
     REAL(8),DIMENSION(AppStream%StrmNodeBudget%NBudNodes) :: UpstrmFlows,DownstrmFlows,TributaryFlows,DrainInflows,LakeInflows,  &
                                                              Runoff,ReturnFlows,StrmGWFlows_InModel,StrmGWFlows_OutModel,Error,  &
                                                              Diversions,Bypasses,DiversionShorts,RiparianET,SurfaceEvap,         &
-                                                             PondDrains,rSpills
+                                                             PondDrains,rSpills,rGWReturnFlows
     INTEGER,ALLOCATABLE                                   :: UpstrmNodes(:)
     
     !Iterate over nodes
@@ -2259,6 +2265,9 @@ CONTAINS
     
       !Tributary flows
       TributaryFlows(indxNode) = QTRIB(iNode)
+      
+      !GW Return flows
+      rGWReturnFlows(indxNode) = rGWRtrnFlws(iNode)
       
       !Inflows from tile drains
       DrainInflows(indxNode) = QTDRAIN(iNode)
@@ -2308,6 +2317,7 @@ CONTAINS
            - DownstrmFlows        &
            + TributaryFlows       &
            + DrainInflows         &
+           + rGWReturnFlows       &
            + Runoff               &
            + ReturnFlows          &
            + rSpills              &
@@ -2328,19 +2338,20 @@ CONTAINS
     DummyArray(2,:)  = DownstrmFlows
     DummyArray(3,:)  = TributaryFlows
     DummyArray(4,:)  = DrainInflows
-    DummyArray(5,:)  = Runoff
-    DummyArray(6,:)  = ReturnFlows
-    DummyArray(7,:)  = rSpills
-    DummyArray(8,:)  = PondDrains
-    DummyArray(9,:)  = StrmGWFlows_InModel
-    DummyArray(10,:) = StrmGWFlows_OutModel
-    DummyArray(11,:) = LakeInflows
-    DummyArray(12,:) = RiparianET
-    DummyArray(13,:) = SurfaceEvap
-    DummyArray(14,:) = Diversions
-    DummyArray(15,:) = Bypasses
-    DummyArray(16,:) = Error
-    DummyArray(17,:) = DiversionShorts
+    DummyArray(5,:)  = rGWReturnFlows
+    DummyArray(6,:)  = Runoff
+    DummyArray(7,:)  = ReturnFlows
+    DummyArray(8,:)  = rSpills
+    DummyArray(9,:)  = PondDrains
+    DummyArray(10,:) = StrmGWFlows_InModel
+    DummyArray(11,:) = StrmGWFlows_OutModel
+    DummyArray(12,:) = LakeInflows
+    DummyArray(13,:) = RiparianET
+    DummyArray(14,:) = SurfaceEvap
+    DummyArray(15,:) = Diversions
+    DummyArray(16,:) = Bypasses
+    DummyArray(17,:) = Error
+    DummyArray(18,:) = DiversionShorts
     
     !Print out values to binary file
     CALL AppStream%StrmNodeBudget%StrmNodeBudRawFile%WriteData(DummyArray)
@@ -2504,7 +2515,7 @@ CONTAINS
     TYPE(BudgetHeaderType)               :: Header
     
     !Local variables
-    INTEGER,PARAMETER           :: TitleLen           = 238  , &
+    INTEGER,PARAMETER           :: TitleLen           = 251  , &
                                    NTitles            = 3    , &
                                    NColumnHeaderLines = 4    
     INTEGER                     :: iCount,indxLocation,indxCol,indx,I,ID,iReach,iMaxPathnameLen
@@ -2514,7 +2525,8 @@ CONTAINS
     CHARACTER(LEN=21),PARAMETER :: FParts(f_iNStrmBudColumns) = ['UPSTRM_INFLOW'         , &
                                                                  'DOWNSTRM_OUTFLOW'      , & 
                                                                  'TRIB_INFLOW'           , & 
-                                                                 'TILE_DRN'              , & 
+                                                                 'TILE_DRN'              , &
+                                                                 'GW_RTRN_FLOW'          , &
                                                                  'RUNOFF'                , & 
                                                                  'RETURN_FLOW'           , &
                                                                  'DIV_SPILL'             , &
@@ -2607,6 +2619,7 @@ CONTAINS
                                           f_iVR ,&  !Downstream outflow
                                           f_iVR ,&  !Tributary inflow
                                           f_iVR ,&  !Tile drain
+                                          f_iVR ,&  !GW return flow
                                           f_iVR ,&  !Runoff
                                           f_iVR ,&  !Return flow
                                           f_iVR ,&  !Diversion spills received
@@ -2624,9 +2637,9 @@ CONTAINS
       ASSOCIATE (pColumnHeaders => pLocation%cColumnHeaders           , &
                  pFormatSpecs   => pLocation%cColumnHeadersFormatSpec )
         TextTime            = ArrangeText(TRIM(UnitT),17)
-        pColumnHeaders(:,1) = ['                 ','     Upstream','   Downstream','    Tributary','        Tile ','             ','     Return  ','  Diversion  ','      Pond   ','Gain from GW ',' Gain from GW','    Gain from','   Riparian ','   Surface  ','             ','      By-pass','             ','    Diversion']
-        pColumnHeaders(:,2) = ['      Time       ','      Inflow ','    Outflow  ','     Inflow  ','        Drain','       Runoff','      Flow   ','    Spills   ','      Drain  ','inside Model ','outside Model','      Lake   ','      ET    ',' Evaporation','    Diversion','        Flow ','  Discrepancy','    Shortage ']
-        pColumnHeaders(:,3) = [           TextTime,'       (+)   ','      (-)    ','      (+)    ','         (+) ','        (+)  ','      (+)    ','     (+)     ','       (+)   ','     (+)     ','      (+)    ','       (+)   ','      (-)   ','     (-)    ','       (-)   ','        (-)  ','      (=)    ','             ']
+        pColumnHeaders(:,1) = ['                 ','     Upstream','   Downstream','    Tributary','        Tile ','      GW     ','             ','     Return  ','  Diversion  ','      Pond   ','Gain from GW ',' Gain from GW','    Gain from','   Riparian ','   Surface  ','             ','      By-pass','             ','    Diversion']
+        pColumnHeaders(:,2) = ['      Time       ','      Inflow ','    Outflow  ','     Inflow  ','        Drain','  Return Flow','       Runoff','      Flow   ','    Spills   ','      Drain  ','inside Model ','outside Model','      Lake   ','      ET    ',' Evaporation','    Diversion','        Flow ','  Discrepancy','    Shortage ']
+        pColumnHeaders(:,3) = [           TextTime,'       (+)   ','      (-)    ','      (+)    ','         (+) ','      (+)    ','        (+)  ','      (+)    ','     (+)     ','       (+)   ','     (+)     ','      (+)    ','       (+)   ','      (-)   ','     (-)    ','       (-)   ','        (-)  ','      (=)    ','             ']
         pColumnHeaders(:,4) = ''
         pFormatSpecs(1)     = '(A17,*(A13))'
         pFormatSpecs(2)     = '(A17,*(A13))'

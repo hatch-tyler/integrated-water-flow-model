@@ -108,7 +108,6 @@ MODULE Class_NonPondedAgLandUse_v41
     REAL(8),ALLOCATABLE :: ReturnFlow(:,:)            !Return flow
     REAL(8),ALLOCATABLE :: IrigInfilt(:,:)            !Infiltration due to irrigation
     REAL(8),ALLOCATABLE :: Reuse(:,:)                 !Reused return flow 
-    REAL(8),ALLOCATABLE :: rCropCoeff(:,:)            !Crop coefficients
     REAL(8),ALLOCATABLE :: ETAW(:,:)                  !ET of applied water
     REAL(8),ALLOCATABLE :: ETP(:,:)                   !ET of precipitation
     REAL(8),ALLOCATABLE :: ETOth(:,:)                 !ET of other sources of moisture
@@ -263,7 +262,6 @@ CONTAINS
               AgLand%Crops%iColReuseFrac(NCrops,NElements)     , &    
               AgLand%Crops%iColLeachFrac(NCrops,NElements)     , &    
               AgLand%Crops%MinSoilM(NCrops,NElements)          , &    
-              AgLand%Crops%rCropCoeff(NCrops,NElements)        , &    
               AgLand%Crops%ReturnFlow(NCrops,NElements)        , &    
               AgLand%Crops%IrigInfilt(NCrops,NElements)        , &    
               AgLand%Crops%Reuse(NCrops,NElements)             , &    
@@ -295,7 +293,6 @@ CONTAINS
     AgLand%Crops%iColReuseFrac     = 0
     AgLand%Crops%iColLeachFrac     = 1
     AgLand%Crops%MinSoilM          = 0.0
-    AgLand%Crops%rCropCoeff        = 1.0
     AgLand%Crops%ReturnFlow        = 0.0
     AgLand%Crops%IrigInfilt        = 0.0
     AgLand%Crops%Reuse             = 0.0
@@ -737,7 +734,6 @@ CONTAINS
                 AgLand%Crops%iColReuseFrac      , &    
                 AgLand%Crops%iColLeachFrac      , &    
                 AgLand%Crops%MinSoilM           , &    
-                AgLand%Crops%rCropCoeff         , &    
                 AgLand%Crops%ReturnFlow         , &    
                 AgLand%Crops%IrigInfilt         , &    
                 AgLand%Crops%Reuse              , &    
@@ -1060,8 +1056,8 @@ CONTAINS
     CALL AgLand%MinSoilMFile%ReadTSData(TimeStep,'Minimum soil moisture requirement data',FileReadCode,iStat)  ;  IF (iStat .EQ. -1) RETURN
     lMinSoilM_Updated = AgLand%MinSoilMFile%lUpdated
     IF (lMinSoilM_Updated) THEN
-        !$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE(indxElem) SCHEDULE(STATIC,160)
-        DO indxElem=1,NElements
+       !$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE(indxElem) SCHEDULE(STATIC,160)
+       DO indxElem=1,NElements
             AgLand%Crops%MinSoilM(:,indxElem) = AgLand%MinSoilMFile%rValues(AgLand%Crops%iColMinSoilM(:,indxElem))
         END DO
         !$OMP END PARALLEL DO
@@ -1392,7 +1388,7 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- SIMULATE FLOW PROCESSES AT NON-PONDED AG
   ! -------------------------------------------------------------
-  SUBROUTINE Simulate(NonPondedAg,AppGrid,ETData,DeltaT,Precip,GenericMoisture,SoilsData,ElemSupply,ReuseFrac,ReturnFrac,ElemsToGW,SolverData,lLakeElem,iStat)
+  SUBROUTINE Simulate(NonPondedAg,AppGrid,ETData,DeltaT,Precip,GenericMoisture,SoilsData,ElemSupply,ReuseFrac,ReturnFrac,ElemsToGW,SolverData,lLakeElem,iStat,iColCropCoeff)
     CLASS(NonPondedAgLandUse_v41_Type)     :: NonPondedAg
     TYPE(AppGridType),INTENT(IN)           :: AppGrid
     TYPE(ETType),INTENT(IN)                :: ETData
@@ -1402,6 +1398,7 @@ CONTAINS
     TYPE(SolverDataType),INTENT(IN)        :: SolverData
     LOGICAL,INTENT(IN)                     :: lLakeElem(:)
     INTEGER,INTENT(OUT)                    :: iStat
+    INTEGER,OPTIONAL,INTENT(IN)            :: iColCropCoeff(:,:)
     
     !Local variables
     CHARACTER(LEN=ModNameLen+8),PARAMETER :: ThisProcedure = ModName // 'Simulate'
@@ -1424,7 +1421,7 @@ CONTAINS
     !Simulate
     ASSOCIATE (pCrops => NonPondedAg%Crops)
         !$OMP PARALLEL DEFAULT(PRIVATE) SHARED(AppGrid,lLakeElem,SoilsData,ETData,Precip,GenericMoisture,DeltaT,  &
-        !$OMP                                  NonPondedAg,ElemSupply,ReturnFrac,ReuseFrac,ElemsToGW,SolverData,iStat) 
+        !$OMP                                  NonPondedAg,ElemSupply,ReturnFrac,ReuseFrac,ElemsToGW,SolverData,iStat,iColCropCoeff) 
         !$OMP DO SCHEDULE(NONMONOTONIC:DYNAMIC,96)
         DO indxElem=1,AppGrid%NElements
             IF (lLakeElem(indxElem)) CYCLE
@@ -1434,7 +1431,11 @@ CONTAINS
             HydCond       = SoilsData(indxElem)%HydCond
             Lambda        = SoilsData(indxElem)%Lambda
             KunsatMethod  = SoilsData(indxElem)%KunsatMethod
-            ETc           = ETData%GetValues(pCrops%iColETc(:,indxElem)) * pCrops%rCropCoeff(:,indxElem)
+            IF (PRESENT(iColCropCoeff)) THEN
+                ETc       = ETData%GetValues(pCrops%iColETc(:,indxElem),iColCropCoeff(:,indxElem))
+            ELSE
+                ETc       = ETData%GetValues(pCrops%iColETc(:,indxElem))
+            END IF
             GMElem        = GenericMoisture(1,indxElem) * DeltaT
             PrecipD       = Precip(indxElem) * DeltaT
             DO indxCrop=1,NonPondedAg%NCrops
@@ -1621,7 +1622,7 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- COMPUTE NON-PONDED AG DEMAND
   ! -------------------------------------------------------------
-  SUBROUTINE ComputeWaterDemand(NonPondedAg,AppGrid,ETData,DeltaT,Precip,GenericMoisture,SoilsData,SpecifiedDemand,ReuseFrac,ReturnFrac,IrigPeriod,SolverData,lLakeElem,lReadAgWaterDemand,iStat)
+  SUBROUTINE ComputeWaterDemand(NonPondedAg,AppGrid,ETData,DeltaT,Precip,GenericMoisture,SoilsData,SpecifiedDemand,ReuseFrac,ReturnFrac,IrigPeriod,SolverData,lLakeElem,lReadAgWaterDemand,iStat,iColCropCoeff)
     CLASS(NonPondedAgLandUse_v41_Type)     :: NonPondedAg
     TYPE(AppGridType),INTENT(IN)           :: AppGrid
     TYPE(ETType),INTENT(IN)                :: ETData
@@ -1631,6 +1632,7 @@ CONTAINS
     TYPE(SolverDataType),INTENT(IN)        :: SolverData
     LOGICAL,INTENT(IN)                     :: lLakeElem(:),lReadAgWaterDemand
     INTEGER,INTENT(OUT)                    :: iStat
+    INTEGER,OPTIONAL,INTENT(IN)            :: iColCropCoeff(:,:)
     
     !Local variables
     CHARACTER(LEN=ModNameLen+18),PARAMETER :: ThisProcedure = ModName // 'ComputeWaterDemand'
@@ -1645,8 +1647,8 @@ CONTAINS
     iStat = 0
         
     !$OMP PARALLEL DEFAULT(PRIVATE) SHARED(AppGrid,lLakeElem,SoilsData,Precip,ETData,GenericMoisture,lReadAgWaterDemand,DeltaT,    &
-    !$OMP                                  SolverData,NonPondedAg,SpecifiedDemand,ReuseFrac,ReturnFrac,IrigPeriod,iStat)        
-    !$OMP DO SCHEDULE(DYNAMIC,200)
+    !$OMP                                  SolverData,NonPondedAg,SpecifiedDemand,ReuseFrac,ReturnFrac,IrigPeriod,iStat,iColCropCoeff)        
+    !$OMP DO SCHEDULE(NONMONOTONIC:DYNAMIC,128)
     DO indxElem=1,AppGrid%NElements
         NonPondedAg%Crops%DemandRaw(:,indxElem) = 0.0
         NonPondedAg%Crops%Demand(:,indxElem)    = 0.0
@@ -1659,7 +1661,11 @@ CONTAINS
         Lambda        = SoilsData(indxElem)%Lambda
         KunsatMethod  = SoilsData(indxElem)%KunsatMethod
         PrecipDepth   = Precip(indxElem)*DeltaT
-        ETc           = ETData%GetValues(NonPondedAg%Crops%iColETc(:,indxElem)) * NonPondedAg%Crops%rCropCoeff(:,indxElem)
+        IF (PRESENT(iColCropCoeff)) THEN
+            ETc       = ETData%GetValues(NonPondedAg%Crops%iColETc(:,indxElem),iColCropCoeff(:,indxElem)) 
+        ELSE
+            ETc       = ETData%GetValues(NonPondedAg%Crops%iColETc(:,indxElem)) 
+        ENDIF
         GMElem        = GenericMoisture(1,indxElem) * DeltaT
         PrecipD       = Precip(indxElem) * DeltaT
         DO indxCrop=1,NonPondedAg%NCrops              

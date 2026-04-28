@@ -83,7 +83,10 @@ MODULE Class_AppGW
                                           f_iLocationType_SubsidenceObs                      , &
                                           f_iLocationType_TileDrainObs                       , &
                                           f_iDataUnitType_Length                             , &
-                                          f_iDataUnitType_Volume                               
+                                          f_iDataUnitType_Volume                             , &
+                                          f_iFlowDest_Outside                                , &
+                                          f_iFlowDest_StrmNode                               , &
+                                          f_iFlowDest_Lake     
   USE Package_Discretization      , ONLY: AppGridType                                        , &
                                           StratigraphyType                                   , &
                                           GetValuesFromParametricGrid                        
@@ -171,6 +174,11 @@ MODULE Class_AppGW
       REAL(8),ALLOCATABLE           :: ElemTransmissivity(:,:)                 !Element transmissivity at each (element,layer) combination computed using AppGW%State%Head
       REAL(8),ALLOCATABLE           :: RegionalStorage(:)                      !Subregional gw storage at the current time step (computed only when gw budget output is required)
       REAL(8),ALLOCATABLE           :: RegionalStorage_P(:)                    !Subregional gw storage at the previous N-R iteration for each (node), counting all the nodes for all the layers
+      REAL(8),ALLOCATABLE           :: rGWReturnFlow(:)                        !GW return flow at each (node) where head above ground surface is turned into surface flow; this computed for top active layer at each node only
+      LOGICAL,ALLOCATABLE           :: lComputeGWReturnFlowAtNode(:)           !Flag to check if gw return flow will be computed at a (node) based on if node is at a stream, lake or certain b.c.s
+      INTEGER,ALLOCATABLE           :: iGWReturnFlowDestType(:)                !Destination type for GW return flow at each (node) 
+      INTEGER,ALLOCATABLE           :: iGWReturnFlowDest(:)                    !Destination for GW return flow at each (node) 
+      LOGICAL                       :: lSimulateGWReturnFlow        = .FALSE.  !Flag to to turn on or off simulation of groundwater return flow
       TYPE(GWHydrographType)        :: GWHyd                                   !Groundwater hydrograph output related data
       REAL(8)                       :: FactHead                     = 1.0      !Conversion factor for output groundwater heads
       CHARACTER(LEN=10)             :: UnitHead                     = ''       !Unit of output head values
@@ -214,6 +222,10 @@ MODULE Class_AppGW
       PROCEDURE,NOPASS :: GetAquiferSy_FromFile
       PROCEDURE,PASS   :: GetAquiferSs
       PROCEDURE,NOPASS :: GetAquiferSs_FromFile
+      PROCEDURE,PASS   :: GetGWReturnFlows
+      PROCEDURE,PASS   :: GetGWReturnFlowsIntoLakes
+      PROCEDURE,PASS   :: GetGWReturnFlowsIntoStrmNodes
+      PROCEDURE,PASS   :: GetGWReturnFlowsIntoStrmNodesAndLakes
       PROCEDURE,NOPASS :: GetGWNParametricGrids
       PROCEDURE,NOPASS :: GetGWNParametricNodes
       PROCEDURE,NOPASS :: GetGWNParametricElements
@@ -334,7 +346,7 @@ MODULE Class_AppGW
   ! -------------------------------------------------------------
   ! --- BUDGET RELATED DATA
   ! -------------------------------------------------------------
-  INTEGER,PARAMETER           :: f_iNGWBudColumns = 16
+  INTEGER,PARAMETER           :: f_iNGWBudColumns = 17
   CHARACTER(LEN=25),PARAMETER :: f_cBudgetColumnTitles(f_iNGWBudColumns) = ['Percolation'                , &
                                                                             'Beginning Storage (+)'      , &
                                                                             'Ending Storage (-)'         , &
@@ -347,6 +359,7 @@ MODULE Class_AppGW
                                                                             'Subsurface Irrigation (+)'  , &
                                                                             'Tile Drain Outflow (-)'     , &
                                                                             'Pumping (-)'                , &
+                                                                            'GW Return Flow (-)'         , &
                                                                             'Outflow to Root Zone (-)'   , &
                                                                             'Net Subsurface Inflow (+)'  , &
                                                                             'Discrepancy (=)'            , &
@@ -384,18 +397,20 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- INSTANTIATE GW COMPONENT
   ! -------------------------------------------------------------
-  SUBROUTINE New(AppGW,lIsForInquiry,cFileName,cWorkingDirectory,AppGrid,Stratigraphy,StrmConnectivity,iStrmNodeIDs,TimeStep,NTIME,iStat,GWHeadICFile,SubsICFile,lPrintParametersOverwrite) 
-    CLASS(AppGWType),INTENT(OUT)      :: AppGW
-    LOGICAL,INTENT(IN)                :: lIsForInquiry
-    CHARACTER(LEN=*),INTENT(IN)       :: cFileName,cWorkingDirectory
-    TYPE(AppGridType),INTENT(IN)      :: AppGrid
-    TYPE(StratigraphyType),INTENT(IN) :: Stratigraphy
-    COMPLEX,INTENT(IN)                :: StrmConnectivity(:)
-    TYPE(TimeStepType),INTENT(IN)     :: TimeStep
-    INTEGER,INTENT(IN)                :: NTIME,iStrmNodeIDs(:)
-    INTEGER,INTENT(OUT)               :: iStat
-    TYPE(GenericFileType),OPTIONAL    :: GWHeadICFile,SubsICFile
-    LOGICAL,OPTIONAL,INTENT(IN)       :: lPrintParametersOverwrite
+  SUBROUTINE New(AppGW,lIsForInquiry,cFileName,cWorkingDirectory,AppGrid,Stratigraphy,StrmConnectivity,iStrmNodeIDs,StrmGWConnector,iLakeIDs,LakeGWConnector,TimeStep,NTIME,iStat,GWHeadICFile,SubsICFile,lPrintParametersOverwrite) 
+    CLASS(AppGWType),INTENT(OUT)         :: AppGW
+    LOGICAL,INTENT(IN)                   :: lIsForInquiry
+    CHARACTER(LEN=*),INTENT(IN)          :: cFileName,cWorkingDirectory
+    TYPE(AppGridType),INTENT(IN)         :: AppGrid
+    TYPE(StratigraphyType),INTENT(IN)    :: Stratigraphy
+    COMPLEX,INTENT(IN)                   :: StrmConnectivity(:)
+    TYPE(StrmGWConnectorType),INTENT(IN) :: StrmGWConnector
+    TYPE(LakeGWConnectorType),INTENT(IN) :: LakeGWConnector
+    TYPE(TimeStepType),INTENT(IN)        :: TimeStep
+    INTEGER,INTENT(IN)                   :: NTIME,iStrmNodeIDs(:),iLakeIDs(:)
+    INTEGER,INTENT(OUT)                  :: iStat
+    TYPE(GenericFileType),OPTIONAL       :: GWHeadICFile,SubsICFile
+    LOGICAL,OPTIONAL,INTENT(IN)          :: lPrintParametersOverwrite
     
     !Local variables
     CHARACTER(LEN=ModNameLen+3) :: ThisProcedure = ModName // "New"
@@ -404,14 +419,15 @@ CONTAINS
     CHARACTER                   :: cALine*3000,cErrorMsg*300,cAllHeadOutFileName*1000,cHeadTecplotFileName*1200, &
                                    cVelTecplotFileName*1200,cBCFileName*1200,cOverwriteFileName*1200,            &
                                    cCellVelocityFileName*1200,cSubsidenceFileName*1200
-    INTEGER                     :: NNodes,NElements,NLayers,NRegions,iGWNodeIDs(AppGrid%NNodes),     &
-                                   ErrorCode,iPrintParameters,iTecPlotFlag
-    REAL(8)                     :: Head(AppGrid%NNodes,Stratigraphy%NLayers)
-    LOGICAL                     :: lTecPlotFlag_Defined
+    INTEGER                     :: NNodes,NElements,NLayers,NRegions,iGWNodeIDs(AppGrid%NNodes),iTecPlotFlag,    &
+                                   iPrintParameters,iLineNumberToRewindTo,iErrorCode1,iErrorCode2,               &
+                                   iGWReturnFlowDataFlag
+    REAL(8)                     :: Head(AppGrid%NNodes,Stratigraphy%NLayers),rFactor 
+    LOGICAL                     :: lTecPlotFlag_Defined,lGWReturnData_Provided
     CHARACTER,ALLOCATABLE       :: cCountLines(:)*50
     CHARACTER(:),ALLOCATABLE    :: cAbsPathFileName
     INTEGER,PARAMETER           :: f_iYesPrintAquiferParameters = 1 , &
-                                   f_iNotPrintAquiferParameters = 0
+                                   f_iNotPrintAquiferParameters = 0 
     
     !Initialize
     iStat      = 0
@@ -430,16 +446,20 @@ CONTAINS
     NRegions  = AppGrid%NSubregions
         
     !Allocate memory and initialize variables
-    ALLOCATE (AppGW%Nodes%Kh(NNodes,NLayers)              , &
+    ALLOCATE (AppGW%rGWReturnFlow(NNodes)                 , &
+              AppGW%iGWReturnFlowDestType(NNodes)         , &
+              AppGW%iGWReturnFlowDest(NNodes)             , &
+              AppGW%lComputeGWReturnFlowAtNode(NNodes)    , &
+              AppGW%Nodes%Kh(NNodes,NLayers)              , &
               AppGW%Nodes%Kv(NNodes,NLayers)              , &
               AppGW%Nodes%AquitardKv(NNodes,NLayers)      , &
               AppGW%Nodes%LeakageV(NNodes,NLayers)        , &
               AppGW%Nodes%Ss(NNodes,NLayers)              , &
               AppGW%Nodes%Sy(NNodes,NLayers)              , &
               AppGW%ElemTransmissivity(NElements,NLayers) , &
-              STAT = ErrorCode                            , &
+              STAT = iErrorCode1                          , &
               ERRMSG = cErrorMsg                          )
-    IF (ErrorCode .NE. 0) THEN
+    IF (iErrorCode1 .NE. 0) THEN
         MessageArray(1) = 'Error in allocating memory for the groundwater component.'
         MessageArray(2) = cErrorMsg
         CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
@@ -583,8 +603,8 @@ CONTAINS
             IF (iStat .EQ. -1) RETURN
             CALL BudHeader%Kill()
             !Allocate memory for subregional storage values
-            ALLOCATE (AppGW%RegionalStorage(NRegions+1) , AppGW%RegionalStorage_P(NRegions+1) , STAT=ErrorCode , ERRMSG=cErrorMsg)
-            IF (ErrorCode .NE. 0) THEN 
+            ALLOCATE (AppGW%RegionalStorage(NRegions+1) , AppGW%RegionalStorage_P(NRegions+1) , STAT=iErrorCode1 , ERRMSG=cErrorMsg)
+            IF (iErrorCode1 .NE. 0) THEN 
                 MessageArray(1) = 'Error in allocating memory for the regional storage values for groundwater budget.'
                 MessageArray(2) = cErrorMsg
                 CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
@@ -648,6 +668,28 @@ CONTAINS
     CALL ReadAquiferParameters(NLayers,AppGrid,TimeStep,AppGWParamFile,AppGW%VarTimeUnit,AppGW%Nodes,iStat)
     IF (iStat .EQ. -1) RETURN
     
+    !BACKWARD COMPATIBILITY: Check if data for gw return flow is provided by trying to read both gw return flow and initial conditions
+    iLineNumberToRewindTo = AppGWParamFile%GetLineNumber()
+    !Try reading gw return flow data (assume it is gw return flow data)
+    CALL AppGWParamFile%ReadData(iGWReturnFlowDataFlag,iErrorCode1)       
+    IF (iGWReturnFlowDataFlag .EQ. 1) CALL AppGWParamFile%ReadData(cCountLines,iErrorCode2)  
+    !Now, try to read initial conditions
+    CALL AppGWParamFile%ReadData(rFactor,iErrorCode1)  
+    CALL AppGWParamFile%ReadData(cCountLines,iErrorCode2)
+    IF (iErrorCode1+iErrorCode2 .NE. 0) THEN
+        lGWReturnData_Provided      = .FALSE.
+        AppGW%lSimulateGWReturnFlow = .FALSE.
+    ELSE
+        lGWReturnData_Provided      = .TRUE.
+    END IF
+    CALL AppGWParamFile%GotoLine(iLineNumberToRewindTo,iStat)  ;  IF (iStat .NE. 0) RETURN
+   
+    !Read GW return flow data, if provided
+    IF (lGWReturnData_Provided) THEN
+        CALL ReadGWReturnFlowDestinations(iStrmNodeIDs,iLakeIDs,iGWNodeIDs,AppGWParamFile,AppGW%lSimulateGWReturnFlow,AppGW%iGWReturnFlowDestType,AppGW%iGWReturnFlowDest,iStat)
+        IF (iStat .NE. 0) RETURN
+    END IF
+    
     !Initial conditions
     IF (PRESENT(GWHeadICFile)) THEN
         CALL ReadInitialHeads(GWHeadICFile,NNodes,iGWNodeIDs,Stratigraphy,Head,iStat)
@@ -695,6 +737,9 @@ CONTAINS
     CALL ComputeRegionalStorage(AppGrid,Stratigraphy,AppGW)
     AppGW%RegionalStorage_P = AppGW%RegionalStorage
     
+    !Compile nodes where gw return flow will be computed
+    CALL CompileNodesWithGWReturnFlow(Stratigraphy,AppGW%AppBC,StrmGWConnector,LakeGWConnector,AppGW%rGWReturnFlow,AppGW%lComputeGWReturnFlowAtNode)
+    
     !Close GW main file
     CALL AppGWParamFile%Kill()
     
@@ -724,10 +769,12 @@ CONTAINS
     TYPE(AppGWType) :: Dummy
     
     !Deallocate allocatable arrays
-    DEALLOCATE (AppGW%ElemTransmissivity , &
-                AppGW%RegionalStorage    , &
-                AppGW%RegionalStorage_P  , &
-                STAT=iErrorCode          )
+    DEALLOCATE (AppGW%ElemTransmissivity         , &
+                AppGW%RegionalStorage            , &
+                AppGW%RegionalStorage_P          , &
+                AppGW%rGWReturnFlow              , &
+                AppGW%lComputeGWReturnFlowAtNode , &
+                STAT=iErrorCode                  )
     
     !Kill gw node data
     CALL AppGW%Nodes%Kill()
@@ -915,6 +962,100 @@ CONTAINS
 ! ******************************************************************
 ! ******************************************************************
 
+  ! -------------------------------------------------------------
+  ! --- GET GW RETURN FLOWS AT EACH NODE
+  ! -------------------------------------------------------------
+  SUBROUTINE GetGWReturnFlows(AppGW,rGWReturnFlows)
+    CLASS(AppGWType),INTENT(IN) :: AppGW
+    REAL(8),INTENT(OUT)         :: rGWReturnFlows(:)
+    
+    rGWReturnFlows = AppGW%rGWReturnFlow
+    
+  END SUBROUTINE GetGWReturnFlows
+  
+  
+  ! -------------------------------------------------------------
+  ! --- GET GW RETURN FLOWS INTO EACH STREAM NODE AND LAKE
+  ! -------------------------------------------------------------
+  SUBROUTINE GetGWReturnFlowsIntoStrmNodesAndLakes(AppGW,rGWReturnFlowsIntoStrmNodes,rGWReturnFlowsIntoLakes)
+    CLASS(AppGWType),INTENT(IN) :: AppGW
+    REAL(8),INTENT(OUT)         :: rGWReturnFlowsIntoStrmNodes(:),rGWReturnFlowsIntoLakes(:)
+    
+    !Local variables
+    INTEGER :: indxNode,iDest
+    
+    !Initialize
+    rGWReturnFlowsIntoStrmNodes = 0.0
+    rGWReturnFlowsIntoLakes     = 0.0
+    
+    IF (.NOT. AppGW%lSimulateGWReturnFlow) RETURN
+    
+    DO indxNode=1,SIZE(AppGW%iGWReturnFlowDestType)
+        SELECT CASE (AppGW%iGWReturnFlowDestType(indxNode))
+            CASE (f_iFlowDest_StrmNode)
+                iDest                              = AppGW%iGWReturnFlowDest(indxNode)
+                rGWReturnFlowsIntoStrmNodes(iDest) = rGWReturnFlowsIntoStrmNodes(iDest) + AppGW%rGWReturnFlow(indxNode)
+                
+            CASE (f_iFlowDest_Lake)
+                iDest                          = AppGW%iGWReturnFlowDest(indxNode)
+                rGWReturnFlowsIntoLakes(iDest) = rGWReturnFlowsIntoLakes(iDest) + AppGW%rGWReturnFlow(indxNode)
+        END SELECT
+    END DO
+    
+  END SUBROUTINE GetGWReturnFlowsIntoStrmNodesAndLakes
+  
+  
+  ! -------------------------------------------------------------
+  ! --- GET GW RETURN FLOWS INTO EACH STREAM NODE 
+  ! -------------------------------------------------------------
+  SUBROUTINE GetGWReturnFlowsIntoStrmNodes(AppGW,rGWReturnFlowsIntoStrmNodes)
+    CLASS(AppGWType),INTENT(IN) :: AppGW
+    REAL(8),INTENT(OUT)         :: rGWReturnFlowsIntoStrmNodes(:)
+    
+    !Local variables
+    INTEGER :: indxNode,iDest
+    
+    !Initialize
+    rGWReturnFlowsIntoStrmNodes = 0.0
+    
+    IF (.NOT. AppGW%lSimulateGWReturnFlow) RETURN
+    
+    DO indxNode=1,SIZE(AppGW%iGWReturnFlowDestType)
+        IF (AppGW%iGWReturnFlowDestType(indxNode) .EQ. f_iFlowDest_StrmNode) THEN
+            iDest                              = AppGW%iGWReturnFlowDest(indxNode)
+            rGWReturnFlowsIntoStrmNodes(iDest) = rGWReturnFlowsIntoStrmNodes(iDest) + AppGW%rGWReturnFlow(indxNode)
+                
+        END IF
+    END DO
+    
+  END SUBROUTINE GetGWReturnFlowsIntoStrmNodes
+  
+  
+  ! -------------------------------------------------------------
+  ! --- GET GW RETURN FLOWS INTO EACH LAKE
+  ! -------------------------------------------------------------
+  SUBROUTINE GetGWReturnFlowsIntoLakes(AppGW,rGWReturnFlowsIntoLakes)
+    CLASS(AppGWType),INTENT(IN) :: AppGW
+    REAL(8),INTENT(OUT)         :: rGWReturnFlowsIntoLakes(:)
+    
+    !Local variables
+    INTEGER :: indxNode,iDest
+    
+    !Initialize
+    rGWReturnFlowsIntoLakes = 0.0
+    
+    IF (.NOT. AppGW%lSimulateGWReturnFlow) RETURN
+    
+    DO indxNode=1,SIZE(AppGW%iGWReturnFlowDestType)
+        IF (AppGW%iGWReturnFlowDestType(indxNode) .EQ. f_iFlowDest_Lake) THEN
+            iDest                          = AppGW%iGWReturnFlowDest(indxNode)
+            rGWReturnFlowsIntoLakes(iDest) = rGWReturnFlowsIntoLakes(iDest) + AppGW%rGWReturnFlow(indxNode)
+        END IF
+    END DO
+    
+  END SUBROUTINE GetGWReturnFlowsIntoLakes
+  
+  
   ! -------------------------------------------------------------
   ! --- GET GW NUMBER OF PARAMETRIC GRIDS
   ! -------------------------------------------------------------
@@ -3708,67 +3849,72 @@ CONTAINS
     TYPE(AppGWType)                      :: AppGW
   
     !Local variables
-    INTEGER                                  :: NRegions
-    REAL(8)                                  :: DummyArray(f_iNGWBudColumns,(AppGrid%NSubregions+1))
-    REAL(8),DIMENSION(AppGrid%NSubregions+1) :: RPerc,RDeepPerc,RStreamGWFlows,RRecharge,RLakeGWFlows,RBound,RSubIrig, &
-                                                RTileDrain,RPump,RSubsidence_P,RSubsidence,RError,RSubInflow,RGWToRZFlows
+    INTEGER                                  :: iNRegions
+    REAL(8)                                  :: rDummyArray(f_iNGWBudColumns,(AppGrid%NSubregions+1))
+    REAL(8),DIMENSION(AppGrid%NSubregions+1) :: RPerc,RDeepPerc,RStreamGWFlows,RRecharge,RLakeGWFlows,RBound,RSubIrig,     &
+                                                RTileDrain,RPump,RSubsidence_P,RSubsidence,RError,RSubInflow,RGWToRZFlows, &
+                                                RGWReturnFlow
     
     !Initialize
-    NRegions = AppGrid%NSubregions
+    iNRegions = AppGrid%NSubregions
     
     !Regional percolation
-    RPerc(1:NRegions) = AppGrid%AccumElemValuesToSubregions(QPERC)
-    RPerc(NRegions+1) = SUM(RPerc(1:NRegions))
+    RPerc(1:iNRegions) = AppGrid%AccumElemValuesToSubregions(QPERC)
+    RPerc(iNRegions+1) = SUM(RPerc(1:iNRegions))
     
     !Regional deep percolation
-    RDeepPerc(1:NRegions) = AppGrid%AccumElemValuesToSubregions(QNETP)
-    RDeepPerc(NRegions+1) = SUM(RDeepPerc(1:NRegions))
+    RDeepPerc(1:iNRegions) = AppGrid%AccumElemValuesToSubregions(QNETP)
+    RDeepPerc(iNRegions+1) = SUM(RDeepPerc(1:iNRegions))
     
     !Stream-gw interaction
-    RStreamGWFlows(1:NRegions) = StrmGWConnector%GetSubregionalFlows(AppGrid,lInsideModel=.TRUE.)      !(+: flow from stream to gw)
-    RStreamGWFlows(NRegions+1) = SUM(RStreamGWFlows(1:NRegions))
+    RStreamGWFlows(1:iNRegions) = StrmGWConnector%GetSubregionalFlows(AppGrid,lInsideModel=.TRUE.)      !(+: flow from stream to gw)
+    RStreamGWFlows(iNRegions+1) = SUM(RStreamGWFlows(1:iNRegions))
     
     !Recharge as diversion recovarable losses and from pumping component
-    RRecharge(1:NRegions) = AppGW%AppPumping%GetSubregionalRecharge(AppGrid) + RRecvLoss
-    RRecharge(NRegions+1) = SUM(RRecharge(1:NRegions))
+    RRecharge(1:iNRegions) = AppGW%AppPumping%GetSubregionalRecharge(AppGrid) + RRecvLoss
+    RRecharge(iNRegions+1) = SUM(RRecharge(1:iNRegions))
     
     !Lake-gw interaction
-    RLakeGWFlows(1:NRegions) = LakeGWConnector%GetSubregionalFlows(AppGrid)      !(+: flow from lake to gw)
-    RLakeGWFlows(NRegions+1) = SUM(RLakeGWFlows(1:NRegions))
+    RLakeGWFlows(1:iNRegions) = LakeGWConnector%GetSubregionalFlows(AppGrid)      !(+: flow from lake to gw)
+    RLakeGWFlows(iNRegions+1) = SUM(RLakeGWFlows(1:iNRegions))
 
     !Flow from boundary conditions including small watersheds
     IF (AppGW%lAppBC_Defined) THEN
-        RBound(1:NRegions) = AppGW%AppBC%GetSubregionalFlows(AppGrid)
-        RBound(NRegions+1) = SUM(RBound(1:NRegions))
+        RBound(1:iNRegions) = AppGW%AppBC%GetSubregionalFlows(AppGrid)
+        RBound(iNRegions+1) = SUM(RBound(1:iNRegions))
     ELSE
         RBound = 0.0
     END IF
     RBound = RBound + RSWShedIn
     
     !Subsurface irrigation
-    RSubIrig(1:NRegions) = AppGW%AppTileDrain%GetSubregionalFlows(f_iSubIrig,AppGrid)
-    RSubIrig(NRegions+1) = SUM(RSubIrig(1:NRegions))
+    RSubIrig(1:iNRegions) = AppGW%AppTileDrain%GetSubregionalFlows(f_iSubIrig,AppGrid)
+    RSubIrig(iNRegions+1) = SUM(RSubIrig(1:iNRegions))
     
     !Tile drains
-    RTileDrain(1:NRegions) = AppGW%AppTileDrain%GetSubregionalFlows(f_iTileDrain,AppGrid)
-    RTileDrain(NRegions+1) = SUM(RTileDrain(1:NRegions))
+    RTileDrain(1:iNRegions) = AppGW%AppTileDrain%GetSubregionalFlows(f_iTileDrain,AppGrid)
+    RTileDrain(iNRegions+1) = SUM(RTileDrain(1:iNRegions))
     
     !Pumping
-    RPump(1:NRegions) = AppGW%AppPumping%GetSubregionalPumping(AppGrid)             
-    RPump(NRegions+1) = SUM(RPump(1:NRegions))
+    RPump(1:iNRegions) = AppGW%AppPumping%GetSubregionalPumping(AppGrid)             
+    RPump(iNRegions+1) = SUM(RPump(1:iNRegions))
+    
+    !GW return flow
+    RGWReturnFlow(1:iNRegions) = AppGrid%AccumNodeValuesToSubregions(AppGW%rGWReturnFlow)
+    RGWReturnFlow(iNRegions+1) = SUM(RGWReturnFlow(1:iNRegions))
     
     !GW to root zone flows
-    RGWToRZFlows(1:NRegions) = AppGrid%AccumElemValuesToSubregions(GWToRZFlows)             
-    RGWToRZFlows(NRegions+1) = SUM(RGWToRZFlows(1:NRegions))
+    RGWToRZFlows(1:iNRegions) = AppGrid%AccumElemValuesToSubregions(GWToRZFlows)             
+    RGWToRZFlows(iNRegions+1) = SUM(RGWToRZFlows(1:iNRegions))
     
     IF (AppGW%lSubsidence_Defined) THEN
         !Cumulative subsidence at the current time step
-        RSubsidence(1:NRegions) = AppGW%AppSubsidence%GetSubregionalCumSubsidence(AppGrid%NSubregions,lPreviousTS=.FALSE.)
-        RSubsidence(NRegions+1) = SUM(RSubsidence(1:NRegions))
+        RSubsidence(1:iNRegions) = AppGW%AppSubsidence%GetSubregionalCumSubsidence(AppGrid%NSubregions,lPreviousTS=.FALSE.)
+        RSubsidence(iNRegions+1) = SUM(RSubsidence(1:iNRegions))
 
         !Cumulative subsidence at the previous time step
-        RSubsidence_P(1:NRegions) = AppGW%AppSubsidence%GetSubregionalCumSubsidence(AppGrid%NSubregions,lPreviousTS=.TRUE.)
-        RSubsidence_P(NRegions+1) = SUM(RSubsidence_P(1:NRegions))
+        RSubsidence_P(1:iNRegions) = AppGW%AppSubsidence%GetSubregionalCumSubsidence(AppGrid%NSubregions,lPreviousTS=.TRUE.)
+        RSubsidence_P(iNRegions+1) = SUM(RSubsidence_P(1:iNRegions))
     ELSE
         RSubsidence   = 0.0
         RSubsidence_P = 0.0
@@ -3789,29 +3935,31 @@ CONTAINS
             + RSubIrig                     &
             + RTileDrain                   &
             - RPump                        &
+            - RGWReturnFlow                &
             - RGWToRZFlows                 &
             + RSubInflow
 
     !Store budget data in array
-    DummyArray(1,:)  = RPerc 
-    DummyArray(2,:)  = AppGW%RegionalStorage_P
-    DummyArray(3,:)  = AppGW%RegionalStorage    
-    DummyArray(4,:)  = RDeepPerc 
-    DummyArray(5,:)  = RStreamGWFlows 
-    DummyArray(6,:)  = RRecharge 
-    DummyArray(7,:)  = RLakeGWFlows
-    DummyArray(8,:)  = RBound 
-    DummyArray(9,:)  = RSubsidence-RSubsidence_P
-    DummyArray(10,:) = RSubIrig 
-    DummyArray(11,:) =-RTileDrain 
-    DummyArray(12,:) = RPump 
-    DummyArray(13,:) = RGWToRZFlows 
-    DummyArray(14,:) = RSubInflow 
-    DummyArray(15,:) = RError
-    DummyArray(16,:) = RSubsidence
+    rDummyArray(1,:)  = RPerc 
+    rDummyArray(2,:)  = AppGW%RegionalStorage_P
+    rDummyArray(3,:)  = AppGW%RegionalStorage    
+    rDummyArray(4,:)  = RDeepPerc 
+    rDummyArray(5,:)  = RStreamGWFlows 
+    rDummyArray(6,:)  = RRecharge 
+    rDummyArray(7,:)  = RLakeGWFlows
+    rDummyArray(8,:)  = RBound 
+    rDummyArray(9,:)  = RSubsidence-RSubsidence_P
+    rDummyArray(10,:) = RSubIrig 
+    rDummyArray(11,:) =-RTileDrain 
+    rDummyArray(12,:) = RPump 
+    rDummyArray(13,:) = RGWReturnFlow 
+    rDummyArray(14,:) = RGWToRZFlows 
+    rDummyArray(15,:) = RSubInflow 
+    rDummyArray(16,:) = RError
+    rDummyArray(17,:) = RSubsidence
    
     !Write data
-    CALL AppGW%GWBudFile%WriteData(DummyArray)
+    CALL AppGW%GWBudFile%WriteData(rDummyArray)
     
   END SUBROUTINE WriteGWFlowsToBudFile
   
@@ -3911,7 +4059,7 @@ CONTAINS
         CALL OutFile%WriteData(Text)
     END DO
     
-  END SUBROUTINE PrintFinalHeads
+    END SUBROUTINE PrintFinalHeads
 
   
   
@@ -3926,6 +4074,101 @@ CONTAINS
 ! ******************************************************************
 ! ******************************************************************
 
+  ! -------------------------------------------------------------
+  ! --- READ GW RETURN FLOW DESTINATIONS
+  ! -------------------------------------------------------------
+  SUBROUTINE ReadGWReturnFlowDestinations(iStrmNodeIDs,iLakeIDs,iGWNodeIDs,AppGWParamFile,lSimulateGWReturnFlow,iGWReturnFlowDestType,iGWReturnFlowDest,iStat)
+    INTEGER,INTENT(IN)                  :: iStrmNodeIDs(:),iLakeIDs(:),iGWNodeIDs(:)
+    TYPE(GenericFileType),INTENT(INOUT) :: AppGWParamFile
+    LOGICAL,INTENT(OUT)                 :: lSimulateGWReturnFlow
+    INTEGER,INTENT(OUT)                 :: iGWReturnFlowDestType(:),iGWReturnFlowDest(:)
+    INTEGER,INTENT(OUT)                 :: iStat
+  
+    !Local variables
+    CHARACTER(LEN=ModNameLen+28) :: ThisProcedure = ModName // 'ReadGWReturnFlowDestinations'
+    INTEGER                      :: indxNode,iNodeID,iNode,iDummyArray(3),iDestinationType,iSimGWReturnFlow, &
+                                    iStrmNodeID,iStrmNode,iLakeID,iLake
+    LOGICAL                      :: lProcessed(SIZE(iGWNodeIDs))
+    INTEGER,PARAMETER            :: f_iDestinationTypeList(3) = [f_iFlowDest_Outside  , &
+                                                                 f_iFlowDest_StrmNode , &
+                                                                 f_iFlowDest_Lake     ]
+    
+    !Initialize
+    iStat      = 0
+    lProcessed = .FALSE.
+    
+    !Are we simulating gw return flow
+    CALL AppGWParamFile%ReadData(iSimGWReturnFlow,iStat)  ;  IF (iStat .NE. 0) RETURN
+    IF (iSimGWReturnFlow .EQ. 1) THEN
+        lSimulateGWReturnFlow = .TRUE.
+    ELSE
+        lSimulateGWReturnFlow = .FALSE.
+    END IF        
+    IF (.NOT. lSimulateGWReturnFlow) RETURN
+    
+    DO indxNode=1,SIZE(iGWNodeIDs)
+        CALL AppGWParamFile%ReadData(iDummyArray,iStat)  ;  IF (iStat .NE. 0) RETURN
+        
+        !Check that element ID is legit
+        iNodeID = iDummyArray(1)
+        iNode   = LocateInList(iNodeID,iGWNodeIDs)
+        IF (iNode .EQ. 0) THEN
+            CALL SetLastMessage('Node ID '//TRIM(IntToText(iNodeID))//' listed for groundwater return flow destination data is not modeled!',f_iFatal,ThisProcedure)
+            iStat = -1
+            RETURN
+        END IF
+        
+        !Check if elemenet was listed before
+        IF (lProcessed(iNode)) THEN
+            CALL SetLastMessage('Node '//TRIM(IntToText(iNodeID))//' is listed more than once for groundwater return flow destination data!',f_iFatal,ThisProcedure)
+            iStat = -1
+            RETURN
+        END IF
+        lProcessed(iNode) = .TRUE.
+    
+        !Check that destination type is legit
+        iDestinationType = iDummyArray(2)
+        IF (LocateInList(iDestinationType,f_iDestinationTypeList) .EQ. 0) THEN
+            CALL SetLastMessage ('Groundwater flow destination type for node ' // TRIM(IntToText(iNodeID)) // ' is not accepted!',f_iFatal,ThisProcedure)
+            iStat = -1
+            RETURN
+        END IF
+        iGWReturnFlowDestType(iNode) = iDestinationType
+        
+        !Check that destination ID is legit
+        SELECT CASE (iDestinationType)
+            CASE (f_iFlowDest_Outside)
+                iGWReturnFlowDest(iNode) = 0
+                
+            CASE (f_iFlowDest_StrmNode)
+                iStrmNodeID = iDummyArray(3)
+                iStrmNode   = LocateInList(iStrmNodeID,iStrmNodeIDs)
+                IF (iStrmNode .EQ. 0) THEN
+                    MessageArray(1) = 'Stream node number ' // TRIM(IntToText(iStrmNodeID)) // ' listed for groundwater node ' // TRIM(IntToText(iNodeID)) 
+                    MessageArray(2) = ' as groundwater return flow destination is not in the model!'
+                    CALL SetLastMessage (MessageArray(1:2),f_iFatal,ThisProcedure)
+                    iStat = -1
+                    RETURN
+                END IF
+                iGWReturnFlowDest(iNode) = iStrmNode
+                
+            CASE (f_iFlowDest_Lake)
+                iLakeID = iDummyArray(3)
+                iLake   = LocateInList(iLakeID,iLakeIDs)
+                IF (iLake .EQ. 0) THEN
+                    MessageArray(1) = 'Lake number ' // TRIM(IntToText(iLakeID)) // ' listed for groundwater node ' // TRIM(IntToText(iNodeID)) 
+                    MessageArray(2) = ' as groundwater return flow destination is not in the model!'
+                    CALL SetLastMessage (MessageArray(1:2),f_iFatal,ThisProcedure)
+                    iStat = -1
+                    RETURN
+                END IF
+                iGWReturnFlowDest(iNode) = iLake
+        END SELECT        
+    END DO
+
+  END SUBROUTINE ReadGWReturnFlowDestinations
+    
+    
   ! -------------------------------------------------------------
   ! --- READ RESTART DATA
   ! -------------------------------------------------------------
@@ -4587,6 +4830,10 @@ CONTAINS
     IF (AppGW%lPumping_Defined)  &
         CALL AppGW%AppPumping%ComputeRHS(AppGrid,Stratigraphy,rStor,Matrix)
     
+    !Simulate conversion of gw that is above ground surface to surface flow
+    IF (AppGW%lSimulateGWReturnFlow)  &
+        CALL ComputeGWReturnFlow_RHS(AppGrid,Stratigraphy,AppGW,Matrix)
+    
     !Simulate boundary conditions (must be the last to be simulated for the entire simulation in case any
     !  specified head b.c. are defined; flow at specified head b.c. is equal to the computed RHS vector entry)
     IF (AppGW%lAppBC_Defined)  &
@@ -4655,6 +4902,10 @@ CONTAINS
     !Simulate pumping/recharge
     IF (AppGW%lPumping_Defined)  &
         CALL AppGW%AppPumping%Simulate(AppGrid,Stratigraphy,rStor,rdStor,Matrix)
+    
+    !Simulate conversion of gw that is above ground surface to surface flow
+    IF (AppGW%lSimulateGWReturnFlow)  &
+        CALL ComputeGWReturnFlow(AppGrid,Stratigraphy,AppGW,Matrix)
     
     !Simulate boundary conditions (must be the last to be simulated for the entire simulation in case any
     !  specified head b.c. are defined; flow at specified head b.c. is equal to the computed RHS vector entry)
@@ -4771,7 +5022,7 @@ CONTAINS
     TYPE(BudgetHeaderType)        :: Header
     
     !Local variables
-    INTEGER,PARAMETER           :: TitleLen           = 242  , &
+    INTEGER,PARAMETER           :: TitleLen           = 256  , &
                                    NTitles            = 4    , &
                                    NColumnHeaderLines = 4    
     TYPE(TimeStepType)          :: TimeStepLocal
@@ -4789,6 +5040,7 @@ CONTAINS
                                                                'SUBSURF_IRRIGATION' ,& 
                                                                'TILE_DRAINS'        ,& 
                                                                'PUMPING'            ,&
+                                                               'GW_RETURN_FLOW'     ,&
                                                                'FLOW_TO_ROOTZONE'   ,&
                                                                'NET_SUBSURF_INFLOW' ,&
                                                                'DISCREPANCY'        ,&
@@ -4832,7 +5084,7 @@ CONTAINS
         pASCIIOutput%cTitles(4)         = REPEAT('-',pASCIIOutput%TitleLen)
         pASCIIOutput%lTitlePersist(1:3) = .TRUE.
         pASCIIOutput%lTitlePersist(4)   = .FALSE.
-      pASCIIOutput%cFormatSpec        = ADJUSTL('(A16,1X,50(F13.1,1X))')
+      pASCIIOutput%cFormatSpec        = ADJUSTL('(A16,1X,*(F13.1,1X))')
       pASCIIOutput%NColumnHeaderLines = NColumnHeaderLines
     END ASSOCIATE 
     
@@ -4865,6 +5117,7 @@ CONTAINS
                                           f_iVR ,&  !Subsurface irrigation
                                           f_iVR ,&  !Tile drain outflow
                                           f_iVR ,&  !Pumping
+                                          f_iVR ,&  !GW return flow
                                           f_iVR ,&  !Outflow to root zone
                                           f_iVR ,&  !Net subsurface inflow
                                           f_iVR ,&  !Discrepancy
@@ -4872,13 +5125,13 @@ CONTAINS
       pLocation%iColWidth              = [17,(13,I=1,f_iNGWBudColumns)]
       ASSOCIATE (pColumnHeaders => pLocation%cColumnHeaders           , &
                  pFormatSpecs   => pLocation%cColumnHeadersFormatSpec )
-        pColumnHeaders(:,1) = (/'                 ','              ','     Beginning','       Ending ','      Deep    ','     Gain from','              ','     Gain from','      Boundary','              ','    Subsurface','    Tile Drain','              ','  Outflow to  ','Net Subsurface','              ','    Cumulative'/)
-        pColumnHeaders(:,2) = (/'      Time       ','   Percolation','      Storage ','       Storage','   Percolation','      Stream  ','      Recharge','       Lake   ','       Inflow ','    Subsidence','    Irrigation','     Outflow  ','     Pumping  ','  Root Zone   ','    Inflow    ','   Discrepancy','    Subsidence'/)
-        pColumnHeaders(:,3) = (/      TextTime     ,'              ','        (+)   ','         (-)  ','       (+)    ','        (+)   ','         (+)  ','        (+)   ','        (+)   ','        (+)   ','        (+)   ','       (-)    ','       (-)    ','     (-)      ','     (+)      ','       (=)    ','              '/)
+        pColumnHeaders(:,1) = (/'                 ','              ','     Beginning','       Ending ','      Deep    ','     Gain from','              ','     Gain from','      Boundary','              ','    Subsurface','    Tile Drain','              ','      GW      ','  Outflow to  ','Net Subsurface','              ','    Cumulative'/)
+        pColumnHeaders(:,2) = (/'      Time       ','   Percolation','      Storage ','       Storage','   Percolation','      Stream  ','      Recharge','       Lake   ','       Inflow ','    Subsidence','    Irrigation','     Outflow  ','     Pumping  ','  Return Flow ','  Root Zone   ','    Inflow    ','   Discrepancy','    Subsidence'/)
+        pColumnHeaders(:,3) = (/      TextTime     ,'              ','        (+)   ','         (-)  ','       (+)    ','        (+)   ','         (+)  ','        (+)   ','        (+)   ','        (+)   ','        (+)   ','       (-)    ','       (-)    ','       (-)    ','     (-)      ','     (+)      ','       (=)    ','              '/)
         pColumnHeaders(:,4) = ''
-        pFormatSpecs(1)     = '(A17,16A14)'
-        pFormatSpecs(2)     = '(A17,16A14)'
-        pFormatSpecs(3)     = '(A17,16A14)'
+        pFormatSpecs(1)     = '(A17,*(A14))'
+        pFormatSpecs(2)     = '(A17,*(A14))'
+        pFormatSpecs(3)     = '(A17,*(A14))'
         pFormatSpecs(4)     = '('//TRIM(IntToText(TitleLen))//'(1H-),'//TRIM(IntToText(f_iNGWBudColumns+1))//'A0)'
       END ASSOCIATE
     END ASSOCIATE
@@ -5066,6 +5319,114 @@ CONTAINS
     
   END SUBROUTINE ComputeElemTransmissivities
 
+  
+  ! -------------------------------------------------------------
+  ! --- COMPUTE SURFACE FLOW WHEN GW HEAD IS ABOVE GROUND SURFACE
+  ! --- Note: Computed only for top aquifer layer and if it doesn't have a confining layer 
+  ! -------------------------------------------------------------
+  SUBROUTINE ComputeGWReturnFlow(AppGrid,Stratigraphy,AppGW,Matrix)
+    TYPE(AppGridType),INTENT(IN)      :: AppGrid
+    TYPE(StratigraphyType),INTENT(IN) :: Stratigraphy
+    TYPE(AppGWType),INTENT(INOUT)     :: AppGW
+    TYPE(MatrixType),INTENT(INOUT)    :: Matrix
+    
+    !Local variables
+    INTEGER           :: indxNode,iTopActiveLayer,iNodes(1),iNNodes
+    REAL(8)           :: rGSElev,rHeadDiff,rDiff,rStorativity,rConductance,rUpdateValues(1),rGWReturnFlowMax,  &
+                         rGWReturnFlow,rdGWReturnFlow,rHead
+    INTEGER,PARAMETER :: iCompIDs(1) = [f_iGWComp]
+    
+    !Initialize
+    iNNodes = AppGrid%NNodes
+    
+    !Loop through nodes for first layer
+    !$OMP PARALLEL DO DEFAULT(PRIVATE) SHARED(iNNodes,Stratigraphy,AppGW,Matrix,iCompIDs) 
+    DO indxNode=1,iNNodes
+        !Do we need to compute GW return flow? Note that, GW return flows are all set to zero during instantiation so no need to redo it 
+        IF (.NOT. AppGW%lComputeGWReturnFlowAtNode(indxNode)) CYCLE
+        
+        iTopActiveLayer = Stratigraphy%TopActiveLayer(indxNode)
+        rGSElev         = Stratigraphy%GSElev(indxNode)
+        
+        !Compute GW return flow
+        rHead     = AppGW%State%Head(indxNode,iTopActiveLayer)
+        rHeadDiff = rHead - rGSElev 
+        IF (rHeadDiff .GT. 0.0) THEN
+            rConductance                  = 100.0 * AppGW%Nodes%Ss(indxNode,iTopActiveLayer)                           !Choose a large conductance to quickly reduce the head down to GSE
+            rGWReturnFlow                 = rHeadDiff * rConductance
+            rStorativity                  = AppGW%Nodes%Sy(indxNode,iTopActiveLayer)  
+            rGWReturnFlowMax              = (rHead - Stratigraphy%BottomElev(indxNode,iTopActiveLayer)) * rStorativity  !This is defined to avoid any "sloshing" of gw up and down if the GWReturnflow is too large
+            AppGW%rGWReturnFlow(indxNode) = MIN(rGWReturnFlow , rGWReturnFlowMax) 
+            iNodes(1)                     = (iTopActiveLayer-1)*iNNodes + indxNode
+            
+            !Update RHS vector
+            rUpdateValues(1) = AppGW%rGWReturnFlow(indxNode)
+            CALL Matrix%UpdateRHS(iCompIDs,iNodes,rUpdateValues)
+            
+            !Update COEFF matrix
+            rDiff            = rGWReturnFlowMax - rGWReturnFlow
+            rdGWReturnFlow   = 0.5d0 * rConductance * (1d0 + rHeadDiff/SQRT(rHeadDiff*rHeadDiff+f_rSmoothMaxP))
+            rUpdateValues(1) = rStorativity - (0.5d0 * (1d0 + rDiff/SQRT(rDiff*rDiff+f_rSmoothMaxP))) * (rStorativity - rdGWReturnFlow)
+            CALL Matrix%UpdateCOEFF(f_iGWComp,iNodes(1),1,iCompIDs,iNodes,rUpdateValues)
+        ELSE
+            AppGW%rGWReturnFlow(indxNode) = 0.0
+        END IF
+    END DO
+    !$OMP END PARALLEL DO
+        
+  END SUBROUTINE ComputeGWReturnFlow
+  
+  
+  ! -------------------------------------------------------------
+  ! --- COMPUTE SURFACE FLOW WHEN GW HEAD IS ABOVE GROUND SURFACE TO BE USED FOR RHS VECTOR ONLY
+  ! --- Note: Computed only for top aquifer layer and if it doesn't have a confining layer 
+  ! -------------------------------------------------------------
+  SUBROUTINE ComputeGWReturnFlow_RHS(AppGrid,Stratigraphy,AppGW,Matrix)
+    TYPE(AppGridType),INTENT(IN)      :: AppGrid
+    TYPE(StratigraphyType),INTENT(IN) :: Stratigraphy
+    TYPE(AppGWType),INTENT(INOUT)     :: AppGW
+    TYPE(MatrixType),INTENT(INOUT)    :: Matrix
+    
+    !Local variables
+    INTEGER           :: indxNode,iTopActiveLayer,iNodes(1),iNNodes
+    REAL(8)           :: rGSElev,rHeadDiff,rStorativity,rConductance,rUpdateValues(1),rGWReturnFlowMax,  &
+                         rGWReturnFlow,rHead
+    INTEGER,PARAMETER :: iCompIDs(1) = [f_iGWComp]
+    
+    !Initialize
+    iNNodes = AppGrid%NNodes
+    
+    !Loop through nodes for first layer
+    !$OMP PARALLEL DO DEFAULT(PRIVATE) SHARED(iNNodes,Stratigraphy,AppGW,Matrix,iCompIDs) 
+    DO indxNode=1,iNNodes
+        !Do we need to compute GW return flow? Note that, GW return flows are all set to zero during instantiation so no need to redo it 
+        IF (.NOT. AppGW%lComputeGWReturnFlowAtNode(indxNode)) CYCLE
+        
+        iTopActiveLayer = Stratigraphy%TopActiveLayer(indxNode)
+        rGSElev         = Stratigraphy%GSElev(indxNode)
+        
+        !Compute GW return flow
+        rHead     = AppGW%State%Head(indxNode,iTopActiveLayer)
+        rHeadDiff = rHead - rGSElev 
+        IF (rHeadDiff .GT. 0.0) THEN
+            rConductance                  = 100.0 * AppGW%Nodes%Ss(indxNode,iTopActiveLayer)                           !Choose a large conductance to quickly reduce the head down to GSE
+            rGWReturnFlow                 = rHeadDiff * rConductance
+            rStorativity                  = AppGW%Nodes%Sy(indxNode,iTopActiveLayer)  
+            rGWReturnFlowMax              = (rHead - Stratigraphy%BottomElev(indxNode,iTopActiveLayer)) * rStorativity  !This is defined to avoid any "sloshing" of gw up and down if the GWReturnflow is too large
+            AppGW%rGWReturnFlow(indxNode) = MIN(rGWReturnFlow , rGWReturnFlowMax) 
+            iNodes(1)                     = (iTopActiveLayer-1)*iNNodes + indxNode
+            
+            !Update RHS vector
+            rUpdateValues(1) = AppGW%rGWReturnFlow(indxNode)
+            CALL Matrix%UpdateRHS(iCompIDs,iNodes,rUpdateValues)            
+        ELSE
+            AppGW%rGWReturnFlow(indxNode) = 0.0
+        END IF
+    END DO
+    !$OMP END PARALLEL DO
+    
+  END SUBROUTINE ComputeGWReturnFlow_RHS
+  
   
   ! -------------------------------------------------------------
   ! --- COMPUTE CONTRIBUTION OF HORIZONTAL FLOWS TO RHS VECTOR ONLY 
@@ -5626,5 +5987,82 @@ CONTAINS
     AppGW%lAppBC_Defined = AppGW%AppBC%IsDefined()
     
   END SUBROUTINE RemoveBC
+    
+    
+  ! -------------------------------------------------------------
+  ! --- COMPILE NODES WHERE GW RETURN FLOW WILL BE COMPUTED
+  ! -------------------------------------------------------------
+  SUBROUTINE CompileNodesWithGWReturnFlow(Stratigraphy,AppBC,StrmGWConnector,LakeGWConnector,rGWReturnFlow,lComputeGWReturnFlow)
+    TYPE(StratigraphyType),INTENT(IN)    :: Stratigraphy
+    TYPE(AppBCType),INTENT(IN)           :: AppBC
+    TYPE(StrmGWConnectorType),INTENT(IN) :: StrmGWConnector
+    TYPE(LakeGWConnectorType),INTENT(IN) :: LakeGWConnector
+    REAL(8),INTENT(INOUT)                :: rGWReturnFlow(:)
+    LOGICAL,INTENT(INOUT)                :: lComputeGWReturnflow(:)
+    
+    !Local variables
+    INTEGER             :: iNNodes,iNode,indxLayer,indxNode,iTopActiveLayer
+    REAL(8)             :: rConductance
+    INTEGER,ALLOCATABLE :: iGWNodeList(:)
+    REAL(8),ALLOCATABLE :: rConductances(:)
+    
+    !Initialize
+    iNNodes = SIZE(Stratigraphy%TopActiveLayer)
+    
+    !Initailize arrays; assume gw return flow will be computed at all nodes initially
+    rGWReturnFlow        = 0.0
+    lComputeGWReturnFlow = .TRUE.
+    
+    !Don't calculate it if a confining layer exists or there are no active layers
+    DO indxNode=1,iNNodes
+        iTopActiveLayer = Stratigraphy%TopActiveLayer(indxNode)
+        IF (iTopActiveLayer .LT. 1) THEN
+            lComputeGWReturnFlow(indxNode) = .FALSE.
+            CYCLE
+        END IF
+        IF (Stratigraphy%TopElev(indxNode,iTopActiveLayer) .LT. Stratigraphy%GSElev(indxNode)) lComputeGWReturnFlow(indxNode) = .FALSE.
+    END DO
+    
+    !Don't calculate GW return flow at stream nodes only when conductance is non-zero
+    CALL StrmGWConnector%GetAllGWNodes(iGWNodeList)
+    CALL StrmGWConnector%GetConductances(rConductances)
+    DO indxNode=1,SIZE(iGWNodeList)
+        iNode = iGWNodeList(indxNode)
+        IF (rConductances(indxNode) .GT. 0.0) lComputeGWReturnFlow(iNode) = .FALSE.
+    END DO
+    
+    !Don't calculate it at lake nodes only when conductance is non-zero
+    CALL LakeGWConnector%GetGWNodes(iGWNodeList)
+    CALL LakeGWConnector%GetMaxConductances(rConductances)
+    DO indxNode=1,SIZE(iGWNodeList)
+        iNode = iGWNodeList(indxNode)
+        IF (rConductances(indxNode) .GT. 0.0) lComputeGWReturnFlow(iNode) = .FALSE.
+    END DO
+    
+    !Don't calculate it at GHB b.c. nodes only when conductance is non-zero
+    DO indxLayer=1,Stratigraphy%NLayers
+        CALL AppBC%GetNodesWithBCType(indxLayer,f_iGHBCID,iGWNodeList)
+        DO indxNode=1,SIZE(iGWNodeList)
+            iNode = iGWNodeList(indxNode)
+            IF (Stratigraphy%TopActiveLayer(iNode) .EQ. indxLayer) THEN
+                rConductance = AppBC%GetConductance_AtANode(iNode,indxLayer,f_iGHBCID)
+                IF (rConductance .GT. 0.0) lComputeGWReturnFlow(iNode) = .FALSE.
+            END IF
+        END DO
+    END DO
+    
+    !Don't calculate it at constraint GHB b.c. nodes only when conductance is non-zero
+    DO indxLayer=1,Stratigraphy%NLayers
+        CALL AppBC%GetNodesWithBCType(indxLayer,f_iConstrainedGHBCID,iGWNodeList)
+        DO indxNode=1,SIZE(iGWNodeList)
+            iNode = iGWNodeList(indxNode)
+            IF (Stratigraphy%TopActiveLayer(iNode) .EQ. indxLayer) THEN
+                rConductance = AppBC%GetConductance_AtANode(iNode,indxLayer,f_iConstrainedGHBCID)
+                IF (rConductance .GT. 0.0) lComputeGWReturnFlow(iNode) = .FALSE.
+            END IF
+        END DO
+    END DO
+
+  END SUBROUTINE CompileNodesWithGWReturnFlow
     
 END MODULE

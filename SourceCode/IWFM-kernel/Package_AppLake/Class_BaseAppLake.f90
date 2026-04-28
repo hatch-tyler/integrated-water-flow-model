@@ -160,12 +160,13 @@ MODULE Class_BaseAppLake
   ! -------------------------------------------------------------
   ! --- BUDGET RELATED DATA
   ! -------------------------------------------------------------
-  INTEGER,PARAMETER           :: f_iNLakeBudColumns = 14
+  INTEGER,PARAMETER           :: f_iNLakeBudColumns = 15
   CHARACTER(LEN=27),PARAMETER :: f_cBudgetColumnTitles(f_iNLakeBudColumns) = ['Beginning Storage (+)'       , &
                                                                               'Ending Storage (-)'          , &
                                                                               'Flow from Upstream Lake (+)' , &
                                                                               'Flow from Streams (+)'       , &
                                                                               'Flow from Bypasses (+)'      , &
+                                                                              'GW Return Flow (+)'          , &  
                                                                               'Runoff (+)'                  , &
                                                                               'Return Flow (+)'             , &
                                                                               'Pond Drain (+)'              , &
@@ -263,20 +264,20 @@ MODULE Class_BaseAppLake
     END SUBROUTINE Abstract_KillImplementation
 
     
-     FUNCTION Abstract_GetMaxElevs(AppLake) RESULT(MaxElevs)
+    FUNCTION Abstract_GetMaxElevs(AppLake) RESULT(MaxElevs)
        IMPORT                            :: BaseAppLakeType
        CLASS(BaseAppLakeType),INTENT(IN) :: AppLake
        REAL(8)                           :: MaxElevs(AppLake%NLakes)
-     END FUNCTION Abstract_GetMaxElevs
+    END FUNCTION Abstract_GetMaxElevs
      
      
-     SUBROUTINE Abstract_Simulate(AppLake,GSElevs,GWHeads,Runoff,ReturnFlow,PondDrain,LakeGWConnector,StrmLakeConnector,Matrix)
-      IMPORT                               :: BaseAppLakeType,LakeGWConnectorType,StrmLakeConnectorType,MatrixType
-      CLASS(BaseAppLakeType)               :: AppLake
-      REAL(8),INTENT(IN)                   :: GSElevs(:),GWHeads(:,:),Runoff(:),ReturnFlow(:),PondDrain(:)
-      TYPE(LakeGWConnectorType),INTENT(IN) :: LakeGWConnector
-      TYPE(StrmLakeConnectorType)          :: StrmLakeConnector
-      TYPE(MatrixType)                     :: Matrix
+    SUBROUTINE Abstract_Simulate(AppLake,GSElevs,GWHeads,rGWReturnFlows,Runoff,ReturnFlow,PondDrain,LakeGWConnector,StrmLakeConnector,Matrix)
+        IMPORT                               :: BaseAppLakeType,LakeGWConnectorType,StrmLakeConnectorType,MatrixType
+        CLASS(BaseAppLakeType)               :: AppLake
+        REAL(8),INTENT(IN)                   :: GSElevs(:),GWHeads(:,:),rGWReturnFlows(:),Runoff(:),ReturnFlow(:),PondDrain(:)
+        TYPE(LakeGWConnectorType),INTENT(IN) :: LakeGWConnector
+        TYPE(StrmLakeConnectorType)          :: StrmLakeConnector
+        TYPE(MatrixType)                     :: Matrix
     END SUBROUTINE Abstract_Simulate
     
     
@@ -975,11 +976,11 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- PRINT OUT APPLICATION LAKES SIMULATION RESULTS
   ! -------------------------------------------------------------
-  SUBROUTINE PrintResults(AppLake,TimeStep,lEndOfSimulation,Runoff,ReturnFlow,PondDrain,LakeGWConnector,StrmLakeConnector)
+  SUBROUTINE PrintResults(AppLake,TimeStep,lEndOfSimulation,rGWReturnFlows,Runoff,ReturnFlow,PondDrain,LakeGWConnector,StrmLakeConnector)
     CLASS(BaseAppLakeType)                 :: AppLake
     TYPE(TimeStepType),INTENT(IN)          :: TimeStep
     LOGICAL,INTENT(IN)                     :: lEndOfSimulation
-    REAL(8),INTENT(IN)                     :: Runoff(:),ReturnFlow(:),PondDrain(:)
+    REAL(8),INTENT(IN)                     :: rGWReturnFlows(:),Runoff(:),ReturnFlow(:),PondDrain(:)
     TYPE(LakeGWConnectorType),INTENT(IN)   :: LakeGWConnector
     TYPE(StrmLakeConnectorType),INTENT(IN) :: StrmLakeConnector
     
@@ -1008,6 +1009,7 @@ CONTAINS
              + pLakes%InFlowUplake              &
              + StrmInflows                      &
              + BypassInflows                    &
+             + rGWReturnFlows                   &
              + Runoff                           &
              + ReturnFlow                       &
              + PondDrain                        &
@@ -1020,15 +1022,16 @@ CONTAINS
       DummyArray(3,:)  = pLakes%InflowUpLake
       DummyArray(4,:)  = StrmInflows
       DummyArray(5,:)  = BypassInflows
-      DummyArray(6,:)  = Runoff
-      DummyArray(7,:)  = ReturnFlow      
-      DummyArray(8,:)  = PondDrain      
-      DummyArray(9,:)  = LakePrecip
-      DummyArray(10,:) = -LakeGWFlows
-      DummyArray(11,:) = pLakes%ETa
-      DummyArray(12,:) = pLakes%Outflow
-      DummyArray(13,:) = Error
-      DummyArray(14,:) = pLakes%Elev
+      DummyArray(6,:)  = rGWReturnFlows
+      DummyArray(7,:)  = Runoff
+      DummyArray(8,:)  = ReturnFlow      
+      DummyArray(9,:)  = PondDrain      
+      DummyArray(10,:) = LakePrecip
+      DummyArray(11,:) = -LakeGWFlows
+      DummyArray(12,:) = pLakes%ETa
+      DummyArray(13,:) = pLakes%Outflow
+      DummyArray(14,:) = Error
+      DummyArray(15,:) = pLakes%Elev
     END ASSOCIATE
                  
     !Print out values to binary file
@@ -1165,7 +1168,7 @@ CONTAINS
     TYPE(BudgetHeaderType)        :: Header
    
     !Local variables
-    INTEGER,PARAMETER :: TitleLen           = 199  , &
+    INTEGER,PARAMETER :: TitleLen           = 212  , &
                          NTitles            = 4    , &
                          NColumnHeaderLines = 4    
     TYPE(TimeStepType):: TimeStepLocal
@@ -1185,12 +1188,14 @@ CONTAINS
                                                        'VOLUME' , &
                                                        'VOLUME' , &
                                                        'VOLUME' , &
+                                                       'VOLUME' , &
                                                        'ELEV'   ]
     CHARACTER(LEN=17),PARAMETER :: FParts(f_iNLakeBudColumns) = ['BEGIN_STORAGE'      ,&
                                                                  'END_STORAGE'        ,&
                                                                  'FLOW_FRM_UPLAKE'    ,&    
                                                                  'FLOW_FRM_STRM'      ,&
                                                                  'FLOW_FRM_BYPASS'    ,&
+                                                                 'GW_RTRN_FLOW'       ,& 
                                                                  'RUNOFF'             ,&
                                                                  'RETURN_FLOW'        ,&
                                                                  'POND_DRN'           ,&
@@ -1239,7 +1244,7 @@ CONTAINS
         pASCIIOutput%cTitles(4)         = REPEAT('-',pASCIIOutput%TitleLen)
         pASCIIOutput%lTitlePersist(1:3) = .TRUE.
         pASCIIOutput%lTitlePersist(4)   = .FALSE.
-      pASCIIOutput%cFormatSpec        = ADJUSTL('(A16,1X,50(F12.2,1X))')
+      pASCIIOutput%cFormatSpec        = ADJUSTL('(A16,1X,*(F12.2,1X))')
       pASCIIOutput%NColumnHeaderLines = NColumnHeaderLines
     END ASSOCIATE 
    
@@ -1267,6 +1272,7 @@ CONTAINS
                                                             f_iVR ,&  !Flow from upstream lake
                                                             f_iVR ,&  !Flow from streams
                                                             f_iVR ,&  !Flow from bypasses
+                                                            f_iVR ,&  !GW return flow into lake
                                                             f_iVR ,&  !Runoff into lake
                                                             f_iVR ,&  !Return flow into lake
                                                             f_iVR ,&  !Pond drain into lake
@@ -1279,13 +1285,13 @@ CONTAINS
       pLocation%iColWidth                             = [17,(12,indx=1,f_iNLakeBudColumns)]
       ASSOCIATE (pColumnHeaders => pLocation%cColumnHeaders           , &
                  pFormatSpecs   => pLocation%cColumnHeadersFormatSpec )
-        pColumnHeaders(:,1) = (/'                 ','    Beginning','    Ending   ','  Flow from  ','  Flow from  ','  Flow from  ','             ','    Return   ','      Pond   ','             ','   Gain from ','     Lake    ','      Lake   ','             ','Lake Surface '/)
-        pColumnHeaders(:,2) = (/'      Time       ','     Storage ','    Storage  ','Upstream Lake','   Streams   ','   Bypasses  ','     Runoff  ','     Flow    ','      Drain  ','Precipitation','  Groundwater','  Evaporation','     Outflow ',' Discrepancy ','  Elevation  '/)
-        pColumnHeaders(:,3) = (/      TextTime     ,'       (+)   ','      (-)    ','     (+)     ','     (+)     ','     (+)     ','      (+)    ','      (+)    ','      (+)    ','      (+)    ','      (+)    ','     (-)     ','       (-)   ','     (=)     ',          Text1/)
+        pColumnHeaders(:,1) = (/'                 ','    Beginning','    Ending   ','  Flow from  ','  Flow from  ','  Flow from  ','      GW     ','             ','    Return   ','      Pond   ','             ','   Gain from ','     Lake    ','      Lake   ','             ','Lake Surface '/)
+        pColumnHeaders(:,2) = (/'      Time       ','     Storage ','    Storage  ','Upstream Lake','   Streams   ','   Bypasses  ','  Return Flow','     Runoff  ','     Flow    ','      Drain  ','Precipitation','  Groundwater','  Evaporation','     Outflow ',' Discrepancy ','  Elevation  '/)
+        pColumnHeaders(:,3) = (/      TextTime     ,'       (+)   ','      (-)    ','     (+)     ','     (+)     ','     (+)     ','      (+)    ','      (+)    ','      (+)    ','      (+)    ','      (+)    ','      (+)    ','     (-)     ','       (-)   ','     (=)     ',          Text1/)
         pColumnHeaders(:,4) = ''
-        pFormatSpecs(1)     = '(A17,14A13)'
-        pFormatSpecs(2)     = '(A17,14A13)'
-        pFormatSpecs(3)     = '(A17,14A13)'
+        pFormatSpecs(1)     = '(A17,*(A13))'
+        pFormatSpecs(2)     = '(A17,*(A13))'
+        pFormatSpecs(3)     = '(A17,*(A13))'
         pFormatSpecs(4)     = '('//TRIM(IntToText(TitleLen))//'(1H-),'//TRIM(IntToText(f_iNLakeBudColumns+1))//'A0)'
       END ASSOCIATE
     END ASSOCIATE

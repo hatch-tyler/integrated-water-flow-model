@@ -143,6 +143,7 @@ MODULE IOInterface_Local
     PROCEDURE,PASS :: WriteTSArrayData
     PROCEDURE,PASS :: WriteTSMatrixData
     PROCEDURE,PASS :: WriteEntireTSD_ToDSSFile
+    PROCEDURE,PASS :: GoToLine
     PROCEDURE,PASS :: RewindFile   
     PROCEDURE,PASS :: RewindFile_To_BeginningOfTSData
     PROCEDURE,PASS :: BackspaceFile
@@ -2059,6 +2060,38 @@ CONTAINS
     END SELECT
       
   END SUBROUTINE SkipDataBlocks
+
+
+  ! -------------------------------------------------------------
+  ! --- GO TO A LINE IN A ASCII INPUT FILE
+  ! -------------------------------------------------------------
+  SUBROUTINE GoToLine(ThisFile,iGoToLine,iStat)
+    CLASS(GenericFileType) :: ThisFile
+    INTEGER,INTENT(IN)     :: iGoToLine
+    INTEGER,INTENT(OUT)    :: iStat
+
+    !Local variables
+    CHARACTER(LEN=ModNameLen+8),PARAMETER :: ThisProcedure = ModName // 'GoToLine'
+    
+    !Initialize
+    iStat = 0
+    
+    !File is not defined
+    IF (.NOT. ALLOCATED(ThisFile%Me)) THEN
+        CALL LogMessage('Cannot go to a specified line in an unopened file!',f_iWarn,ThisProcedure)
+        RETURN
+    END IF
+
+    SELECT TYPE (p => ThisFile%Me)
+        TYPE IS (AsciiInFileType)  !ASCII input file type
+            CALL p%GoToLine(iGoToLine)
+        
+        CLASS DEFAULT 
+            CALL LogMessage('GoToLine method for file '//ThisFile%Me%Name//' is not defined!',f_iWarn,ThisProcedure)
+        
+    END SELECT
+      
+  END SUBROUTINE GoToLine
 
 
 ! ! -------------------------------------------------------------

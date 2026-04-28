@@ -2558,11 +2558,11 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- PRINT OUT SIMULATION RESULTS
   ! -------------------------------------------------------------
-  SUBROUTINE PrintResults(AppStream,TimeStep,lEndOfSimulation,QTRIB,QROFF,QRTRN,QRPONDDRAIN,QTDRAIN,QRVET,StrmGWConnector,StrmLakeConnector)
+  SUBROUTINE PrintResults(AppStream,TimeStep,lEndOfSimulation,rGWReturnFlows,QTRIB,QROFF,QRTRN,QRPONDDRAIN,QTDRAIN,QRVET,StrmGWConnector,StrmLakeConnector)
     CLASS(AppStreamType)                   :: AppStream
     TYPE(TimeStepType),INTENT(IN)          :: TimeStep
     LOGICAL,INTENT(IN)                     :: lEndOfSimulation
-    REAL(8),INTENT(IN)                     :: QTRIB(:),QROFF(:),QRTRN(:),QRPONDDRAIN(:),QTDRAIN(:),QRVET(:)
+    REAL(8),INTENT(IN)                     :: rGWReturnFlows(:),QTRIB(:),QROFF(:),QRTRN(:),QRPONDDRAIN(:),QTDRAIN(:),QRVET(:)
     TYPE(StrmGWConnectorType),INTENT(IN)   :: StrmGWConnector
     TYPE(StrmLakeConnectorType),INTENT(IN) :: StrmLakeConnector
     
@@ -2572,7 +2572,7 @@ CONTAINS
     IF (AppStream%lDefined) THEN
         IF (AppStream%Me%lRouted) THEN
             BottomElevs = AppStream%Me%GetBottomElevations()
-            CALL AppStream%Me%PrintResults(TimeStep,lEndOfSimulation,QTRIB,QROFF,QRTRN,QRPONDDRAIN,QTDRAIN,QRVET,BottomElevs,StrmGWConnector,StrmLakeConnector)
+            CALL AppStream%Me%PrintResults(TimeStep,lEndOfSimulation,rGWReturnFlows,QTRIB,QROFF,QRTRN,QRPONDDRAIN,QTDRAIN,QRVET,BottomElevs,StrmGWConnector,StrmLakeConnector)
         END IF
     END IF
     
@@ -2781,9 +2781,9 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- CALCULATE STREAM FLOWS
   ! -------------------------------------------------------------
-  SUBROUTINE Simulate(AppStream,GWHeads,Runoff,ReturnFlow,PondDrain,TributaryFlow,DrainInflows,RiparianET,ETData,RiparianETFrac,StrmGWConnector,StrmLakeConnector,Matrix,rWSA,iStrmFlowNodes,rStrmFlows)
+  SUBROUTINE Simulate(AppStream,GWHeads,GWReturnFlow,Runoff,ReturnFlow,PondDrain,TributaryFlow,DrainInflows,RiparianET,ETData,RiparianETFrac,StrmGWConnector,StrmLakeConnector,Matrix,rWSA,iStrmFlowNodes,rStrmFlows)
     CLASS(AppStreamType)        :: AppStream
-    REAL(8),INTENT(IN)          :: GWHeads(:,:),Runoff(:),ReturnFlow(:),PondDrain(:),TributaryFlow(:),DrainInflows(:),RiparianET(:)
+    REAL(8),INTENT(IN)          :: GWHeads(:,:),GWReturnFlow(:),Runoff(:),ReturnFlow(:),PondDrain(:),TributaryFlow(:),DrainInflows(:),RiparianET(:)
     TYPE(ETType),INTENT(IN)     :: ETData 
     REAL(8),INTENT(OUT)         :: RiparianETFrac(:)
     TYPE(StrmGWConnectorType)   :: StrmGWConnector
@@ -2798,17 +2798,17 @@ CONTAINS
                 TYPE IS (AppStream_v42_WSA_Type)
                     !Either WSA should be provided for scenerio runs...
                     IF (PRESENT(rWSA)) THEN
-                        CALL p%Simulate_UsingWSA(rWSA,GWHeads,Runoff,ReturnFlow,PondDrain,TributaryFlow,DrainInflows,RiparianET,ETData,RiparianETFrac,StrmGWConnector,StrmLakeConnector,Matrix)
+                        CALL p%Simulate_UsingWSA(rWSA,GWHeads,GWReturnFlow,Runoff,ReturnFlow,PondDrain,TributaryFlow,DrainInflows,RiparianET,ETData,RiparianETFrac,StrmGWConnector,StrmLakeConnector,Matrix)
                     !...or iStrmFlowNodes and rStrmFlows for historical calculation of WSAs... 
                     ELSEIF (PRESENT(iStrmFlowNodes)) THEN
-                        CALL p%Simulate_UsingHistFlows(iStrmFlowNodes,rStrmFlows,GWHeads,Runoff,ReturnFlow,PondDrain,TributaryFlow,DrainInflows,RiparianET,ETData,RiparianETFrac,StrmGWConnector,StrmLakeConnector,Matrix)
+                        CALL p%Simulate_UsingHistFlows(iStrmFlowNodes,rStrmFlows,GWHeads,GWReturnFlow,Runoff,ReturnFlow,PondDrain,TributaryFlow,DrainInflows,RiparianET,ETData,RiparianETFrac,StrmGWConnector,StrmLakeConnector,Matrix)
                     !...or just good old simulation without worrying about WSAs
                     ELSE
-                        CALL p%Simulate(GWHeads,Runoff,ReturnFlow,PondDrain,TributaryFlow,DrainInflows,RiparianET,ETData,RiparianETFrac,StrmGWConnector,StrmLakeConnector,Matrix)
+                        CALL p%Simulate(GWHeads,GWReturnFlow,Runoff,ReturnFlow,PondDrain,TributaryFlow,DrainInflows,RiparianET,ETData,RiparianETFrac,StrmGWConnector,StrmLakeConnector,Matrix)
                     END IF
                     
                 CLASS DEFAULT
-                    CALL AppStream%Me%Simulate(GWHeads,Runoff,ReturnFlow,PondDrain,TributaryFlow,DrainInflows,RiparianET,ETData,RiparianETFrac,StrmGWConnector,StrmLakeConnector,Matrix)
+                    CALL AppStream%Me%Simulate(GWHeads,GWReturnFlow,Runoff,ReturnFlow,PondDrain,TributaryFlow,DrainInflows,RiparianET,ETData,RiparianETFrac,StrmGWConnector,StrmLakeConnector,Matrix)
             END SELECT
         END IF
     END IF
@@ -2819,9 +2819,9 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- CALCULATE EFECT OF STREAM FLOWS ON RHS VECTOR ONLYS
   ! -------------------------------------------------------------
-  SUBROUTINE ComputeRHS(AppStream,GWHeads,Runoff,ReturnFlow,PondDrain,TributaryFlow,DrainInflows,RiparianET,ETData,RiparianETFrac,StrmGWConnector,StrmLakeConnector,Matrix,rWSA,iStrmFlowNodes,rStrmFlows)
+  SUBROUTINE ComputeRHS(AppStream,GWHeads,GWReturnFlow,Runoff,ReturnFlow,PondDrain,TributaryFlow,DrainInflows,RiparianET,ETData,RiparianETFrac,StrmGWConnector,StrmLakeConnector,Matrix,rWSA,iStrmFlowNodes,rStrmFlows)
     CLASS(AppStreamType)        :: AppStream
-    REAL(8),INTENT(IN)          :: GWHeads(:,:),Runoff(:),ReturnFlow(:),PondDrain(:),TributaryFlow(:),DrainInflows(:),RiparianET(:)
+    REAL(8),INTENT(IN)          :: GWHeads(:,:),GWReturnFlow(:),Runoff(:),ReturnFlow(:),PondDrain(:),TributaryFlow(:),DrainInflows(:),RiparianET(:)
     TYPE(ETType),INTENT(IN)     :: ETData 
     REAL(8),INTENT(OUT)         :: RiparianETFrac(:)
     TYPE(StrmGWConnectorType)   :: StrmGWConnector
@@ -2836,17 +2836,17 @@ CONTAINS
                 TYPE IS (AppStream_v42_WSA_Type)
                     !Either WSA should be provided for scenerio runs...
                     IF (PRESENT(rWSA)) THEN
-                        CALL p%ComputeRHS_UsingWSA(rWSA,GWHeads,Runoff,ReturnFlow,PondDrain,TributaryFlow,DrainInflows,RiparianET,ETData,RiparianETFrac,StrmGWConnector,StrmLakeConnector,Matrix)
+                        CALL p%ComputeRHS_UsingWSA(rWSA,GWHeads,GWReturnFlow,Runoff,ReturnFlow,PondDrain,TributaryFlow,DrainInflows,RiparianET,ETData,RiparianETFrac,StrmGWConnector,StrmLakeConnector,Matrix)
                     !...or iStrmFlowNodes and rStrmFlows for historical calculation of WSAs... 
                     ELSEIF (PRESENT(iStrmFlowNodes)) THEN
-                        CALL p%ComputeRHS_UsingHistFlows(iStrmFlowNodes,rStrmFlows,GWHeads,Runoff,ReturnFlow,PondDrain,TributaryFlow,DrainInflows,RiparianET,ETData,RiparianETFrac,StrmGWConnector,StrmLakeConnector,Matrix)
+                        CALL p%ComputeRHS_UsingHistFlows(iStrmFlowNodes,rStrmFlows,GWHeads,GWReturnFlow,Runoff,ReturnFlow,PondDrain,TributaryFlow,DrainInflows,RiparianET,ETData,RiparianETFrac,StrmGWConnector,StrmLakeConnector,Matrix)
                     !...or just good old simulation without worrying about WSAs
                     ELSE
-                        CALL p%ComputeRHS(GWHeads,Runoff,ReturnFlow,PondDrain,TributaryFlow,DrainInflows,RiparianET,ETData,RiparianETFrac,StrmGWConnector,StrmLakeConnector,Matrix)
+                        CALL p%ComputeRHS(GWHeads,GWReturnFlow,Runoff,ReturnFlow,PondDrain,TributaryFlow,DrainInflows,RiparianET,ETData,RiparianETFrac,StrmGWConnector,StrmLakeConnector,Matrix)
                     END IF
                     
                 CLASS DEFAULT
-                    CALL AppStream%Me%ComputeRHS(GWHeads,Runoff,ReturnFlow,PondDrain,TributaryFlow,DrainInflows,RiparianET,ETData,RiparianETFrac,StrmGWConnector,StrmLakeConnector,Matrix)
+                    CALL AppStream%Me%ComputeRHS(GWHeads,GWReturnFlow,Runoff,ReturnFlow,PondDrain,TributaryFlow,DrainInflows,RiparianET,ETData,RiparianETFrac,StrmGWConnector,StrmLakeConnector,Matrix)
             END SELECT
         END IF
     END IF

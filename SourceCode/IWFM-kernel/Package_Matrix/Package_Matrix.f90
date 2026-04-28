@@ -108,6 +108,7 @@ MODULE Package_Matrix
       PROCEDURE,PASS         :: Kill
       PROCEDURE,PASS         :: FlattenConnectivity
       PROCEDURE,PASS         :: GetSolver
+      PROCEDURE,PASS         :: GetNUnknowns
       PROCEDURE,PASS         :: GetNJD
       PROCEDURE,PASS         :: GetJND
       PROCEDURE,PASS         :: GetConnectivityIndex
@@ -374,6 +375,18 @@ CONTAINS
     N = SIZE(Matrix%JND)
     
   END FUNCTION GetConnectivitySize
+  
+  
+  ! -------------------------------------------------------------
+  ! --- GET THE NUMBER OF UNKNOWNS
+  ! -------------------------------------------------------------
+  PURE FUNCTION GetNUnknowns(Matrix) RESULT(N)
+    CLASS(MatrixType),INTENT(IN) :: Matrix
+    INTEGER                      :: N
+    
+    N = SIZE(Matrix%NJD) - 1
+    
+  END FUNCTION GetNUnknowns
   
   
   ! -------------------------------------------------------------

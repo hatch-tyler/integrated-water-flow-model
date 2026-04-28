@@ -21,7 +21,14 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 MODULE Util_RootZone_v41
+  USE MessageLogger         , ONLY: SetLastMessage                       , &
+                                    MessageArray                         , & 
+                                    f_iFatal
+  USE IOInterface           , ONLY: GenericFileType                      , &
+                                    iGetFileType_FromName                , &
+                                    f_iTXT
   USE GeneralUtilities      , ONLY: ArrangeText                          , &
+                                    PrepareTitle                         , & 
                                     IntToText                            , &
                                     UpperCase                            
   USE TimeSeriesUtilities   , ONLY: TimeStepType                         , &
@@ -57,6 +64,7 @@ MODULE Util_RootZone_v41
             RootZoneBudRawFile_New               , &
             AgLWUseBudRawFile_New                , &
             AgRootZoneBudRawFile_New             , &
+            LUAreaScaleFactorOutFile_New         , &
             f_iLenCropCode                       , &
             f_iNLWUseBudColumns                  , &
             f_iNRootZoneBudColumns               , & 
@@ -152,12 +160,70 @@ MODULE Util_RootZone_v41
                                                                                            'Native&Riparian Veg. Discrepancy (=)'                   ]
 
                    
+  ! -------------------------------------------------------------
+  ! --- MISC. ENTITIES
+  ! -------------------------------------------------------------
+  INTEGER,PARAMETER                      :: f_iModNameLen = 19
+  CHARACTER(LEN=f_iModNameLen),PARAMETER :: f_cModName = 'Util_RootZone_v41::'
+  
+  
   
   
 CONTAINS
 
 
 
+  ! -------------------------------------------------------------
+  ! --- NEW OUTPUT FILE FOR LAND USE AREA SCALING FACTORS
+  ! -------------------------------------------------------------
+  SUBROUTINE LUAreaScaleFactorOutFile_New(IsForInquiry,cFileName,iElemIDs,LUAreaScaleFactorOutFile,iStat)
+    LOGICAL,INTENT(IN)                  :: IsForInquiry
+    CHARACTER(LEN=*),INTENT(IN)         :: cFileName
+    INTEGER,INTENT(IN)                  :: iElemIDs(:)
+    TYPE(GenericFileType),INTENT(INOUT) :: LUAreaScaleFactorOutFile
+    INTEGER,INTENT(OUT)                 :: iStat
+    
+    !Local variables
+    CHARACTER(LEN=f_iModNameLen+28) :: cThisProcedure = f_cModName // 'LUAreaScaleFactorOutFile_New'
+    INTEGER                         :: indxElem
+    CHARACTER                       :: cTitleLines(1)*400,cWorkArray(2)*45,cALine*(16+9*SIZE(iElemIDs))
+    
+    !Open file, either for inquiry or to write data to
+    !NOTE: Do not treat this output file as a timeseries file since we don't 
+    !      know the time interval of output at this point (it is defined at run 
+    !      time as the land use areas are read in); open it as a regular text file
+    IF (IsForInquiry) THEN
+        CALL LUAreaScaleFactorOutFile%New(cFileName,InputFile=.TRUE.,IsTSFile=.FALSE.,Descriptor='land use area scaling factor output file',iStat=iStat)
+        RETURN
+    ELSE
+        !Make sure file is a text file
+        IF (iGetFileType_FromName(cFileName) .NE. f_iTXT) THEN
+            MessageArray(1) = 'Land Use Area Scaling Factors Output File'
+            MessageArray(2) ='('//TRIM(cFileName)//') defined in the'
+            MessageArray(3) = 'Root Zone Component Main Input File must be a text file!'
+            CALL SetLastMessage(MessageArray(1:3),f_iFatal,cThisProcedure)
+            iStat = -1
+            RETURN
+        END IF
+        CALL LUAreaScaleFactorOutFile%New(FileName=cFileName,InputFile=.FALSE.,IsTSFile=.FALSE.,Descriptor='land use area scaling factor output file',iStat=iStat)
+        IF (iStat .NE. 0) RETURN
+    END IF
+
+    !Print titles
+    cWorkArray(1) = ArrangeText(UpperCase('LAND USE SCALING FACTORS'),37)
+    cWorkArray(2) = ArrangeText('AT EACH ELEMENT',37)
+    CALL PrepareTitle(cTitleLines(1),cWorkArray(1:2),39,42)
+    CALL LUAreaScaleFactorOutFile%WriteData(cTitleLines)
+    
+    cALine = '*                 ELEMENT'
+    CALL LUAreaScaleFactorOutFile%WriteData(TRIM(cALine))
+    
+    WRITE (cALine,'(A16,*(2X,I7))') '*      TIME     ',[(iElemIDs(indxElem),indxElem=1,SIZE(iElemIDs))]
+    CALL LUAreaScaleFactorOutFile%WriteData(TRIM(cALine))
+
+  END SUBROUTINE LUAreaScaleFactorOutFile_New
+  
+  
   ! -------------------------------------------------------------
   ! --- NEW BINARY LAND AND WATER USE BUDGET FILE FOR POST-PROCESSING
   ! -------------------------------------------------------------

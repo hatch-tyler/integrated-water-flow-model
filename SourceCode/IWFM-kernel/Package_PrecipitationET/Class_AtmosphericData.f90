@@ -52,7 +52,6 @@ MODULE Class_AtmosphericData
   ! --- RELATED DATA TYPE
   ! -------------------------------------------------------------
   TYPE,EXTENDS(RealTSDataInFileType) :: AtmosphericDataType
-      PRIVATE
       REAL(8)                  :: Fact      = 1.0        !Conversion factor
       CHARACTER(:),ALLOCATABLE :: cDataName              !Name of data     
   CONTAINS
@@ -94,11 +93,12 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- INITIALIZE ATMOSPHERIC DATA TIME SERIES DATA FILE
   ! -------------------------------------------------------------
-  SUBROUTINE New(AtmosphericData,FileName,cWorkingDirectory,cDataName,TimeStep,iStat) 
+  SUBROUTINE New(AtmosphericData,cFileName,cWorkingDirectory,cDataName,TimeStep,iStat,cCropCoeffFileName) 
     CLASS(AtmosphericDataType),INTENT(OUT) :: AtmosphericData
-    CHARACTER(LEN=*),INTENT(IN)            :: FileName,cWorkingDirectory,cDataName
+    CHARACTER(LEN=*),INTENT(IN)            :: cFileName,cWorkingDirectory,cDataName
     TYPE(TimeStepType),INTENT(IN)          :: TimeStep
     INTEGER,INTENT(OUT)                    :: iStat
+    CHARACTER(LEN=*),OPTIONAL,INTENT(IN)   :: cCropCoeffFileName   !Optional, to be used with ET data type
 
     !Local variables
     REAL(8) :: Factor(1)
@@ -108,13 +108,13 @@ CONTAINS
     iStat = 0
     
     !Return if no file name is specified
-    IF (FileName .EQ. '') RETURN
+    IF (cFileName .EQ. '') RETURN
     
     !Print progress
     CALL EchoProgress('Instantiating '//TRIM(cDataName)//' data...')
 
     !Instantiate
-    CALL AtmosphericData%Init(FileName,cWorkingDirectory,TRIM(cDataName)//' data file',TimeStep%TrackTime,1,.TRUE.,Factor,DummyArray,iStat=iStat)  
+    CALL AtmosphericData%Init(cFileName,cWorkingDirectory,TRIM(cDataName)//' data file',TimeStep%TrackTime,1,.TRUE.,Factor,DummyArray,iStat=iStat)  
     IF (iStat .EQ. -1) RETURN
     AtmosphericData%Fact      = Factor(1)
     AtmosphericData%cDataName = TRIM(cDataName)
@@ -138,7 +138,7 @@ CONTAINS
   ! --- KILL ATMOSPHERIC DATA
   ! -------------------------------------------------------------
   SUBROUTINE Kill(AtmosphericData)
-    CLASS(AtmosphericDataType) :: AtmosphericData
+    CLASS(AtmosphericDataType),INTENT(INOUT) :: AtmosphericData
     
     !Local variables
     INTEGER                   :: ErrorCode
@@ -169,12 +169,13 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET ATMOSPHERIC DATA VALUES
   ! -------------------------------------------------------------
-  PURE FUNCTION GetValues(AtmosphericData,iCols) RESULT(Values)
+  FUNCTION GetValues(AtmosphericData,iCols,iCropCoeffCols) RESULT(rValues)
     CLASS(AtmosphericDataType),INTENT(IN) :: AtmosphericData
     INTEGER,INTENT(IN)                    :: iCols(:)
-    REAL(8)                               :: Values(SIZE(iCols))
+    INTEGER,OPTIONAL,INTENT(IN)           :: iCropCoeffCols(:)   !Will be used in ETType
+    REAL(8)                               :: rValues(SIZE(iCols))
     
-    Values = AtmosphericData%rValues(iCols)
+    rValues = AtmosphericData%rValues(iCols)
     
   END FUNCTION GetValues
   
@@ -195,20 +196,21 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- READ DATA FOR A TIME RANGE FOR A COLUMN
   ! -------------------------------------------------------------
-  SUBROUTINE AtmosphericData_ReadTSData_ForTimeRange(AtmosphericData,iCol,lForInquiry,lCheckForNegativity,cBeginDateAndTime,cEndDateAndTime,nActualOutput,rOutputValues,rOutputDates,FileReadCode,iStat)
-    CLASS(AtmosphericDataType)  :: AtmosphericData
-    INTEGER,INTENT(IN)          :: iCol       
-    LOGICAL,INTENT(IN)          :: lForInquiry,lCheckForNegativity
-    CHARACTER(LEN=*),INTENT(IN) :: cBeginDateAndTime,cEndDateAndTime
-    INTEGER,INTENT(OUT)         :: nActualOutput
-    REAL(8),INTENT(OUT)         :: rOutputValues(:),rOutputDates(:)
-    INTEGER,INTENT(OUT)         :: FileReadCode,iStat
+  SUBROUTINE AtmosphericData_ReadTSData_ForTimeRange(AtmosphericData,iCol,lForInquiry,lCheckForNegativity,cBeginDateAndTime,cEndDateAndTime,nActualOutput,rOutputValues,rOutputDates,iFileReadCode,iStat,iColCoeff)
+    CLASS(AtmosphericDataType),INTENT(INOUT) :: AtmosphericData
+    INTEGER,INTENT(IN)                       :: iCol       
+    LOGICAL,INTENT(IN)                       :: lForInquiry,lCheckForNegativity
+    CHARACTER(LEN=*),INTENT(IN)              :: cBeginDateAndTime,cEndDateAndTime
+    INTEGER,INTENT(OUT)                      :: nActualOutput
+    REAL(8),INTENT(OUT)                      :: rOutputValues(:),rOutputDates(:)
+    INTEGER,INTENT(OUT)                      :: iFileReadCode,iStat
+    INTEGER,OPTIONAL,INTENT(IN)              :: iColCoeff
     
     !Local variables
     CHARACTER(LEN=ModNameLen+39) :: ThisProcedure = ModName // 'AtmosphericData_ReadTSData_ForTimeRange'
     
     !Read data
-    CALL AtmosphericData%ReadTSData(iCol,cBeginDateAndTime,cEndDateAndTime,nActualOutput,rOutputValues,rOutputDates,FileReadCode,iStat)
+    CALL AtmosphericData%ReadTSData(iCol,cBeginDateAndTime,cEndDateAndTime,nActualOutput,rOutputValues,rOutputDates,iFileReadCode,iStat)
     IF (iStat .EQ. -1) RETURN
     
     !Unit conversion
@@ -233,10 +235,10 @@ CONTAINS
   ! --- READ DATA FOR A TIME STAMP
   ! -------------------------------------------------------------
   SUBROUTINE AtmosphericData_ReadTSData(AtmosphericData,TimeStep,lCheckForNegativity,iStat)
-    CLASS(AtmosphericDataType)    :: AtmosphericData
-    TYPE(TimeStepType),INTENT(IN) :: TimeStep
-    LOGICAL,INTENT(IN)            :: lCheckForNegativity
-    INTEGER,INTENT(OUT)           :: iStat
+    CLASS(AtmosphericDataType),INTENT(INOUT) :: AtmosphericData
+    TYPE(TimeStepType),INTENT(IN)            :: TimeStep
+    LOGICAL,INTENT(IN)                       :: lCheckForNegativity
+    INTEGER,INTENT(OUT)                      :: iStat
     
     !Local variables
     CHARACTER(LEN=ModNameLen+26) :: ThisProcedure = ModName // 'AtmosphericData_ReadTSData' 

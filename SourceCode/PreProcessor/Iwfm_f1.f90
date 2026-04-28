@@ -41,8 +41,10 @@ PROGRAM IWFM_F1
   
   
   !Set environment for parallel processing
-  !$ CALL KMP_SET_BLOCKTIME(0)
-  !$ CALL OMP_SET_NUM_THREADS(OMP_GET_NUM_PROCS()-1)
+  !$ CALL KMP_SET_BLOCKTIME(0)                                !Let threads sleep right away 
+  !$ CALL OMP_SET_NUM_THREADS(MIN(OMP_GET_NUM_PROCS() , 16))  !Set number of threads to minimum of 16 or number of available processors 
+  !$ CALL OMP_SET_MAX_ACTIVE_LEVELS(2)                        !Maximum 2 levels of nested paralellization
+  !$ CALL KMP_SET_STACKSIZE_S(16777216)                       !Set thread stack size to 16MB
   
   
   !Start timer

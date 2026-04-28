@@ -109,7 +109,6 @@ MODULE Class_PondedAgLandUse_v41
     REAL(8),ALLOCATABLE :: ReturnFlow(:,:)        !Return flow
     REAL(8),ALLOCATABLE :: IrigInfilt(:,:)        !Infiltration due to irrigation
     REAL(8),ALLOCATABLE :: Reuse(:,:)             !Reused return flow 
-    REAL(8),ALLOCATABLE :: rCropCoeff(:,:)        !Crop coefficients
     REAL(8),ALLOCATABLE :: ETAW(:,:)              !ET of applied water
     REAL(8),ALLOCATABLE :: ETP(:,:)               !ET of precipitation
     REAL(8),ALLOCATABLE :: ETOth(:,:)             !ET of other sources of moisture
@@ -278,7 +277,6 @@ CONTAINS
               PondLand%Crops%ReturnFlow(iNCrops,NElements)         , &         
               PondLand%Crops%IrigInfilt(iNCrops,NElements)         , &         
               PondLand%Crops%Reuse(iNCrops,NElements)              , &              
-              PondLand%Crops%rCropCoeff(iNCrops,NElements)         , &               
               PondLand%Crops%ETAW(iNCrops,NElements)               , &               
               PondLand%Crops%ETP(iNCrops,NElements)                , &                
               PondLand%Crops%ETOth(iNCrops,NElements)              , &              
@@ -311,7 +309,6 @@ CONTAINS
     PondLand%Crops%ReturnFlow         = 0.0 
     PondLand%Crops%IrigInfilt         = 0.0 
     PondLand%Crops%Reuse              = 0.0 
-    PondLand%Crops%rCropCoeff         = 1.0 
     PondLand%Crops%ETAW               = 0.0 
     PondLand%Crops%ETP                = 0.0 
     PondLand%Crops%ETOth              = 0.0 
@@ -672,7 +669,6 @@ CONTAINS
                 PondLand%Crops%IrigInfilt           , &         
                 PondLand%Crops%iColAgDemand         , &
                 PondLand%Crops%Reuse                , &              
-                PondLand%Crops%rCropCoeff           , &               
                 PondLand%Crops%ETAW                 , &               
                 PondLand%Crops%ETP                  , &                
                 PondLand%Crops%ETOth                , &              
@@ -888,7 +884,7 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- READ TIME SERIES DATA FOR PONDED AG
   ! -------------------------------------------------------------
-  SUBROUTINE ReadTSData(PondLand,TimeStep,AppGrid,ETData,iIrigPeriod,iElemIDs,rElemAreas,iStat)
+  SUBROUTINE ReadTSData(PondLand,TimeStep,AppGrid,ETData,iIrigPeriod,iElemIDs,rElemAreas,iStat,iColCropCoeff)
     CLASS(PondedAgLandUse_v41_Type) :: PondLand
     TYPE(TimeStepType),INTENT(IN)   :: TimeStep
     TYPE(AppGridType),INTENT(IN)    :: AppGrid
@@ -896,10 +892,11 @@ CONTAINS
     INTEGER,INTENT(IN)              :: iIrigPeriod(:),iElemIDs(AppGrid%NElements)
     REAL(8),INTENT(IN)              :: rElemAreas(AppGrid%NElements)
     INTEGER,INTENT(OUT)             :: iStat
+    INTEGER,OPTIONAL,INTENT(IN)     :: iColCropCoeff(:,:)
     
     !Local variables
     CHARACTER(LEN=ModNameLen+10) :: ThisProcedure = ModName // 'ReadTSData'
-    INTEGER                      :: indxCrop,indxElem,FileReadCode,iRegion,iNCrops,iElemID,iColApplicationH2O,iColPondDepth
+    INTEGER                      :: indxCrop,indxElem,FileReadCode,iRegion,iNCrops,iElemID
     REAL(8)                      :: ETc(PondLand%iNCrops)
     
     !Initialize
@@ -929,13 +926,23 @@ CONTAINS
     !Regional potential ET
     IF (ETData%IsUpdated()) THEN
         PondLand%rRegionETPot = 0.0
-        DO indxElem=1,AppGrid%NElements
-            ETc     = ETData%GetValues(PondLand%Crops%iColETc(:,indxElem))
-            iRegion = AppGrid%AppElement(indxElem)%Subregion
-            DO indxCrop=1,iNCrops
-                PondLand%rRegionETPot(indxCrop,iRegion) = PondLand%rRegionETPot(indxCrop,iRegion) + ETc(indxCrop) * PondLand%Crops%Area(indxCrop,indxElem)
+        IF (PRESENT(iColCropCoeff)) THEN
+            DO indxElem=1,AppGrid%NElements
+                ETc     = ETData%GetValues(PondLand%Crops%iColETc(:,indxElem),iColCropCoeff(:,indxElem))
+                iRegion = AppGrid%AppElement(indxElem)%Subregion
+                DO indxCrop=1,iNCrops
+                    PondLand%rRegionETPot(indxCrop,iRegion) = PondLand%rRegionETPot(indxCrop,iRegion) + ETc(indxCrop) * PondLand%Crops%Area(indxCrop,indxElem)
+                END DO
             END DO
-        END DO
+        ELSE
+            DO indxElem=1,AppGrid%NElements
+                ETc     = ETData%GetValues(PondLand%Crops%iColETc(:,indxElem))
+                iRegion = AppGrid%AppElement(indxElem)%Subregion
+                DO indxCrop=1,iNCrops
+                    PondLand%rRegionETPot(indxCrop,iRegion) = PondLand%rRegionETPot(indxCrop,iRegion) + ETc(indxCrop) * PondLand%Crops%Area(indxCrop,indxElem)
+                END DO
+            END DO
+        END IF
     END IF
     
     !Check for errors
@@ -1230,7 +1237,7 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- SIMULATE FLOW PROCESSES AT PONDED AG LANDS
   ! -------------------------------------------------------------
-  SUBROUTINE Simulate(PondedAg,AppGrid,ETData,DeltaT,Precip,GenericMoisture,SoilsData,HydCondPonded,ElemSupply,ElemsToGW,SolverData,lLakeElem,iStat)
+  SUBROUTINE Simulate(PondedAg,AppGrid,ETData,DeltaT,Precip,GenericMoisture,SoilsData,HydCondPonded,ElemSupply,ElemsToGW,SolverData,lLakeElem,iStat,iColCropCoeff)
     CLASS(PondedAgLandUse_v41_Type)        :: PondedAg
     TYPE(AppGridType),INTENT(IN)           :: AppGrid
     TYPE(ETType),INTENT(IN)                :: ETData
@@ -1240,6 +1247,7 @@ CONTAINS
     TYPE(SolverDataType),INTENT(IN)        :: SolverData
     LOGICAL,INTENT(IN)                     :: lLakeElem(:)
     INTEGER,INTENT(OUT)                    :: iStat
+    INTEGER,OPTIONAL,INTENT(IN)            :: iColCropCoeff(:,:)
     
     !Local variables
     CHARACTER(LEN=ModNameLen+8),PARAMETER :: ThisProcedure = ModName // 'Simulate'
@@ -1261,7 +1269,7 @@ CONTAINS
     
     ASSOCIATE (pCrops => PondedAg%Crops)
         !$OMP PARALLEL DEFAULT(PRIVATE) SHARED(AppGrid,lLakeElem,SoilsData,HydCondPonded,ETData,Precip,GenericMoisture,    &
-        !$OMP                                  DeltaT,PondedAg,ElemSupply,SolverData,ElemsToGW,iStat,iNCrops)                      
+        !$OMP                                  DeltaT,PondedAg,ElemSupply,SolverData,ElemsToGW,iStat,iNCrops,iColCropCoeff)                      
         !$OMP DO SCHEDULE(NONMONOTONIC:DYNAMIC,96)
         DO indxElem=1,AppGrid%NElements
             !Cycle if necessary
@@ -1274,7 +1282,11 @@ CONTAINS
             HydCond       = HydCondPonded(indxElem)
             Lambda        = SoilsData(indxElem)%Lambda
             KunsatMethod  = SoilsData(indxElem)%KunsatMethod
-            ETc           = ETData%GetValues(pCrops%iColETc(:,indxElem)) * DeltaT * pCrops%rCropCoeff(:,indxElem)
+            IF (PRESENT(iColCropCoeff)) THEN
+                ETc       = ETData%GetValues(pCrops%iColETc(:,indxElem),iColCropCoeff(:,indxElem)) * DeltaT 
+            ELSE
+                ETc       = ETData%GetValues(pCrops%iColETc(:,indxElem)) * DeltaT 
+            END IF
             GMElem        = GenericMoisture(1,indxElem) * DeltaT
             PrecipD       = Precip(indxElem) * DeltaT
             
@@ -1480,7 +1492,7 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- COMPUTE PONDED AG DEMAND
   ! -------------------------------------------------------------
-  SUBROUTINE ComputeWaterDemand(PondedAg,AppGrid,ETData,DeltaT,Precip,GenericMoisture,SoilsData,HydCondPonded,SpecifiedDemand,IrigPeriod,lLakeElem,lReadAgWaterDemand,iStat)
+  SUBROUTINE ComputeWaterDemand(PondedAg,AppGrid,ETData,DeltaT,Precip,GenericMoisture,SoilsData,HydCondPonded,SpecifiedDemand,IrigPeriod,lLakeElem,lReadAgWaterDemand,iStat,iColCropCoeff)
     CLASS(PondedAgLandUse_v41_Type)        :: PondedAg
     TYPE(AppGridType),INTENT(IN)           :: AppGrid
     TYPE(ETType),INTENT(IN)                :: ETData
@@ -1489,6 +1501,7 @@ CONTAINS
     INTEGER,INTENT(IN)                     :: IrigPeriod(:)
     LOGICAL,INTENT(IN)                     :: lLakeElem(:),lReadAgWaterDemand
     INTEGER,INTENT(OUT)                    :: iStat
+    INTEGER,OPTIONAL,INTENT(IN)            :: iColCropCoeff(:,:)
     
     !Local variables
     INTEGER :: indxElem,indxCrop,iColApplicationH2O
@@ -1500,15 +1513,19 @@ CONTAINS
     iStat = 0
     
     !$OMP PARALLEL DEFAULT(PRIVATE) SHARED(AppGrid,lLakeElem,SoilsData,ETData,Precip,GenericMoisture,PondedAg,DeltaT,  &
-    !$OMP                                  IrigPeriod,lReadAgWaterDemand,SpecifiedDemand,HydCondPonded) 
-    !$OMP DO SCHEDULE(DYNAMIC,200)
+    !$OMP                                  IrigPeriod,lReadAgWaterDemand,SpecifiedDemand,HydCondPonded,iColCropCoeff) 
+    !$OMP DO SCHEDULE(DYNAMIC,128)
     DO indxElem=1,AppGrid%NElements
         PondedAg%Crops%DemandRaw(:,indxElem) = 0.0  
         PondedAg%Crops%Demand(:,indxElem)    = 0.0
         IF (lLakeElem(indxElem)) CYCLE
         TotalPorosity = SoilsData(indxElem)%TotalPorosity
         FieldCapacity = SoilsData(indxElem)%FieldCapacity
-        ETc           = ETData%GetValues(PondedAg%Crops%iColETc(:,indxElem)) * DeltaT * PondedAg%Crops%rCropCoeff(:,indxElem)
+        IF (PRESENT(iColCropCoeff)) THEN
+            ETc       = ETData%GetValues(PondedAg%Crops%iColETc(:,indxElem),iColCropCoeff(:,indxElem)) * DeltaT 
+        ELSE
+            ETc       = ETData%GetValues(PondedAg%Crops%iColETc(:,indxElem)) * DeltaT 
+        END IF
         GMElem        = GenericMoisture(1,indxElem) * DeltaT
         PrecipD       = Precip(indxElem) * DeltaT
         DO indxCrop=1,PondedAg%iNCrops

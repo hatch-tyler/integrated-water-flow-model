@@ -47,7 +47,8 @@ MODULE RootZone_v413
                                       ETType                                                 
   USE Package_UnsatZone       , ONLY: f_iKUnsatMethodList                                    
   USE Package_Budget          , ONLY: f_iMaxLocationNameLen_Budget  => f_iMaxLocationNameLen     
-  USE Util_RootZone_v41       , ONLY: AgRootZoneBudRawFile_New
+  USE Util_RootZone_v41       , ONLY: AgRootZoneBudRawFile_New                                , &
+                                      LUAreaScaleFactorOutFile_New
   USE RootZone_v412           , ONLY: RootZone_v412_Type                                      , &
                                       AgLWUseBudRawFile_New                                   , &                               
                                       NonPondedAgRootZoneBudRawFile_New                       , &         
@@ -83,12 +84,14 @@ MODULE RootZone_v413
       INTEGER,ALLOCATABLE        :: iColCropCoeff_PondedAg(:,:)               !Column number for ponded ag crop coefficient for each (non-ponded crop,element) 
       INTEGER,ALLOCATABLE        :: iColCropCoeff_Urb(:)                      !Column number for urban ET coefficient for each (element)  
       INTEGER,ALLOCATABLE        :: iColCropCoeff_NVRV(:,:)                   !Column number for native and riparian veg habitat coefficient for each (element)  
-      TYPE(RealTSDataInFileType) :: CropCoeffFile                             !Time-series input file for crop coefficients
   CONTAINS
       PROCEDURE,PASS :: New                      => RootZone_v413_New
       PROCEDURE,PASS :: KillRZImplementation     => RootZone_v413_Kill
+      PROCEDURE,PASS :: ComputeWaterDemand       => RootZone_v413_ComputeWaterDemand
+      PROCEDURE,PASS :: ComputeFutureWaterDemand => RootZone_v413_ComputeFutureWaterDemand
       PROCEDURE,PASS :: ReadTSData               => RootZone_v413_ReadTSData
-      PROCEDURE,PASS :: ComputeFutureWaterDemand => RootZone_v413_ComputeFutureWaterDemand 
+      PROCEDURE,PASS :: PrintResults             => RootZone_v413_PrintResults
+      PROCEDURE,PASS :: Simulate                 => RootZone_v413_Simulate
   END TYPE RootZone_v413_Type
 
   
@@ -119,10 +122,11 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- NEW ROOT ZONE DATA
   ! -------------------------------------------------------------
-  SUBROUTINE RootZone_v413_New(RootZone,IsForInquiry,cProjectNameForDSS,cFileName,cWorkingDirectory,AppGrid,TimeStep,NTIME,ET,Precip,iStat,iStrmNodeIDs,iLakeIDs)
+  SUBROUTINE RootZone_v413_New(RootZone,IsForInquiry,cProjectNameForDSS,cFileName,cCropCoeffFileName,cWorkingDirectory,AppGrid,TimeStep,NTIME,ET,Precip,iStat,iStrmNodeIDs,iLakeIDs)
     CLASS(RootZone_v413_Type)          :: RootZone
     LOGICAL,INTENT(IN)                 :: IsForInquiry
     CHARACTER(LEN=*),INTENT(IN)        :: cProjectNameForDSS,cFileName,cWorkingDirectory
+    CHARACTER(LEN=*),INTENT(IN)        :: cCropCoeffFileName   
     TYPE(AppGridType),INTENT(IN)       :: AppGrid
     TYPE(TimeStepType),INTENT(IN)      :: TimeStep
     INTEGER,INTENT(IN)                 :: NTIME
@@ -140,9 +144,10 @@ CONTAINS
     INTEGER                                     :: iNElements,iNRegion,iErrorCode,indxElem,iColGenericMoisture(AppGrid%NElements),iElemID,iElem,          &
                                                    iElemIDs(AppGrid%NElements),iSubregionIDs(AppGrid%NSubregions),iFlagETFromGW
     TYPE(GenericFileType)                       :: RootZoneParamFile
-    LOGICAL                                     :: lTrackTime,lProcessed(AppGrid%NElements)
+    LOGICAL                                     :: lTrackTime,lProcessed(AppGrid%NElements),lLUAreaScaleOutFileDefined
     CHARACTER(LEN=f_iMaxLocationNameLen_Budget) :: cRegionNames(AppGrid%NSubregions+1)
     CHARACTER(:),ALLOCATABLE                    :: cAbsPathFileName
+    CHARACTER(LEN=20),ALLOCATABLE               :: cEntryLines(:)
     PROCEDURE(AgLWUseBudRawFile_New),POINTER    :: pAgLWUseBudRawFile_New
     PROCEDURE(AgRootZoneBudRawFile_New),POINTER :: pPondedAgRootZoneBudRawFile_New,pNonPondedAgRootZoneBudRawFile_New
     
@@ -169,6 +174,13 @@ CONTAINS
     pAgLWUseBudRawFile_New             => AgLWUseBudRawFile_New
     pPondedAgRootZoneBudRawFile_New    => PondedAgRootZoneBudRawFile_New
     pNonPondedAgRootZoneBudRawFile_New => NonPondedAgRootZoneBudRawFile_New
+    
+    !Make sure a crop coefficient filename is defined
+    IF (LEN_TRIM(cCropCoeffFileName) .EQ. 0) THEN
+        CALL SetLastMessage('A crop/habitat coefficient file needs to be defined in the Main Control Input File for Root Zone Component v4.13!',f_iFatal,ThisProcedure)
+        iStat = -1
+        RETURN
+    END IF
 
     !Allocate memory
     ALLOCATE (RootZone%ElemSoilsData(iNElements)                          , &
@@ -224,6 +236,15 @@ CONTAINS
     !Read away the first version number line to avoid any errors
     CALL RootZoneParamFile%ReadData(cALine,iStat)  
     IF (iStat .EQ. -1) RETURN
+    
+    !BACKWARD COMPATIBILITY: Check the number of input lines to see if Land Use Area Scaling Output File is defined
+    CALL RootZoneParamFile%ReadData(cEntryLines,iStat)  ;  IF (iStat .NE. 0) RETURN
+    IF (SIZE(cEntryLines) .EQ. 18) THEN
+        lLUAreaScaleOutFileDefined = .TRUE.
+    ELSE
+        lLUAreaScaleOutFileDefined = .FALSE.
+    END IF
+    CALL RootZoneParamFile%BackspaceFile(SIZE(cEntryLines))
 
     !Read solution scheme controls
     CALL RootZoneParamFile%ReadData(RootZone%SolverData%Tolerance,iStat)  ;  IF (iStat .EQ. -1) RETURN
@@ -353,18 +374,6 @@ CONTAINS
     IF (RootZone%Flags%lUrban_Defined)       RootZone%NLands = RootZone%NLands + 1
     IF (RootZone%Flags%lNVRV_Defined)        RootZone%NLands = RootZone%NLands + RootZone%NVRVRootZone%iNNVRV 
     
-    !Crop/habitat coefficient data file
-    CALL RootZoneParamFile%ReadData(cALine,iStat)  ;  IF (iStat .EQ. -1) RETURN  
-    cALine = StripTextUntilCharacter(cALine,'/') 
-    CALL CleanSpecialCharacters(cALine)
-    IF (cALine .EQ. '') THEN
-        CALL SetLastMessage('Missing crop/habitat coefficient data file!',f_iFatal,ThisProcedure)
-    ELSE
-        CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(cALine)),cWorkingDirectory,cAbsPathFileName)
-        CALL RootZone%CropCoeffFile%Init(cAbsPathFileName,cWorkingDirectory,'Crop/habitat coefficient data file',lTrackTime,1,.FALSE.,rDummyFactor,iStat=iStat)  
-        IF (iStat .EQ. -1) RETURN
-    END IF
-    
     !Return flow data file
     CALL RootZoneParamFile%ReadData(cALine,iStat)  ;  IF (iStat .EQ. -1) RETURN  
     cALine = StripTextUntilCharacter(cALine,'/') 
@@ -477,6 +486,18 @@ CONTAINS
         RootZone%Flags%RootZoneZoneBudRawFile_Defined = .TRUE.
     END IF
        
+    !Land use area scaling factor output file
+    IF (lLUAreaScaleOutFileDefined) THEN
+        CALL RootZoneParamFile%ReadData(cALine,iStat)  ;  IF (iStat .EQ. -1) RETURN  
+        cALine = StripTextUntilCharacter(cALine,'/') 
+        CALL CleanSpecialCharacters(cALine)
+        IF (cALine .NE. '') THEN
+            CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(cALine)),cWorkingDirectory,cAbsPathFileName)
+            CALL LUAreaScaleFactorOutFile_New(IsForInquiry,cAbsPathFileName,iElemIDs,RootZone%LUAreaScaleFactorOutFile,iStat)
+            IF (iStat .EQ. -1) RETURN
+        END IF
+    END IF
+       
     !Conversion factors for soil parameters
     CALL RootZoneParamFile%ReadData(rFACTK,iStat)      ;  IF (iStat .EQ. -1) RETURN
     CALL RootZoneParamFile%ReadData(rFACTEXDTH,iStat)  ;  IF (iStat .EQ. -1) RETURN
@@ -545,7 +566,19 @@ CONTAINS
             ELSE
                 RootZone%HydCondPonded(iElem) = RootZone%HydCondPonded(iElem) * rFACTK * TimeStep%DeltaT
             END IF
-
+            
+            !Make sure hydraulic conductivity is greater than zero
+            IF (pSoilsData(iElem)%HydCond .LT. 0.0) THEN
+                CALL SetLastMessage('Root zone hydraulic conductivity at element '//TRIM(IntToText(iElemID))//' is less than zero!',f_iFatal,ThisProcedure)
+                iStat = -1
+                RETURN
+            END IF
+            IF (RootZone%HydCondPonded(iElem) .LT. 0.0) THEN
+                CALL SetLastMessage('Root zone hydraulic conductivity for ponded crops at element '//TRIM(IntToText(iElemID))//' is less than zero!',f_iFatal,ThisProcedure)
+                iStat = -1
+                RETURN
+            END IF
+            
             !Method to compute Kunsat must be recognized
             IF (LocateInList(pSoilsData(iElem)%KunsatMethod,f_iKunsatMethodList) .LT. 1) THEN
                 CALL SetLastMessage('Method to compute unsaturated hydraulic conductivity at element '//TRIM(IntToText(iElemID))//' is not recognized!',f_iFatal,ThisProcedure)
@@ -629,7 +662,6 @@ CONTAINS
                 RootZone%iColCropCoeff_Urb         , &    
                 RootZone%iColCropCoeff_NVRV        , &    
                 STAT=iErrorCode                    )
-    CALL RootZone%CropCoeffFile%Close()
     
     SELECT TYPE (RootZone)
         TYPE IS (RootZone_v413_Type)
@@ -654,58 +686,69 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- READ ROOT ZONE RELATED TIME SERIES DATA
   ! -------------------------------------------------------------
-  SUBROUTINE RootZone_v413_ReadTSData(RootZone,AppGrid,TimeStep,Precip,ETData,iStat,RegionLUAreas)
+  SUBROUTINE RootZone_v413_ReadTSData(RootZone,AppGrid,TimeStep,Precip,ETData,iStat,RegionLUAreas,iColCropCoeff_NonPondedAg,iColCropCoeff_PondedAg,iColCropCoeff_Urban,iColCropCoeff_NVRV)
     CLASS(RootZone_v413_Type)          :: RootZone
     TYPE(AppGridType),INTENT(IN)       :: AppGrid
     TYPE(TimeStepType),INTENT(IN)      :: TimeStep
     TYPE(PrecipitationType),INTENT(IN) :: Precip
     TYPE(ETType),INTENT(IN)            :: ETData
     INTEGER,INTENT(OUT)                :: iStat
-    REAL(8),OPTIONAL,INTENT(IN)        :: RegionLUAreas(:,:)   !In (region, land use) format
+    REAL(8),OPTIONAL,INTENT(IN)        :: RegionLUAreas(:,:)          !In (region, land use) format
+    INTEGER,OPTIONAL,INTENT(IN)        :: iColCropCoeff_NonPondedAg(:,:),iColCropCoeff_PondedAg(:,:),iColCropCoeff_Urban(:),iColCropCoeff_NVRV(:,:)  !Not used in this version
     
-    !Local variables
-    INTEGER :: iFileReadCode,indxElem
-
-    !First read the timeseries data for the parent class
-    CALL RootZone%RootZone_v412_Type%ReadTSData(AppGrid,TimeStep,Precip,ETData,iStat,RegionLUAreas)
-    IF (iStat .NE. 0) RETURN
+    !Delgate to parent method but with proper crop coeffcient columns
+    CALL RootZone%RootZone_v412_Type%ReadTSData(AppGrid                                                        , &
+                                                TimeStep                                                       , &
+                                                Precip                                                         , &
+                                                ETData                                                         , &
+                                                iStat                                                          , &
+                                                RegionLUAreas             = RegionLUAreas                      , &
+                                                iColCropCoeff_NonPondedAg = RootZone%iColCropCoeff_NonPondedAg , &
+                                                iColCropCoeff_PondedAg    = RootZone%iColCropCoeff_PondedAg    , & 
+                                                iColCropCoeff_Urban       = RootZone%iColCropCoeff_Urb         , &
+                                                iColCropCoeff_NVRV        = RootZone%iColCropCoeff_NVRV        )
     
-    !Inform user about progress
-    CALL EchoProgress('Reading crop/habitat coefficients time series data')
-    
-    !Read crop/habitat coefficients
-    CALL RootZone%CropCoeffFile%ReadTSData(TimeStep,'Crop/habitat coefficients data',iFileReadCode,iStat)
-    IF (iStat .NE. 0) RETURN
-    
-    !Update crop/habitat coeffcients
-    !Non-ponded ag
-    IF (RootZone%Flags%lNonPondedAg_Defined) THEN
-        DO indxElem=1,AppGrid%NElements
-            RootZone%NonPondedAgRootZone%Crops%rCropCoeff(:,indxElem) = RootZone%CropCoeffFile%rValues(RootZone%iColCropCoeff_NonPondedAg(:,indxElem))
-        END DO
-    END IF
-    !Ponded ag
-    IF (RootZone%Flags%lPondedAg_Defined) THEN
-        DO indxElem=1,AppGrid%NElements
-            RootZone%PondedAgRootZone%Crops%rCropCoeff(:,indxElem) = RootZone%CropCoeffFile%rValues(RootZone%iColCropCoeff_PondedAg(:,indxElem))
-        END DO
-    END IF
-    !Urban
-    IF (RootZone%Flags%lUrban_Defined) THEN
-        RootZone%UrbanRootZone%UrbData%rUrbETCoeff(:,1) = RootZone%CropCoeffFile%rValues(RootZone%iColCropCoeff_Urb)
-    END IF
-    !Native and riparian veg
-    IF (RootZone%Flags%lNVRV_Defined) THEN
-        DO indxElem=1,AppGrid%NElements
-            RootZone%NVRVRootZone%NVRV%rHabitatCoeff(:,indxElem) = RootZone%CropCoeffFile%rValues(RootZone%iColCropCoeff_NVRV(:,indxElem))
-        END DO
-    END IF
-
-  END SUBROUTINE RootZone_v413_ReadTSData  
+  END SUBROUTINE RootZone_v413_ReadTSData
   
   
+  
+  
+! ******************************************************************
+! ******************************************************************
+! ******************************************************************
+! ***
+! *** DATA WRITERS
+! ***
+! ******************************************************************
+! ******************************************************************
+! ******************************************************************
 
+  ! -------------------------------------------------------------
+  ! --- PRINT OUT RESULTS
+  ! -------------------------------------------------------------
+  SUBROUTINE RootZone_v413_PrintResults(RootZone,AppGrid,ETData,TimeStep,lEndOfSimulation,iColCropCoeff_NonPondedAg,iColCropCoeff_PondedAg,iColCropCoeff_Urban,iColCropCoeff_NVRV)
+    CLASS(RootZone_v413_Type)     :: RootZone
+    TYPE(AppGridType),INTENT(IN)  :: AppGrid
+    TYPE(ETType),INTENT(IN)       :: ETData
+    TYPE(TimeStepType),INTENT(IN) :: TimeStep           !Not used in this version
+    LOGICAL,INTENT(IN)            :: lEndOfSimulation   !Not used in this version
+    INTEGER,OPTIONAL,INTENT(IN)   :: iColCropCoeff_NonPondedAg(:,:),iColCropCoeff_PondedAg(:,:),iColCropCoeff_Urban(:),iColCropCoeff_NVRV(:,:) !Not used in this version 
 
+    !Delegate to parent method but with the proper crop coefficient column numbers
+    CALL RootZone%RootZone_v412_Type%PrintResults(AppGrid                                                       , &
+                                                  ETData                                                        , &
+                                                  TimeStep                                                      , &
+                                                  lEndOfSimulation                                              , &
+                                                  iColCropCoeff_NonPondedAg = RootZone%iColCropCoeff_NonPondedAg, &
+                                                  iColCropCoeff_PondedAg    = RootZone%iColCropCoeff_PondedAg   , &
+                                                  iColCropCoeff_Urban       = RootZone%iColCropCoeff_Urb        , &
+                                                  iColCropCoeff_NVRV        = RootZone%iColCropCoeff_NVRV       )
+    
+  END SUBROUTINE RootZone_v413_PrintResults
+  
+  
+  
+  
 ! ******************************************************************
 ! ******************************************************************
 ! ******************************************************************
@@ -716,6 +759,101 @@ CONTAINS
 ! ******************************************************************
 ! ******************************************************************
 
+  ! -------------------------------------------------------------
+  ! --- COMPUTE WATER DEMAND
+  ! -------------------------------------------------------------
+  SUBROUTINE RootZone_v413_ComputeWaterDemand(RootZone,AppGrid,TimeStep,ETData,iStat)
+    CLASS(RootZone_v413_Type)     :: RootZone
+    TYPE(AppGridType),INTENT(IN)  :: AppGrid
+    TYPE(TimeStepType),INTENT(IN) :: TimeStep
+    TYPE(ETType),INTENT(IN)       :: ETData
+    INTEGER,INTENT(OUT)           :: iStat
+    
+    !Local variables
+    INTEGER :: iElemIDs(AppGrid%NElements),iNElements,iStatArray(3)
+    
+    !Initialize
+    iStat      = 0
+    iStatArray = 0
+    iNElements = AppGrid%NElements
+    iElemIDs   = AppGrid%AppElement%ID
+    
+    !Return if root zone is not simulated
+    IF (RootZone%NLands .EQ. 0) RETURN
+    
+    !$OMP PARALLEL SECTIONS DEFAULT(PRIVATE) SHARED(RootZone,AppGrid,iNElements,iElemIDs,ETData,TimeStep,iStatArray)
+    !$OMP SECTION
+    !Riparian ET demand from streams
+    IF (RootZone%Flags%lNVRV_Defined)  THEN
+        CALL EchoProgress('Computing riparian ET demand from streams...')
+        CALL RootZone%NVRVRootZone%ComputeWaterDemand(iNElements                                    , &
+                                                      iElemIDs                                      , &
+                                                      ETData                                        , &
+                                                      TimeStep%DeltaT                               , &
+                                                      RootZone%ElemPrecipData%Precip                , &
+                                                      RootZone%GenericMoistureData%rGenericMoisture , &
+                                                      RootZone%ElemSoilsData                        , &
+                                                      RootZone%SolverData                           , &
+                                                      RootZone%Flags%lLakeElems                     , &
+                                                      iStatArray(1)                                 , &
+                                                      iColCropCoeff_NVRV=RootZone%iColCropCoeff_NVRV)
+    END IF
+    
+    !$OMP SECTION
+    !Echo progress
+    CALL EchoProgress('Computing agricultural water demand...')
+
+    !Compute ag water demand (urban water demands are read in as input)
+    !Non-ponded ag
+    IF (RootZone%Flags%lNonPondedAg_Defined) THEN
+        CALL RootZone%NonPondedAgRootZone%ComputeWaterDemand(AppGrid                                         , &
+                                                             ETData                                          , &
+                                                             TimeStep%DeltaT                                 , &
+                                                             RootZone%ElemPrecipData%Precip                  , &
+                                                             RootZone%GenericMoistureData%rGenericMoisture   , &
+                                                             RootZone%ElemSoilsData                          , &
+                                                             RootZone%AgWaterDemandFile%rValues              , &
+                                                             RootZone%ReuseFracFile%rValues                  , &
+                                                             RootZone%ReturnFracFile%rValues                 , &
+                                                             RootZone%IrigPeriodFile%iValues                 , &
+                                                             RootZone%SolverData                             , &
+                                                             RootZone%Flags%lLakeElems                       , &
+                                                             RootZone%Flags%lReadNonPondedAgWaterDemand      , &
+                                                             iStatArray(2)                                   , &
+                                                             iColCropCoeff=RootZone%iColCropCoeff_NonPondedAg)
+    END IF
+             
+    !$OMP SECTION
+    !Ponded ag
+    IF (RootZone%Flags%lPondedAg_Defined) THEN
+        CALL RootZone%PondedAgRootZone%ComputeWaterDemand(AppGrid                                      , &
+                                                          ETData                                       , &
+                                                          TimeStep%DeltaT                              , &
+                                                          RootZone%ElemPrecipData%Precip               , &
+                                                          RootZone%GenericMoistureData%rGenericMoisture, &
+                                                          RootZone%ElemSoilsData                       , &
+                                                          RootZone%HydCondPonded                       , &
+                                                          RootZone%AgWaterDemandFile%rValues           , &
+                                                          RootZone%IrigPeriodFile%iValues              , &
+                                                          RootZone%Flags%lLakeElems                    , &
+                                                          RootZone%Flags%lReadPondedAgWaterDemand      , &
+                                                          iStatArray(3)                                , &
+                                                          iColCropCoeff=RootZone%iColCropCoeff_PondedAg)
+    END IF
+    !$OMP END PARALLEL SECTIONS
+    
+    !Check for errors
+    IF (SUM(iStatArray) .NE. 0) THEN
+        iStat = -1
+        RETURN
+    END IF
+    
+    !Compute demand and supply related fractions
+    CALL RootZone%ComputeDemandSupplyRelatedFracs(AppGrid)
+
+  END SUBROUTINE RootZone_v413_ComputeWaterDemand
+  
+  
   ! -------------------------------------------------------------
   ! --- COMPUTE FUTURE AGRICULTURAL WATER DEMAND UNTIL A SPECIFIED DATE
   ! --- Note 1: Effect of GW on demand is ignored to avoid solving gw 
@@ -806,8 +944,8 @@ CONTAINS
     CALL Precip%ReadTSData(TimeStep,.TRUE.,iStat)                                                          ;  IF (iStat .NE. 0) RETURN
     CALL ET%File%RewindFile_To_BeginningOfTSData(iStat)                                                    ;  IF (iStat .NE. 0) RETURN
     CALL ET%ReadTSData(TimeStep,.TRUE.,iStat)                                                              ;  IF (iStat .NE. 0) RETURN
-    CALL RootZone%CropCoeffFile%File%RewindFile_To_BeginningOfTSData(iStat)                                ;  IF (iStat .NE. 0) RETURN
-    CALL RootZone%CropCoeffFile%ReadTSData(TimeStep,'Crop/habitat coefficients data',iFileReadCode,iStat)  ;  IF (iStat .NE. 0) RETURN
+    CALL ET%CropCoeffFile%File%RewindFile_To_BeginningOfTSData(iStat)                                      ;  IF (iStat .NE. 0) RETURN
+    CALL ET%CropCoeffFile%ReadTSData(TimeStep,'Crop/habitat coefficients data',iFileReadCode,iStat)        ;  IF (iStat .NE. 0) RETURN
     CALL RootZone%RewindTSInputFilesToTimeStamp(AppGrid%AppElement%ID,AppGrid%AppElement%Area,TimeStep,iStat)             
 
   END SUBROUTINE RootZone_v413_ComputeFutureWaterDemand
@@ -826,6 +964,197 @@ CONTAINS
 ! ******************************************************************
  
   ! -------------------------------------------------------------
+  ! --- SIMULATE SOIL MOISTURE IN ROOT ZONE
+  ! --- Note1: In this version, we assume surface flow from an element cannot 
+  ! ---        be used as water supply in another element, so we are not
+  ! ---        calculating cross-element surface flows and not iterating
+  ! --- Note2: Urban return flow is only the outdoors return flow for easy 
+  ! ---        budgeting later; rAW_UrbIndoors variable is the urban indoors 
+  ! ---        return flow since 100% of urban indoors water is assumed to 
+  ! ---        return
+  ! --- Note3: Any surface flow from any land use going to gw is not dealt 
+  ! ---        with during simulation; it is dealt with later during 
+  ! ---        post-processing and data retrieval
+  ! -------------------------------------------------------------
+  SUBROUTINE RootZone_v413_Simulate(RootZone,AppGrid,TimeStep,ETData,iStat)
+    CLASS(RootZone_v413_Type)     :: RootZone
+    TYPE(AppGridType),INTENT(IN)  :: AppGrid
+    TYPE(TimeStepType),INTENT(IN) :: TimeStep
+    TYPE(ETType),INTENT(IN)       :: ETData
+    INTEGER,INTENT(OUT)           :: iStat
+    
+    !Local variables
+    CHARACTER(LEN=ModNameLen+22) :: ThisProcedure = ModName // 'RootZone_v413_Simulate'
+    INTEGER                      :: indxElem,iNElements,iElemID,iNoElemsToGW(0),iStatArray(4)
+    REAL(8)                      :: rDeltaT,rArea,rZeroFlow(AppGrid%NElements),                             &    
+                                    rIrigSupply_Ag(AppGrid%NElements),rIrigSupply_Urb(AppGrid%NElements),   &
+                                    rElemCropSupply(RootZone%NonPondedAgRootZone%NCrops,AppGrid%NElements), &
+                                    rElemPondSupply(RootZone%PondedAgRootZone%iNCrops,AppGrid%NElements)
+                                    
+    !Initialize
+    iStat      = 0
+    iStatArray = 0
+    rZeroFlow  = 0.0
+
+    ASSOCIATE (pElemSupply       => RootZone%ElemSupply                           , &
+               pSoilsData        => RootZone%ElemSoilsData                        , &
+               pElemPrecip       => RootZone%ElemPrecipData%Precip                , &
+               prGenericMoisture => RootZone%GenericMoistureData%rGenericMoisture , &
+               pReuseFracs       => RootZone%ReuseFracFile%rValues                , &
+               pReturnFracs      => RootZone%ReturnFracFile%rValues               , &
+               pSolverData       => RootZone%SolverData                           )
+               
+        !Initialize
+        rDeltaT         = TimeStep%DeltaT
+        iNElements      = AppGrid%NElements
+        rIrigSupply_Ag  = pElemSupply%Diversion_Ag  + pElemSupply%Pumping_Ag
+        rIrigSupply_Urb = pElemSupply%Diversion_Urb + pElemSupply%Pumping_Urb
+        
+        !Check water supply vs. irrigable lands
+        !$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE(indxElem,iElemID,rArea) SCHEDULE(DYNAMIC,500)
+        DO indxElem=1,iNElements
+            !If this is a lake element, report that to the user
+            IF (RootZone%Flags%lLakeElems(indxElem)) THEN
+                IF (rIrigSupply_Ag(indxElem)+rIrigSupply_Urb(indxElem) .GT. 0.0) THEN 
+                    iElemID         = AppGrid%AppElement(indxElem)%ID
+                    MessageArray(1) = 'Element '//TRIM(IntToText(iElemID))//' is a lake element.'
+                    MessageArray(2) = 'Water supply for lake elements must be zero!'
+                    CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                    iStat = -1
+                    CYCLE
+                END IF
+            END IF
+            !Check ag area vs. ag water supply
+            IF (rIrigSupply_Ag(indxElem) .GT. 0.0) THEN
+                rArea = 0.0
+                IF (RootZone%Flags%lNonPondedAg_Defined) rArea = rArea + SUM(RootZone%NonPondedAgRootZone%Crops%Area(:,indxElem))
+                IF (RootZone%Flags%lPondedAg_Defined)    rArea = rArea + SUM(RootZone%PondedAgRootZone%Crops%Area(:,indxElem))
+                IF (rArea .EQ. 0.0) THEN
+                    iElemID         = AppGrid%AppElement(indxElem)%ID
+                    MessageArray(1) = 'Agricultural applied water at element '//TRIM(IntToText(iElemID))//' cannot be non-zero'
+                    MessageArray(2) = 'when agricultural area is zero!'
+                    CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                    iStat = -1
+                    CYCLE
+                END IF
+            END IF
+            !Check urban area vs. urban water supply
+            IF (rIrigSupply_Urb(indxElem) .GT. 0.0) THEN
+                IF (RootZone%Flags%lUrban_Defined) THEN
+                    rArea = RootZone%UrbanRootZone%UrbData%Area(indxElem,1)
+                ELSE
+                    rArea = 0.0
+                END IF
+                IF (rArea .EQ. 0.0) THEN
+                    iElemID         = AppGrid%AppElement(indxElem)%ID
+                    MessageArray(1) = 'Urban applied water at element '//TRIM(IntToText(iElemID))//' cannot be non-zero'
+                    MessageArray(2) = 'when urban area is zero!'
+                    CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                    iStat = -1
+                    CYCLE
+                END IF
+            END IF
+        END DO
+        !$OMP END PARALLEL DO
+        
+        !Return if there was an error
+        IF (iStat .EQ. -1) RETURN
+          
+        !$OMP PARALLEL SECTIONS DEFAULT(PRIVATE) SHARED(RootZone,iNElements,AppGrid,rIrigSupply_Ag,ETData,rDeltaT,     &
+        !$OMP                                           rElemCropSupply,rElemPondSupply,rIrigSupply_Urb,iNoElemsToGW,  &
+        !$OMP                                           rZeroFlow,iStatArray)
+        !$OMP SECTION
+        !Simulate non-ponded ag lands
+        IF (RootZone%Flags%lNonPondedAg_Defined) THEN
+            !$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE(indxElem)
+            DO indxElem=1,iNElements
+                rElemCropSupply(:,indxElem) = rIrigSupply_Ag(indxElem) * RootZone%NonPondedAgRootZone%Crops%ElemDemandFrac_Ag(:,indxElem)
+            END DO
+            !$OMP END PARALLEL DO
+            CALL RootZone%NonPondedAgRootZone%Simulate(AppGrid                                         , &
+                                                       ETData                                          , &
+                                                       rDeltaT                                         , &
+                                                       pElemPrecip                                     , &
+                                                       prGenericMoisture                               , &
+                                                       pSoilsData                                      , &
+                                                       rElemCropSupply                                 , &
+                                                       pReuseFracs                                     , &
+                                                       pReturnFracs                                    , &
+                                                       iNoElemsToGW                                    , &
+                                                       pSolverData                                     , &
+                                                       RootZone%Flags%lLakeElems                       , &
+                                                       iStatArray(1)                                   , &
+                                                       iColCropCoeff=RootZone%iColCropCoeff_NonPondedAg)
+        END IF
+        
+        !$OMP SECTION
+        !Simulate ponded ag lands
+        IF (RootZone%Flags%lPondedAg_Defined) THEN  
+            !$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE(indxElem) SCHEDULE(STATIC,160)
+            DO indxElem=1,iNElements
+                rElemPondSupply(:,indxElem) = rIrigSupply_Ag(indxElem) * RootZone%PondedAgRootZone%Crops%ElemDemandFrac_Ag(:,indxElem)
+            END DO
+            !$OMP END PARALLEL DO
+            CALL RootZone%PondedAgRootZone%Simulate(AppGrid                                      , &
+                                                    ETData                                       , &
+                                                    rDeltaT                                      , &
+                                                    pElemPrecip                                  , &
+                                                    prGenericMoisture                            , &
+                                                    pSoilsData                                   , &
+                                                    RootZone%HydCondPonded                       , &
+                                                    rElemPondSupply                              , &
+                                                    iNoElemsToGW                                 , &
+                                                    pSolverData                                  , &
+                                                    RootZone%Flags%lLakeElems                    , &
+                                                    iStatArray(2)                                , &
+                                                    iColCropCoeff=RootZone%iColCropCoeff_PondedAg)
+        END IF
+        
+        !$OMP SECTION
+        !Simulate urban lands
+        IF (RootZone%Flags%lUrban_Defined) THEN 
+            CALL RootZone%UrbanRootZone%Simulate(AppGrid                                       , &
+                                                 ETData                                        , &
+                                                 rDeltaT                                       , &
+                                                 pElemPrecip                                   , &
+                                                 prGenericMoisture                             , &
+                                                 pSoilsData                                    , &
+                                                 rIrigSupply_Urb                               , &
+                                                 pReuseFracs                                   , &
+                                                 pReturnFracs                                  , &
+                                                 iNoElemsToGW                                  , &
+                                                 pSolverData                                   , &
+                                                 RootZone%Flags%lLakeElems                     , &
+                                                 iStatArray(3)                                 , &
+                                                 iColCropCoeff_Urban=RootZone%iColCropCoeff_Urb)
+        END IF
+        
+        !$OMP SECTION
+        !Simulate native and riparian veg lands
+        IF (RootZone%Flags%lNVRV_Defined) THEN
+            CALL RootZone%NVRVRootZone%Simulate(AppGrid                                       , &
+                                                ETData                                        , &
+                                                rDeltaT                                       , &
+                                                pElemPrecip                                   , &
+                                                prGenericMoisture                             , &
+                                                pSoilsData                                    , &
+                                                rZeroFlow                                     , &
+                                                iNoElemsToGW                                  , &
+                                                pSolverData                                   , &
+                                                RootZone%Flags%lLakeElems                     , &
+                                                iStatArray(4)                                 , &
+                                                iColCropCoeff_NVRV=RootZone%iColCropCoeff_NVRV)
+        END IF 
+        !$OMP END PARALLEL SECTIONS
+    END ASSOCIATE
+               
+    !Check for error
+    IF (SUM(iStatArray) .NE. 0) iStat = -1
+    
+  END SUBROUTINE RootZone_v413_Simulate
+
+  
+  ! -------------------------------------------------------------
   ! --- CHECK POINTERS TO TIME SERIES DATA COLUMNS
   ! -------------------------------------------------------------
   SUBROUTINE CheckTSDataPointers(RootZone,iElemIDs,Precip,ET,iStat)
@@ -836,43 +1165,69 @@ CONTAINS
     INTEGER,INTENT(OUT)                 :: iStat
     
     !Local variables
-    INTEGER :: indxElem,ID
+    CHARACTER(LEN=ModNameLen+19) :: ThisProcedure = ModName // 'CheckTSDataPointers'
+    INTEGER                      :: indxElem,ID,iMaxKcCol
     
     !First call the inhereted method
     CALL RootZone%RootZone_v412_Type%CheckTSDataPointers(iElemIDs,Precip,ET,iStat)
     IF (iStat .EQ. -1) RETURN
     
     !Check crop coefficient pointers for other land use types
+    iMaxKcCol = ET%GetNKcColumns()
     !Non-ponded ag
     IF (RootZone%Flags%lNonPondedAg_Defined) THEN
         DO indxElem=1,SIZE(iElemIDs)
-            ID = iElemIDs(indxElem)
-            CALL RootZone%CropCoeffFile%CheckColNum('Crop/habitat coefficient data file (referenced by non-ponded crop data file for element '//TRIM(IntToText(ID))//')',RootZone%iColCropCoeff_NonPondedAg(:,indxElem),.TRUE.,iStat) 
-            IF (iStat .EQ. -1) RETURN
+            IF (iMaxKcCol .LT. MAXVAL(RootZone%iColCropCoeff_NonPondedAg(:,indxElem))) THEN                
+                ID              = iElemIDs(indxElem)
+                MessageArray(1) = 'Crop coefficient data column(s) referenced by non-ponded crop data file for'
+                MessageArray(2) = 'element '//TRIM(IntToText(ID))//' is greater than the columns in the'
+                MessageArray(3) = 'Crop/Habitat Coeffcient Data File!'
+                CALL SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+                iStat = -1
+                RETURN
+            END IF
         END DO
     END IF
     !Ponded ag
     IF (RootZone%Flags%lPondedAg_Defined) THEN
         DO indxElem=1,SIZE(iElemIDs)
-            ID = iElemIDs(indxElem)
-            CALL RootZone%CropCoeffFile%CheckColNum('Crop/habitat coefficient data file (referenced by ponded crop data file for element '//TRIM(IntToText(ID))//')',RootZone%iColCropCoeff_PondedAg(:,indxElem),.TRUE.,iStat) 
-            IF (iStat .EQ. -1) RETURN
+            IF (iMaxKcCol .LT. MAXVAL(RootZone%iColCropCoeff_PondedAg(:,indxElem))) THEN                
+                ID              = iElemIDs(indxElem)
+                MessageArray(1) = 'Crop coefficient data column(s) referenced by ponded crop data file for'
+                MessageArray(2) = 'element '//TRIM(IntToText(ID))//' is greater than the columns in the'
+                MessageArray(3) = 'Crop/Habitat Coeffcient Data File!'
+                CALL SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+                iStat = -1
+                RETURN
+            END IF
         END DO
     END IF
     !Urban
     IF (RootZone%Flags%lUrban_Defined) THEN
         DO indxElem=1,SIZE(iElemIDs)
-            ID = iElemIDs(indxElem)
-            CALL RootZone%CropCoeffFile%CheckColNum('Crop/habitat coefficient data file (referenced by urban data file for element '//TRIM(IntToText(ID))//')',[RootZone%iColCropCoeff_Urb(indxElem)],.TRUE.,iStat) 
-            IF (iStat .EQ. -1) RETURN
+            IF (iMaxKcCol .LT. RootZone%iColCropCoeff_Urb(indxElem)) THEN                
+                ID              = iElemIDs(indxElem)
+                MessageArray(1) = 'Crop coefficient data column(s) referenced by urban data file for'
+                MessageArray(2) = 'element '//TRIM(IntToText(ID))//' is greater than the columns in the'
+                MessageArray(3) = 'Crop/Habitat Coeffcient Data File!'
+                CALL SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+                iStat = -1
+                RETURN
+            END IF
         END DO
     END IF
     !Native and riparian
     IF (RootZone%Flags%lNVRV_Defined) THEN
         DO indxElem=1,SIZE(iElemIDs)
-            ID = iElemIDs(indxElem)
-            CALL RootZone%CropCoeffFile%CheckColNum('Crop/habitat coefficient data file (referenced by native&riparain vegetation file for native vegetation at element '//TRIM(IntToText(ID))//')',RootZone%iColCropCoeff_NVRV(:,indxElem),.TRUE.,iStat) 
-            IF (iStat .EQ. -1) RETURN
+            IF (iMaxKcCol .LT. MAXVAL(RootZone%iColCropCoeff_NVRV(:,indxElem))) THEN                
+                ID              = iElemIDs(indxElem)
+                MessageArray(1) = 'Crop coefficient data column(s) referenced by native&riparain vegetation data file for'
+                MessageArray(2) = 'element '//TRIM(IntToText(ID))//' is greater than the columns in the'
+                MessageArray(3) = 'Crop/Habitat Coeffcient Data File!'
+                CALL SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+                iStat = -1
+                RETURN
+            END IF
         END DO
     END IF
 

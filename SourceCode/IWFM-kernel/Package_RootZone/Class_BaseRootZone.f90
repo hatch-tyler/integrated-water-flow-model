@@ -154,6 +154,7 @@ MODULE Class_BaseRootZone
       REAL(8),ALLOCATABLE                           :: rFutureUrbElemDemand(:,:)          !Future urban demand at each (element,timestep) combination
       TYPE(BudgetType)                              :: LWUseBudRawFile                    !Raw land and water use budget output file
       TYPE(BudgetType)                              :: RootZoneBudRawFile                 !Raw root zone budget output file
+      TYPE(GenericFileType)                         :: LUAreaScaleFactorOutFile           !Output file to print out land use area scaling factor for each element so that land use areas add up to the element area
       TYPE(GenericFileType)                         :: FinalMoistureOutFile               !Output file for the soil moisture at the end of simulation
   CONTAINS
       PROCEDURE(Abstract_New),PASS,DEFERRED                                   :: New
@@ -241,11 +242,11 @@ MODULE Class_BaseRootZone
   ! -------------------------------------------------------------
   ABSTRACT INTERFACE
   
-     SUBROUTINE Abstract_New(RootZone,IsForInquiry,cProjectNameForDSS,cFileName,cWorkingDirectory,AppGrid,TimeStep,NTIME,ET,Precip,iStat,iStrmNodeIDs,iLakeIDs) 
+     SUBROUTINE Abstract_New(RootZone,IsForInquiry,cProjectNameForDSS,cFileName,cCropCoeffFileName,cWorkingDirectory,AppGrid,TimeStep,NTIME,ET,Precip,iStat,iStrmNodeIDs,iLakeIDs) 
         IMPORT                             :: AppGridType,TimeStepType,BaseRootZoneType,ETType,PrecipitationType
         CLASS(BaseRootZoneType)            :: RootZone
         LOGICAL,INTENT(IN)                 :: IsForInquiry
-        CHARACTER(LEN=*),INTENT(IN)        :: cProjectNameForDSS,cFileName,cWorkingDirectory
+        CHARACTER(LEN=*),INTENT(IN)        :: cProjectNameForDSS,cFileName,cCropCoeffFileName,cWorkingDirectory
         TYPE(AppGridType),INTENT(IN)       :: AppGrid
         TYPE(TimeStepType),INTENT(IN)      :: TimeStep
         INTEGER,INTENT(IN)                 :: NTIME
@@ -666,7 +667,7 @@ MODULE Class_BaseRootZone
      END SUBROUTINE Abstract_ConvertTimeUnit
      
      
-     SUBROUTINE Abstract_ReadTSData(RootZone,AppGrid,TimeStep,Precip,ETData,iStat,RegionLUAreas)
+     SUBROUTINE Abstract_ReadTSData(RootZone,AppGrid,TimeStep,Precip,ETData,iStat,RegionLUAreas,iColCropCoeff_NonPondedAg,iColCropCoeff_PondedAg,iColCropCoeff_Urban,iColCropCoeff_NVRV)
         IMPORT                             :: BaseRootZoneType,AppGridType,TimeStepType,PrecipitationType,ETType
         CLASS(BaseRootZoneType)            :: RootZone
         TYPE(AppGridType),INTENT(IN)       :: AppGrid
@@ -675,6 +676,7 @@ MODULE Class_BaseRootZone
         TYPE(ETType),INTENT(IN)            :: ETData
         INTEGER,INTENT(OUT)                :: iStat
         REAL(8),OPTIONAL,INTENT(IN)        :: RegionLUAreas(:,:)
+        INTEGER,OPTIONAL,INTENT(IN)        :: iColCropCoeff_NonPondedAg(:,:),iColCropCoeff_PondedAg(:,:),iColCropCoeff_Urban(:),iColCropCoeff_NVRV(:,:)
      END SUBROUTINE Abstract_ReadTSData
      
      
@@ -760,13 +762,14 @@ MODULE Class_BaseRootZone
      END SUBROUTINE Abstract_RegionalReturnFlow_Urb
      
      
-     SUBROUTINE Abstract_PrintResults(RootZone,AppGrid,ETData,TimeStep,lEndOfSimulation)
+     SUBROUTINE Abstract_PrintResults(RootZone,AppGrid,ETData,TimeStep,lEndOfSimulation,iColCropCoeff_NonPondedAg,iColCropCoeff_PondedAg,iColCropCoeff_Urban,iColCropCoeff_NVRV)
         IMPORT                        :: BaseRootZoneType,AppGridType,ETType,TimeStepType
         CLASS(BaseRootZoneType)       :: RootZone
         TYPE(AppGridType),INTENT(IN)  :: AppGrid
         TYPE(ETType),INTENT(IN)       :: ETData
         TYPE(TimeStepType),INTENT(IN) :: TimeStep
         LOGICAL,INTENT(IN)            :: lEndOfSimulation
+        INTEGER,OPTIONAL,INTENT(IN)   :: iColCropCoeff_NonPondedAg(:,:),iColCropCoeff_PondedAg(:,:),iColCropCoeff_Urban(:),iColCropCoeff_NVRV(:,:)
      END SUBROUTINE Abstract_PrintResults
 
  
@@ -1373,12 +1376,13 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- COMPUTE REGIONAL POTENTIAL ET WHEN MULTIPLE LAND USES FOR EACH ELEMENT ARE GIVEN
   ! -------------------------------------------------------------
-  SUBROUTINE ComputeRegionalETPot_MultipleLUPerElem(AppGrid,ETData,iColETc,Area,ETPot)
+  SUBROUTINE ComputeRegionalETPot_MultipleLUPerElem(AppGrid,ETData,iColETc,Area,ETPot,iColCropCoeff)
     TYPE(AppGridType),INTENT(IN) :: AppGrid
     TYPE(ETType),INTENT(IN)      :: ETData
     INTEGER,INTENT(IN)           :: iColETc(:,:)
     REAL(8),INTENT(IN)           :: Area(:,:)
     REAL(8),INTENT(OUT)          :: ETPot(:,:)
+    INTEGER,OPTIONAL,INTENT(IN)  :: iColCropCoeff(:,:)
     
     !Local variables
     INTEGER :: indxElem,iRegion
@@ -1388,11 +1392,19 @@ CONTAINS
     ETPot = 0.0
     
     !Compile
-    DO indxElem=1,AppGrid%NElements
-        iRegion          = AppGrid%AppElement(indxElem)%Subregion
-        ETc              = ETData%GetValues(iColETc(:,indxElem))
-        ETPot(:,iRegion) = ETPot(:,iRegion) + ETc * Area(:,indxElem)
-    END DO
+    IF (PRESENT(iColCropCoeff)) THEN
+        DO indxElem=1,AppGrid%NElements
+            iRegion          = AppGrid%AppElement(indxElem)%Subregion
+            ETc              = ETData%GetValues(iColETc(:,indxElem),iColCropCoeff(:,indxElem))
+            ETPot(:,iRegion) = ETPot(:,iRegion) + ETc * Area(:,indxElem)
+        END DO
+    ELSE
+        DO indxElem=1,AppGrid%NElements
+            iRegion          = AppGrid%AppElement(indxElem)%Subregion
+            ETc              = ETData%GetValues(iColETc(:,indxElem))
+            ETPot(:,iRegion) = ETPot(:,iRegion) + ETc * Area(:,indxElem)
+        END DO
+    END IF
     
   END SUBROUTINE ComputeRegionalETPot_MultipleLUPerElem
 
@@ -1400,12 +1412,13 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- COMPUTE REGIONAL POTENTIAL ET WHEN MULTIPLE LAND USES FOR EACH ELEMENT ARE GIVEN
   ! -------------------------------------------------------------
-  SUBROUTINE ComputeRegionalETPot_SingleLUPerElem(AppGrid,ETData,iColETc,Area,ETPot)
+  SUBROUTINE ComputeRegionalETPot_SingleLUPerElem(AppGrid,ETData,iColETc,Area,ETPot,iColCropCoeff)
     TYPE(AppGridType),INTENT(IN) :: AppGrid
     TYPE(ETType),INTENT(IN)      :: ETData
     INTEGER,INTENT(IN)           :: iColETc(:)
     REAL(8),INTENT(IN)           :: Area(:)
     REAL(8),INTENT(OUT)          :: ETPot(:)
+    INTEGER,OPTIONAL,INTENT(IN)  :: iColCropCoeff(:)
     
     !Local variables
     INTEGER :: indxElem,iRegion
@@ -1413,7 +1426,7 @@ CONTAINS
     
     !Initialize
     ETPot = 0.0
-    ETc   = ETData%GetValues(iColETc)
+    ETc   = ETData%GetValues(iColETc,iColCropCoeff)
     
     !Compile
     DO indxElem=1,AppGrid%NElements

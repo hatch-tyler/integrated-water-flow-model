@@ -1580,17 +1580,10 @@ CONTAINS
             !Convert the sign of required pumping to be compared to storage and applied to RHS
             rPumpRequired = -AppPumping%NodalPumpRequired(indxNode,indxLayer)
             
-            !If pumping is zero, cycle
-            IF (rPumpRequired .EQ. 0.0) THEN
-                AppPumping%NodalPumpActual(indxNode,indxLayer) = 0.0
-                rUpdateRHS(indx)                               = 0.0
-                CYCLE
-            END IF
-            
-            !If this is recharge, cycle (negative sign means recharge)
-            IF (rPumpRequired .LT. 0.0) THEN
-                AppPumping%NodalPumpActual(indxNode,indxLayer) = rPumpRequired
-                rUpdateRHS(indx)                               = rPumpRequired
+            !If pumping is zero and it is recharge (i.e. less than zero), cycle
+            IF (rPumpRequired .LE. 0.0) THEN
+                AppPumping%NodalPumpActual(indxNode,indxLayer) = -rPumpRequired  !Convert it back to recharge by multiplying with -1
+                rUpdateRHS(indx)                               =  rPumpRequired
                 CYCLE
             END IF
             

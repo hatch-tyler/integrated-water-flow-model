@@ -248,10 +248,11 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- NEW ROOT ZONE DATA
   ! -------------------------------------------------------------
-  SUBROUTINE RootZone_v40_New(RootZone,IsForInquiry,cProjectNameForDSS,cFileName,cWorkingDirectory,AppGrid,TimeStep,NTIME,ET,Precip,iStat,iStrmNodeIDs,iLakeIDs)
+  SUBROUTINE RootZone_v40_New(RootZone,IsForInquiry,cProjectNameForDSS,cFileName,cCropCoeffFileName,cWorkingDirectory,AppGrid,TimeStep,NTIME,ET,Precip,iStat,iStrmNodeIDs,iLakeIDs)
     CLASS(RootZone_v40_Type)           :: RootZone
     LOGICAL,INTENT(IN)                 :: IsForInquiry
     CHARACTER(LEN=*),INTENT(IN)        :: cProjectNameForDSS,cFileName,cWorkingDirectory
+    CHARACTER(LEN=*),INTENT(IN)        :: cCropCoeffFileName   !Not used in this version
     TYPE(AppGridType),INTENT(IN)       :: AppGrid
     TYPE(TimeStepType),INTENT(IN)      :: TimeStep
     INTEGER,INTENT(IN)                 :: NTIME
@@ -621,6 +622,18 @@ CONTAINS
                         SurfaceFlowDest(iElem) = 0                        
                 END SELECT
             END ASSOCIATE
+            
+            !Make sure hydraulic conductivity is greater than zero
+            IF (pSoilsData(iElem)%HydCond .LT. 0.0) THEN
+                CALL SetLastMessage('Root zone hydraulic conductivity at element '//TRIM(IntToText(iElemID))//' is less than zero!',f_iFatal,ThisProcedure)
+                iStat = -1
+                RETURN
+            END IF
+            IF (RootZone%HydCondPonded(iElem) .LT. 0.0) THEN
+                CALL SetLastMessage('Root zone hydraulic conductivity for ponded crops at element '//TRIM(IntToText(iElemID))//' is less than zero!',f_iFatal,ThisProcedure)
+                iStat = -1
+                RETURN
+            END IF
             
             !Method to compute Kunsat must be recognized
             IF (LocateInList(pSoilsData(iElem)%KunsatMethod,f_iKunsatMethodList) .LT. 1) THEN
@@ -2745,14 +2758,15 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- READ ROOT ZONE RELATED TIME SERIES DATA
   ! -------------------------------------------------------------
-  SUBROUTINE RootZone_v40_ReadTSData(RootZone,AppGrid,TimeStep,Precip,ETData,iStat,RegionLUAreas)
+  SUBROUTINE RootZone_v40_ReadTSData(RootZone,AppGrid,TimeStep,Precip,ETData,iStat,RegionLUAreas,iColCropCoeff_NonPondedAg,iColCropCoeff_PondedAg,iColCropCoeff_Urban,iColCropCoeff_NVRV)
     CLASS(RootZone_v40_Type)           :: RootZone
     TYPE(AppGridType),INTENT(IN)       :: AppGrid
     TYPE(TimeStepType),INTENT(IN)      :: TimeStep
     TYPE(PrecipitationType),INTENT(IN) :: Precip
     TYPE(ETType),INTENT(IN)            :: ETData
     INTEGER,INTENT(OUT)                :: iStat
-    REAL(8),OPTIONAL,INTENT(IN)        :: RegionLUAreas(:,:)   !In (region, land use) format
+    REAL(8),OPTIONAL,INTENT(IN)        :: RegionLUAreas(:,:)           !In (region, land use) format
+    INTEGER,OPTIONAL,INTENT(IN)        :: iColCropCoeff_NonPondedAg(:,:),iColCropCoeff_PondedAg(:,:),iColCropCoeff_Urban(:),iColCropCoeff_NVRV(:,:)  !Not used in this version
     
     !Local variables
     CHARACTER(LEN=ModNameLen+23) :: ThisProcedure = ModName // 'RootZone_v40_ReadTSData'
@@ -3181,12 +3195,13 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GATEWAY PROCEDURE TO PRINT OUT RESULTS
   ! -------------------------------------------------------------
-  SUBROUTINE RootZone_v40_PrintResults(RootZone,AppGrid,ETData,TimeStep,lEndOfSimulation)
+  SUBROUTINE RootZone_v40_PrintResults(RootZone,AppGrid,ETData,TimeStep,lEndOfSimulation,iColCropCoeff_NonPondedAg,iColCropCoeff_PondedAg,iColCropCoeff_Urban,iColCropCoeff_NVRV)
     CLASS(RootZone_v40_Type)      :: RootZone
     TYPE(AppGridType),INTENT(IN)  :: AppGrid
     TYPE(ETTYpe),INTENT(IN)       :: ETData          !Not used in this version
     TYPE(TimeStepType),INTENT(IN) :: TimeStep
     LOGICAL,INTENT(IN)            :: lEndOfSimulation
+    INTEGER,OPTIONAL,INTENT(IN)   :: iColCropCoeff_NonPondedAg(:,:),iColCropCoeff_PondedAg(:,:),iColCropCoeff_Urban(:),iColCropCoeff_NVRV(:,:)  !Not used in this version
     
     !Local variables
     REAL(8),DIMENSION(AppGrid%NElements)     :: DemandFracAg,ElemPrecip

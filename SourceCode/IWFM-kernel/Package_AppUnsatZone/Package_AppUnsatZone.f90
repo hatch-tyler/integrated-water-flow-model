@@ -1008,7 +1008,8 @@ CONTAINS
             rVertFlow(:,indxElem) = 0.0
             rDeepPerc(:,indxElem) = 0.0
             IF (AppUnsatZone%UnsatElems(1,indxElem)%Thickness .EQ. 0.0) THEN
-                rDeepPerc(1,indxElem) = Perc(indxElem) + AppUnsatZone%UnsatElems(1,indxElem)%SoilM_To_GW
+                rDeepPerc(1,indxElem)  = Perc(indxElem) + AppUnsatZone%UnsatElems(1,indxElem)%SoilM_To_GW
+                rDeepPerc(2:,indxElem) = AppUnsatZone%UnsatElems(2:,indxElem)%SoilM_To_GW
             ELSE
                 DO indxLayer=1,NUZLayers-1
                     IF (AppUnsatZone%UnsatElems(indxLayer+1,indxElem)%Thickness .EQ. 0.0) THEN
@@ -1016,7 +1017,7 @@ CONTAINS
                         rDeepPerc(indxLayer+1,indxElem) = AppUnsatZone%UnsatElems(indxLayer+1,indxElem)%SoilM_To_GW
                         CYCLE
                     ELSE
-                        rVertFlow(indxLayer,indxElem)      = -AppUnsatZone%UnsatElems(indxLayer,indxElem)%Outflow  !Downward flow must be assigned as negative flow 
+                        rVertFlow(indxLayer,indxElem)   = -AppUnsatZone%UnsatElems(indxLayer,indxElem)%Outflow  !Downward flow must be assigned as negative flow 
                     END IF
                 END DO
                 IF (AppUnsatZone%UnsatElems(NUZLayers,indxElem)%Thickness .GT. 0.0) THEN
@@ -1392,7 +1393,7 @@ CONTAINS
                         SoilM_P = pUnsatElems(indxLayer,indxElem)%SoilM_P * D_P
                     END IF
                     TotalPorosity = pUnsatElems(indxLayer,indxElem)%TotalPorosity * D
-                    Toler         = MAX(TotalPorosity * AppUnsatZone%SolverData%Tolerance / Area(indxElem) , 1D-12)
+                    Toler         = MAX(TotalPorosity * AppUnsatZone%SolverData%Tolerance / Area(indxElem) , 1D-12) !Dividing by area because when results are multiplied by area (generally very large), we see decent size mass balance errors
                     CALL VadoseZoneMoistureRouter(Inflow(indxElem)                             ,  &
                                                   pUnsatElems(indxLayer,indxElem)%HydCond      ,  &
                                                   TotalPorosity                                ,  &

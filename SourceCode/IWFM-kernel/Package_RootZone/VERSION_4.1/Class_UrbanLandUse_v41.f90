@@ -92,7 +92,6 @@ MODULE Class_UrbanLandUse_v41
       REAL(8),ALLOCATABLE :: ReturnFlowIn(:,:)            !Urban indoors return flow
       REAL(8),ALLOCATABLE :: ReturnFlowOut(:,:)           !Urban outdoors return flow
       REAL(8),ALLOCATABLE :: ElemDemandFrac(:,:)          !Ratio of urban demand to the total demand at the element it is located at
-      REAL(8),ALLOCATABLE :: rUrbETCoeff(:,:)             !Urban ET coefficients
   END TYPE Urban_v41_Type
   
   
@@ -200,7 +199,6 @@ CONTAINS
               UrbLand%UrbData%ReturnFlowIn(NElements,1)           , &              
               UrbLand%UrbData%ReturnFlowOut(NElements,1)          , &              
               UrbLand%UrbData%ElemDemandFrac(NElements,1)         , &
-              UrbLand%UrbData%rUrbETCoeff(NElements,1)            , &
               UrbLand%RegionETPot(NSubregions)                    , &
               STAT=ErrorCode                                      )
     IF (ErrorCode+iStat .NE. 0) THEN
@@ -223,7 +221,6 @@ CONTAINS
     UrbLand%UrbData%ReturnFlowIn          = 0.0 
     UrbLand%UrbData%ReturnFlowOut         = 0.0 
     UrbLand%UrbData%ElemDemandFrac        = 0.0
-    UrbLand%UrbData%rUrbETCoeff           = 1.0
     UrbLand%RegionETPot                   = 0.0
 
     !Land use data file
@@ -407,7 +404,6 @@ CONTAINS
                 UrbLand%UrbData%ReturnFlowIn            , &              
                 UrbLand%UrbData%ReturnFlowOut           , &              
                 UrbLand%UrbData%ElemDemandFrac          , &
-                UrbLand%UrbData%rUrbETCoeff             , &
                 UrbLand%RegionETPot                     , &
                 STAT = ErrorCode                        )
     
@@ -741,7 +737,7 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- SIMULATE FLOW PROCESSES AT URBAN AREAS
   ! -------------------------------------------------------------
-  SUBROUTINE Simulate(UrbanLand,AppGrid,ETData,DeltaT,Precip,GenericMoisture,SoilsData,ElemSupply,ReuseFrac,ReturnFrac,ElemsToGW,SolverData,lLakeElem,iStat)
+  SUBROUTINE Simulate(UrbanLand,AppGrid,ETData,DeltaT,Precip,GenericMoisture,SoilsData,ElemSupply,ReuseFrac,ReturnFrac,ElemsToGW,SolverData,lLakeElem,iStat,iColCropCoeff_Urban)
     CLASS(UrbanLandUse_v41_Type)           :: UrbanLand
     TYPE(AppGridType),INTENT(IN)           :: AppGrid
     TYPE(ETType),INTENT(IN)                :: ETData
@@ -751,11 +747,12 @@ CONTAINS
     TYPE(SolverDataType),INTENT(IN)        :: SolverData
     LOGICAL,INTENT(IN)                     :: lLakeElem(:)
     INTEGER,INTENT(OUT)                    :: iStat
+    INTEGER,OPTIONAL,INTENT(IN)            :: iColCropCoeff_Urban(:)
     
     !Local variables
     CHARACTER(LEN=ModNameLen+8),PARAMETER :: ThisProcedure = ModName // 'Simulate'
-    INTEGER                               :: indxElem,iColETc(1),KunsatMethod,iElemID
-    REAL(8)                               :: AchievedConv,Area,ETc(1),HydCond,TotalPorosity,Area_Indoors,Area_Outdoors,   &
+    INTEGER                               :: indxElem,KunsatMethod,iElemID
+    REAL(8)                               :: AchievedConv,Area,ETc(AppGrid%NElements),HydCond,TotalPorosity,Area_Indoors,Area_Outdoors,   &
                                              FieldCapacity,TotalPorosityUrban,FieldCapacityUrban,RootDepth,Lambda,        &
                                              AW_Outdoors,AW_Indoors,WiltingPoint,WiltingPointUrban,rSoilM_P,SoilM,Supply, &
                                              GM,PrecipD,rMultip,Excess,Inflow,fRU,fRF,ratio(3),SoilM_P_Array(3),          &
@@ -771,11 +768,12 @@ CONTAINS
     CALL EchoProgress('Simulating flows at urban lands')
     
     !Initialize
-    RootDepth = UrbanLand%RootDepth   
+    RootDepth = UrbanLand%RootDepth  
+    ETc       = ETData%GetValues(UrbanLand%UrbData%iColETc(:,1),iColCropCoeff_Urban) 
     
     ASSOCIATE (pUrbData => UrbanLand%UrbData)
-        !$OMP PARALLEL DEFAULT(PRIVATE) SHARED(AppGrid,UrbanLand,lLakeElem,SoilsData,ETData,Precip,DeltaT,GenericMoisture,     &
-        !$OMP                                  ReturnFrac,ReuseFrac,SolverData,ElemSupply,ElemsToGW,iStat,RootDepth,  &
+        !$OMP PARALLEL DEFAULT(PRIVATE) SHARED(AppGrid,UrbanLand,lLakeElem,SoilsData,ETc,Precip,DeltaT,GenericMoisture, &
+        !$OMP                                  ReturnFrac,ReuseFrac,SolverData,ElemSupply,ElemsToGW,iStat,RootDepth,       &
         !$OMP                                  rElemSupply_Indrs_Local)       
         !$OMP DO SCHEDULE(NONMONOTONIC:DYNAMIC,96)
         DO indxElem=1,AppGrid%NElements
@@ -809,8 +807,6 @@ CONTAINS
             HydCond            = SoilsData(indxElem)%HydCond
             Lambda             = SoilsData(indxElem)%Lambda
             KunsatMethod       = SoilsData(indxElem)%KunsatMethod
-            iColETc(1)         = pUrbData%iColETc(indxElem,1)
-            ETc                = ETData%GetValues(iColETc) * pUrbData%rUrbETCoeff(indxElem,1)
             PrecipD            = Precip(indxElem) * DeltaT
             GM                 = GenericMoisture(1,indxElem) * RootDepth * DeltaT
             Area_Outdoors      = Area * pUrbData%PerviousFrac(indxElem,1)
@@ -846,8 +842,8 @@ CONTAINS
             Inflow = GM + rIrigInfilt
             
             !ET from GW
-            rETFromGW_Actual = MIN(ETc(1)*DeltaT , pUrbData%ETFromGW_Max(indxElem,1))
-            ETc_effect       = ETc(1)*DeltaT - rETFromGW_Actual
+            rETFromGW_Actual = MIN(ETc(indxElem)*DeltaT , pUrbData%ETFromGW_Max(indxElem,1))
+            ETc_effect       = ETc(indxElem)*DeltaT - rETFromGW_Actual
             
             !Simulate
             CALL NonPondedLUMoistureRouter(PrecipD                                    ,  &

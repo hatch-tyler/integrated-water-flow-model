@@ -658,90 +658,92 @@ CONTAINS
     
     !Set SM_test_Check based on the method used to compute Kunsat 
     SELECT CASE (KunsatMethod)
-      CASE (f_iCampbell)
-        SM_test_Check = 0.0
-      
-      CASE (f_ivanGenuchten)
-        SM_test_Check = f_rTolerFrac * Toler
+        CASE (f_iCampbell)
+            SM_test_Check = 0.0
+        
+        CASE (f_ivanGenuchten)
+            SM_test_Check = f_rTolerFrac * Toler
     END SELECT
     
     !Check if high-end or low-end value of SM satisfies function
     IF (ABS(SM_Function(SMI,ETc,WP,FC,TN,PSDI,K,Inflow,Outflow,SMHigh,Toler,KunsatMethod)) .LT. Toler) THEN
-      SM        = SMHigh
-      Converged = .TRUE.
+        SM        = SMHigh
+        Converged = .TRUE.
     ELSEIF (ABS(SM_Function(SMI,ETc,WP,FC,TN,PSDI,K,Inflow,Outflow,SMLow,Toler,KunsatMethod)) .LT. Toler) THEN
-      SM        = SMLow
-      Converged = .TRUE.
+        SM        = SMLow
+        Converged = .TRUE.
     ELSE
-      iter = 0
-      DO 
-        !Take a Newton-Raphson step
-        IF (UseNewtonRaphson) THEN
-          F_SM_test  = SM_Function(SMI,ETc,WP,FC,TN,PSDI,K,Inflow,Outflow,SM,Toler,KunsatMethod)
-          DF_SM_test = dSM_Function(ETc,WP,FC,TN,PSDI,K,SM,Toler,KunsatMethod)
-          Delta      = F_SM_test /DF_SM_test
-          !Check if SM is already close enough to the root; if it is don't update it   
-          IF (ABS(Delta) .LT. Toler) THEN
-            IF (ABS(F_SM_test) .LT. Toler) THEN
-              Converged = .TRUE.
-              EXIT
+        iter = 0
+        DO 
+            !Take a Newton-Raphson step
+            IF (UseNewtonRaphson) THEN
+                F_SM_test  = SM_Function(SMI,ETc,WP,FC,TN,PSDI,K,Inflow,Outflow,SM,Toler,KunsatMethod)
+                DF_SM_test = dSM_Function(ETc,WP,FC,TN,PSDI,K,SM,Toler,KunsatMethod)
+                Delta      = F_SM_test /DF_SM_test
+                !Check if SM is already close enough to the root; if it is don't update it   
+                IF (ABS(Delta) .LT. Toler) THEN
+                    IF (ABS(F_SM_test) .LT. Toler) THEN
+                        Converged = .TRUE.
+                        EXIT
+                    END IF
+                END IF
+                IF (iter .LT. 11) THEN
+                    SM_test = SM - Delta
+                ELSEIF (iter .LT. 31) THEN
+                    SM_test = SM - (0.5 * Delta)
+                    IF (F_SM_Test .GT. 0.0) THEN
+                        IF (SM .LT. SMHigh) SMHigh = SM
+                    ELSE
+                        IF (SM .GT. SMLow) SMLow = SM
+                    END IF
+                ELSE
+                    SM_test          = SM - (0.5 * Delta)
+                    UseNewtonRaphson = .FALSE.
+                END IF
+                IF (SM_test.GT.TN-SM_test_Check .OR. SM_test.LT.0.0) UseNewtonRaphson = .FALSE.
+            
+            !Check if new moisture is beyond limits; if so take a bisection step
+            ELSE
+                SM_test   = (SMHigh+SMLow)/2d0
+                F_SM_Test = SM_Function(SMI,ETc,WP,FC,TN,PSDI,K,Inflow,Outflow,SM_test,Toler,KunsatMethod)
+                F_SMLow   = SM_Function(SMI,ETc,WP,FC,TN,PSDI,K,Inflow,Outflow,SMLow,Toler,KunsatMethod)
+                IF (F_SM_Test*F_SMLow .GE. 0.0) THEN
+                    SMLow  = SM_test
+                ELSE
+                    SMHigh = SM_test
+                END IF
+                Delta = ABS(SMHigh-SMLow)
             END IF
-          END IF
-          IF (iter .LT. 11) THEN
-              SM_test = SM - Delta
-          ELSEIF (iter .LT. 21) THEN
-              SM_test = SM - (0.5 * Delta)
-              IF (F_SM_Test .GT. 0.0) THEN
-                  IF (SM .LT. SMHigh) SMHigh = SM
-              ELSE
-                  IF (SM .GT. SMLow) SMLow = SM
-              END IF
-          ELSE
-              SM_test          = SM - (0.5 * Delta)
-              UseNewtonRaphson = .FALSE.
-          END IF
-          IF (SM_test.GT.TN-SM_test_Check .OR. SM_test.LT.0.0) UseNewtonRaphson = .FALSE.
-      
-        !Check if new moisture is beyond limits; if so take a bisection step
-        ELSE
-          SM_test   = (SMHigh+SMLow)/2d0
-          F_SM_Test = SM_Function(SMI,ETc,WP,FC,TN,PSDI,K,Inflow,Outflow,SM_test,Toler,KunsatMethod)
-          F_SMLow   = SM_Function(SMI,ETc,WP,FC,TN,PSDI,K,Inflow,Outflow,SMLow,Toler,KunsatMethod)
-          IF (F_SM_Test*F_SMLow .GE. 0.0) THEN
-            SMLow  = SM_test
-          ELSE
-            SMHigh = SM_test
-          END IF
-          Delta = ABS(SMHigh-SMLow)
-        END IF
-        
-        SM = SM_test
-        
-        !Convergence achieved because we are exactly at the root
-        IF (F_SM_test .EQ. 0.0) THEN
-          Converged = .TRUE.
-          EXIT
-        END IF
-        
-        !Convergence achieved because we are close to the root
-        IF (ABS(Delta) .LT. Toler) THEN
-          IF (ABS(F_SM_test) .LT. Toler) THEN
-            Converged = .TRUE.
-            EXIT
-          END IF
-        END IF
-        
-        !Convergence is not achieved
-        iter = iter+1
-        IF (iter .GT. IterMax) EXIT
-                     
-      END DO
+            
+            SM = SM_test
+            
+            !Convergence achieved because we are exactly at the root
+            IF (F_SM_test .EQ. 0.0) THEN
+                Converged = .TRUE.
+                EXIT
+            END IF
+            
+            !Convergence achieved because we are close to the root
+            IF (ABS(Delta) .LT. Toler) THEN
+                IF (ABS(F_SM_test) .LT. Toler) THEN
+                    Converged = .TRUE.
+                    EXIT
+                ELSEIF (ABS(F_SM_test) .LE. 1D-11) THEN
+                    Converged = .TRUE.
+                    EXIT
+                END IF
+            END IF
+            
+            !Convergence is not achieved
+            iter = iter+1
+            IF (iter .GT. IterMax) EXIT
+        END DO
     END IF
     
     IF (Converged) THEN
-      Delta = 0.0
+        Delta = 0.0
     ELSE
-      Delta = MAX(ABS(Delta) , ABS(F_SM_test))
+        Delta = MAX(ABS(Delta) , ABS(F_SM_test))
     END IF
        
   END SUBROUTINE MixedIterMethod

@@ -89,6 +89,7 @@ MODULE Class_BaseStrmGWConnector
     PROCEDURE,PASS                                                                    :: BaseStrmGWConnector_AddGWNodes
     PROCEDURE,PASS                                                                    :: BaseStrmGWConnector_ReadPreprocessedData
     PROCEDURE,PASS                                                                    :: Kill                      => BaseStrmGWConnector_Kill
+    PROCEDURE,PASS                                                                    :: GetConductances           => BaseStrmGWConnector_GetConductances
     PROCEDURE,PASS                                                                    :: GetAllLayers              => BaseStrmGWConnector_GetAllLayers           
     PROCEDURE,PASS                                                                    :: GetLayer                  => BaseStrmGWConnector_GetLayer               
     PROCEDURE,PASS                                                                    :: GetFlowAtGWNode           => BaseStrmGWConnector_GetFlowAtGWNode        
@@ -409,6 +410,25 @@ CONTAINS
     Layers = Connector%iLayer
     
   END SUBROUTINE BaseStrmGWConnector_GetAllLayers
+  
+  
+  ! -------------------------------------------------------------
+  ! --- GET CONDUCTANCES
+  ! -------------------------------------------------------------
+  SUBROUTINE BaseStrmGWConnector_GetConductances(Connector,rConductance)
+    CLASS(BaseStrmGWConnectorType),INTENT(IN) :: Connector
+    REAL(8),ALLOCATABLE,INTENT(INOUT)         :: rConductance(:)
+    
+    !Local variables
+    INTEGER :: iErrorCode
+    
+    !Initialize
+    DEALLOCATE (rConductance , STAT=iErrorCode)
+    ALLOCATE (rConductance(SIZE(Connector%Conductance)))
+    
+    rConductance = Connector%Conductance
+    
+  END SUBROUTINE BaseStrmGWConnector_GetConductances
   
   
   ! -------------------------------------------------------------

@@ -85,7 +85,6 @@ MODULE Class_NativeRiparianLandUse_v41
   ! --- NATIVE/RIPARIAN LAND DATA TYPE
   ! -------------------------------------------------------------
   TYPE,EXTENDS(GenericLandUse_v41_Type) :: NativeRiparian_v41_Type
-      REAL(8),ALLOCATABLE :: rHabitatCoeff(:,:)    !Habitat coefficient for ET
   END TYPE NativeRiparian_v41_Type
 
 
@@ -216,8 +215,7 @@ CONTAINS
     
     !Allocate memory
     CALL NVRVLand%NVRV%New(iNNVRV,NElements,iStat)
-    ALLOCATE (NVRVLand%NVRV%rHabitatCoeff(iNNVRV,NElements)   , &
-              NVRVLand%cVegCodes(iNNVRV)                      , &
+    ALLOCATE (NVRVLand%cVegCodes(iNNVRV)                      , &
               NVRVLand%rRootDepth(iNNVRV)                     , &
               NVRVLand%rRegionETPot(iNNVRV,NSubregions)       , &
               STAT=iErrorCode                                 )
@@ -228,9 +226,8 @@ CONTAINS
     END IF
     
     !Initialize arrays
-    NVRVLand%NVRV%rHabitatCoeff = 1.0
-    NVRVLand%rRootDepth         = 0.0
-    NVRVLand%rRegionETPot       = 0.0
+    NVRVLand%rRootDepth   = 0.0
+    NVRVLand%rRegionETPot = 0.0
     IF (lReadNVeg) THEN
         NVRVLand%cVegCodes = cVegCodes
     ELSE
@@ -373,11 +370,10 @@ CONTAINS
     
     !Deallocate arrays
     CALL NVRVLand%NVRV%Kill()
-    DEALLOCATE (NVRVLand%NVRV%rHabitatCoeff   , &
-                NVRVLand%cVegCodes            , &
-                NVRVLand%rRootDepth           , &
-                NVRVLand%rRegionETPot         , &
-                STAT = iErrorCode             )
+    DEALLOCATE (NVRVLand%cVegCodes    , &
+                NVRVLand%rRootDepth   , &
+                NVRVLand%rRegionETPot , &
+                STAT = iErrorCode     )
     
     !Close files
     CALL NVRVLand%LandUseDataFile%Kill()
@@ -672,7 +668,7 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- COMPUTE RIPARIAN ET DEMAND FROM STREAMS
   ! -------------------------------------------------------------
-  SUBROUTINE ComputeWaterDemand(NVRVLand,iNElements,iElemIDs,ETData,rDeltaT,rPrecip,rGenericMoisture,SoilsData,SolverData,lLakeElem,iStat)
+  SUBROUTINE ComputeWaterDemand(NVRVLand,iNElements,iElemIDs,ETData,rDeltaT,rPrecip,rGenericMoisture,SoilsData,SolverData,lLakeElem,iStat,iColCropCoeff_NVRV)
     CLASS(NativeRiparianLandUse_v41_Type)  :: NVRVLand
     INTEGER,INTENT(IN)                     :: iNElements,iElemIDs(iNElements)
     TYPE(ETType),INTENT(IN)                :: ETData
@@ -681,6 +677,7 @@ CONTAINS
     TYPE(SolverDataType),INTENT(IN)        :: SolverData
     LOGICAL,INTENT(IN)                     :: lLakeElem(:)
     INTEGER,INTENT(OUT)                    :: iStat
+    INTEGER,OPTIONAL,INTENT(IN)            :: iColCropCoeff_NVRV(:,:)
     
     !Local variables
     CHARACTER(LEN=ModNameLen+18),PARAMETER :: ThisProcedure = ModName // 'ComputeWaterDemand'
@@ -698,9 +695,9 @@ CONTAINS
     IF (.NOT. NVRVLand%lRVETFromStrm_Simulated) RETURN
     
     !Loop over elements
-    !$OMP PARALLEL DEFAULT(PRIVATE) SHARED(iNElements,NVRVLand,rETFromStrm_Required,lLakeElem,SoilsData,ETData,rPrecip,   &
-    !$OMP                                  rGenericMoisture,SolverData,iElemIDs,rDeltaT,iStat,iNNative,iNNVRV)  
-    !$OMP DO SCHEDULE(DYNAMIC,200)
+    !$OMP PARALLEL DEFAULT(PRIVATE) SHARED(iNElements,NVRVLand,rETFromStrm_Required,lLakeElem,SoilsData,ETData,rPrecip,          &
+    !$OMP                                  rGenericMoisture,SolverData,iElemIDs,rDeltaT,iStat,iNNative,iNNVRV,iColCropCoeff_NVRV)  
+    !$OMP DO SCHEDULE(NONMONOTONIC:DYNAMIC,200)
     DO indxElem=1,iNElements
         !Soil parameters and ETc
         rWiltingPoint  = SoilsData(indxElem)%WiltingPoint  
@@ -709,7 +706,11 @@ CONTAINS
         rHydCond       = SoilsData(indxElem)%HydCond
         rLambda        = SoilsData(indxElem)%Lambda
         iKunsatMethod  = SoilsData(indxElem)%KunsatMethod
-        rETc           = ETData%GetValues(NVRVLand%NVRV%iColETc(:,indxElem)) * rDeltaT * NVRVLand%NVRV%rHabitatCoeff(:,indxElem)
+        IF (PRESENT(iColCropCoeff_NVRV)) THEN
+            rETc       = ETData%GetValues(NVRVLand%NVRV%iColETc(:,indxElem),iColCropCoeff_NVRV(:,indxElem)) * rDeltaT 
+        ELSE
+            rETc       = ETData%GetValues(NVRVLand%NVRV%iColETc(:,indxElem)) * rDeltaT 
+        END IF
         rPrecipD       = rPrecip(indxElem) * rDeltaT
         DO indxVeg=iNNative+1,iNNVRV
             indxRiparian = indxVeg - iNNative
@@ -788,7 +789,7 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- SIMULATE FLOW PROCESSES 
   ! -------------------------------------------------------------
-  SUBROUTINE Simulate(NVRVLand,AppGrid,ETData,DeltaT,Precip,GenericMoisture,SoilsData,ElemSupply,ElemsToGW,SolverData,lLakeElem,iStat)
+  SUBROUTINE Simulate(NVRVLand,AppGrid,ETData,DeltaT,Precip,GenericMoisture,SoilsData,ElemSupply,ElemsToGW,SolverData,lLakeElem,iStat,iColCropCoeff_NVRV)
     CLASS(NativeRiparianLandUse_v41_Type)  :: NVRVLand
     TYPE(AppGridType),INTENT(IN)           :: AppGrid
     TYPE(ETType),INTENT(IN)                :: ETData
@@ -798,6 +799,7 @@ CONTAINS
     TYPE(SolverDataType),INTENT(IN)        :: SolverData
     LOGICAL,INTENT(IN)                     :: lLakeElem(:)
     INTEGER,INTENT(OUT)                    :: iStat
+    INTEGER,OPTIONAL,INTENT(IN)            :: iColCropCoeff_NVRV(:,:)
     
     !Local variables
     CHARACTER(LEN=ModNameLen+8),PARAMETER :: ThisProcedure = ModName // 'Simulate'
@@ -821,7 +823,7 @@ CONTAINS
     IF (NVRVLand%lRVETFromStrm_Simulated) CALL NVRVLand%RVETFromStrm%GetActualET_AtElements(rRiparianETStrm) 
     
     !$OMP PARALLEL DEFAULT(PRIVATE) SHARED(AppGrid,NVRVLand,lLakeElem,ETData,SoilsData,DeltaT,Precip,iStat,GenericMoisture,  &
-    !$OMP                                  ElemSupply,ElemsToGW,SolverData,rRiparianETStrm,iNNVRV)   
+    !$OMP                                  ElemSupply,ElemsToGW,SolverData,rRiparianETStrm,iNNVRV,iColCropCoeff_NVRV)   
     !$OMP DO SCHEDULE(NONMONOTONIC:DYNAMIC,96)
     DO indxElem=1,AppGrid%NElements
         !Initalize flows
@@ -849,7 +851,11 @@ CONTAINS
         rHydCond       = SoilsData(indxElem)%HydCond
         rLambda        = SoilsData(indxElem)%Lambda
         iKunsatMethod  = SoilsData(indxElem)%KunsatMethod
-        rETc           = ETData%GetValues(NVRVLand%NVRV%iColETc(:,indxElem)) * NVRVLand%NVRV%rHabitatCoeff(:,indxElem)
+        IF (PRESENT(iColCropCoeff_NVRV)) THEN
+            rETc       = ETData%GetValues(NVRVLand%NVRV%iColETc(:,indxElem),iColCropCoeff_NVRV(:,indxElem)) 
+        ELSE
+            rETc       = ETData%GetValues(NVRVLand%NVRV%iColETc(:,indxElem)) 
+        END IF
         rPrecipD       = Precip(indxElem) * DeltaT
 
         DO indxVeg=1,iNNVRV

@@ -1091,7 +1091,7 @@ CONTAINS
     CHARACTER(LEN=ModNameLen+22),PARAMETER :: ThisProcedure = ModName // 'PrepareZoneFlowOutFile'
     INTEGER                                :: iFileType,NDataColumns,ErrorCode,NPrint,PrintDeltaT_InMinutes,NAdjZones,iCount,indxAdjZone,indxData
     REAL(8)                                :: rDummy
-    CHARACTER                              :: cAccessType*10,cFormatSpec*300
+    CHARACTER                              :: cAccessType*10
     CHARACTER(LEN=8),ALLOCATABLE           :: cDataTypes(:),cDataUnits(:)
     CHARACTER(LEN=80),ALLOCATABLE          :: cDSSPathNames(:)
     
@@ -1142,12 +1142,8 @@ CONTAINS
     !Set parameters for ASCII output
     IF (iFileType .EQ. f_iTXT) THEN
         !Cache size and print format
-        CALL OutFile%SetCacheSize(NDataColumns,iStat=iStat)  ;  IF (iStat .EQ. -1) RETURN
-        cFormatSpec = ZBudget%Header%ASCIIOutput%cNumberFormat(1:LEN_TRIM(ZBudget%Header%ASCIIOutput%cNumberFormat)-1) // ',' // TRIM(IntTotext(2*NAdjZones)) // '(2X,F14.2)'
-        IF (ZBudget%Header%lComputeError)     cFormatSpec = TRIM(cFormatSpec) // ',1(2X,F14.2)'
-        IF (ZBudget%Header%lStorages_Defined) cFormatSpec = TRIM(cFormatSpec) // ',1(2X,F14.2)'
-        cFormatSpec = TRIM(cFormatSpec) // ')'
-        CALL OutFile%SetPrintFormatSpec(TRIM(cFormatSpec),iStat)  ;  IF (iStat .EQ. -1) RETURN
+        CALL OutFile%SetCacheSize(NDataColumns,iStat=iStat)                                    ;  IF (iStat .EQ. -1) RETURN
+        CALL OutFile%SetPrintFormatSpec(TRIM(ZBudget%Header%ASCIIOutput%cNumberFormat),iStat)  ;  IF (iStat .EQ. -1) RETURN
         
         !Zone titles
         CALL PrintASCIITitles(iStat)
