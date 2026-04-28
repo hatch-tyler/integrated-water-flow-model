@@ -63,3 +63,9 @@ build-*/
 
 # Local Claude/IDE config
 .claude/
+
+# Local-only working dirs (not part of upstream mirror)
+deps/
+release-staging/
+samplemodel/
+iwfm-assets-*/
