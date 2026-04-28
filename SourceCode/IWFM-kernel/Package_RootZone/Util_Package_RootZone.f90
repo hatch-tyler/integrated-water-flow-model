@@ -21,8 +21,8 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 MODULE Util_Package_RootZone
-  USE MessageLogger          , ONLY: SetLastMessage                , &
-                                     f_iFatal                        
+  USE MessageLogger          , ONLY: MessageLoggerType             , &
+                                     f_iFatal
   USE GeneralUtilities       , ONLY: LowerCase                     , &
                                      UpperCase                     , &
                                      IntToText                     , &
@@ -130,6 +130,11 @@ MODULE Util_Package_RootZone
 
                                            
   ! -------------------------------------------------------------
+  ! --- MODULE-LEVEL LOGGER (removed; Logger is now passed as a parameter)
+  ! -------------------------------------------------------------
+
+
+  ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
   INTEGER,PARAMETER                   :: ModNameLen = 23
@@ -141,16 +146,16 @@ MODULE Util_Package_RootZone
 CONTAINS
 
 
-
   ! -------------------------------------------------------------
   ! --- SUBROUTINE TO READ DATA FROM PARAMETER FILE
   ! -------------------------------------------------------------
-  SUBROUTINE ReadPointerData(File,cDescription,cFeatures,iRow,iCol,iFeatureIDs,DummyIntArray,iStat)
-    TYPE(GenericFileType)           :: File
-    CHARACTER(LEN=*),INTENT(IN)     :: cDescription,cFeatures
-    INTEGER,INTENT(IN)              :: iRow,iCol,iFeatureIDs(iRow)
-    INTEGER,ALLOCATABLE,INTENT(OUT) :: DummyIntArray(:,:)
-    INTEGER,INTENT(OUT)             :: iStat
+  SUBROUTINE ReadPointerData(File,cDescription,cFeatures,iRow,iCol,iFeatureIDs,DummyIntArray,iStat,Logger)
+    TYPE(GenericFileType)                      :: File
+    CHARACTER(LEN=*),INTENT(IN)                :: cDescription,cFeatures
+    INTEGER,INTENT(IN)                         :: iRow,iCol,iFeatureIDs(iRow)
+    INTEGER,ALLOCATABLE,INTENT(OUT)            :: DummyIntArray(:,:)
+    INTEGER,INTENT(OUT)                        :: iStat
+    TYPE(MessageLoggerType),OPTIONAL,INTENT(INOUT) :: Logger
       
     !Local variables
     CHARACTER(LEN=ModNameLen+15),PARAMETER :: ThisProcedure = ModName // 'ReadPointerData'
@@ -181,25 +186,28 @@ CONTAINS
         IDs = DummyIntArray(:,1)
         CALL ConvertID_To_Index(IDs,iFeatureIDs,iIndices)
         IF (ANY(iIndices.EQ.0)) THEN
-            CALL SetLastMessage('One or more '//TRIM(cFeatures)//' listed for '//TRIM(LowerCase(cDescription))//' are not in the model!',f_iFatal,ThisProcedure)
+            IF (PRESENT(Logger)) THEN
+                CALL Logger%SetLastMessage('One or more '//TRIM(cFeatures)//' listed for '//TRIM(LowerCase(cDescription))//' are not in the model!',f_iFatal,ThisProcedure)
+            END IF
             iStat = -1
             RETURN
         END IF
         DummyIntArray(:,1) = iIndices
     END IF
-            
+
   END SUBROUTINE ReadPointerData
     
 
   ! -------------------------------------------------------------
   ! --- SUBROUTINE TO READ REAL DATA FROM PARAMETER FILE
   ! -------------------------------------------------------------
-  SUBROUTINE ReadRealData(File,cDescription,cFeatures,iRow,iCol,iFeatureIDs,DummyRealArray,iStat)
-    TYPE(GenericFileType)           :: File
-    CHARACTER(LEN=*),INTENT(IN)     :: cDescription,cFeatures
-    INTEGER,INTENT(IN)              :: iRow,iCol,iFeatureIDs(iRow)
-    REAL(8),ALLOCATABLE,INTENT(OUT) :: DummyRealArray(:,:)
-    INTEGER,INTENT(OUT)             :: iStat
+  SUBROUTINE ReadRealData(File,cDescription,cFeatures,iRow,iCol,iFeatureIDs,DummyRealArray,iStat,Logger)
+    TYPE(GenericFileType)                      :: File
+    CHARACTER(LEN=*),INTENT(IN)                :: cDescription,cFeatures
+    INTEGER,INTENT(IN)                         :: iRow,iCol,iFeatureIDs(iRow)
+    REAL(8),ALLOCATABLE,INTENT(OUT)            :: DummyRealArray(:,:)
+    INTEGER,INTENT(OUT)                        :: iStat
+    TYPE(MessageLoggerType),OPTIONAL,INTENT(INOUT) :: Logger
     
     !Local variables
     CHARACTER(LEN=ModNameLen+12),PARAMETER :: ThisProcedure = ModName // 'ReadRealData'
@@ -231,24 +239,27 @@ CONTAINS
         IDs = DummyRealArray(:,1)
         CALL ConvertID_To_Index(IDs,iFeatureIDs,iIndices)
         IF (ANY(iIndices.EQ.0)) THEN
-            CALL SetLastMessage('One or more '//TRIM(cFeatures)//' listed for '//TRIM(LowerCase(cDescription))//' are not in the model!',f_iFatal,ThisProcedure)
+            IF (PRESENT(Logger)) THEN
+                CALL Logger%SetLastMessage('One or more '//TRIM(cFeatures)//' listed for '//TRIM(LowerCase(cDescription))//' are not in the model!',f_iFatal,ThisProcedure)
+            END IF
             iStat = -1
             RETURN
         END IF
         DummyRealArray(:,1) = iIndices
     END IF
-    
+
   END SUBROUTINE ReadRealData
   
   
   ! -------------------------------------------------------------
   ! --- INSTANTIATE COLUMN POINTER DATA
   ! -------------------------------------------------------------
-  SUBROUTINE InitColumnPointerData_ForElements(InputDataFile,cDescription,iNCols,iElemIDs,iColPointers,iStat)  
-    TYPE(GenericFileType)       :: InputDataFile
-    CHARACTER(LEN=*),INTENT(IN) :: cDescription
-    INTEGER,INTENT(IN)          :: iNCols,iElemIDs(:)
-    INTEGER,INTENT(OUT)         :: iColPointers(iNCols,SIZE(iElemIDs)),iStat
+  SUBROUTINE InitColumnPointerData_ForElements(InputDataFile,cDescription,iNCols,iElemIDs,iColPointers,iStat,Logger)
+    TYPE(GenericFileType)                      :: InputDataFile
+    CHARACTER(LEN=*),INTENT(IN)                :: cDescription
+    INTEGER,INTENT(IN)                         :: iNCols,iElemIDs(:)
+    INTEGER,INTENT(OUT)                        :: iColPointers(iNCols,SIZE(iElemIDs)),iStat
+    TYPE(MessageLoggerType),OPTIONAL,INTENT(INOUT) :: Logger
 
     !Local variables
     CHARACTER(LEN=ModNameLen+33)     :: ThisProcedure = ModName // 'InitColumnPointerData_ForElements'
@@ -261,14 +272,16 @@ CONTAINS
     iNElements            = SIZE(iElemIDs)    
     cLowerCaseDescription = LowerCase(cDescription)
     
-    CALL ReadPointerData(InputDataFile,cLowerCaseDescription,'elements',iNElements,iNCols+1,iElemIDs,iDummyIntArray,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    CALL ReadPointerData(InputDataFile,cLowerCaseDescription,'elements',iNElements,iNCols+1,iElemIDs,iDummyIntArray,iStat,Logger)  ;  IF (iStat .EQ. -1) RETURN
     lProcessed = .FALSE.
     DO indxElem=1,iNElements
         iElem = iDummyIntArray(indxElem,1)
         IF (lProcessed(iElem)) THEN
             ID                         = iElemIDs(iElem)
             cLowerCaseDescription(1:1) = UpperCase(cLowerCaseDescription(1:1))
-            CALL SetLastMessage(cLowerCaseDescription//' at element '//TRIM(IntToText(ID))//' are defined more than once!',f_iFatal,ThisProcedure)
+            IF (PRESENT(Logger)) THEN
+                CALL Logger%SetLastMessage(cLowerCaseDescription//' at element '//TRIM(IntToText(ID))//' are defined more than once!',f_iFatal,ThisProcedure)
+            END IF
             iStat = -1
             RETURN
         END IF

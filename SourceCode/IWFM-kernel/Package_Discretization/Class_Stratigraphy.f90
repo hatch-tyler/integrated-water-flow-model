@@ -21,15 +21,14 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 MODULE Class_Stratigraphy
-  USE MessageLogger    , ONLY: SetLastMessage      , &
-                               EchoProgress        , &
+  USE MessageLogger    , ONLY: MessageLoggerType   , &
                                MessageArray        , &
-                               f_iFatal              
-  USE IOInterface                                  
+                               f_iFatal
+  USE IOInterface
   USE GeneralUtilities , ONLY: IntToText           , &
                                ConvertID_To_Index
-  USE Class_AppGrid    , ONLY: AppGridType         
-                               
+  USE Class_AppGrid    , ONLY: AppGridType
+
   IMPLICIT NONE
 
 
@@ -47,13 +46,14 @@ MODULE Class_Stratigraphy
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: StratigraphyType                       
+  PUBLIC :: StratigraphyType
 
 
   ! -------------------------------------------------------------
   ! --- STRATIGRAPHY DATA TYPE
   ! -------------------------------------------------------------
   TYPE StratigraphyType
+    TYPE(MessageLoggerType),POINTER :: Logger => NULL()
     INTEGER             :: NLayers = 0         !Number of stratigraphy layers
     INTEGER,ALLOCATABLE :: TopActiveLayer(:)   !Topmost active layer at node (node)
     LOGICAL,ALLOCATABLE :: ActiveNode(:,:)     !Active node indicator (node,layer)
@@ -114,18 +114,20 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- NEW STRATIGRAPHY
   ! -------------------------------------------------------------
-  SUBROUTINE NewStratigraphy(Stratigraphy,NNodes,NLayers,TopActiveLayer,ActiveNode,GSElev,TopElev,BottomElev,iStat)
-    CLASS(StratigraphyType),INTENT(OUT) :: Stratigraphy
-    INTEGER,INTENT(IN)                  :: NLayers , NNodes , TopActiveLayer(NNodes)
-    LOGICAL,INTENT(IN)                  :: ActiveNode(NNodes,NLayers)
-    REAL(8),INTENT(IN)                  :: GSElev(NNodes),TopElev(NNodes,NLayers),BottomElev(NNodes,NLayers)
-    INTEGER,INTENT(OUT)                 :: iStat
+  SUBROUTINE NewStratigraphy(Stratigraphy,Logger,NNodes,NLayers,TopActiveLayer,ActiveNode,GSElev,TopElev,BottomElev,iStat)
+    CLASS(StratigraphyType),INTENT(OUT)         :: Stratigraphy
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT)   :: Logger
+    INTEGER,INTENT(IN)                          :: NLayers , NNodes , TopActiveLayer(NNodes)
+    LOGICAL,INTENT(IN)                          :: ActiveNode(NNodes,NLayers)
+    REAL(8),INTENT(IN)                          :: GSElev(NNodes),TopElev(NNodes,NLayers),BottomElev(NNodes,NLayers)
+    INTEGER,INTENT(OUT)                         :: iStat
 
     !Local variables
     CHARACTER(LEN=ModNameLen+15) :: ThisProcedure = ModName // 'NewStratigraphy'
     INTEGER                      :: ErrorCode
-    
+
     !Initialize
+    Stratigraphy%Logger => Logger
     iStat = 0
 
     !Allocate memory
@@ -136,7 +138,7 @@ CONTAINS
               Stratigraphy%BottomElev(NNodes,NLayers) , &
               STAT = ErrorCode                        )
     IF (ErrorCode .NE. 0) THEN
-        CALL SetLastMessage('Error in allocating memory for stratigraphy data!',f_iFatal,ThisProcedure)
+        CALL Stratigraphy%Logger%SetLastMessage('Error in allocating memory for stratigraphy data!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -198,11 +200,12 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- READ DATA FROM PRE-PROCESSOR FILE
   ! -------------------------------------------------------------
-  SUBROUTINE ReadStratigraphyData(Stratigraphy,NNodes,NodeIDs,FileName,iStat) 
-    CLASS(StratigraphyType),INTENT(OUT) :: Stratigraphy
-    INTEGER,INTENT(IN)                  :: NNodes,NodeIDs(NNodes)
-    CHARACTER(LEN=*),INTENT(IN)         :: FileName
-    INTEGER,INTENT(OUT)                 :: iStat
+  SUBROUTINE ReadStratigraphyData(Stratigraphy,Logger,NNodes,NodeIDs,FileName,iStat)
+    CLASS(StratigraphyType),INTENT(OUT)         :: Stratigraphy
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT)   :: Logger
+    INTEGER,INTENT(IN)                          :: NNodes,NodeIDs(NNodes)
+    CHARACTER(LEN=*),INTENT(IN)                 :: FileName
+    INTEGER,INTENT(OUT)                         :: iStat
 
     !Local variables
     CHARACTER(LEN=ModNameLen+20) :: ThisProcedure = ModName // 'ReadStratigraphyData'
@@ -215,17 +218,18 @@ CONTAINS
     LOGICAL,ALLOCATABLE          :: ActiveNode(:,:)
     
     !Initialize
+    Stratigraphy%Logger => Logger
     iStat = 0
 
     !Make sure number of nodes is non-zero
     IF (NNodes .LE. 0) THEN
-        CALL SetLastMessage('Application grid needs to be defined before reading stratigraphy data!',f_iFatal,ThisProcedure)
+        CALL Stratigraphy%Logger%SetLastMessage('Application grid needs to be defined before reading stratigraphy data!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
 
     !Print progress
-    CALL EchoProgress('Instantiating stratigraphy')
+    CALL Stratigraphy%Logger%EchoProgress('Instantiating stratigraphy')
 
     !Open file
     CALL StratigraphyFile%New(FileName=FileName,InputFile=.TRUE.,IsTSFile=.FALSE.,Descriptor='stratigraphy data file',iStat=iStat)
@@ -243,7 +247,7 @@ CONTAINS
               W(2*NLayers)               , &
               STAT=ErrorCode             )
     IF (ErrorCode .NE. 0) THEN
-        CALL SetLastMessage('Error in allocating memory to read stratigraphy data!',f_iFatal,ThisProcedure)
+        CALL Stratigraphy%Logger%SetLastMessage('Error in allocating memory to read stratigraphy data!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -259,14 +263,14 @@ CONTAINS
         ID = INT(rDummyArray(1)) 
         CALL ConvertID_To_Index(ID,NodeIDs,index)
         IF (index .EQ. 0) THEN
-            CALL SetLastMessage('Node ID '//TRIM(IntToText(ID))//' listed for stratigraphy data is not in the model!',f_iFatal,ThisProcedure)
+            CALL Stratigraphy%Logger%SetLastMessage('Node ID '//TRIM(IntToText(ID))//' listed for stratigraphy data is not in the model!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
         
         !Make sure same node is not listed more than once
         IF (lProcessed(index)) THEN
-            CALL SetLastMessage('Node ID '//TRIM(IntToText(ID))//' is listed more than once for stratigraphy data!',f_iFatal,ThisProcedure)
+            CALL Stratigraphy%Logger%SetLastMessage('Node ID '//TRIM(IntToText(ID))//' is listed more than once for stratigraphy data!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -288,7 +292,7 @@ CONTAINS
                 MessageArray(1) ='Aquifer thickness cannot be less than zero!'
                 MessageArray(2) =                   'Node               = '//TRIM(IntToText(ID))
                 WRITE (MessageArray(3),'(A,F10.2)') 'Specified thickness= ',W((indxLayer-1)*2+2)
-                CALL SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+                CALL Stratigraphy%Logger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -303,14 +307,14 @@ CONTAINS
     !Make sure all nodes are processed
     DO indxNode=1,NNodes
         IF (.NOT. lProcessed(indxNode)) THEN
-            CALL SetLastMessage('Stratigraphy is not defined at node '//TRIM(IntToText(NodeIDs(indxNode)))//'!',f_iFatal,ThisProcedure)
+            CALL Stratigraphy%Logger%SetLastMessage('Stratigraphy is not defined at node '//TRIM(IntToText(NodeIDs(indxNode)))//'!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
     END DO
     
     !Instantiate stratigraphy
-    CALL Stratigraphy%New(NNodes,NLayers,TopActiveLayer,ActiveNode,GSElev,TopElev,BottomElev,iStat)
+    CALL Stratigraphy%New(Logger,NNodes,NLayers,TopActiveLayer,ActiveNode,GSElev,TopElev,BottomElev,iStat)
     IF (iStat .EQ. -1) RETURN
 
     !Close stratigraphy file
@@ -325,11 +329,12 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- READ DATA FROM BINARY FILE
   ! -------------------------------------------------------------
-  SUBROUTINE ReadProcessedStratigraphyData(Stratigraphy,NNodes,InFile,iStat) 
-    CLASS(StratigraphyType),INTENT(OUT) :: Stratigraphy
-    INTEGER,INTENT(IN)                  :: NNodes
-    TYPE(GenericFileType)               :: InFile
-    INTEGER,INTENT(OUT)                 :: iStat
+  SUBROUTINE ReadProcessedStratigraphyData(Stratigraphy,Logger,NNodes,InFile,iStat)
+    CLASS(StratigraphyType),INTENT(OUT)         :: Stratigraphy
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT)   :: Logger
+    INTEGER,INTENT(IN)                          :: NNodes
+    TYPE(GenericFileType)                        :: InFile
+    INTEGER,INTENT(OUT)                         :: iStat
 
     !Local variables
     CHARACTER(LEN=ModNameLen+29),PARAMETER :: ThisProcedure = ModName//'ReadProcessedStratigraphyData'
@@ -339,11 +344,12 @@ CONTAINS
     REAL(8),ALLOCATABLE                    :: TopElev(:,:),BottomElev(:,:)
     
     !Initialize
+    Stratigraphy%Logger => Logger
     iStat = 0
 
     !Check if number of nodes in the application grid is specified
     IF (NNodes .LE. 0) THEN
-        CALL SetLastMessage('Application grid needs to be set before reading stratigraphy data!',f_iFatal,ThisProcedure)
+        CALL Stratigraphy%Logger%SetLastMessage('Application grid needs to be set before reading stratigraphy data!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -358,7 +364,7 @@ CONTAINS
               BottomElev(NNodes,NLayers)    , &
               STAT=ErrorCode                )
     IF (ErrorCode .NE. 0) THEN
-        CALL SetLastMessage('Error in allocating memory for stratigraphy data when reading from pre-processor binary file!',f_iFatal,ThisProcedure)  
+        CALL Stratigraphy%Logger%SetLastMessage('Error in allocating memory for stratigraphy data when reading from pre-processor binary file!',f_iFatal,ThisProcedure)  
         iStat = -1
         RETURN
     END IF
@@ -371,8 +377,8 @@ CONTAINS
     CALL InFile%ReadData(BottomElev,iStat)      ;  IF (iStat .EQ. -1) RETURN 
 
     !Construct stratigraphy
-    CALL Stratigraphy%New(NNodes,NLayers,TopActiveLayer,ActiveNode,GSElev,TopElev,BottomElev,iStat)
-           
+    CALL Stratigraphy%New(Logger,NNodes,NLayers,TopActiveLayer,ActiveNode,GSElev,TopElev,BottomElev,iStat)
+
     !Free memory
     DEALLOCATE (ActiveNode1D , ActiveNode , TopElev , BottomElev , STAT=ErrorCode)
     
@@ -698,11 +704,11 @@ CONTAINS
     IF (iElem .EQ. 0) THEN
         MessageArray(1) = 'Location described by a coordinate cannot be located in the model area!'
         WRITE (MessageArray(2),'(A,F11.2,A,F11.2,A)') 'X-Y coordinate: (' , rX , ',' , rY , ')'
-        CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+        CALL Stratigraphy%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
-    
+
     !Iterate over surrounding nodes
     DO indxNode=1,SIZE(iNodes)
         iNode   = iNodes(indxNode)

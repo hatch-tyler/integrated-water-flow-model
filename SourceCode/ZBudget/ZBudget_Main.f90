@@ -26,13 +26,14 @@ PROGRAM ZBudget
   USE IOInterface       , ONLY: GenericFileType
   USE MessageLogger     , ONLY: SetLogFileName        , &
                                 SetFlagToEchoProgress , &
-                                LogMessage            , &
+                                DefaultLogger         , &
                                 LogLastMessage        , &
                                 MessageArray          , &
                                 f_iMessage            , &
                                 f_iYesEchoProgress    , &
                                 f_iFILE                  
-  USE ProgramTimer      , ONLY: StartTimer               
+  USE ProgramTimer      , ONLY: DefaultTimer           , &
+                                ProgramTimerType
   USE IWFM_Version      , ONLY: IWFMVersion
   USE ZBudgetControls   , ONLY: ProcessZBudgets       , &
                                 EndExecution
@@ -43,8 +44,8 @@ PROGRAM ZBudget
   INTEGER               :: iStat
 
   !Start timer
-  CALL StartTimer()
-  
+  CALL DefaultTimer%Start()
+
   !Set flag to echo progress
   CALL SetFlagToEchoProgress(f_iYesEchoProgress,iStat)
   IF (iStat .EQ. -1) CALL EndExecution(StandardOutputFile,iStat)
@@ -58,7 +59,7 @@ PROGRAM ZBudget
   MessageArray(1) = 'PROGRAM: IWFM Z-Budget Post-Processor ' // TRIM(IWFMVersion%GetVersion())
   MessageArray(2) = 'This run is made on '//TRIM(GetDate())//' at '//TRIM(GetTime())
   MessageArray(3) = ''
-  CALL LogMessage(MessageArray(1:3),f_iMessage,'',iDestination=f_iFILE)
+  CALL DefaultLogger%LogMessage(MessageArray(1:3),f_iMessage,'',iDestination=f_iFILE)
 
   !Read in the main control data
   CALL ProcessZBudgets('',0,iStat)  

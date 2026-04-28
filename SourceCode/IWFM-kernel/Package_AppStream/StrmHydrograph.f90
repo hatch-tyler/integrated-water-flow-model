@@ -21,9 +21,8 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 MODULE StrmHydrograph
-  USE MessageLogger          , ONLY: SetLastMessage                , &
-                                     LogMessage                    , &
-                                     MessageArray                  , &
+  USE MessageLogger          , ONLY: MessageArray                  , &
+                                     MessageLoggerType             , &
                                      f_iFatal                      , &
                                      f_iInfo
   USE IOInterface            , ONLY: GenericFileType               , &
@@ -67,9 +66,9 @@ MODULE StrmHydrograph
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: StrmHydrographType , &
-            iHydFlow           , &
-            iHydStage          , &
+  PUBLIC :: StrmHydrographType        , &
+            iHydFlow                  , &
+            iHydStage                 , &
             iHydBoth
   
   
@@ -85,6 +84,7 @@ MODULE StrmHydrograph
   ! --- STREAM HYDROGRAPH PRINT DATA TYPE
   ! -------------------------------------------------------------
   TYPE StrmHydrographType
+    TYPE(MessageLoggerType),POINTER   :: Logger => NULL()
     TYPE(GenericFileType)         :: HydFile
     TYPE(RealTSDataInFileType)    :: HydFile_ForInquiry
     LOGICAL                       :: HydFile_Defined    = .FALSE.
@@ -123,7 +123,7 @@ MODULE StrmHydrograph
   
 CONTAINS
 
-  
+
 
 ! ******************************************************************
 ! ******************************************************************
@@ -138,15 +138,16 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- INSTANTIATE STREAM HYDROGRAPH PRINT DATA
   ! -------------------------------------------------------------
-  SUBROUTINE New(StrmHyd,IsRoutedStreams,IsForInquiry,cWorkingDirectory,NStrmNodes,iStrmNodeIDs,TimeStep,InFile,iStat) 
-    CLASS(StrmHydrographType),INTENT(OUT) :: StrmHyd
-    LOGICAL,INTENT(IN)                    :: IsRoutedStreams,IsForInquiry
-    CHARACTER(LEN=*),INTENT(IN)           :: cWorkingDirectory
-    INTEGER,INTENT(IN)                    :: NStrmNodes,iStrmNodeIDs(NStrmNodes)
-    TYPE(TimeStepType),INTENT(IN)         :: TimeStep
-    TYPE(GenericFileType)                 :: InFile
-    INTEGER,INTENT(OUT)                   :: iStat
-    
+  SUBROUTINE New(StrmHyd,Logger,IsRoutedStreams,IsForInquiry,cWorkingDirectory,NStrmNodes,iStrmNodeIDs,TimeStep,InFile,iStat)
+    CLASS(StrmHydrographType),INTENT(OUT)      :: StrmHyd
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
+    LOGICAL,INTENT(IN)                         :: IsRoutedStreams,IsForInquiry
+    CHARACTER(LEN=*),INTENT(IN)                :: cWorkingDirectory
+    INTEGER,INTENT(IN)                         :: NStrmNodes,iStrmNodeIDs(NStrmNodes)
+    TYPE(TimeStepType),INTENT(IN)              :: TimeStep
+    TYPE(GenericFileType)                       :: InFile
+    INTEGER,INTENT(OUT)                        :: iStat
+
     !Local variables
     CHARACTER(LEN=ModNameLen+3) :: ThisProcedure = ModName // 'New'
     INTEGER                     :: NHyd,indx,ErrorCode,iNode
@@ -154,6 +155,9 @@ CONTAINS
     INTEGER,ALLOCATABLE         :: iHydNodeIDs(:)
     CHARACTER(:),ALLOCATABLE    :: cAbsPathFileName
     
+    !Set Logger
+    StrmHyd%Logger => Logger
+
     !Read data
     CALL InFile%ReadData(NHyd,iStat)  ;  IF (iStat .EQ. -1) RETURN  ;  StrmHyd%NHyd = NHyd
     IF (NHyd .EQ. 0) THEN
@@ -174,7 +178,7 @@ CONTAINS
     !Output file name
     CALL InFile%ReadData(cHydOutFile,iStat)  ;  IF (iStat .EQ. -1) RETURN ; cHydOutFile = StripTextUntilCharacter(cHydOutFile,f_cInlineCommentChar) ; CALL CleanSpecialCharacters(cHydOutFile)
     IF (cHydOutFile .EQ. '') THEN
-        IF (IsRoutedStreams) CALL LogMessage('Stream hydrograph printing is suppressed because an output file name is not specified!',f_iInfo,ThisProcedure)
+        IF (IsRoutedStreams) CALL StrmHyd%Logger%LogMessage('Stream hydrograph printing is suppressed because an output file name is not specified!',f_iInfo,ThisProcedure)
         DO indx=1,NHyd
             CALL InFile%ReadData(iNode,iStat)  
             IF (iStat .EQ. -1) RETURN
@@ -193,7 +197,7 @@ CONTAINS
         READ (ALine,*,IOSTAT=ErrorCode) iHydNodeIDs(indx)
         CALL ConvertID_To_Index(iHydNodeIDs(indx),iStrmNodeIDs,iNode)
         IF (iNode .EQ. 0) THEN
-            CALL SetLastMessage('Stream node ID '//TRIM(IntToText(iHydNodeIDs(indx)))//' listed for hydrograph printing is not in the model!',f_iFatal,ThisProcedure)
+            CALL StrmHyd%Logger%SetLastMessage('Stream node ID '//TRIM(IntToText(iHydNodeIDs(indx)))//' listed for hydrograph printing is not in the model!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -202,7 +206,7 @@ CONTAINS
         IF (ErrorCode .NE. 0) THEN
             MessageArray(1) = 'Error in reading stream hydrograph print data!'
             MessageArray(2) = TRIM(ALine)
-            CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+            CALL StrmHyd%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -391,7 +395,7 @@ CONTAINS
     !Convert node ID to hydrograph index
     iHydIndex = LocateInList(iNode,StrmHyd%iHydNodes)
     IF (iHydIndex .EQ. 0) THEN
-        CALL SetLastMessage('Stream node ID '//TRIM(IntToText(iNodeID))//' does not have a hydrograph printed as model results!',f_iFatal,ThisProcedure)
+        CALL StrmHyd%Logger%SetLastMessage('Stream node ID '//TRIM(IntToText(iNodeID))//' does not have a hydrograph printed as model results!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -743,19 +747,24 @@ CONTAINS
     CHARACTER(:),ALLOCATABLE :: cFileName
     REAL(8),ALLOCATABLE      :: rData(:,:),rConvFactor(:)
     TYPE(TimeStepType)       :: TimeStep_Local
-    
+    LOGICAL                  :: lHDFExists
+
     !Initialize
     iStat = 0
-    
+
     !Return if no output
     IF (.NOT. StrmHyd%HydFile_Defined) RETURN
-    
-    !Get the name of the text/DSS file 
+
+    !Get the name of the text/DSS file
     CALL StrmHyd%HydFile_ForInquiry%GetFileName(cFileName)
-    
+
     !Name for the HDF file
     cHDFFileName = TRIM(ADJUSTL(StripTextUntilCharacter(cFileName,'.',Back=.TRUE.))) // '.hdf'
-    
+
+    !Skip if the HDF already exists from a previous inquiry-mode load.
+    INQUIRE(FILE=TRIM(cHDFFileName), EXIST=lHDFExists)
+    IF (lHDFExists) RETURN
+
     !Open output file HDF file
     CALL OutFile%New(FileName=TRIM(cHDFFileName),InputFile=.FALSE.,IsTSFile=.TRUE.,iStat=iStat)
     IF (iStat .EQ. -1) RETURN

@@ -57,6 +57,26 @@ docker build -t iwfm-runtime:2025.0 -f docker/Dockerfile.runtime .
 docker run --rm -v /path/to/model:/data iwfm-runtime:2025.0 iwfm-simulation Simulation_MAIN.IN
 ```
 
+## Fast inquiry-mode loads (pywfm / C-DLL users)
+
+If you use the IWFM C DLL — directly, or through [pywfm](https://github.com/SGMOModeling/PyWFM) — to read simulation results in inquiry mode (`is_for_inquiry=1`), choose **`.hdf`** instead of `.out` or `.dss` for output filenames in your input files. The simulation writes HDF5 natively when the filename ends in `.hdf`; inquiry mode reads it directly with no conversion step.
+
+When the output is `.out` (text) or `.dss`, the first inquiry-mode load after a fresh simulation has to convert it to a sibling `.hdf`. For C2VSimFG (30K nodes × 47 years) this conversion is roughly 15 seconds. Subsequent loads reuse the converted `.hdf` and are fast either way; only the first load suffers.
+
+Output filenames you most likely want to set to `.hdf`:
+
+| Input file | Entry name | Default | Recommended |
+|------------|------------|---------|-------------|
+| GW main file | `GWALLOUTFL` (heads at every node) | `*.out` | `*.hdf` |
+| GW main file | `GWHYDOUTFL` (GW hydrographs at user-defined locations) | `*.out` | `*.hdf` |
+| GW main file (subsidence section) | subsidence-at-every-node output | `*.out` | `*.hdf` |
+| GW main file (tile drain section) | tile drain hydrograph output | `*.out` | `*.hdf` |
+| Stream main file | stream hydrograph output | `*.out` | `*.hdf` |
+
+The simulation also writes smaller binary HDF outputs by default for `*Bud*` (budget) and `*ZBud*` (zone budget) files — those are already HDF and need no change.
+
+If you have an existing `.out`-based model and want fast cold loads without re-running the simulation, the conversion step is automatically performed once and cached, so the **second** inquiry-mode load against the same outputs is fast. The `IW_Model_DeleteInquiryDataFile` DLL function clears only the small `IW_ModelData_ForInquiry.bin` cache; the converted `.hdf` files remain valid as long as the source `.out` is unchanged.
+
 ## Documentation
 
 - [BUILD.md](BUILD.md) -- Full build instructions, dependency management, and platform matrix

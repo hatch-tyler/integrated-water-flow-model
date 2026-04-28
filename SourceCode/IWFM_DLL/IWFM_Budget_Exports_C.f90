@@ -29,6 +29,7 @@ MODULE IWFM_Budget_Exports
                                          f_iTimeStampLength                      
   USE GeneralUtilities           , ONLY: String_Copy_C_F                         , &
                                          String_Copy_F_C
+  USE MessageLogger              , ONLY: DefaultLogger
   USE Package_Budget             , ONLY: BudgetType                              , &
                                          f_iMaxLocationNameLen                   , &
                                          f_iColumnHeaderLen
@@ -43,17 +44,18 @@ MODULE IWFM_Budget_Exports
   
   ! -------------------------------------------------------------
   ! --- VARIABLES
+  ! --- Per-thread Budget singleton. THREADPRIVATE lets each thread
+  ! --- drive its own IW_Budget_OpenFile / getter sequence on its own
+  ! --- Budget instance without contention on the shared module var.
   ! -------------------------------------------------------------
   TYPE(BudgetType),SAVE    :: Budget
   LOGICAL,SAVE             :: lBudget_Instantiated = .FALSE.
-  
-  
-  
+  !$OMP THREADPRIVATE(Budget, lBudget_Instantiated)
+
+
 
 CONTAINS
 
-
-    
 
 ! ******************************************************************
 ! ******************************************************************
@@ -82,19 +84,19 @@ CONTAINS
     
     CALL String_Copy_C_F(cFileName,cFileName_F)
     
-    !If a budget file is already open, close it
+    !If a budget file is already open on this thread, close it; then open new file
     IF (lBudget_Instantiated) THEN
       CALL Budget%Kill()
       lBudget_Instantiated = .FALSE.
     END IF
-    
+
     !Open file
-    CALL Budget%New(cFileName_F,iStat)
+    CALL Budget%New(DefaultLogger,cFileName_F,iStat)
     IF (iStat .EQ. -1) THEN
         CALL Budget%Kill()
-        RETURN
+    ELSE
+        lBudget_Instantiated = .TRUE.
     END IF
-    lBudget_Instantiated = .TRUE.
     
   END SUBROUTINE IW_Budget_OpenFile
   
@@ -120,7 +122,8 @@ CONTAINS
     
     iStat = 0
     CALL Budget%Kill()
-    
+    lBudget_Instantiated = .FALSE.
+
   END SUBROUTINE IW_Budget_CloseFile
   
 

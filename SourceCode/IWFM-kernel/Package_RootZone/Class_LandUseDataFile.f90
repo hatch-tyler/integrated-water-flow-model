@@ -21,7 +21,7 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 MODULE Class_LandUseDataFile
-  USE MessageLogger          , ONLY: SetLastMessage          , &
+  USE MessageLogger          , ONLY: MessageLoggerType       , &
                                      MessageArray            , &
                                      f_iFatal
   USE GeneralUtilities       , ONLY: ConvertID_To_Index      , &
@@ -48,7 +48,7 @@ MODULE Class_LandUseDataFile
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: LandUseDataFileType        
+  PUBLIC :: LandUseDataFileType
 
 
   ! -------------------------------------------------------------
@@ -74,8 +74,6 @@ MODULE Class_LandUseDataFile
   
   
 CONTAINS
-
-
 
 
   ! -------------------------------------------------------------
@@ -159,14 +157,14 @@ CONTAINS
         !Check that listed element/subregion is modeled
         CALL ConvertID_To_Index(iLocationID,iLocationIDs,iLocation)
         IF (iLocation .EQ. 0) THEN
-            CALL SetLastMessage('Element or subregion number '//TRIM(IntToText(iLocationID))//' listed for '//TRIM(LowerCase(cDescriptor))//' is not in the model!',f_iFatal,ThisProcedure)
+            CALL LandUseDataFile%Logger%SetLastMessage('Element or subregion number '//TRIM(IntToText(iLocationID))//' listed for '//TRIM(LowerCase(cDescriptor))//' is not in the model!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
-        
+
         !Make sure location number is not listed more than once
         IF (lProcessed(iLocation)) THEN
-            CALL SetLastMessage('Element or subregion number '//TRIM(IntToText(iLocationID))//' listed for '//TRIM(LowerCase(cDescriptor))//' is listed more than once!',f_iFatal,ThisProcedure)
+            CALL LandUseDataFile%Logger%SetLastMessage('Element or subregion number '//TRIM(IntToText(iLocationID))//' listed for '//TRIM(LowerCase(cDescriptor))//' is listed more than once!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF

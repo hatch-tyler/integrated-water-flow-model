@@ -23,10 +23,10 @@
 MODULE Package_AppLake
   USE IWFM_Kernel_Version         , ONLY: ReadVersion             , &
                                           IWFMKernelVersion
-  USE MessageLogger               , ONLY: SetLastMessage          , &
-                                          EchoProgress            , &
-                                          MessageArray            , &
-                                          f_iFatal                  
+  USE MessageLogger               , ONLY: MessageArray            , &
+                                          MessageLoggerType       , &
+                                          DefaultLogger           , &
+                                          f_iFatal
   USE IOInterface                 , ONLY: GenericFileType         , &
                                           f_iUNKNOWN
   USE GeneralUtilities            , ONLY: IntToText               , &
@@ -39,7 +39,7 @@ MODULE Package_AppLake
   USE Package_Matrix              , ONLY: MatrixType
   USE Package_PrecipitationET     , ONLY: ETType                  , &
                                           PrecipitationType
-  USE Class_BaseAppLake           , ONLY: BaseAppLakeType         , &
+  USE Class_BaseAppLake           , ONLY: BaseAppLakeType                  , &
                                           f_iBudgetType_Lake
   USE Class_AppLake_v40           , ONLY: AppLake_v40_Type
   USE Class_AppLake_v50           , ONLY: AppLake_v50_Type
@@ -63,7 +63,7 @@ MODULE Package_AppLake
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: AppLakeType        , &
+  PUBLIC :: AppLakeType                         , &
             f_iBudgetType_Lake
   
   
@@ -72,6 +72,7 @@ MODULE Package_AppLake
   ! -------------------------------------------------------------
   TYPE AppLakeType
       PRIVATE
+      TYPE(MessageLoggerType), POINTER   :: Logger            => NULL()
       INTEGER                            :: iComponentVersion = 0
       LOGICAL                            :: lDefined          = .FALSE.
       CLASS(BaseAppLakeType),ALLOCATABLE :: Me
@@ -134,10 +135,12 @@ MODULE Package_AppLake
   
   
 CONTAINS
-    
-    
-    
-    
+
+
+
+
+
+
 ! ******************************************************************
 ! ******************************************************************
 ! ******************************************************************
@@ -169,21 +172,25 @@ CONTAINS
     !Initialize
     iStat = 0
 
+    !Set Logger
+    AppLake%Logger => DefaultLogger
+
     !Return if no filename is defined
     IF (cFileName .EQ. '') RETURN
 
     !Open main control file and retrieve version number
     CALL AppLakeMainFile%New(FileName=cFileName,InputFile=.TRUE.,IsTSFile=.FALSE.,iStat=iStat)  ;  IF (iStat .EQ. -1) RETURN
-    CALL ReadVersion(AppLakeMainFile,'LAKE',cVersionLocal,iStat)
+    CALL ReadVersion(AppLakeMainFile,'LAKE',cVersionLocal,iStat,AppLake%Logger)
     IF (iStat .EQ. -1) RETURN
-    
+
     !Close file to reset it
     CALL AppLakeMainFile%Kill()
-    
+
     !Instantiate lake component based on version
     SELECT CASE (TRIM(cVersionLocal))
         CASE ('4.0')
             ALLOCATE(AppLake_v40_Type :: AppLake%Me)
+            AppLake%Me%Logger => AppLake%Logger
             CALL AppLake%Me%New(cFileName,Stratigraphy,AppGrid,StrmLakeConnector,LakeGWConnector,iStat)
             IF (iStat .EQ. -1) RETURN
             IF (AppLake%Me%NLakes .EQ. 0) THEN
@@ -196,6 +203,7 @@ CONTAINS
             
         CASE ('5.0')
             ALLOCATE(AppLake_v50_Type :: AppLake%Me)
+            AppLake%Me%Logger => AppLake%Logger
             CALL AppLake%Me%New(cFileName,Stratigraphy,AppGrid,StrmLakeConnector,LakeGWConnector,iStat)
             IF (iStat .EQ. -1) RETURN
             IF (AppLake%Me%NLakes .EQ. 0) THEN
@@ -205,9 +213,9 @@ CONTAINS
             END IF
             AppLake%iComponentVersion = 50
             AppLake%lDefined          = .TRUE.
-            
+
         CASE DEFAULT
-            CALL SetLastMessage('Lake Component version number is not recognized ('//TRIM(cVersionLocal)//')!',f_iFatal,ThisProcedure)
+            CALL AppLake%Logger%SetLastMessage('Lake Component version number is not recognized ('//TRIM(cVersionLocal)//')!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END SELECT
@@ -229,18 +237,22 @@ CONTAINS
     
     !Initialize
     iStat = 0
-    
+
+    !Set Logger
+    AppLake%Logger => DefaultLogger
+
     !Read version number from binary file
-    CALL BinFile%ReadData(iVersion,iStat)  
+    CALL BinFile%ReadData(iVersion,iStat)
     IF (iStat .EQ. -1) RETURN
-    
+
     !Return if version number is zero (streams are not simulated)
     IF (iVersion .EQ. 0) RETURN
-  
+
     !Instantiate stream component based on version
     SELECT CASE (iVersion)
         CASE (40)
             ALLOCATE(AppLake_v40_Type :: AppLake%Me)
+            AppLake%Me%Logger => AppLake%Logger
             CALL AppLake%Me%New(BinFile,iStat)
             IF (iStat .EQ. -1) RETURN
             IF (AppLake%Me%NLakes .EQ. 0) THEN
@@ -250,9 +262,10 @@ CONTAINS
             END IF
             AppLake%iComponentVersion = 40
             AppLake%lDefined          = .TRUE.
-            
+
         CASE (50)
             ALLOCATE(AppLake_v50_Type :: AppLake%Me)
+            AppLake%Me%Logger => AppLake%Logger
             CALL AppLake%Me%New(BinFile,iStat)
             IF (iStat .EQ. -1) RETURN
             IF (AppLake%Me%NLakes .EQ. 0) THEN
@@ -262,9 +275,9 @@ CONTAINS
             END IF
             AppLake%iComponentVersion = 50
             AppLake%lDefined          = .TRUE.
-            
+
         CASE DEFAULT
-            CALL SetLastMessage('Lake Component version number is not recognized ('//TRIM(IntToText(iVersion))//')!',f_iFatal,ThisProcedure)
+            CALL AppLake%Logger%SetLastMessage('Lake Component version number is not recognized ('//TRIM(IntToText(iVersion))//')!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
     END SELECT
@@ -303,7 +316,7 @@ CONTAINS
         IF (AppLake%iComponentVersion .GT. 0) THEN
             MessageArray(1) = 'For proper simulation of lakes, relevant lake data files must'
             MessageArray(2) = 'be specified when lakes are defined in Pre-Processor.'
-            CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+            CALL AppLake%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         ELSE
@@ -313,24 +326,24 @@ CONTAINS
 
     !Open main control file and retrieve version number
     CALL AppLakeMainFile%New(FileName=cFileName,InputFile=.TRUE.,IsTSFile=.FALSE.,iStat=iStat)  ;  IF (iStat .EQ. -1) RETURN
-    CALL ReadVersion(AppLakeMainFile,'LAKE',cVersionSim,iStat)
+    CALL ReadVersion(AppLakeMainFile,'LAKE',cVersionSim,iStat,AppLake%Logger)
     IF (iStat .EQ. -1) RETURN
-    
+
     !Close file to reset it
     CALL AppLakeMainFile%Kill()
-    
+
     !Make sure versions from static and dynamic components are the same
     ErrorCode   = 0
     rVersionPre = REAL(AppLake%iComponentVersion)/10.0
     SELECT CASE (TRIM(cVersionSim))
         CASE ('4.0')
             IF (AppLake%iComponentVersion .NE. 40) ErrorCode = 1
-            
+
         CASE ('5.0')
             IF (AppLake%iComponentVersion .NE. 50) ErrorCode = 1
-            
+
         CASE DEFAULT
-            CALL SetLastMessage('Lake Component version number is not recognized ('//TRIM(cVersionSim)//')!',f_iFatal,ThisProcedure)
+            CALL AppLake%Logger%SetLastMessage('Lake Component version number is not recognized ('//TRIM(cVersionSim)//')!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
     END SELECT
@@ -338,7 +351,7 @@ CONTAINS
         MessageArray(1) = 'Lake Component versions used in Pre-Processor and Simulation must match!'
         WRITE(MessageArray(2),'(A,F3.1)') 'Version number in Pre-Processor = ',rVersionPre
         MessageArray(3) = 'Version number in Simulation    = ' // TRIM(cVersionSim)
-        CALL SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+        CALL AppLake%Logger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -369,20 +382,24 @@ CONTAINS
     CHARACTER(LEN=ModNameLen+16) :: ThisProcedure = ModName // 'SetAllComponents'
     INTEGER                      :: iVersion,ErrorCode
     
-    !If a binary file is supplied, read the flag to see if lake are simulated 
+    !Set Logger
+    AppLake%Logger => DefaultLogger
+
+    !If a binary file is supplied, read the flag to see if lake are simulated
     IF (BinFile%iGetFileType() .NE. f_iUNKNOWN) THEN
-        CALL BinFile%ReadData(iVersion,iStat)  
+        CALL BinFile%ReadData(iVersion,iStat)
         IF (iStat .EQ. -1) RETURN
         IF (iVersion .EQ. 0) RETURN
     END IF
 
     !Return if a Simulation filename is not specified
     IF (cFileName .EQ. ''  .OR.  BinFile%iGetFileType() .EQ. f_iUNKNOWN) RETURN
-    
+
     !Instantiate lake component based on version
     SELECT CASE (iVersion)
         CASE (40)
             ALLOCATE(AppLake_v40_Type :: AppLake%Me)
+            AppLake%Me%Logger => AppLake%Logger
             CALL AppLake%Me%New(IsForInquiry,cFileName,cSimWorkingDirectory,IWFMKernelVersion%GetVersion(),TimeStep,NTIME,AppGrid,BinFile,LakeGWConnector,Precip,ET,iStat)
             IF (iStat .EQ. -1) RETURN
             IF (AppLake%Me%NLakes .EQ. 0) THEN
@@ -392,9 +409,10 @@ CONTAINS
             END IF
             AppLake%iComponentVersion = 40
             AppLake%lDefined          = .TRUE.
-            
+
         CASE (50)
             ALLOCATE(AppLake_v50_Type :: AppLake%Me)
+            AppLake%Me%Logger => AppLake%Logger
             CALL AppLake%Me%New(IsForInquiry,cFileName,cSimWorkingDirectory,IWFMKernelVersion%GetVersion(),TimeStep,NTIME,AppGrid,BinFile,LakeGWConnector,Precip,ET,iStat)
             IF (iStat .EQ. -1) RETURN
             IF (AppLake%Me%NLakes .EQ. 0) THEN
@@ -404,9 +422,9 @@ CONTAINS
             END IF
             AppLake%iComponentVersion = 50
             AppLake%lDefined          = .TRUE.
-            
+
         CASE DEFAULT
-            CALL SetLastMessage('Lake Component version number is not recognized ('//TRIM(IntToText(iVersion))//')!',f_iFatal,ThisProcedure)
+            CALL AppLake%Logger%SetLastMessage('Lake Component version number is not recognized ('//TRIM(IntToText(iVersion))//')!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
     END SELECT
@@ -439,22 +457,26 @@ CONTAINS
     
     !Initialzie
     iStat = 0
-    
+
+    !Set Logger
+    AppLake%Logger => DefaultLogger
+
     !Return if a Simulation filename is not specified
     IF (cSimFileName .EQ. ''  .OR.  cPPFileName .EQ. '') RETURN
-    
+
     !Open file and read the version number line to decide which component to instantiate
     CALL MainFile%New(FileName=cPPFileName,InputFile=.TRUE.,Descriptor='main stream data file',iStat=iStat)  ;  IF (iStat .EQ. -1) RETURN
-    CALL ReadVersion(MainFile,'LAKE',cVersionPre,iStat)
+    CALL ReadVersion(MainFile,'LAKE',cVersionPre,iStat,AppLake%Logger)
     IF (iStat .EQ. -1) RETURN
-    
+
     !Close main input file to reset it
     CALL MainFile%Kill()
-    
+
     !Instantiate lake component based on version
     SELECT CASE (TRIM(cVersionPre))
         CASE ('4.0')
             ALLOCATE(AppLake_v40_Type :: AppLake%Me)
+            AppLake%Me%Logger => AppLake%Logger
             CALL AppLake%Me%New(IsForInquiry,cPPFileName,cSimFileName,cSimWorkingDirectory,IWFMKernelVersion%GetVersion(),AppGrid,Stratigraphy,TimeStep,NTIME,StrmLakeConnector,LakeGWConnector,Precip,ET,iStat)
             IF (iStat .EQ. -1) RETURN
             IF (AppLake%Me%NLakes .EQ. 0) THEN
@@ -464,9 +486,10 @@ CONTAINS
             END IF
             AppLake%iComponentVersion = 40
             AppLake%lDefined          = .TRUE.
-            
+
         CASE ('5.0')
             ALLOCATE(AppLake_v50_Type :: AppLake%Me)
+            AppLake%Me%Logger => AppLake%Logger
             CALL AppLake%Me%New(IsForInquiry,cPPFileName,cSimFileName,cSimWorkingDirectory,IWFMKernelVersion%GetVersion(),AppGrid,Stratigraphy,TimeStep,NTIME,StrmLakeConnector,LakeGWConnector,Precip,ET,iStat)
             IF (iStat .EQ. -1) RETURN
             IF (AppLake%Me%NLakes .EQ. 0) THEN
@@ -476,9 +499,9 @@ CONTAINS
             END IF
             AppLake%iComponentVersion = 50
             AppLake%lDefined          = .TRUE.
-            
+
         CASE DEFAULT
-            CALL SetLastMessage('Lake Component version number is not recognized ('//TRIM(cVersionPre)//')!',f_iFatal,ThisProcedure)
+            CALL AppLake%Logger%SetLastMessage('Lake Component version number is not recognized ('//TRIM(cVersionPre)//')!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
     END SELECT
@@ -611,14 +634,15 @@ CONTAINS
   ! --- GET MONTHLY BUDGET FLOWS FROM A DEFINED BUDGET FILE FOR A SPECIFED LAKE
   ! --- (Assumes cBeginDate and cEndDate are adjusted properly)
   ! -------------------------------------------------------------
-  SUBROUTINE GetBudget_MonthlyFlows_GivenFile(Budget,iLakeIndex,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
-    TYPE(BudgetType),INTENT(IN)              :: Budget      !Assumes Budget file is already open
-    CHARACTER(LEN=*),INTENT(IN)              :: cBeginDate,cEndDate
-    INTEGER,INTENT(IN)                       :: iLakeIndex
-    REAL(8),INTENT(IN)                       :: rFactVL
-    REAL(8),ALLOCATABLE,INTENT(OUT)          :: rFlows(:,:)  !In (column,month) format
-    CHARACTER(LEN=*),ALLOCATABLE,INTENT(OUT) :: cFlowNames(:)
-    INTEGER,INTENT(OUT)                      :: iStat
+  SUBROUTINE GetBudget_MonthlyFlows_GivenFile(Budget,iLakeIndex,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat,Logger)
+    TYPE(BudgetType),INTENT(IN)                :: Budget      !Assumes Budget file is already open
+    CHARACTER(LEN=*),INTENT(IN)                :: cBeginDate,cEndDate
+    INTEGER,INTENT(IN)                         :: iLakeIndex
+    REAL(8),INTENT(IN)                         :: rFactVL
+    REAL(8),ALLOCATABLE,INTENT(OUT)            :: rFlows(:,:)  !In (column,month) format
+    CHARACTER(LEN=*),ALLOCATABLE,INTENT(OUT)   :: cFlowNames(:)
+    INTEGER,INTENT(OUT)                        :: iStat
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
     
     !Local variables
     CHARACTER(LEN=ModNameLen+32) :: ThisProcedure = ModName // 'GetBudget_MonthlyFlows_GivenFile'
@@ -628,15 +652,20 @@ CONTAINS
     
     !Get version number
     CALL GetPackageVersion(Budget,cVersion)
-    
+
+    !Set Logger on local AppLake
+    AppLake%Logger => Logger
+
     !Based on component version, allocate base stream type
     SELECT CASE (cVersion)
         CASE ('4.0')
             ALLOCATE(AppLake_v40_Type :: AppLake%Me)
+            AppLake%Me%Logger => AppLake%Logger
         CASE ('5.0')
             ALLOCATE(AppLake_v50_Type :: AppLake%Me)
+            AppLake%Me%Logger => AppLake%Logger
         CASE DEFAULT
-            CALL SetLastMessage('Lake Component version number is not recognized ('//TRIM(cVersion)//')!',f_iFatal,ThisProcedure)
+            CALL Logger%SetLastMessage('Lake Component version number is not recognized ('//TRIM(cVersion)//')!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
     END SELECT
@@ -816,11 +845,13 @@ CONTAINS
     !Initialize
     iStat = 0
     
-    !Allocate base lake type as v40 type just to allocate
+    !Set Logger on local AppLake and allocate base lake type as v40 type just to allocate
+    AppLake%Logger => DefaultLogger
     ALLOCATE(AppLake_v40_Type :: AppLake%Me)
+    AppLake%Me%Logger => AppLake%Logger
     
     !Get the lake elements
-    CALL AppLake%Me%GetLakeElements_FromFile(cFileName,iLakeElems,iStat)
+    CALL AppLake%Me%GetLakeElements_FromFile(cFileName,DefaultLogger,iLakeElems,iStat)
     
     !Kill AppLake
     CALL AppLake%Kill()
@@ -1072,8 +1103,12 @@ CONTAINS
     
     IF (AppLake%lDefined) THEN
         !Echo progress
-        CALL EchoProgress('Simulating lakes')
-    
+        IF (ASSOCIATED(AppLake%Logger)) THEN
+            CALL AppLake%Logger%EchoProgress('Simulating lakes')
+        ELSE
+            CALL AppLake%Logger%EchoProgress('Simulating lakes')
+        END IF
+
         !Simulate
         CALL AppLake%Me%Simulate(GSElevs,GWHeads,rGWReturnFlows,Runoff,ReturnFlow,PondDrain,LakeGWConnector,StrmLakeConnector,Matrix)
     END IF
@@ -1093,7 +1128,11 @@ CONTAINS
     iStat = 0
     
     IF (AppLake%lDefined) THEN
-        CALL EchoProgress('Registering lake component with matrix...')
+        IF (ASSOCIATED(AppLake%Logger)) THEN
+            CALL AppLake%Logger%EchoProgress('Registering lake component with matrix...')
+        ELSE
+            CALL AppLake%Logger%EchoProgress('Registering lake component with matrix...')
+        END IF
         CALL AppLake%Me%RegisterWithMatrix(Matrix,iStat)
     END IF
     

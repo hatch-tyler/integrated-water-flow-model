@@ -47,16 +47,15 @@ MODULE Class_AppGW
   USE IOInterface                 , ONLY: GenericFileType                                    , &
                                           DoesFileExist                                      , &
                                           f_iTXT                                                
-  USE MessageLogger               , ONLY: LogMessage                                         , &
-                                          SetLastMessage                                     , &
-                                          EchoProgress                                       , &
-                                          IsLogFileDefined                                   , &
+  USE MessageLogger               , ONLY: IsLogFileDefined                                   , &
                                           MessageArray                                       , &
+                                          MessageLoggerType                                  , &
                                           f_iFILE                                            , &
                                           f_iMessage                                         , &
                                           f_iFatal                                           , &
                                           f_iWarn                                            , &
-                                          f_iInfo                                              
+                                          f_iInfo                                            , &
+                                          f_lLogPerfMarkers
   USE Package_Budget              , ONLY: BudgetType                                         , &
                                           BudgetHeaderType                                   , &
                                           f_iColumnHeaderLen                                 , &
@@ -169,6 +168,7 @@ MODULE Class_AppGW
   ! -------------------------------------------------------------
   TYPE AppGWType
       PRIVATE
+      TYPE(MessageLoggerType),POINTER :: Logger => NULL()
       CHARACTER(LEN=6)              :: VarTimeUnit                  = ''       !Time unit for aquifer variables
       TYPE(GWNodeType)              :: Nodes                                   !Groundwater data at each (node,layer) combination
       TYPE(GWStateType)             :: State                                   !Data type that stores the state of the groundwater
@@ -202,6 +202,7 @@ MODULE Class_AppGW
       TYPE(GenericFileType)         :: FinalHeadsFile                          !Optional file to store final groundwater heads
       LOGICAL                       :: lFinalHeadsFile_Defined      = .FALSE.  !Flag to check if final heads output file is defined
   CONTAINS
+      PROCEDURE,PASS   :: SetLogger => AppGW_SetLogger
       PROCEDURE,PASS   :: New
       PROCEDURE,PASS   :: Kill
       PROCEDURE,PASS   :: GetBudget_List
@@ -382,8 +383,19 @@ MODULE Class_AppGW
 
   
 CONTAINS
-    
-    
+
+
+  ! -------------------------------------------------------------
+  ! --- SET LOGGER
+  ! -------------------------------------------------------------
+  SUBROUTINE AppGW_SetLogger(AppGW,Logger)
+    CLASS(AppGWType)                          :: AppGW
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
+
+    AppGW%Logger => Logger
+
+  END SUBROUTINE AppGW_SetLogger
+
 
 ! ******************************************************************
 ! ******************************************************************
@@ -398,8 +410,9 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- INSTANTIATE GW COMPONENT
   ! -------------------------------------------------------------
-  SUBROUTINE New(AppGW,lIsForInquiry,cFileName,cWorkingDirectory,AppGrid,Stratigraphy,StrmConnectivity,iStrmNodeIDs,StrmGWConnector,iLakeIDs,LakeGWConnector,TimeStep,NTIME,iStat,GWHeadICFile,SubsICFile,lPrintParametersOverwrite) 
+  SUBROUTINE New(AppGW,Logger,lIsForInquiry,cFileName,cWorkingDirectory,AppGrid,Stratigraphy,StrmConnectivity,iStrmNodeIDs,StrmGWConnector,iLakeIDs,LakeGWConnector,TimeStep,NTIME,iStat,GWHeadICFile,SubsICFile,lPrintParametersOverwrite)
     CLASS(AppGWType),INTENT(OUT)         :: AppGW
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
     LOGICAL,INTENT(IN)                   :: lIsForInquiry
     CHARACTER(LEN=*),INTENT(IN)          :: cFileName,cWorkingDirectory
     TYPE(AppGridType),INTENT(IN)         :: AppGrid
@@ -428,17 +441,22 @@ CONTAINS
     CHARACTER,ALLOCATABLE       :: cCountLines(:)*50
     CHARACTER(:),ALLOCATABLE    :: cAbsPathFileName
     INTEGER,PARAMETER           :: f_iYesPrintAquiferParameters = 1 , &
-                                   f_iNotPrintAquiferParameters = 0 
-    
+                                   f_iNotPrintAquiferParameters = 0
+    ! Sub-profiling timers
+    INTEGER :: iPerfStart(8), iPerfEnd(8)
+    REAL(8) :: rPerfSec
+    CHARACTER(LEN=80) :: cPerfMsg
+
     !Initialize
+    AppGW%Logger => Logger
     iStat      = 0
     iGWNodeIDs = AppGrid%AppNode%ID
-    
+
     !Return if no filename is given
     IF (cFileName .EQ. '') RETURN
-    
+
     !Print progress
-    CALL EchoProgress('Instantiating groundwater component')
+    CALL AppGW%Logger%EchoProgress('Instantiating groundwater component')
     
     !Initialize
     NNodes    = AppGrid%GetNNodes()
@@ -463,7 +481,7 @@ CONTAINS
     IF (iErrorCode1 .NE. 0) THEN
         MessageArray(1) = 'Error in allocating memory for the groundwater component.'
         MessageArray(2) = cErrorMsg
-        CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+        CALL AppGW%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -476,7 +494,7 @@ CONTAINS
     AppGW%ElemTransmissivity = 0.0
        
     !Instantiate State data
-    CALL AppGW%State%New(NNodes,NLayers,iStat)  
+    CALL AppGW%State%New(AppGW%Logger,NNodes,NLayers,iStat)
     IF (iStat .NE. 0) RETURN
 
     !Open file
@@ -509,27 +527,42 @@ CONTAINS
     cBCFileName = cAbsPathFileName
     
     !Tile drains/subsurface irrigation
+    CALL DATE_AND_TIME(VALUES=iPerfStart)
     CALL AppGWParamFile%ReadData(cALine,iStat)  ;  IF (iStat .EQ. -1) RETURN  
     cALine = StripTextUntilCharacter(cALine,f_cInlineCommentChar)  
     CALL CleanSpecialCharacters(cALine)
     CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(cALine)),cWorkingDirectory,cAbsPathFileName)
-    CALL AppGW%AppTileDrain%New(lIsForInquiry,cAbsPathFileName,cWorkingDirectory,iStrmNodeIDs,TimeStep,AppGrid,Stratigraphy,iStat)
+    CALL AppGW%AppTileDrain%New(AppGW%Logger,lIsForInquiry,cAbsPathFileName,cWorkingDirectory,iStrmNodeIDs,TimeStep,AppGrid,Stratigraphy,iStat)
     IF (iStat .EQ. -1) RETURN
     IF (AppGW%AppTileDrain%GetNDrain() .GT. 0   .OR.   AppGW%AppTileDrain%GetNSubIrig() .GT. 0)  &
         AppGW%lTileDrain_Defined = .TRUE.
     
+    IF (f_lLogPerfMarkers) THEN
+        CALL DATE_AND_TIME(VALUES=iPerfEnd)
+        rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
+        WRITE(cPerfMsg,'(A,F8.3,A)') '    [PERF] AppGW TileDrain: ', rPerfSec, ' sec'
+        CALL AppGW%Logger%LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+    END IF
+
     !Pumping
-    CALL AppGWParamFile%ReadData(cALine,iStat)  ;  IF (iStat .EQ. -1) RETURN  
-    cALine = StripTextUntilCharacter(cALine,f_cInlineCommentChar)  
+    CALL DATE_AND_TIME(VALUES=iPerfStart)
+    CALL AppGWParamFile%ReadData(cALine,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    cALine = StripTextUntilCharacter(cALine,f_cInlineCommentChar)
     CALL CleanSpecialCharacters(cALine)
     CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(cALine)),cWorkingDirectory,cAbsPathFileName)
-    CALL AppGW%AppPumping%New(lIsForInquiry,cAbsPathFileName,cWorkingDirectory,AppGrid,Stratigraphy,TimeStep,iStat)
+    CALL AppGW%AppPumping%New(AppGW%Logger,lIsForInquiry,cAbsPathFileName,cWorkingDirectory,AppGrid,Stratigraphy,TimeStep,iStat)
     IF (iStat .EQ. -1) RETURN
     IF (AppGW%AppPumping%GetNWells() .GT. 0   .OR.   AppGW%AppPumping%GetNElemPumps() .GT. 0)   &
         AppGW%lPumping_Defined = .TRUE.
-    
+    IF (f_lLogPerfMarkers) THEN
+        CALL DATE_AND_TIME(VALUES=iPerfEnd)
+        rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
+        WRITE(cPerfMsg,'(A,F8.3,A)') '    [PERF] AppGW Pumping: ', rPerfSec, ' sec'
+        CALL AppGW%Logger%LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+    END IF
+
     !Subsidence filename
-    CALL AppGWParamFile%ReadData(cSubsidenceFileName,iStat)  ;  IF (iStat .EQ. -1) RETURN  
+    CALL AppGWParamFile%ReadData(cSubsidenceFileName,iStat)  ;  IF (iStat .EQ. -1) RETURN
     cSubsidenceFileName = StripTextUntilCharacter(cSubsidenceFileName,f_cInlineCommentChar)  
     CALL CleanSpecialCharacters(cSubsidenceFileName)
     CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(cSubsidenceFileName)),cWorkingDirectory,cAbsPathFileName)
@@ -565,7 +598,7 @@ CONTAINS
     CALL CleanSpecialCharacters(cALine) 
     cALine = ADJUSTL(StripTextUntilCharacter(cALine,f_cInlineCommentChar))
     CALL EstablishAbsolutePathFileName(TRIM(cALine),cWorkingDirectory,cAbsPathFileName)
-    CALL VerticalFlowOutput_New(lIsForInquiry,TimeStep,NLayers,NRegions,AppGW%UnitFlow,cAbsPathFileName,AppGW%VerticalFlowOutput,iStat)
+    CALL VerticalFlowOutput_New(lIsForInquiry,TimeStep,NLayers,NRegions,AppGW%UnitFlow,cAbsPathFileName,AppGW%VerticalFlowOutput,iStat,Logger)
     IF (iStat .EQ. -1) RETURN
     
     !Output file for heads at all nodes and layers
@@ -596,11 +629,11 @@ CONTAINS
     IF (cALine .NE. '') THEN
         CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(cALine)),cWorkingDirectory,cAbsPathFileName)
         IF (lIsForInquiry) THEN
-            CALL AppGW%GWBudFile%New(cAbsPathFileName,iStat)
+            CALL AppGW%GWBudFile%New(AppGW%Logger,cAbsPathFileName,iStat)
             IF (iStat .EQ. -1) RETURN
         ELSE
             BudHeader = PrepareGWBudgetHeader(NTIME,TimeStep,AppGrid)
-            CALL AppGW%GWBudFile%New(cAbsPathFileName,BudHeader,iStat)
+            CALL AppGW%GWBudFile%New(AppGW%Logger,cAbsPathFileName,BudHeader,iStat)
             IF (iStat .EQ. -1) RETURN
             CALL BudHeader%Kill()
             !Allocate memory for subregional storage values
@@ -608,7 +641,7 @@ CONTAINS
             IF (iErrorCode1 .NE. 0) THEN 
                 MessageArray(1) = 'Error in allocating memory for the regional storage values for groundwater budget.'
                 MessageArray(2) = cErrorMsg
-                CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                CALL AppGW%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -636,7 +669,7 @@ CONTAINS
         END IF
         IF (iStat .EQ. -1) RETURN
         IF (AppGW%FinalHeadsFile%iGetFileType() .NE. f_iTXT) THEN
-            CALL SetLastMessage('End-of-simulation groundwater heads output file must be a text file!',f_iFatal,ThisProcedure)
+            CALL AppGW%Logger%SetLastMessage('End-of-simulation groundwater heads output file must be a text file!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -661,12 +694,28 @@ CONTAINS
         END IF
     END IF
     
+    IF (f_lLogPerfMarkers) THEN
+        CALL DATE_AND_TIME(VALUES=iPerfEnd)
+        rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
+        WRITE(cPerfMsg,'(A,F8.3,A)') '      [PERF] AppGW Budget+OutputFiles: ', rPerfSec, ' sec'
+        CALL AppGW%Logger%LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+    END IF
+
     !Groundwater hydrographs
-    CALL AppGW%GWHyd%New(lIsForInquiry,AppGrid,Stratigraphy,cWorkingDirectory,iGWNodeIDs,iTecPlotFlag,AppGW%FactHead,AppGW%UnitHead,AppGW%UnitFlow,AppGW%UnitVelocity,TRIM(cAllHeadOutFileName),TRIM(cCellVelocityFileName),TRIM(cHeadTecplotFileName),TRIM(cVelTecplotFileName),TimeStep,NTIME,AppGWParamFile,iStat)
+    CALL DATE_AND_TIME(VALUES=iPerfStart)
+    CALL AppGW%GWHyd%New(AppGW%Logger,lIsForInquiry,AppGrid,Stratigraphy,cWorkingDirectory,iGWNodeIDs,iTecPlotFlag,AppGW%FactHead,AppGW%UnitHead,AppGW%UnitFlow,AppGW%UnitVelocity,TRIM(cAllHeadOutFileName),TRIM(cCellVelocityFileName),TRIM(cHeadTecplotFileName),TRIM(cVelTecplotFileName),TimeStep,NTIME,AppGWParamFile,iStat)
     IF (iStat .EQ. -1) RETURN
     
+    IF (f_lLogPerfMarkers) THEN
+        CALL DATE_AND_TIME(VALUES=iPerfEnd)
+        rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
+        WRITE(cPerfMsg,'(A,F8.3,A)') '      [PERF] AppGW GWHyd(54K hydrographs): ', rPerfSec, ' sec'
+        CALL AppGW%Logger%LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+    END IF
+
     !Aquifer parameters
-    CALL ReadAquiferParameters(NLayers,AppGrid,TimeStep,AppGWParamFile,AppGW%VarTimeUnit,AppGW%Nodes,iStat)
+    CALL DATE_AND_TIME(VALUES=iPerfStart)
+    CALL ReadAquiferParameters(AppGW%Logger,NLayers,AppGrid,TimeStep,AppGWParamFile,AppGW%VarTimeUnit,AppGW%Nodes,iStat)
     IF (iStat .EQ. -1) RETURN
     
     !BACKWARD COMPATIBILITY: Check if data for gw return flow is provided by trying to read both gw return flow and initial conditions
@@ -687,42 +736,64 @@ CONTAINS
    
     !Read GW return flow data, if provided
     IF (lGWReturnData_Provided) THEN
-        CALL ReadGWReturnFlowDestinations(iStrmNodeIDs,iLakeIDs,iGWNodeIDs,AppGWParamFile,AppGW%lSimulateGWReturnFlow,AppGW%iGWReturnFlowDestType,AppGW%iGWReturnFlowDest,iStat)
+        CALL ReadGWReturnFlowDestinations(AppGW%Logger,iStrmNodeIDs,iLakeIDs,iGWNodeIDs,AppGWParamFile,AppGW%lSimulateGWReturnFlow,AppGW%iGWReturnFlowDestType,AppGW%iGWReturnFlowDest,iStat)
         IF (iStat .NE. 0) RETURN
     END IF
     
     !Initial conditions
     IF (PRESENT(GWHeadICFile)) THEN
-        CALL ReadInitialHeads(GWHeadICFile,NNodes,iGWNodeIDs,Stratigraphy,Head,iStat)
+        CALL ReadInitialHeads(AppGW%Logger,GWHeadICFile,NNodes,iGWNodeIDs,Stratigraphy,Head,iStat)
     ELSE
-        CALL ReadInitialHeads(AppGWParamFile,NNodes,iGWNodeIDs,Stratigraphy,Head,iStat)
+        CALL ReadInitialHeads(AppGW%Logger,AppGWParamFile,NNodes,iGWNodeIDs,Stratigraphy,Head,iStat)
     END IF
     IF (iStat .EQ. -1) RETURN
     AppGW%State%Head = Head
     
+    IF (f_lLogPerfMarkers) THEN
+        CALL DATE_AND_TIME(VALUES=iPerfEnd)
+        rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
+        WRITE(cPerfMsg,'(A,F8.3,A)') '    [PERF] AppGW Params+IC: ', rPerfSec, ' sec'
+        CALL AppGW%Logger%LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+    END IF
+
     !Instantiate the boundary conditions data and overwrite the initial conditions if necessary
-    CALL AppGW%AppBC%New(lIsForInquiry,ADJUSTL(cBCFileName),cWorkingDirectory,AppGrid,Stratigraphy,iGWNodeIDs,AppGW%UnitFlow,TimeStep,AppGW%State%Head,iStat)
+    CALL DATE_AND_TIME(VALUES=iPerfStart)
+    CALL AppGW%AppBC%New(AppGW%Logger,lIsForInquiry,ADJUSTL(cBCFileName),cWorkingDirectory,AppGrid,Stratigraphy,iGWNodeIDs,AppGW%UnitFlow,TimeStep,AppGW%State%Head,iStat)
     IF (iStat .EQ. -1) RETURN
     AppGW%lAppBC_Defined = AppGW%AppBC%IsDefined()
 
     !Assign previous head as current head
     AppGW%State%Head_P = AppGW%State%Head
     
+    IF (f_lLogPerfMarkers) THEN
+        CALL DATE_AND_TIME(VALUES=iPerfEnd)
+        rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
+        WRITE(cPerfMsg,'(A,F8.3,A)') '    [PERF] AppGW BoundaryConditions: ', rPerfSec, ' sec'
+        CALL AppGW%Logger%LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+    END IF
+
     !Instantiate subsidence; this has to be done after AppGW initial conditions are processed
-    CALL AppGW%AppSubsidence%New(lIsForInquiry,cSubsidenceFileName,cWorkingDirectory,iGWNodeIDs,AppGrid,Stratigraphy,StrmConnectivity,TimeStep,iStat,SubsICFile,NTIME)
+    CALL DATE_AND_TIME(VALUES=iPerfStart)
+    CALL AppGW%AppSubsidence%New(AppGW%Logger,lIsForInquiry,cSubsidenceFileName,cWorkingDirectory,iGWNodeIDs,AppGrid,Stratigraphy,StrmConnectivity,TimeStep,iStat,SubsICFile,NTIME)
     IF (iStat .EQ. -1) RETURN
     AppGW%lSubsidence_Defined = AppGW%AppSubsidence%IsDefined()
+    IF (f_lLogPerfMarkers) THEN
+        CALL DATE_AND_TIME(VALUES=iPerfEnd)
+        rPerfSec = (iPerfEnd(5)*3600d0+iPerfEnd(6)*60d0+iPerfEnd(7)+iPerfEnd(8)/1000d0) - (iPerfStart(5)*3600d0+iPerfStart(6)*60d0+iPerfStart(7)+iPerfStart(8)/1000d0)
+        WRITE(cPerfMsg,'(A,F8.3,A)') '    [PERF] AppGW Subsidence: ', rPerfSec, ' sec'
+        CALL AppGW%Logger%LogMessage(TRIM(cPerfMsg), f_iInfo, ModName)
+    END IF
 
     !Aquifer overwrite parameters
     IF (cOverwriteFileName .NE. '') THEN
-        CALL OverwriteParameters(cOverwriteFileName,AppGrid,AppGW%VarTimeUnit,TimeStep%TrackTime,AppGW%lSubsidence_Defined,AppGW%Nodes,AppGW%AppSubsidence,iStat)
+        CALL OverwriteParameters(AppGW%Logger,cOverwriteFileName,AppGrid,AppGW%VarTimeUnit,TimeStep%TrackTime,AppGW%lSubsidence_Defined,AppGW%Nodes,AppGW%AppSubsidence,iStat)
         IF (iStat .EQ. -1) RETURN
     END IF
     
     !Print final aquifer parameters, if desired
     IF (iPrintParameters .EQ. f_iYesPrintAquiferParameters) THEN
         IF (IsLogFileDefined()) THEN
-            CALL PrintAquiferParameters(iGWNodeIDs,AppGW%Nodes)
+            CALL PrintAquiferParameters(AppGW%Logger,iGWNodeIDs,AppGW%Nodes)
             IF (AppGW%lSubsidence_Defined) CALL AppGW%AppSubsidence%PrintParameters(iGWNodeIDs,AppGrid%AppNode%Area)
         END IF
     END IF
@@ -731,7 +802,7 @@ CONTAINS
     IF (.NOT. lIsForInquiry) CALL AppGW%GWHyd%PrintInitialValues(AppGrid,Stratigraphy,AppGW%State%Head,AppGW%FactHead,AppGW%FactVelocity,StrmConnectivity,TimeStep)
     
     !Process aquifer parameters for use in simulation
-    CALL ProcessAquiferParameters(AppGrid,Stratigraphy,AppGW%lSubsidence_Defined,AppGW%AppSubsidence,AppGW%Nodes,AppGW%State,iStat)
+    CALL ProcessAquiferParameters(AppGW%Logger,AppGrid,Stratigraphy,AppGW%lSubsidence_Defined,AppGW%AppSubsidence,AppGW%Nodes,AppGW%State,iStat)
     IF (iStat .EQ. -1) RETURN
     
     !Compute initial subregional groundwater storages
@@ -1518,7 +1589,8 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET INITIAL GW HEADS
   ! -------------------------------------------------------------
-  SUBROUTINE GetGWHeadsIC(cGWMainFileName,iNodeIDs,Stratigraphy,rGWHeadsIC,iStat)
+  SUBROUTINE GetGWHeadsIC(Logger,cGWMainFileName,iNodeIDs,Stratigraphy,rGWHeadsIC,iStat)
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
     CHARACTER(LEN=*),INTENT(IN)       :: cGWMainFileName
     INTEGER,INTENT(IN)                :: iNodeIDs(:)
     TYPE(StratigraphyType),INTENT(IN) :: Stratigraphy
@@ -1584,7 +1656,7 @@ CONTAINS
     
     !Now, we are at initial conditions
     iNNodes = SIZE(iNodeIDs)
-    CALL ReadInitialHeads(vGWMainFile,iNNodes,iNodeIDs,Stratigraphy,rGWHeadsIC,iStat)
+    CALL ReadInitialHeads(Logger,vGWMainFile,iNNodes,iNodeIDs,Stratigraphy,rGWHeadsIC,iStat)
     
     !Close file
     CALL vGWMainFile%Kill()
@@ -1623,13 +1695,21 @@ CONTAINS
             MessageArray(1) = 'File '//cFileName//' cannot be found for data retrieval!'
             MessageArray(2) = 'Groundwater heads at a layer will be retrieved from the text output file.'
             MessageArray(3) = 'This may take a substantially long time.'
-            CALL LogMessage(MessageArray(1:3),f_iWarn,ThisProcedure)
+            IF (ASSOCIATED(AppGW%Logger)) THEN
+                CALL AppGW%Logger%LogMessage(MessageArray(1:3),f_iWarn,ThisProcedure)
+            ELSE
+                CALL AppGW%Logger%LogMessage(MessageArray(1:3),f_iWarn,ThisProcedure)
+            END IF
             CALL AppGW%GWHyd%ReadGWHeadsAll_ForALayer(iNNodes,iLayer,cOutputBeginDateAndTime,cOutputEndDateAndTime,AppGW%FactHead,rFact_LT,rOutputDates,rGWHeads,iStat)
         END IF
     ELSE
         MessageArray(1) = 'GW heads at all nodes for a layer cannot be retrieved '
         MessageArray(2) = 'this output file was not generated for the model!'
-        CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+        IF (ASSOCIATED(AppGW%Logger)) THEN
+            CALL AppGW%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+        ELSE
+            CALL AppGW%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+        END IF
         iStat = -1
     END IF
         
@@ -1744,7 +1824,8 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET AQUIFER PARAMETERS WITHOUT AppGW OBJECT
   ! -------------------------------------------------------------
-  SUBROUTINE GetAquiferParameters_FromFile(cGWFileName,cWorkingDirectory,AppGrid,Stratigraphy,TimeStep,rKh,rKv,rAquitardKv,rSs,rSy,iStat)
+  SUBROUTINE GetAquiferParameters_FromFile(Logger,cGWFileName,cWorkingDirectory,AppGrid,Stratigraphy,TimeStep,rKh,rKv,rAquitardKv,rSs,rSy,iStat)
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
     CHARACTER(LEN=*),INTENT(IN)       :: cGWFileName,cWorkingDirectory
     TYPE(AppGridType),INTENT(IN)      :: AppGrid
     TYPE(StratigraphyType),INTENT(IN) :: Stratigraphy
@@ -1789,7 +1870,7 @@ CONTAINS
     Nodes%Sy         = 0.0
     
     !Instantiate State data
-    CALL GWState%New(iNNodes,iNLayers,iStat)  
+    CALL GWState%New(Logger,iNNodes,iNLayers,iStat)
     IF (iStat .NE. 0) GOTO 10
 
     !Open file
@@ -1875,34 +1956,34 @@ CONTAINS
     END DO
 
     !Aquifer parameters
-    CALL ReadAquiferParameters(iNLayers,AppGrid,TimeStep,AppGWParamFile,cVarTimeUnit,Nodes,iStat)
+    CALL ReadAquiferParameters(Logger,iNLayers,AppGrid,TimeStep,AppGWParamFile,cVarTimeUnit,Nodes,iStat)
     IF (iStat .EQ. -1) GOTO 10
     
     !Initial conditions
-    CALL ReadInitialHeads(AppGWParamFile,iNNodes,iGWNodeIDs,Stratigraphy,rHeads,iStat)
+    CALL ReadInitialHeads(Logger,AppGWParamFile,iNNodes,iGWNodeIDs,Stratigraphy,rHeads,iStat)
     IF (iStat .EQ. -1) GOTO 10
     GWState%Head = rHeads
 
     !Instantiate the boundary conditions data and overwrite the initial conditions if necessary
-    CALL AppBC%New(lIsForInquiry,cBCFileName,cWorkingDirectory,AppGrid,Stratigraphy,iGWNodeIDs,cUnitFlow,TimeStep,GWState%Head,iStat)
+    CALL AppBC%New(Logger,lIsForInquiry,cBCFileName,cWorkingDirectory,AppGrid,Stratigraphy,iGWNodeIDs,cUnitFlow,TimeStep,GWState%Head,iStat)
     IF (iStat .EQ. -1) GOTO 10
 
     !Assign previous head as current head
     GWState%Head_P = GWState%Head
     
     !Instantiate subsidence; this has to be done after AppGW initial conditions are processed
-    CALL AppSubsidence%New(lIsForInquiry,cSubsidenceFileName,cWorkingDirectory,iGWNodeIDs,AppGrid,Stratigraphy,StrmConnectivity,TimeStep,iStat)
+    CALL AppSubsidence%New(Logger,lIsForInquiry,cSubsidenceFileName,cWorkingDirectory,iGWNodeIDs,AppGrid,Stratigraphy,StrmConnectivity,TimeStep,iStat)
     IF (iStat .EQ. -1) GOTO 10
     lSubsidence_Defined = AppSubsidence%IsDefined()
 
     !Aquifer overwrite parameters
     IF (cOverwriteFileName .NE. '') THEN
-        CALL OverwriteParameters(cOverwriteFileName,AppGrid,cVarTimeUnit,TimeStep%TrackTime,lSubsidence_Defined,Nodes,AppSubsidence,iStat)
+        CALL OverwriteParameters(Logger,cOverwriteFileName,AppGrid,cVarTimeUnit,TimeStep%TrackTime,lSubsidence_Defined,Nodes,AppSubsidence,iStat)
         IF (iStat .EQ. -1) GOTO 10
     END IF
     
     !Process aquifer parameters for use in simulation
-    CALL ProcessAquiferParameters(AppGrid,Stratigraphy,lSubsidence_Defined,AppSubsidence,Nodes,GWState,iStat)
+    CALL ProcessAquiferParameters(Logger,AppGrid,Stratigraphy,lSubsidence_Defined,AppSubsidence,Nodes,GWState,iStat)
     IF (iStat .EQ. -1) GOTO 10
 
     !Return variables
@@ -1946,18 +2027,19 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET AQUIFER HORIZONTAL HYDRAULIC CONDUCTIVITY WITHOUT AppGW OBJECT 
   ! -------------------------------------------------------------
-  SUBROUTINE GetAquiferKh_FromFile(cGWFileName,cWorkingDirectory,AppGrid,Stratigraphy,TimeStep,rAquiferKh,iStat)
+  SUBROUTINE GetAquiferKh_FromFile(Logger,cGWFileName,cWorkingDirectory,AppGrid,Stratigraphy,TimeStep,rAquiferKh,iStat)
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
     CHARACTER(LEN=*),INTENT(IN)       :: cGWFileName,cWorkingDirectory
     TYPE(AppGridType),INTENT(IN)      :: AppGrid
     TYPE(StratigraphyType),INTENT(IN) :: Stratigraphy
     TYPE(TimeStepType),INTENT(IN)     :: TimeStep
     REAL(8),INTENT(OUT)               :: rAquiferKh(:,:)
     INTEGER,INTENT(OUT)               :: iStat
-    
+
     !Local variables
     REAL(8) :: rDummy(SIZE(rAquiferKh,DIM=1),SIZE(rAquiferKh,DIM=2))
-    
-    CALL GetAquiferParameters_FromFile(cGWFileName,cWorkingDirectory,AppGrid,Stratigraphy,TimeStep,rAquiferKh,rDummy,rDummy,rDummy,rDummy,iStat)
+
+    CALL GetAquiferParameters_FromFile(Logger,cGWFileName,cWorkingDirectory,AppGrid,Stratigraphy,TimeStep,rAquiferKh,rDummy,rDummy,rDummy,rDummy,iStat)
     
   END SUBROUTINE GetAquiferKh_FromFile
    
@@ -1965,18 +2047,19 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET AQUIFER VERTICAL HYDRAULIC CONDUCTIVITY WITHOUT AppGW OBJECT 
   ! -------------------------------------------------------------
-  SUBROUTINE GetAquiferKv_FromFile(cGWFileName,cWorkingDirectory,AppGrid,Stratigraphy,TimeStep,rAquiferKv,iStat)
+  SUBROUTINE GetAquiferKv_FromFile(Logger,cGWFileName,cWorkingDirectory,AppGrid,Stratigraphy,TimeStep,rAquiferKv,iStat)
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
     CHARACTER(LEN=*),INTENT(IN)       :: cGWFileName,cWorkingDirectory
     TYPE(AppGridType),INTENT(IN)      :: AppGrid
     TYPE(StratigraphyType),INTENT(IN) :: Stratigraphy
     TYPE(TimeStepType),INTENT(IN)     :: TimeStep
     REAL(8),INTENT(OUT)               :: rAquiferKv(:,:)
     INTEGER,INTENT(OUT)               :: iStat
-    
+
     !Local variables
     REAL(8) :: rDummy(SIZE(rAquiferKv,DIM=1),SIZE(rAquiferKv,DIM=2))
-    
-    CALL GetAquiferParameters_FromFile(cGWFileName,cWorkingDirectory,AppGrid,Stratigraphy,TimeStep,rDummy,rAquiferKv,rDummy,rDummy,rDummy,iStat)
+
+    CALL GetAquiferParameters_FromFile(Logger,cGWFileName,cWorkingDirectory,AppGrid,Stratigraphy,TimeStep,rDummy,rAquiferKv,rDummy,rDummy,rDummy,iStat)
     
   END SUBROUTINE GetAquiferKv_FromFile
    
@@ -1984,18 +2067,19 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET AQUITARD VERTICAL HYDRUALIC CONDUCTIVITY WITHOUT AppGW OBJECT 
   ! -------------------------------------------------------------
-  SUBROUTINE GetAquitardKv_FromFile(cGWFileName,cWorkingDirectory,AppGrid,Stratigraphy,TimeStep,rAquitardKv,iStat)
+  SUBROUTINE GetAquitardKv_FromFile(Logger,cGWFileName,cWorkingDirectory,AppGrid,Stratigraphy,TimeStep,rAquitardKv,iStat)
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
     CHARACTER(LEN=*),INTENT(IN)       :: cGWFileName,cWorkingDirectory
     TYPE(AppGridType),INTENT(IN)      :: AppGrid
     TYPE(StratigraphyType),INTENT(IN) :: Stratigraphy
     TYPE(TimeStepType),INTENT(IN)     :: TimeStep
     REAL(8),INTENT(OUT)               :: rAquitardKv(:,:)
     INTEGER,INTENT(OUT)               :: iStat
-    
+
     !Local variables
     REAL(8) :: rDummy(SIZE(rAquitardKv,DIM=1),SIZE(rAquitardKv,DIM=2))
-    
-    CALL GetAquiferParameters_FromFile(cGWFileName,cWorkingDirectory,AppGrid,Stratigraphy,TimeStep,rDummy,rDummy,rAquitardKv,rDummy,rDummy,iStat)
+
+    CALL GetAquiferParameters_FromFile(Logger,cGWFileName,cWorkingDirectory,AppGrid,Stratigraphy,TimeStep,rDummy,rDummy,rAquitardKv,rDummy,rDummy,iStat)
     
   END SUBROUTINE GetAquitardKv_FromFile
    
@@ -2003,18 +2087,19 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET SPECIFIC YIELD WITHOUT AppGW OBJECT 
   ! -------------------------------------------------------------
-  SUBROUTINE GetAquiferSy_FromFile(cGWFileName,cWorkingDirectory,AppGrid,Stratigraphy,TimeStep,rSy,iStat)
+  SUBROUTINE GetAquiferSy_FromFile(Logger,cGWFileName,cWorkingDirectory,AppGrid,Stratigraphy,TimeStep,rSy,iStat)
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
     CHARACTER(LEN=*),INTENT(IN)       :: cGWFileName,cWorkingDirectory
     TYPE(AppGridType),INTENT(IN)      :: AppGrid
     TYPE(StratigraphyType),INTENT(IN) :: Stratigraphy
     TYPE(TimeStepType),INTENT(IN)     :: TimeStep
     REAL(8),INTENT(OUT)               :: rSy(:,:)
     INTEGER,INTENT(OUT)               :: iStat
-    
+
     !Local variables
     REAL(8) :: rDummy(SIZE(rSy,DIM=1),SIZE(rSy,DIM=2))
-    
-    CALL GetAquiferParameters_FromFile(cGWFileName,cWorkingDirectory,AppGrid,Stratigraphy,TimeStep,rDummy,rDummy,rDummy,rDummy,rSy,iStat)
+
+    CALL GetAquiferParameters_FromFile(Logger,cGWFileName,cWorkingDirectory,AppGrid,Stratigraphy,TimeStep,rDummy,rDummy,rDummy,rDummy,rSy,iStat)
     
   END SUBROUTINE GetAquiferSy_FromFile
    
@@ -2022,18 +2107,19 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET STORAGE COEFFICIENT WITHOUT AppGW OBJECT (AFTER SPECIFIC STORAGE IS MULTIPLIED BY AQUIFER THICKNESS)
   ! -------------------------------------------------------------
-  SUBROUTINE GetAquiferSs_FromFile(cGWFileName,cWorkingDirectory,AppGrid,Stratigraphy,TimeStep,rSs,iStat)
+  SUBROUTINE GetAquiferSs_FromFile(Logger,cGWFileName,cWorkingDirectory,AppGrid,Stratigraphy,TimeStep,rSs,iStat)
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
     CHARACTER(LEN=*),INTENT(IN)       :: cGWFileName,cWorkingDirectory
     TYPE(AppGridType),INTENT(IN)      :: AppGrid
     TYPE(StratigraphyType),INTENT(IN) :: Stratigraphy
     TYPE(TimeStepType),INTENT(IN)     :: TimeStep
     REAL(8),INTENT(OUT)               :: rSs(:,:)
     INTEGER,INTENT(OUT)               :: iStat
-    
+
     !Local variables
     REAL(8) :: rDummy(SIZE(rSs,DIM=1),SIZE(rSs,DIM=2))
-    
-    CALL GetAquiferParameters_FromFile(cGWFileName,cWorkingDirectory,AppGrid,Stratigraphy,TimeStep,rDummy,rDummy,rDummy,rSs,rDummy,iStat)
+
+    CALL GetAquiferParameters_FromFile(Logger,cGWFileName,cWorkingDirectory,AppGrid,Stratigraphy,TimeStep,rDummy,rDummy,rDummy,rSs,rDummy,iStat)
     
   END SUBROUTINE GetAquiferSs_FromFile
    
@@ -2242,7 +2328,11 @@ CONTAINS
         
     !Return with error if filename is empty
     IF (LEN_TRIM(cFileName) .EQ. 0) THEN
-        CALL SetLastMessage('Requested hydrograph data is not part of the model output!',f_iFatal,ThisProcedure)
+        IF (ASSOCIATED(AppGW%Logger)) THEN
+            CALL AppGW%Logger%SetLastMessage('Requested hydrograph data is not part of the model output!',f_iFatal,ThisProcedure)
+        ELSE
+            CALL AppGW%Logger%SetLastMessage('Requested hydrograph data is not part of the model output!',f_iFatal,ThisProcedure)
+        END IF
         iStat = -1
         RETURN
     END IF
@@ -3289,7 +3379,11 @@ CONTAINS
         CALL AppGW%AppPumping%GetPumpingPurpose(iPumpType,iPumps,iAgOrUrban,iStat)
     ELSE
         iStat = -1
-        CALL SetLastMessage('Pumping is not simulated so purposes for pumping cannot be retrieved!',f_iFatal,ThisProcedure)
+        IF (ASSOCIATED(AppGW%Logger)) THEN
+            CALL AppGW%Logger%SetLastMessage('Pumping is not simulated so purposes for pumping cannot be retrieved!',f_iFatal,ThisProcedure)
+        ELSE
+            CALL AppGW%Logger%SetLastMessage('Pumping is not simulated so purposes for pumping cannot be retrieved!',f_iFatal,ThisProcedure)
+        END IF
     END IF
     
   END SUBROUTINE GetPumpPurpose
@@ -3968,7 +4062,8 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- PRINT-OUT FINAL AQUIFER PARAMETERS
   ! -------------------------------------------------------------
-  SUBROUTINE PrintAquiferParameters(iGWNodeIDs,GWNodes)
+  SUBROUTINE PrintAquiferParameters(Logger,iGWNodeIDs,GWNodes)
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
     INTEGER,INTENT(IN)          :: iGWNodeIDs(:)
     TYPE(GWNodeType),INTENT(IN) :: GWNodes
     
@@ -3981,18 +4076,18 @@ CONTAINS
     NLayers = SIZE(GWNodes%Kh , DIM=2)
     
     !Print parameters
-    CALL LogMessage('',f_iMessage,'',f_iFILE)
-    CALL LogMessage(REPEAT('-',100),f_iMessage,'',f_iFILE)
-    CALL LogMessage(REPEAT(' ',30)//'AQUIFER PARAMETER VALUES FOR EACH NODE',f_iMessage,'',f_iFILE)
-    CALL LogMessage(REPEAT(' ',12)//'*** Note: Values Below are After '//'Multiplication by Conversion Factors ***',f_iMessage,'',f_iFILE)
-    CALL LogMessage(REPEAT('-',100),f_iMessage,'',f_iFILE)
+    CALL Logger%LogMessage('',f_iMessage,'',f_iFILE)
+    CALL Logger%LogMessage(REPEAT('-',100),f_iMessage,'',f_iFILE)
+    CALL Logger%LogMessage(REPEAT(' ',30)//'AQUIFER PARAMETER VALUES FOR EACH NODE',f_iMessage,'',f_iFILE)
+    CALL Logger%LogMessage(REPEAT(' ',12)//'*** Note: Values Below are After '//'Multiplication by Conversion Factors ***',f_iMessage,'',f_iFILE)
+    CALL Logger%LogMessage(REPEAT('-',100),f_iMessage,'',f_iFILE)
     WRITE (Text,'(A,2X,5(A,2X))')             &
         '   NODE','        PKH             '   &
                  ,'        PS              '   &
                  ,'        PN              '   &
                  ,'        PV              '   &
                  ,'        PL              '   
-    CALL LogMessage(TRIM(Text),f_iMessage,'',f_iFILE)
+    CALL Logger%LogMessage(TRIM(Text),f_iMessage,'',f_iFILE)
     
     DO indxNode=1,NNodes
       DO indxLayer=1,NLayers                                                                                          
@@ -4003,11 +4098,11 @@ CONTAINS
           WRITE (Text,'(9X,5(1PG24.15E3,2X))')                                                                  &                                                                                          
                          GWNodes%Kh(indxNode,indxLayer)   ,GWNodes%Ss(indxNode,indxLayer) ,GWNodes%Sy(indxNode,indxLayer) ,GWNodes%AquitardKv(indxNode,indxLayer)   ,GWNodes%Kv(indxNode,indxLayer)                                                                                              
         END IF                                                                                          
-        CALL LogMessage(TRIM(Text),f_iMessage,'',f_iFILE)                                                                                          
+        CALL Logger%LogMessage(TRIM(Text),f_iMessage,'',f_iFILE)                                                                                          
       END DO                                                                                          
     END DO  
         
-    CALL LogMessage('',f_iMessage,'',f_iFILE)
+    CALL Logger%LogMessage('',f_iMessage,'',f_iFILE)
 
   END SUBROUTINE PrintAquiferParameters
   
@@ -4078,7 +4173,8 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- READ GW RETURN FLOW DESTINATIONS
   ! -------------------------------------------------------------
-  SUBROUTINE ReadGWReturnFlowDestinations(iStrmNodeIDs,iLakeIDs,iGWNodeIDs,AppGWParamFile,lSimulateGWReturnFlow,iGWReturnFlowDestType,iGWReturnFlowDest,iStat)
+  SUBROUTINE ReadGWReturnFlowDestinations(Logger,iStrmNodeIDs,iLakeIDs,iGWNodeIDs,AppGWParamFile,lSimulateGWReturnFlow,iGWReturnFlowDestType,iGWReturnFlowDest,iStat)
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
     INTEGER,INTENT(IN)                  :: iStrmNodeIDs(:),iLakeIDs(:),iGWNodeIDs(:)
     TYPE(GenericFileType),INTENT(INOUT) :: AppGWParamFile
     LOGICAL,INTENT(OUT)                 :: lSimulateGWReturnFlow
@@ -4114,14 +4210,14 @@ CONTAINS
         iNodeID = iDummyArray(1)
         iNode   = LocateInList(iNodeID,iGWNodeIDs)
         IF (iNode .EQ. 0) THEN
-            CALL SetLastMessage('Node ID '//TRIM(IntToText(iNodeID))//' listed for groundwater return flow destination data is not modeled!',f_iFatal,ThisProcedure)
+            CALL Logger%SetLastMessage('Node ID '//TRIM(IntToText(iNodeID))//' listed for groundwater return flow destination data is not modeled!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
         
         !Check if elemenet was listed before
         IF (lProcessed(iNode)) THEN
-            CALL SetLastMessage('Node '//TRIM(IntToText(iNodeID))//' is listed more than once for groundwater return flow destination data!',f_iFatal,ThisProcedure)
+            CALL Logger%SetLastMessage('Node '//TRIM(IntToText(iNodeID))//' is listed more than once for groundwater return flow destination data!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -4130,7 +4226,7 @@ CONTAINS
         !Check that destination type is legit
         iDestinationType = iDummyArray(2)
         IF (LocateInList(iDestinationType,f_iDestinationTypeList) .EQ. 0) THEN
-            CALL SetLastMessage ('Groundwater flow destination type for node ' // TRIM(IntToText(iNodeID)) // ' is not accepted!',f_iFatal,ThisProcedure)
+            CALL Logger%SetLastMessage('Groundwater flow destination type for node ' // TRIM(IntToText(iNodeID)) // ' is not accepted!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -4147,7 +4243,7 @@ CONTAINS
                 IF (iStrmNode .EQ. 0) THEN
                     MessageArray(1) = 'Stream node number ' // TRIM(IntToText(iStrmNodeID)) // ' listed for groundwater node ' // TRIM(IntToText(iNodeID)) 
                     MessageArray(2) = ' as groundwater return flow destination is not in the model!'
-                    CALL SetLastMessage (MessageArray(1:2),f_iFatal,ThisProcedure)
+                    CALL Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                     iStat = -1
                     RETURN
                 END IF
@@ -4159,7 +4255,7 @@ CONTAINS
                 IF (iLake .EQ. 0) THEN
                     MessageArray(1) = 'Lake number ' // TRIM(IntToText(iLakeID)) // ' listed for groundwater node ' // TRIM(IntToText(iNodeID)) 
                     MessageArray(2) = ' as groundwater return flow destination is not in the model!'
-                    CALL SetLastMessage (MessageArray(1:2),f_iFatal,ThisProcedure)
+                    CALL Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                     iStat = -1
                     RETURN
                 END IF
@@ -4197,7 +4293,8 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- READ INITIAL HEADS
   ! -------------------------------------------------------------
-  SUBROUTINE ReadInitialHeads(AppGWParamFile,NNodes,NodeIDs,Stratigraphy,Heads,iStat)
+  SUBROUTINE ReadInitialHeads(Logger,AppGWParamFile,NNodes,NodeIDs,Stratigraphy,Heads,iStat)
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
     TYPE(GenericFileType)             :: AppGWParamFile
     INTEGER,INTENT(IN)                :: NNodes,NodeIDs(NNodes)
     TYPE(StratigraphyType),INTENT(IN) :: Stratigraphy
@@ -4225,14 +4322,14 @@ CONTAINS
         ID = INT(rDummyArray(1))
         CALL ConvertID_To_Index(ID,NodeIDs,index)
         IF (index .EQ. 0) THEN
-            CALL SetLastMessage('Node ID '//TRIM(IntToText(ID))//' listed for initial groundwater heads is not in the model!',f_iFatal,ThisProcedure)
+            CALL Logger%SetLastMessage('Node ID '//TRIM(IntToText(ID))//' listed for initial groundwater heads is not in the model!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
         
         !Make sure same node is not listed more than once
         IF (lProcessed(index)) THEN
-            CALL SetLastMessage('Node ID '//TRIM(IntToText(ID))//' is listed more than once for initial groundwater heads!',f_iFatal,ThisProcedure)
+            CALL Logger%SetLastMessage('Node ID '//TRIM(IntToText(ID))//' is listed more than once for initial groundwater heads!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -4266,7 +4363,7 @@ CONTAINS
     !Make sure all nodes are processed
     DO indxNode=1,NNodes
         IF (.NOT. lProcessed(indxNode)) THEN
-            CALL SetLastMessage('Initial groundwater heads at node '//TRIM(IntToText(NodeIDs(indxNode)))//' are not defined!',f_iFatal,ThisProcedure)
+            CALL Logger%SetLastMessage('Initial groundwater heads at node '//TRIM(IntToText(NodeIDs(indxNode)))//' are not defined!',f_iFatal,ThisProcedure)
             iStat = -1
             EXIT
         END IF
@@ -4278,7 +4375,8 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- READ AQUIFER PARAMETER DATA
   ! -------------------------------------------------------------
-  SUBROUTINE ReadAquiferParameters(NLayers,AppGrid,TimeStep,InFile,VarTimeUnit,GWNodes,iStat)
+  SUBROUTINE ReadAquiferParameters(Logger,NLayers,AppGrid,TimeStep,InFile,VarTimeUnit,GWNodes,iStat)
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
     INTEGER,INTENT(IN)            :: NLayers
     TYPE(AppGridType),INTENT(IN)  :: AppGrid
     TYPE(TimeStepType),INTENT(IN) :: TimeStep
@@ -4301,7 +4399,7 @@ CONTAINS
     iStat   = 0
     
     !Inform user
-    CALL EchoProgress('   Reading aquifer parameters...')
+    CALL Logger%EchoProgress('   Reading aquifer parameters...')
     
     !Initialize
     NNodes     = AppGrid%NNodes
@@ -4325,17 +4423,17 @@ CONTAINS
     !Make sure time units are valid if time tracking simulation
     IF (TimeStep%TrackTime) THEN
         IF (IsTimeIntervalValid(cTimeUnit_Kh) .EQ. 0) THEN
-            CALL SetLastMessage('Time unit for aquifer horizontal hydraulic conductivity is not valid!',f_iFatal,ThisProcedure)
+            CALL Logger%SetLastMessage('Time unit for aquifer horizontal hydraulic conductivity is not valid!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
         IF (IsTimeIntervalValid(cTimeUnit_AquitardV) .EQ. 0) THEN
-            CALL SetLastMessage('Time unit for aquitard vertical conductivity is not valid!',f_iFatal,ThisProcedure)
+            CALL Logger%SetLastMessage('Time unit for aquitard vertical conductivity is not valid!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
         IF (IsTimeIntervalValid(cTimeUnit_Kv) .EQ. 0) THEN
-            CALL SetLastMessage('Time unit for aquifer vertical hydraulic conductivity is not valid!',f_iFatal,ThisProcedure)
+            CALL Logger%SetLastMessage('Time unit for aquifer vertical hydraulic conductivity is not valid!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -4366,14 +4464,14 @@ CONTAINS
                 ID = INT(rDummyArray(1))  
                 CALL ConvertID_To_Index(ID,NodeIDs,index)
                 IF (index .EQ. 0) THEN
-                    CALL SetLastMessage('Groundwater node ID '//TRIM(IntToText(ID))//' listed for aquifer parameters is not in the model!',f_iFatal,ThisProcedure)
+                    CALL Logger%SetLastMessage('Groundwater node ID '//TRIM(IntToText(ID))//' listed for aquifer parameters is not in the model!',f_iFatal,ThisProcedure)
                     iStat = -1
                     RETURN
                 END IF
                 
                 !Check that node is not listed more than once
                 IF (lProcessed(index)) THEN
-                    CALL SetLastMessage('Groundwater node ID '//TRIM(IntToText(ID))//' is listed more than once for aquifer parameter entry!',f_iFatal,ThisProcedure)
+                    CALL Logger%SetLastMessage('Groundwater node ID '//TRIM(IntToText(ID))//' is listed more than once for aquifer parameter entry!',f_iFatal,ThisProcedure)
                     iStat = -1
                     RETURN
                 END IF
@@ -4394,7 +4492,7 @@ CONTAINS
         !Check all nodes are processed
         DO indxNode=1,NNodes
             IF (.NOT. lProcessed(indxNode)) THEN
-                CALL SetLastMessage('Aquifer parameters are not defined at node '//TRIM(IntToText(NodeIDs(indxNode)))//'!',f_iFatal,ThisProcedure)
+                CALL Logger%SetLastMessage('Aquifer parameters are not defined at node '//TRIM(IntToText(NodeIDs(indxNode)))//'!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -4405,7 +4503,7 @@ CONTAINS
     IF (NGroup .GT. 0) THEN
 
         !Read the parameter values at parametric nodes and compute the interpolation coefficients for finite element nodes
-        CALL GetValuesFromParametricGrid(InFile,AppGrid%GridType,NodeIDs,NGroup,rFactors,.FALSE.,'aquifer paremeters',rDummy3DArray,iStat)
+        CALL GetValuesFromParametricGrid(AppGrid%GridType%Logger,InFile,AppGrid%GridType,NodeIDs,NGroup,rFactors,.FALSE.,'aquifer paremeters',rDummy3DArray,iStat)
         IF (iStat .EQ. -1) RETURN
 
         !Initialize parameter values
@@ -4432,7 +4530,7 @@ CONTAINS
         IEBK = rDummyArray1(2)
         CALL ConvertID_To_Index(IEBK,ElementIDs,index)
         IF (index .EQ. 0) THEN
-            CALL LogMessage('Element '//TRIM(IntToText(IEBK))//' listed for anomaly hydraulic conductivity is not in the model! Skipping...',f_iInfo,ThisProcedure)
+            CALL Logger%LogMessage('Element '//TRIM(IntToText(IEBK))//' listed for anomaly hydraulic conductivity is not in the model! Skipping...',f_iInfo,ThisProcedure)
             CYCLE
         END IF
         BK = rDummyArray1(3:) * Fact
@@ -4509,7 +4607,8 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- PREPARE AQUIFER PARAMETERS TO BE USED IN SIMULATION
   ! -------------------------------------------------------------
-  SUBROUTINE ProcessAquiferParameters(AppGrid,Stratigraphy,lSubsidence_Defined,AppSubsidence,GWNodes,GWState,iStat)
+  SUBROUTINE ProcessAquiferParameters(Logger,AppGrid,Stratigraphy,lSubsidence_Defined,AppSubsidence,GWNodes,GWState,iStat)
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
     TYPE(AppGridType),INTENT(IN)      :: AppGrid
     TYPE(StratigraphyType),INTENT(IN) :: Stratigraphy
     LOGICAL,INTENT(IN)                :: lSubsidence_Defined
@@ -4559,7 +4658,7 @@ CONTAINS
                         MessageArray(1) = 'Aquifer thickness at node '//TRIM(IntToText(ID))//' and layer '//TRIM(IntToText(indxLayer))//' is less than interbed thickness!'
                         WRITE(MessageArray(2),'(A,F12.6)') 'Aquifer thickness  = ',rAquiferThickness
                         WRITE(MessageArray(3),'(A,F12.6)') 'Interbed thickness = ',rInterbedThick(indxNode,indxLayer)
-                        CALL SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+                        CALL Logger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
                         iStat = -1
                         RETURN
                     END IF
@@ -4618,7 +4717,7 @@ CONTAINS
                 IF (GWNodes%Kh(indxNode,indxLayer) .LT. 0.0) THEN
                     MessageArray(1) = 'Hydraulic conductivity is less than zero '
                     WRITE (MessageArray(2),'(5A,F9.3,A)') 'at node ',TRIM(IntToText(ID)),', layer ',TRIM(IntToText(indxLayer)),' (',GWNodes%Kh(indxNode,indxLayer),')'
-                    CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                    CALL Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                     iStat = -1
                     RETURN
                 END IF
@@ -4627,7 +4726,7 @@ CONTAINS
                 IF (GWNodes%Ss(indxNode,indxLayer) .LT. 0.0) THEN
                     MessageArray(1) = 'Specific storage is less than zero '
                     WRITE (MessageArray(2),'(5A,F9.3,A)') 'at node ',TRIM(IntToText(ID)),', layer ',TRIM(IntToText(indxLayer)),' (',GWNodes%Ss(indxNode,indxLayer),')'
-                    CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                    CALL Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                     iStat = -1
                     RETURN
                 END IF
@@ -4636,7 +4735,7 @@ CONTAINS
                 IF (GWNodes%Sy(indxNode,indxLayer) .LT. 0.0) THEN
                     MessageArray(1) = 'Specific yield is less than zero '
                     WRITE (MessageArray(2),'(5A,F9.3,A)') 'at node ',TRIM(IntToText(ID)),', layer ',TRIM(IntToText(indxLayer)),' (',GWNodes%Sy(indxNode,indxLayer),')'
-                    CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                    CALL Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                     iStat = -1
                     RETURN
                 END IF
@@ -4645,7 +4744,7 @@ CONTAINS
                 IF (GWNodes%LeakageV(indxNode,indxLayer) .LT. 0.0) THEN
                     MessageArray(1) = 'Vertical leakage is less than zero '
                     WRITE (MessageArray(2),'(5A,F9.3,A)') 'at node ',TRIM(IntToText(ID)),', layer ',TRIM(IntToText(indxLayer)),' (',GWNodes%LeakageV(indxNode,indxLayer),')'
-                    CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                    CALL Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                     iStat = -1
                     RETURN
                 END IF
@@ -4663,7 +4762,8 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- OVERWRITE GROUNDWATER PARAMETERS
   ! -------------------------------------------------------------
-  SUBROUTINE OverwriteParameters(cFileName,AppGrid,VarTimeUnit,TrackTime,lSubsidence_Defined,GWNodes,AppSubsidence,iStat)
+  SUBROUTINE OverwriteParameters(Logger,cFileName,AppGrid,VarTimeUnit,TrackTime,lSubsidence_Defined,GWNodes,AppSubsidence,iStat)
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
     CHARACTER(LEN=*),INTENT(IN)  :: cFileName,VarTimeUnit
     TYPE(AppGridType),INTENT(IN) :: AppGrid
     LOGICAL,INTENT(IN)           :: TrackTime,lSubsidence_Defined
@@ -4705,17 +4805,17 @@ CONTAINS
     !Make sure time units are valid if time tracking simulation
     IF (TrackTime) THEN
         IF (IsTimeIntervalValid(cTimeUnit_Kh) .EQ. 0) THEN
-            CALL SetLastMessage('Time unit for aquifer horizontal hydraulic conductivity in over-write file is not valid!',f_iFatal,ThisProcedure)
+            CALL Logger%SetLastMessage('Time unit for aquifer horizontal hydraulic conductivity in over-write file is not valid!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
         IF (IsTimeIntervalValid(cTimeUnit_AquitardV) .EQ. 0) THEN
-            CALL SetLastMessage('Time unit for aquitard vertical conductivity in over-write file is not valid!',f_iFatal,ThisProcedure)
+            CALL Logger%SetLastMessage('Time unit for aquitard vertical conductivity in over-write file is not valid!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
         IF (IsTimeIntervalValid(cTimeUnit_Kv) .EQ. 0) THEN
-            CALL SetLastMessage('Time unit for aquifer vertical hydraulic conductivity in over-write file is not valid!',f_iFatal,ThisProcedure)
+            CALL Logger%SetLastMessage('Time unit for aquifer vertical hydraulic conductivity in over-write file is not valid!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -4736,7 +4836,7 @@ CONTAINS
           iNode  = INT(rDummyArraySubs(1))
           CALL ConvertID_To_Index(iNode,NodeIDs,index)
           IF (index .EQ. 0) THEN
-              CALL LogMessage('Node number '//TRIM(IntTotext(iNode))//' listed for aquifer parameter overwrite is not part of the model! Skipping...',f_iInfo,ThisProcedure)
+              CALL Logger%LogMessage('Node number '//TRIM(IntTotext(iNode))//' listed for aquifer parameter overwrite is not part of the model! Skipping...',f_iInfo,ThisProcedure)
               CYCLE
           END IF
           iLayer = INT(rDummyArraySubs(2))
@@ -4755,7 +4855,7 @@ CONTAINS
           iNode = INT(rDummyArrayNoSubs(1))
           CALL ConvertID_To_Index(iNode,NodeIDs,index)
           IF (index .EQ. 0) THEN
-              CALL LogMessage('Node number '//TRIM(IntTotext(iNode))//' listed for aquifer parameter overwrite is not part of the model! Skipping...',f_iInfo,ThisProcedure)
+              CALL Logger%LogMessage('Node number '//TRIM(IntTotext(iNode))//' listed for aquifer parameter overwrite is not part of the model! Skipping...',f_iInfo,ThisProcedure)
               CYCLE
           END IF
           iLayer = INT(rDummyArrayNoSubs(2))
@@ -4860,7 +4960,11 @@ CONTAINS
     INTEGER,PARAMETER :: iCompIDs(1) = [f_iGWComp]
     
     !Inform user
-    CALL EchoProgress('Simulating groundwater flows...')
+    IF (ASSOCIATED(AppGW%Logger)) THEN
+        CALL AppGW%Logger%EchoProgress('Simulating groundwater flows...')
+    ELSE
+        CALL AppGW%Logger%EchoProgress('Simulating groundwater flows...')
+    END IF
     
     !Initialize
     NNodes = AppGrid%NNodes
@@ -5890,7 +5994,8 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- REGISTER GW COMPONENT WITH MATRIX
   ! -------------------------------------------------------------
-  SUBROUTINE RegisterWithMatrix(AppGrid,Stratigraphy,Matrix,iStat)
+  SUBROUTINE RegisterWithMatrix(Logger,AppGrid,Stratigraphy,Matrix,iStat)
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
     TYPE(AppGridType),INTENT(IN)      :: AppGrid
     TYPE(StratigraphyType),INTENT(IN) :: Stratigraphy
     TYPE(MatrixType)                  :: Matrix
@@ -5906,7 +6011,7 @@ CONTAINS
     iStat = 0
     
     !Inform user
-    CALL EchoProgress('Registering groundwater component with matrix...')
+    CALL Logger%EchoProgress('Registering groundwater component with matrix...')
     
     !Initialize grid related variables
     NNodes  = AppGrid%NNodes

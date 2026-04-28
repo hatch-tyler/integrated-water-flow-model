@@ -23,14 +23,12 @@
 MODULE Class_ZBudget
   USE,INTRINSIC :: ISO_C_BINDING , ONLY: C_INT                     , &
                                          C_CHAR                  
-  USE MessageLogger              , ONLY: LogMessage                , &
-                                         SetLastMessage            , &
-                                         EchoProgress              , &
+  USE MessageLogger              , ONLY: MessageLoggerType         , &
                                          MessageArray              , &
                                          f_iFatal                  , &
                                          f_iWarn                   , &
                                          f_iMessage                , &
-                                         f_iSCREEN_FILE               
+                                         f_iSCREEN_FILE
   USE GeneralUtilities           , ONLY: IntToText                 , &
                                          LocateInList              , &
                                          ArrangeText               , &
@@ -84,12 +82,12 @@ MODULE Class_ZBudget
                                          f_iVR_lwu_AgOthIn         , &
                                          f_iVR_lwu_AgShort         , &
                                          f_iVLB                    , &
-                                         f_iVLE                       
+                                         f_iVLE
   IMPLICIT NONE
-  
-  
 
-  
+
+
+
 ! ******************************************************************
 ! ******************************************************************
 ! ******************************************************************
@@ -112,13 +110,15 @@ MODULE Class_ZBudget
   ! --- Z-BUDGET DATA TYPE
   ! -------------------------------------------------------------
   TYPE ZBudgetType
-      TYPE(GenericFileType)   :: File
-      TYPE(ZBudgetHeaderType) :: Header
-      TYPE(SystemDataType)    :: SystemData
+      TYPE(GenericFileType)           :: File
+      TYPE(ZBudgetHeaderType)         :: Header
+      TYPE(SystemDataType)            :: SystemData
+      TYPE(MessageLoggerType),POINTER :: Logger => NULL()
   CONTAINS
+      PROCEDURE,PASS   :: SetLogger => ZBudget_SetLogger
       PROCEDURE,PASS   :: Create_ZBudget
       PROCEDURE,PASS   :: Open_ZBudget
-      PROCEDURE,PASS   :: Kill 
+      PROCEDURE,PASS   :: Kill
       PROCEDURE,PASS   :: GetFileName
       PROCEDURE,PASS   :: GetTimeStepRelatedData
       PROCEDURE,NOPASS :: GetNTitleLines
@@ -160,10 +160,22 @@ MODULE Class_ZBudget
   
   
 CONTAINS
-    
-    
-    
-    
+
+
+  ! -------------------------------------------------------------
+  ! --- SET THE LOGGER
+  ! -------------------------------------------------------------
+  SUBROUTINE ZBudget_SetLogger(ZBudget,Logger)
+    CLASS(ZBudgetType)                      :: ZBudget
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT) :: Logger
+
+    ZBudget%Logger => Logger
+
+  END SUBROUTINE ZBudget_SetLogger
+
+
+
+
 ! ******************************************************************
 ! ******************************************************************
 ! ******************************************************************
@@ -177,20 +189,24 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- CREATE NEW Z-BUDGET
   ! -------------------------------------------------------------
-  SUBROUTINE Create_ZBudget(ZBudget,cFileName,NTimeSteps,TimeStep,Header,SystemData,iStat)  
-    CLASS(ZBudgetType)                 :: ZBudget
-    CHARACTER(LEN=*),INTENT(IN)        :: cFileName
-    INTEGER,INTENT(IN)                 :: NTimeSteps
-    TYPE(TimeStepType),INTENT(IN)      :: TimeStep
-    TYPE(ZBudgetHeaderType),INTENT(IN) :: Header
-    TYPE(SystemDataType),INTENT(IN)    :: SystemData
-    INTEGER,INTENT(OUT)                :: iStat
-    
+  SUBROUTINE Create_ZBudget(ZBudget,Logger,cFileName,NTimeSteps,TimeStep,Header,SystemData,iStat)
+    CLASS(ZBudgetType)                        :: ZBudget
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT) :: Logger
+    CHARACTER(LEN=*),INTENT(IN)               :: cFileName
+    INTEGER,INTENT(IN)                        :: NTimeSteps
+    TYPE(TimeStepType),INTENT(IN)             :: TimeStep
+    TYPE(ZBudgetHeaderType),INTENT(IN)        :: Header
+    TYPE(SystemDataType),INTENT(IN)           :: SystemData
+    INTEGER,INTENT(OUT)                       :: iStat
+
     !Local variables
     CHARACTER(LEN=ModNameLen+14),PARAMETER :: ThisProcedure = ModName // 'Create_ZBudget'
     INTEGER                                :: indxLayer,indxData,iCount,nDataColumns((Header%iNData+3)*SystemData%NLayers),NNodes,NElements,NLayers,NFaces
     CHARACTER(LEN=f_iMaxDatasetNameLen)    :: cDatasetNames((Header%iNData+3)*SystemData%NLayers)
-    
+
+    !Set logger
+    ZBudget%Logger => Logger
+
     !Initialize
     iStat     = 0
     NNodes    = SystemData%NNodes
@@ -200,7 +216,7 @@ CONTAINS
     
     !Make sure that there are at least 3 lines of ASCII column titles
     IF (ZBudget%Header%ASCIIOutput%iNTitles .LT. 3) THEN
-        CALL SetLastMessage('There has to be at least 3 lines for column titles for Z-Budget ASCII output!',f_iFatal,ThisProcedure)
+        CALL ZBudget%Logger%SetLastMessage('There has to be at least 3 lines for column titles for Z-Budget ASCII output!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -213,11 +229,11 @@ CONTAINS
     
     !Make sure that file is an HDF5 file
     IF (iGetFileType_FromName(cFileName) .NE. f_iHDF) THEN
-        CALL SetLastMessage('File '//TRIM(ADJUSTL(cFileName))//' must be an HDF5 file for Z-Budget output!',f_iFatal,ThisProcedure)
+        CALL ZBudget%Logger%SetLastMessage('File '//TRIM(ADJUSTL(cFileName))//' must be an HDF5 file for Z-Budget output!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
-    
+
     !Open file
     CALL ZBudget%File%New(FileName=ADJUSTL(cFileName),InputFile=.FALSE.,Descriptor=Header%cDescriptor,iStat=iStat)
     IF (iStat .EQ. -1) RETURN
@@ -284,34 +300,38 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- OPEN AN EXISTING Z-BUDGET DATASET
   ! -------------------------------------------------------------
-  SUBROUTINE Open_ZBudget(ZBudget,cFileName,iStat)  
-    CLASS(ZBudgetType)          :: ZBudget
-    CHARACTER(LEN=*),INTENT(IN) :: cFileName
-    INTEGER,INTENT(OUT)         :: iStat
-    
+  SUBROUTINE Open_ZBudget(ZBudget,Logger,cFileName,iStat)
+    CLASS(ZBudgetType)                        :: ZBudget
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT) :: Logger
+    CHARACTER(LEN=*),INTENT(IN)               :: cFileName
+    INTEGER,INTENT(OUT)                       :: iStat
+
     !Local variables
     CHARACTER(LEN=ModNameLen+12),PARAMETER :: ThisProcedure = ModName // 'Open_ZBudget'
-    
+
+    !Set logger
+    ZBudget%Logger => Logger
+
     !Initialize
     iStat = 0
     
     !Make sure that file is an HDF5 file
     IF (iGetFileType_FromName(cFileName) .NE. f_iHDF) THEN
-        CALL SetLastMessage('File '//TRIM(ADJUSTL(cFileName))//' must be an HDF5 file for Z-Budget processing!',f_iFatal,ThisProcedure)
+        CALL ZBudget%Logger%SetLastMessage('File '//TRIM(ADJUSTL(cFileName))//' must be an HDF5 file for Z-Budget processing!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
-    
+
     !Open file
     CALL ZBudget%File%New(FileName=ADJUSTL(cFileName),InputFile=.TRUE.,iStat=iStat)
     IF (iStat .EQ. -1) RETURN
     
     !Read system data
-    CALL ZBudget%SystemData%ReadFromFile(ZBudget%File,iStat)
+    CALL ZBudget%SystemData%ReadFromFile(Logger,ZBudget%File,iStat)
     IF (iStat .EQ. -1) RETURN
-       
+
     !Read header
-    CALL ZBudget%Header%ReadFromFile(ZBudget%SystemData,ZBudget%File,iStat)  
+    CALL ZBudget%Header%ReadFromFile(Logger,ZBudget%SystemData,ZBudget%File,iStat)  
     
   END SUBROUTINE Open_ZBudget
  
@@ -686,8 +706,8 @@ CONTAINS
     CALL ZBudget%GetTimeStepRelatedData(NTimeSteps,TimeStep)
     
     !Calculate the number of intervals between output dates
-    iNOutputIntervals = OutputIntervals(TimeStep%DeltaT_InMinutes,cOutputBeginDateAndTime,cOutputInterval,ZBudget%Header%cDescriptor)
-    
+    iNOutputIntervals = OutputIntervals(TimeStep%DeltaT_InMinutes,cOutputBeginDateAndTime,cOutputInterval,ZBudget%Header%cDescriptor,ZBudget%Logger)
+
     !Final time stamp to julian
     rJulian = TimeStampToJulian(IncrementTimeStamp(IncrementTimeStamp(cOutputBeginDateAndTime,TimeStep%DeltaT_InMinutes,-1),TimeStep%DeltaT_InMinutes,iNOutputIntervals))
 
@@ -768,7 +788,7 @@ CONTAINS
     
     !If iZone equals -99 (undefined zone), generate an error and return
     IF (iZone .EQ. f_iUndefinedZone) THEN
-        CALL SetLastMessage('It is not allowed to generate zone budget for zone -99 (undefined zone)!',f_iFatal,ThisProcedure)
+        CALL ZBudget%Logger%SetLastMessage('It is not allowed to generate zone budget for zone -99 (undefined zone)!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -780,8 +800,8 @@ CONTAINS
     CALL AdjustPrintDates(TimeStep,NTimeSteps,cOutputBeginDateAndTime,cOutputEndDateAndTime,cAdjPrintBeginDateAndTime,cAdjPrintEndDateAndTime)
 
     !Calculate the number of intervals between output dates
-    iNOutputIntervals = OutputIntervals(TimeStep%DeltaT_InMinutes,TimeStep%CurrentDateAndTime,cOutputInterval,ZBudget%Header%cDescriptor)
-    
+    iNOutputIntervals = OutputIntervals(TimeStep%DeltaT_InMinutes,TimeStep%CurrentDateAndTime,cOutputInterval,ZBudget%Header%cDescriptor,ZBudget%Logger)
+
     !Does the zone budget output have a storage column
     IF (ZBudget%Header%lStorages_Defined) THEN
         NStorageCol = 1
@@ -801,13 +821,13 @@ CONTAINS
     IF (cPrintDateAndTime .TSGT. cAdjPrintEndDateAndTime) THEN
         MessageArray(1) = 'There are not enough print-out timesteps between specified time period.'
         MessageArray(2) = 'Printing of Z-Budget for '//TRIM(ZBudget%Header%cDescriptor)//' is supressed.'
-        CALL LogMessage(MessageArray(1:2),f_iWarn,ThisProcedure)
+        CALL ZBudget%Logger%LogMessage(MessageArray(1:2),f_iWarn,ThisProcedure)
     END IF
-    
+
     !Allocate array to hold the packed zone flows
     pZone => ZoneList%GetPointerToNode(iZone)
     IF (.NOT. ASSOCIATED(pZone)) THEN
-        CALL SetLastMessage('Zone number '//TRIM(IntToText(iZone))//' cannot be located in the list of zones!',f_iFatal,ThisProcedure)
+        CALL ZBudget%Logger%SetLastMessage('Zone number '//TRIM(IntToText(iZone))//' cannot be located in the list of zones!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -816,11 +836,11 @@ CONTAINS
             iNZoneDataCols = ZBudget%Header%iNData + 2*pZone%NAdjacentZones + NErrorCol + NStorageCol
     END SELECT
     ALLOCATE (rZoneFlows(iNZoneDataCols))
-    
+
     !Time stamps for output
     cCurrentDateAndTime = cAdjPrintBeginDateAndTime
     cPrintDateAndTime   = IncrementTimeStamp(cCurrentDateAndTime,TimeStep%DeltaT_InMinutes,iNOutputIntervals-1)
-    
+
     !Data unit types of the columns read
     DO indx=1,SIZE(iReadCols)
         iCol = iReadCols(indx)
@@ -849,7 +869,7 @@ CONTAINS
         IF (iStat .EQ. -1) RETURN
         
         !Is this the last time for printing?
-        iNOutputIntervals = OutputIntervals(TimeStep%DeltaT_InMinutes,IncrementTimeStamp(cPrintDateAndTime,TimeStep%DeltaT_InMinutes,1),cOutputInterval,ZBudget%Header%cDescriptor)
+        iNOutputIntervals = OutputIntervals(TimeStep%DeltaT_InMinutes,IncrementTimeStamp(cPrintDateAndTime,TimeStep%DeltaT_InMinutes,1),cOutputInterval,ZBudget%Header%cDescriptor,ZBudget%Logger)
         IF (IncrementTimeStamp(cPrintDateAndTime,TimeStep%DeltaT_InMinutes,iNOutputIntervals) .TSGT. cAdjPrintEndDateAndTime) THEN
             lFinalTime = .TRUE.
         ELSE
@@ -876,9 +896,9 @@ CONTAINS
         
         !Move in time
         cCurrentDateAndTime = IncrementTimeStamp(cPrintDateAndTime,TimeStep%DeltaT_InMinutes,1)
-        iNOutputIntervals   = OutputIntervals(TimeStep%DeltaT_InMinutes,cCurrentDateAndTime,cOutputInterval,ZBudget%Header%cDescriptor)
+        iNOutputIntervals   = OutputIntervals(TimeStep%DeltaT_InMinutes,cCurrentDateAndTime,cOutputInterval,ZBudget%Header%cDescriptor,ZBudget%Logger)
         cPrintDateAndTime   = IncrementTimeStamp(cCurrentDateAndTime,TimeStep%DeltaT_InMinutes,iNOutputIntervals-1)
-        
+
     END DO
 
   END SUBROUTINE ReadData_SelectedColumns_ForAZone
@@ -919,8 +939,8 @@ CONTAINS
     CALL AdjustPrintDates(TimeStep,NTimeSteps,cPrintBeginDateAndTime,cPrintEndDateAndTime,cAdjPrintBeginDateAndTime,cAdjPrintEndDateAndTime)
           
     !Calculate the number of intervals between output dates
-    iNOutputIntervals = OutputIntervals(TimeStep%DeltaT_InMinutes,TimeStep%CurrentDateAndTime,cPrintInterval,ZBudget%Header%cDescriptor)
-    
+    iNOutputIntervals = OutputIntervals(TimeStep%DeltaT_InMinutes,TimeStep%CurrentDateAndTime,cPrintInterval,ZBudget%Header%cDescriptor,ZBudget%Logger)
+
     !Does the zone budget output have a storage column
     IF (ZBudget%Header%lStorages_Defined) THEN
         NStorageCol = 1
@@ -940,9 +960,9 @@ CONTAINS
     IF (cPrintDateAndTime .TSGT. cAdjPrintEndDateAndTime) THEN
         MessageArray(1) = 'There are not enough print-out timesteps between specified time period.'
         MessageArray(2) = 'Printing of Z-Budget for '//TRIM(ZBudget%Header%cDescriptor)//' is supressed.'
-        CALL LogMessage(MessageArray(1:2),f_iWarn,ThisProcedure)
+        CALL ZBudget%Logger%LogMessage(MessageArray(1:2),f_iWarn,ThisProcedure)
     END IF
-    
+
     !Prepare output file(s)
     SELECT CASE (iGetFileType_FromName(cOutputFileName))
         !If output is text, prepare temporary files for each zone which will be merged all together later
@@ -977,7 +997,7 @@ CONTAINS
             
         !Outwise, error message
         CASE DEFAULT
-            CALL SetLastMessage('File '//TRIM(cOutputFileName)//' is not a recognized filetype for Z-Budget output!',f_iFatal,ThisProcedure) 
+            CALL ZBudget%Logger%SetLastMessage('File '//TRIM(cOutputFileName)//' is not a recognized filetype for Z-Budget output!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
     END SELECT
@@ -1002,14 +1022,14 @@ CONTAINS
     !Process zones through time
     DO
         !Inform user
-        CALL LogMessage(cPrintDateAndTime,f_iMessage,'',Destination=f_iSCREEN_FILE)
+        CALL ZBudget%Logger%LogMessage(cPrintDateAndTime,f_iMessage,'',Destination=f_iSCREEN_FILE)
         
         !Compile zone flows
         CALL CompileZoneData(ZBudget,ZoneList,iPrintZones,cCurrentDateAndTime,iNOutputIntervals,rFact_AR,rFact_VL,iStat)
         IF (iStat .EQ. -1) RETURN
         
         !Is this the last time for printing?
-        iNOutputIntervals = OutputIntervals(TimeStep%DeltaT_InMinutes,IncrementTimeStamp(cPrintDateAndTime,TimeStep%DeltaT_InMinutes,1),cPrintInterval,ZBudget%Header%cDescriptor)
+        iNOutputIntervals = OutputIntervals(TimeStep%DeltaT_InMinutes,IncrementTimeStamp(cPrintDateAndTime,TimeStep%DeltaT_InMinutes,1),cPrintInterval,ZBudget%Header%cDescriptor,ZBudget%Logger)
         IF (IncrementTimeStamp(cPrintDateAndTime,TimeStep%DeltaT_InMinutes,iNOutputIntervals) .TSGT. cAdjPrintEndDateAndTime) THEN
             lFinalPrint = .TRUE.
         ELSE
@@ -1035,9 +1055,9 @@ CONTAINS
         
         !Move in time
         cCurrentDateAndTime = IncrementTimeStamp(cPrintDateAndTime,TimeStep%DeltaT_InMinutes,1)
-        iNOutputIntervals   = OutputIntervals(TimeStep%DeltaT_InMinutes,cCurrentDateAndTime,cPrintInterval,ZBudget%Header%cDescriptor)
+        iNOutputIntervals   = OutputIntervals(TimeStep%DeltaT_InMinutes,cCurrentDateAndTime,cPrintInterval,ZBudget%Header%cDescriptor,ZBudget%Logger)
         cPrintDateAndTime   = IncrementTimeStamp(cCurrentDateAndTime,TimeStep%DeltaT_InMinutes,iNOutputIntervals-1)
-        
+
     END DO
     
     !If the output is to text file, merge temp files
@@ -1117,7 +1137,7 @@ CONTAINS
         !Make sure file is ASCII or DSS
         iFileType = iGetFileType_FromName(cOutFileName)
         IF (iFileType.NE.f_iTXT  .AND.  iFileType.NE.f_iDSS) THEN
-            CALL SetLastMessage('Z-Budget output file ('//TRIM(cOutFileName)//') must be either an ASCII or DSS file!',f_iFatal,ThisProcedure)
+            CALL ZBudget%Logger%SetLastMessage('Z-Budget output file ('//TRIM(cOutFileName)//') must be either an ASCII or DSS file!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -1840,10 +1860,11 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- CALCULATE INTERVALS BETWEEN TWO PRINT-OUT DATES 
   ! -------------------------------------------------------------
-  FUNCTION OutputIntervals(DeltaT_InMinutes,cCurrentDateAndTime,cPrintInterval,cDescriptor) RESULT(iNIntervals)
-    INTEGER,INTENT(IN)            :: DeltaT_InMinutes
-    CHARACTER(LEN=*),INTENT(IN)   :: cCurrentDateAndTime,cPrintInterval,cDescriptor
-    INTEGER                       :: iNIntervals
+  FUNCTION OutputIntervals(DeltaT_InMinutes,cCurrentDateAndTime,cPrintInterval,cDescriptor,Logger) RESULT(iNIntervals)
+    INTEGER,INTENT(IN)                         :: DeltaT_InMinutes
+    CHARACTER(LEN=*),INTENT(IN)                :: cCurrentDateAndTime,cPrintInterval,cDescriptor
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
+    INTEGER                                    :: iNIntervals
   
     !LOcal variables
     CHARACTER(LEN=ModNameLen+15),PARAMETER :: ThisProcedure = ModName // 'OutputIntervals'
@@ -1859,7 +1880,7 @@ CONTAINS
         IF (iPrintDeltaT_InMinutes .LT. DeltaT_InMinutes) THEN
             MessageArray(1) = 'Z-Budget output interval cannot be less than the simulation timestep!'
             MessageArray(2) = 'Adjusting the output interval to be equal to the simulation timestep for '//TRIM(cDescriptor)//'.'
-            CALL LogMessage(MessageArray(1:2),f_iWarn,ThisProcedure)
+            CALL Logger%LogMessage(MessageArray(1:2),f_iWarn,ThisProcedure)
             iPrintDeltaT_InMinutes = DeltaT_InMinutes
         END IF
         cDateZero    = IncrementTimeStamp(cCurrentDateAndTime,DeltaT_InMinutes,-1)  ! This method of calculation includes the cCurrentDateandTime in
@@ -1927,6 +1948,6 @@ CONTAINS
     END DO
     
   END SUBROUTINE ReplaceMarkers
-  
+
 
 END MODULE

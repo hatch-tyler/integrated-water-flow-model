@@ -21,9 +21,7 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 MODULE Class_AppSubsidence_v40
-  USE MessageLogger           , ONLY: SetLastMessage                , &
-                                      EchoProgress                  , &
-                                      LogMessage                    , &
+  USE MessageLogger           , ONLY: MessageLoggerType             , &
                                       f_iMessage                    , &
                                       f_iFatal                      , &
                                       f_iFILE
@@ -97,9 +95,11 @@ MODULE Class_AppSubsidence_v40
   INTEGER,PARAMETER                   :: ModNameLen = 25
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'Class_AppSubsidence_v40::'
 
-  
-  
+
+
 CONTAINS
+
+
     
     
     
@@ -117,8 +117,9 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- INSTANTIATE SUBSIDENCE COMPONENT
   ! -------------------------------------------------------------
-  SUBROUTINE AppSubsidence_v40_New(AppSubsidence,IsForInquiry,cFileName,cWorkingDirectory,iGWNodeIDs,AppGrid,Stratigraphy,StrmConnectivity,TimeStep,iStat,SubsICFile,NTIME) 
+  SUBROUTINE AppSubsidence_v40_New(AppSubsidence,Logger,IsForInquiry,cFileName,cWorkingDirectory,iGWNodeIDs,AppGrid,Stratigraphy,StrmConnectivity,TimeStep,iStat,SubsICFile,NTIME)
     CLASS(AppSubsidence_v40_Type),INTENT(OUT) :: AppSubsidence
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
     LOGICAL,INTENT(IN)                        :: IsForInquiry
     CHARACTER(LEN=*),INTENT(IN)               :: cFileName,cWorkingDirectory
     INTEGER,INTENT(IN)                        :: iGWNodeIDs(:)
@@ -140,12 +141,13 @@ CONTAINS
     
     !Initialize
     iStat = 0
-    
+    AppSubsidence%Logger => Logger
+
     !Return if no filename is given
     IF (cFileName .EQ. '') RETURN
-    
+
     !Inform user
-    CALL EchoProgress('   Instantiating subsidence component ...')
+    CALL AppSubsidence%Logger%EchoProgress('   Instantiating subsidence component ...')
     
     !Initialize
     NNodes  = AppGrid%NNodes
@@ -170,24 +172,24 @@ CONTAINS
               AppSubsidence%RegionalCumSubsidence_P(NRegn)   ,  &
               STAT=ErrorCode , ERRMSG=cErrorMsg              )
     IF (ErrorCode .NE. 0) THEN
-        CALL SetLastMessage('Error allocating memory for subsidence parameters!'//NEW_LINE('x')//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
+        CALL AppSubsidence%Logger%SetLastMessage('Error allocating memory for subsidence parameters!'//NEW_LINE('x')//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
-    
+
     !Initialize values
-    AppSubsidence%InterbedThick_P         = 0d0 
-    AppSubsidence%InterbedThick           = 0d0 
-    AppSubsidence%InterbedThickMin        = 0d0 
-    AppSubsidence%Subsidence              = 0d0 
+    AppSubsidence%InterbedThick_P         = 0d0
+    AppSubsidence%InterbedThick           = 0d0
+    AppSubsidence%InterbedThickMin        = 0d0
+    AppSubsidence%Subsidence              = 0d0
     AppSubsidence%CumSubsidence_P         = 0d0
     AppSubsidence%CumSubsidence           = 0d0
     AppSubsidence%PreCompactHead          = HUGE(0d0)
     AppSubsidence%RegionalCumSubsidence_P = 0d0
-    
+
     !Read away the version line
     CALL SubsMainFile%ReadData(ALine,iStat)  ;  IF (iStat .EQ. -1) RETURN
-    
+
     !Read configuration: IC file, output files, parameters, IC data
     CALL ReadSubsidenceConfig_v40(AppSubsidence,SubsMainFile,IsForInquiry,cWorkingDirectory,iGWNodeIDs,AppGrid,Stratigraphy,StrmConnectivity,TimeStep,iStat,SubsICFile)
     IF (iStat .EQ. -1) RETURN
@@ -242,12 +244,12 @@ CONTAINS
     IF (ALine .NE. '') THEN
         ALLOCATE (AppSubsidence%TecplotFile , STAT=ErrorCode , ERRMSG=cErrorMsg)
         IF (ErrorCode .NE. 0) THEN
-            CALL SetLastMessage('Error allocating memory for subsidence Tecplot file output.'//f_cLineFeed//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
+            CALL AppSubsidence%Logger%SetLastMessage('Error allocating memory for subsidence Tecplot file output.'//f_cLineFeed//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
         CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(ALine)),cWorkingDirectory,cAbsPathFileName)
-        CALL AppSubsidence%TecplotFile%New(IsForInquiry,cAbsPathFileName,'subsidence print-out for Tecplot',iStat)  ;  IF (iStat .EQ. -1) RETURN
+        CALL AppSubsidence%TecplotFile%New(AppSubsidence%Logger,IsForInquiry,cAbsPathFileName,'subsidence print-out for Tecplot',iStat)  ;  IF (iStat .EQ. -1) RETURN
         AppSubsidence%lTecplotFile_Defined = .TRUE.
 
         !Print zero subsidence as initial values
@@ -263,7 +265,7 @@ CONTAINS
     IF (ALine .NE. '') THEN
         ALLOCATE (AppSubsidence%FinalSubsFile , STAT=ErrorCode , ERRMSG=cErrorMsg)
         IF (ErrorCode .NE. 0) THEN
-            CALL SetLastMessage('Error allocating memory for end-of-simulation subsidence output file.'//f_cLineFeed//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
+            CALL AppSubsidence%Logger%SetLastMessage('Error allocating memory for end-of-simulation subsidence output file.'//f_cLineFeed//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -275,7 +277,7 @@ CONTAINS
         END IF
         IF (iStat .EQ. -1) RETURN
         IF (AppSubsidence%FinalSubsFile%iGetFileType() .NE. f_iTXT) THEN
-            CALL SetLastMessage('End-of-simulation subsidence output file must be a text file!',f_iFatal,ThisProcedure)
+            CALL AppSubsidence%Logger%SetLastMessage('End-of-simulation subsidence output file must be a text file!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -290,11 +292,11 @@ CONTAINS
     !Subsidence hydrograph output data
     ALLOCATE (AppSubsidence%SubsHydOutput ,STAT=ErrorCode , ERRMSG=cErrorMsg)
     IF (ErrorCode .NE. 0) THEN
-        CALL SetLastMessage('Error in allocating memory for subsidence printing at user-specified locations!'//f_cLineFeed//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
+        CALL AppSubsidence%Logger%SetLastMessage('Error in allocating memory for subsidence printing at user-specified locations!'//f_cLineFeed//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
-    CALL AppSubsidence%SubsHydOutput%New(IsForInquiry,SubsMainFile,cWorkingDirectory,AppGrid,Stratigraphy,iGWNodeIDs,f_iHyd_Subsidence,AppSubsidence%cUnitLen,'TOTAL_CHANGE_THICK',TimeStep,iStat)
+    CALL AppSubsidence%SubsHydOutput%New(AppSubsidence%Logger,IsForInquiry,SubsMainFile,cWorkingDirectory,AppGrid,Stratigraphy,iGWNodeIDs,f_iHyd_Subsidence,AppSubsidence%cUnitLen,'TOTAL_CHANGE_THICK',TimeStep,iStat)
     IF (iStat .EQ. -1) RETURN
     AppSubsidence%lSubsHydOutput_Defined = AppSubsidence%SubsHydOutput%IsDefined()
     IF (AppSubsidence%lSubsHydOutput_Defined) THEN
@@ -304,14 +306,14 @@ CONTAINS
     END IF
 
     !Read subsidence parameters
-    CALL ReadSubsidenceParameters(NLayers,iGWNodeIDs,AppGrid,SubsMainFile,AppSubsidence%ElasticSC,AppSubsidence%InelasticSC,AppSubsidence%InterbedThick,AppSubsidence%InterbedThickMin,AppSubsidence%PreCompactHead,iStat)
+    CALL ReadSubsidenceParameters(AppSubsidence%Logger,NLayers,iGWNodeIDs,AppGrid,SubsMainFile,AppSubsidence%ElasticSC,AppSubsidence%InelasticSC,AppSubsidence%InterbedThick,AppSubsidence%InterbedThickMin,AppSubsidence%PreCompactHead,iStat)
     IF (iStat .EQ. -1) RETURN
 
     !Read initial interbed thickness and pre-compaction head to overwrite the previous values
     IF (PRESENT(SubsICFile)) THEN
-        CALL ReadSubsidenceICData_FromOpenedFile(SubsICFile,iGWNodeIDs,AppSubsidence%InterbedThick,AppSubsidence%PreCompactHead,iStat)
+        CALL ReadSubsidenceICData_FromOpenedFile(AppSubsidence%Logger,SubsICFile,iGWNodeIDs,AppSubsidence%InterbedThick,AppSubsidence%PreCompactHead,iStat)
     ELSE
-        CALL ReadSubsidenceICData_OpenFile(cICFileName,iGWNodeIDs,AppSubsidence%InterbedThick,AppSubsidence%PreCompactHead,iStat)
+        CALL ReadSubsidenceICData_OpenFile(AppSubsidence%Logger,cICFileName,iGWNodeIDs,AppSubsidence%InterbedThick,AppSubsidence%PreCompactHead,iStat)
     END IF
     IF (iStat .EQ. -1) RETURN
     AppSubsidence%InterbedThick_P = AppSubsidence%InterbedThick
@@ -380,7 +382,8 @@ CONTAINS
   ! --- READ INITIAL INTERBED THICKNESS AND PRE-COMPACTION HEAD
   ! --- (File is not yet opened; open file first)
   ! -------------------------------------------------------------
-  SUBROUTINE ReadSubsidenceICData_OpenFile(cICFileName,iGWNodeIDs,InterbedThick,PreCompactHead,iStat)
+  SUBROUTINE ReadSubsidenceICData_OpenFile(Logger,cICFileName,iGWNodeIDs,InterbedThick,PreCompactHead,iStat)
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT) :: Logger
     CHARACTER(LEN=*),INTENT(IN) :: cICFileName
     INTEGER,INTENT(IN)          :: iGWNodeIDs(:)
     REAL(8)                     :: InterbedThick(:,:),PreCompactHead(:,:)
@@ -419,28 +422,28 @@ CONTAINS
         ID = rDummyArray(1)
         CALL ConvertID_To_Index(ID,iGWNodeIDs,iNode)
         IF (iNode .EQ. 0) THEN
-            CALL SetLastMessage('Groundwater node ID '//TRIM(IntToText(ID))//' listed for subsidence initial conditions is not in the model!',f_iFatal,ThisProcedure)
+            CALL Logger%SetLastMessage('Groundwater node ID '//TRIM(IntToText(ID))//' listed for subsidence initial conditions is not in the model!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
         IF (lProcessed(iNode)) THEN
-            CALL SetLastMessage('Groundwater node ID '//TRIM(IntToText(ID))//' is listed more than once for subsidence initial conditions definitions!',f_iFatal,ThisProcedure)
+            CALL Logger%SetLastMessage('Groundwater node ID '//TRIM(IntToText(ID))//' is listed more than once for subsidence initial conditions definitions!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
         lProcessed(iNode) = .TRUE.
-        
+
         !Interbed thickness
         InterbedThick(iNode,:) = rDummyArray(2:1+NLayers) * rFact
-        
+
         !Pre-compaction head
         PreCompactHead(iNode,:) = rDummyArray(NLayers+2:) * rFact
-        
+
     END DO
-    
+
     !Close file
     CALL ICFile%Kill()
-    
+
   END SUBROUTINE ReadSubsidenceICData_OpenFile
   
   
@@ -448,7 +451,8 @@ CONTAINS
   ! --- READ INITIAL INTERBED THICKNESS AND PRE-COMPACTION HEAD
   ! --- (File is already opened)
   ! -------------------------------------------------------------
-  SUBROUTINE ReadSubsidenceICData_FromOpenedFile(ICFile,iGWNodeIDs,InterbedThick,PreCompactHead,iStat)
+  SUBROUTINE ReadSubsidenceICData_FromOpenedFile(Logger,ICFile,iGWNodeIDs,InterbedThick,PreCompactHead,iStat)
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT) :: Logger
     TYPE(GenericFileType) :: ICFile
     INTEGER,INTENT(IN)    :: iGWNodeIDs(:)
     REAL(8)               :: InterbedThick(:,:),PreCompactHead(:,:)
@@ -479,32 +483,33 @@ CONTAINS
         ID = rDummyArray(1)
         CALL ConvertID_To_Index(ID,iGWNodeIDs,iNode)
         IF (iNode .EQ. 0) THEN
-            CALL SetLastMessage('Groundwater node ID '//TRIM(IntToText(ID))//' listed for subsidence initial conditions is not in the model!',f_iFatal,ThisProcedure)
+            CALL Logger%SetLastMessage('Groundwater node ID '//TRIM(IntToText(ID))//' listed for subsidence initial conditions is not in the model!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
         IF (lProcessed(iNode)) THEN
-            CALL SetLastMessage('Groundwater node ID '//TRIM(IntToText(ID))//' is listed more than once for subsidence initial conditions definitions!',f_iFatal,ThisProcedure)
+            CALL Logger%SetLastMessage('Groundwater node ID '//TRIM(IntToText(ID))//' is listed more than once for subsidence initial conditions definitions!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
         lProcessed(iNode) = .TRUE.
-        
+
         !Interbed thickness
         InterbedThick(iNode,:) = rDummyArray(2:1+NLayers) * rFact
-        
+
         !Pre-compaction head
         PreCompactHead(iNode,:) = rDummyArray(NLayers+2:) * rFact
-        
+
     END DO
-    
+
   END SUBROUTINE ReadSubsidenceICData_FromOpenedFile
   
   
   ! -------------------------------------------------------------
   ! --- READ SUBSIDENCE PARAMETERS
   ! -------------------------------------------------------------
-  SUBROUTINE ReadSubsidenceParameters(NLayers,iGWNodeIDs,AppGrid,InFile,ElasticSC,InelasticSC,InterbedThick,InterbedThickMin,PreCompactHead,iStat)
+  SUBROUTINE ReadSubsidenceParameters(Logger,NLayers,iGWNodeIDs,AppGrid,InFile,ElasticSC,InelasticSC,InterbedThick,InterbedThickMin,PreCompactHead,iStat)
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT) :: Logger
     INTEGER,INTENT(IN)           :: NLayers
     INTEGER,INTENT(IN)           :: iGWNodeIDs(:)
     TYPE(AppGridType),INTENT(IN) :: AppGrid
@@ -523,7 +528,7 @@ CONTAINS
     lProcessed = .FALSE.
     
     !Inform user
-    CALL EchoProgress('   Reading subsidence parameters...')
+    CALL Logger%EchoProgress('   Reading subsidence parameters...')
     
     !Initialize
     NNodes = AppGrid%NNodes
@@ -549,13 +554,13 @@ CONTAINS
                     ID = INT(rDummyArray(1))
                     CALL ConvertID_To_Index(ID,iGWNodeIDs,iNode)
                     IF (iNode .EQ. 0) THEN 
-                        CALL SetLastMessage('Groundwater node ID '//TRIM(IntToText(ID))//' listed for subsidence parameters is not in the model!',f_iFatal,ThisProcedure)
+                        CALL Logger%SetLastMessage('Groundwater node ID '//TRIM(IntToText(ID))//' listed for subsidence parameters is not in the model!',f_iFatal,ThisProcedure)
                         iStat = -1
                         RETURN
                     END IF
                     !Make sure node is not entered more than once
                     IF (lProcessed(iNode)) THEN
-                        CALL SetLastMessage('Groundwater node ID '//TRIM(IntToText(ID))//' is listed more than once for subsidence parameter definition!',f_iFatal,ThisProcedure)
+                        CALL Logger%SetLastMessage('Groundwater node ID '//TRIM(IntToText(ID))//' is listed more than once for subsidence parameter definition!',f_iFatal,ThisProcedure)
                         iStat = -1
                         RETURN
                     END IF
@@ -577,7 +582,7 @@ CONTAINS
     IF (NGroup .GT. 0) THEN
 
         !Read the parameter values at parametric nodes and compute the interpolation coefficients for finite element nodes
-        CALL GetValuesFromParametricGrid(InFile,AppGrid%GridType,iGWNodeIDs,NGroup,rFactors,.FALSE.,'subsidence',rDummy3DArray,iStat)
+        CALL GetValuesFromParametricGrid(AppGrid%GridType%Logger,InFile,AppGrid%GridType,iGWNodeIDs,NGroup,rFactors,.FALSE.,'subsidence',rDummy3DArray,iStat)
         IF (iStat .EQ. -1) RETURN
 
         !Initialize parameter values
@@ -636,36 +641,36 @@ CONTAINS
     NLayers = SIZE(AppSubs%Subsidence , DIM=2)
     
     !Print parameters
-    CALL LogMessage('',f_iMessage,'',f_iFILE)
-    CALL LogMessage(REPEAT('-',100),f_iMessage,'',f_iFILE)
-    CALL LogMessage(REPEAT(' ',30)//'SUBSIDENCE PARAMETER VALUES FOR EACH NODE',f_iMessage,'',f_iFILE)
-    CALL LogMessage(REPEAT(' ',12)//'*** Note: Values Below are After Multiplication by Conversion Factors ***',f_iMessage,'',f_iFILE)
-    CALL LogMessage(REPEAT('-',100),f_iMessage,'',f_iFILE)
+    CALL AppSubs%Logger%LogMessage('',f_iMessage,'',f_iFILE)
+    CALL AppSubs%Logger%LogMessage(REPEAT('-',100),f_iMessage,'',f_iFILE)
+    CALL AppSubs%Logger%LogMessage(REPEAT(' ',30)//'SUBSIDENCE PARAMETER VALUES FOR EACH NODE',f_iMessage,'',f_iFILE)
+    CALL AppSubs%Logger%LogMessage(REPEAT(' ',12)//'*** Note: Values Below are After Multiplication by Conversion Factors ***',f_iMessage,'',f_iFILE)
+    CALL AppSubs%Logger%LogMessage(REPEAT('-',100),f_iMessage,'',f_iFILE)
     WRITE (Text,'(A,2X,5(A,2X))')            &
       '   NODE','        SCE             '   &
                ,'        SCI             '   &
                ,'        DC              '   &
                ,'        DCMIN           '   &
                ,'        HC              '
-    CALL LogMessage(TRIM(Text),f_iMessage,'',f_iFILE)
+    CALL AppSubs%Logger%LogMessage(TRIM(Text),f_iMessage,'',f_iFILE)
 
     DO indxNode=1,NNodes
-      DO indxLayer=1,NLayers                                                                                     
-        IF (indxLayer .EQ. 1) THEN                                                                               
-          WRITE (Text,'(I7,2X,10(1PG24.15E3,2X))')                                                                                                                   & 
-               iGWNodeIDs(indxNode) ,AppSubs%ElasticSC(indxNode,indxLayer) / NodeAreas(indxNode) , AppSubs%InelasticSC(indxNode,indxLayer) / NodeAreas(indxNode) ,   & 
+      DO indxLayer=1,NLayers
+        IF (indxLayer .EQ. 1) THEN
+          WRITE (Text,'(I7,2X,10(1PG24.15E3,2X))')                                                                                                                   &
+               iGWNodeIDs(indxNode) ,AppSubs%ElasticSC(indxNode,indxLayer) / NodeAreas(indxNode) , AppSubs%InelasticSC(indxNode,indxLayer) / NodeAreas(indxNode) ,   &
                                      AppSubs%InterbedThick(indxNode,indxLayer)                   , AppSubs%interbedThickMin(indxNode,indxLayer)                  ,   &
-                                     AppSubs%PreCompactHead(indxNode,indxLayer)     
-        ELSE                                                                                          
-          WRITE (Text,'(9X,10(1PG24.15E3,2X))')                                                                                                          &  
-                         AppSubs%ElasticSC(indxNode,indxLayer) / NodeAreas(indxNode) , AppSubs%InelasticSC(indxNode,indxLayer) / NodeAreas(indxNode) ,   & 
+                                     AppSubs%PreCompactHead(indxNode,indxLayer)
+        ELSE
+          WRITE (Text,'(9X,10(1PG24.15E3,2X))')                                                                                                          &
+                         AppSubs%ElasticSC(indxNode,indxLayer) / NodeAreas(indxNode) , AppSubs%InelasticSC(indxNode,indxLayer) / NodeAreas(indxNode) ,   &
                          AppSubs%InterbedThick(indxNode,indxLayer)                   , AppSubs%interbedThickMin(indxNode,indxLayer)                  ,   &
-                         AppSubs%PreCompactHead(indxNode,indxLayer)     
-        END IF                                                                                          
-        CALL LogMessage(TRIM(Text),f_iMessage,'',f_iFILE)                                                                       
-      END DO                                                                                          
-    END DO  
-    CALL LogMessage('',f_iMessage,'',f_iFILE)
+                         AppSubs%PreCompactHead(indxNode,indxLayer)
+        END IF
+        CALL AppSubs%Logger%LogMessage(TRIM(Text),f_iMessage,'',f_iFILE)
+      END DO
+    END DO
+    CALL AppSubs%Logger%LogMessage('',f_iMessage,'',f_iFILE)
 
   END SUBROUTINE AppSubsidence_v40_PrintParameters
   

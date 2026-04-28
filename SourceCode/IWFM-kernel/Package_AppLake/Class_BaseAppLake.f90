@@ -22,9 +22,9 @@
 !***********************************************************************
 MODULE Class_BaseAppLake
    USE IWFM_Kernel_Version         , ONLY: ReadVersion
-   USE MessageLogger               , ONLY: EchoProgress            , &
-                                           SetLastMessage          , &
-                                           MessageArray            , &
+   USE MessageLogger               , ONLY: MessageArray            , &
+                                           MessageLoggerType       , &
+                                           DefaultLogger           , &
                                            f_iFatal
    USE GeneralUtilities            , ONLY: ArrangeText             , &
                                            UpperCase               , &
@@ -84,16 +84,17 @@ MODULE Class_BaseAppLake
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: BaseAppLakeType         , &
-            PrepareLakeBudgetHeader , &
-            GenerateRatingTable     , &
-            f_iBudgetType_Lake 
+  PUBLIC :: BaseAppLakeType                  , &
+            PrepareLakeBudgetHeader         , &
+            GenerateRatingTable             , &
+            f_iBudgetType_Lake
 
 
   ! -------------------------------------------------------------
   ! --- BASE APPLICATION LAKES DATA TYPE
   ! -------------------------------------------------------------
   TYPE,ABSTRACT :: BaseAppLakeType
+      TYPE(MessageLoggerType), POINTER  :: Logger                 => NULL()
       INTEGER                           :: NLakes                 = 0
       TYPE(LakeType),ALLOCATABLE        :: Lakes(:)
       LOGICAL                           :: LakeBudRawFile_Defined = .FALSE.
@@ -303,11 +304,12 @@ MODULE Class_BaseAppLake
 
 
 CONTAINS
-    
-    
-    
-    
-    
+
+
+
+
+
+
 ! ******************************************************************
 ! ******************************************************************
 ! ******************************************************************
@@ -683,10 +685,11 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET LAKE ELEMENTS FROM FILE
   ! -------------------------------------------------------------
-  SUBROUTINE GetLakeElements_FromFile(cFileName,iListElems,iStat)
-    CHARACTER(LEN=*),INTENT(IN) :: cFileName
-    INTEGER,ALLOCATABLE         :: iListElems(:)
-    INTEGER,INTENT(OUT)         :: iStat
+  SUBROUTINE GetLakeElements_FromFile(cFileName,Logger,iListElems,iStat)
+    CHARACTER(LEN=*),INTENT(IN)                     :: cFileName
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT)    :: Logger
+    INTEGER,ALLOCATABLE                        :: iListElems(:)
+    INTEGER,INTENT(OUT)                        :: iStat
 
     !Local data type
     TYPE,EXTENDS(GenericLinkedListType)  :: ElemListType
@@ -713,7 +716,7 @@ CONTAINS
     IF (iStat .EQ. -1) RETURN
     
     !Read the first line that holds version number
-    CALL ReadVersion(InFile,'LAKE',cVersion,iStat)
+    CALL ReadVersion(InFile,'LAKE',cVersion,iStat,Logger)
     IF (iStat .EQ. -1) RETURN
     
     !Number of lakes
@@ -738,14 +741,14 @@ CONTAINS
     END DO
     
     !Retrieve the lake elements as a whole
-    CALL ElemList%GetArray(iListElems,iStat)   ;  IF (iStat .EQ. -1) RETURN
+    CALL ElemList%GetArray(Logger,iListElems,iStat)   ;  IF (iStat .EQ. -1) RETURN
     
     !Make sure lake elements are not listed more than once
     DO indxElem=1,SIZE(iListElems)-1
         iElem =  iListElems(indxElem)
         DO indxElem1=indxElem+1,SIZE(iListElems)
             IF (iElem .EQ. iListElems(indxElem1)) THEN
-                CALL SetLastMessage('Element '//TRIM(IntToText(iElem))//' is listed more than once as a lake element!' ,f_iFatal,ThisProcedure)
+                CALL Logger%SetLastMessage('Element '//TRIM(IntToText(iElem))//' is listed more than once as a lake element!' ,f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -866,13 +869,16 @@ CONTAINS
     CLASS(BaseAppLakeType),INTENT(OUT) :: AppLake
     TYPE(GenericFileType)              :: InFile
     INTEGER,INTENT(OUT)                :: iStat
-    
+
     !Local variables
     CHARACTER(LEN=ModNameLen+20) :: ThisProcedure = ModName // 'ReadPreprocessedData'
     INTEGER                      :: NLakes,ErrorCode,indxLake
-    
+
     !Initailize
     iStat = 0
+
+    !Set Logger (INTENT(OUT) resets pointer, restore from DefaultLogger)
+    AppLake%Logger => DefaultLogger
     
     !Read number of lakes modeled
     CALL InFile%ReadData(NLakes,iStat)  ;  IF (iStat .EQ. -1) RETURN
@@ -881,7 +887,7 @@ CONTAINS
     !Allocate memory
     ALLOCATE (AppLake%Lakes(NLakes) , STAT=ErrorCode)
     IF (ErrorCode .NE. 0) THEN
-        CALL SetLastMessage('Error in allocating memory for application lakes!',f_iFatal,ThisProcedure)
+        CALL AppLake%Logger%SetLastMessage('Error in allocating memory for application lakes!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -897,7 +903,7 @@ CONTAINS
                       pLake%NodeAreas(pLake%NNodes)   , &
                       STAT=ErrorCode                  )
             IF (ErrorCode .NE. 0) THEN
-                CALL SetLastMessage('Error in allocating memory for lake '//TRIM(IntToText(pLake%ID))//'!',f_iFatal,ThisProcedure)
+                CALL AppLake%Logger%SetLastMessage('Error in allocating memory for lake '//TRIM(IntToText(pLake%ID))//'!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -907,7 +913,7 @@ CONTAINS
             CALL InFile%ReadData(pLake%Elements,iStat)         ;  IF (iStat .EQ. -1) RETURN
             CALL InFile%ReadData(pLake%Nodes,iStat)            ;  IF (iStat .EQ. -1) RETURN
             CALL InFile%ReadData(pLake%NodeAreas,iStat)        ;  IF (iStat .EQ. -1) RETURN
-            CALL pLake%RatingTable%New(InFile,iStat)           ;  IF (iStat .EQ. -1) RETURN
+            CALL pLake%RatingTable%New(AppLake%Logger,InFile,iStat)           ;  IF (iStat .EQ. -1) RETURN
         END ASSOCIATE
     END DO
     
@@ -993,7 +999,11 @@ CONTAINS
     IF (.NOT. AppLake%LakeBudRawFile_Defined) RETURN
     
     !Echo progress
-    CALL EchoProgress('Printing results of lake simulation')
+    IF (ASSOCIATED(AppLake%Logger)) THEN
+        CALL AppLake%Logger%EchoProgress('Printing results of lake simulation')
+    ELSE
+        CALL AppLake%Logger%EchoProgress('Printing results of lake simulation')
+    END IF
 
     !Initialize
     LakeGWFlows = LakeGWConnector%GetFlowAtLakes()
@@ -1118,7 +1128,7 @@ CONTAINS
             iDest   = LocateInList(iDestID,iStrmNodeIDs)
             IF (iDest .EQ. 0) THEN
                 iLakeID = AppLake%Lakes(indx)%ID
-                CALL SetLastMessage('Stream node '//TRIM(IntToText(iDestID))//' that receive outflow from lake '//TRIM(IntToText(iLakeID))//' is not in the model!',f_iFatal,ThisProcedure)
+                CALL AppLake%Logger%SetLastMessage('Stream node '//TRIM(IntToText(iDestID))//' that receive outflow from lake '//TRIM(IntToText(iLakeID))//' is not in the model!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -1455,7 +1465,7 @@ CONTAINS
     END DO  
         
     !Instantiate rating table
-    CALL RatingTable%New(Counter+1,HLake,VLake,iStat)        
+    CALL RatingTable%New(DefaultLogger,Counter+1,HLake,VLake,iStat)        
 
   END SUBROUTINE GenerateRatingTable  
 
@@ -1482,18 +1492,18 @@ CONTAINS
         ID    = AppLake%Lakes(iLake(1))%ID
         MessageArray(1) = 'Precipitation data column for lake '//TRIM(IntToText(ID))//' is greater than the'
         MessageArray(2) = 'available data columns in the Precipitation Data file!'
-        CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+        CALL AppLake%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
-    
+
     !Check ET columns
     IF (ET%GetNDataColumns() .LT. MAXVAL(AppLake%Lakes%iColET)) THEN
         iLake = MAXLOC(AppLake%Lakes%iColET)
         ID    = AppLake%Lakes(iLake(1))%ID
         MessageArray(1) = 'Evapotranspiration data column for lake '//TRIM(IntToText(ID))//' is greater than the'
         MessageArray(2) = 'available data columns in the Evapotranspiration Data file!'
-        CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+        CALL AppLake%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF

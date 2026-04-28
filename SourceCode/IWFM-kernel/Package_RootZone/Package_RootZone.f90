@@ -23,10 +23,10 @@
 MODULE Package_RootZone
   USE IWFM_Kernel_Version        , ONLY : ReadVersion                        , &
                                           IWFMKernelVersion
-  USE MessageLogger              , ONLY : SetLastMessage                     , & 
-                                          EchoProgress                       , &
+  USE MessageLogger              , ONLY : MessageLoggerType                  , &
                                           MessageArray                       , &
-                                          f_iFatal                             
+                                          DefaultLogger                      , &
+                                          f_iFatal
   USE TimeSeriesUtilities        , ONLY : TimeStepType                       
   USE GeneralUtilities           , ONLY : FirstLocation                      , &
                                           CleanSpecialCharacters             , &
@@ -45,7 +45,7 @@ MODULE Package_RootZone
   USE Class_BaseRootZone         , ONLY : BaseRootZoneType                   , &
                                           ElementLU_InterpolateExtrapolate   , &
                                           f_iMeasuredLUDataForSubregion      , &
-                                          f_iMeasuredLUDataForModelDomain 
+                                          f_iMeasuredLUDataForModelDomain
   USE Util_Package_RootZone      , ONLY : f_iBudgetType_LWU                  , &
                                           f_iBudgetType_RootZone             , &
                                           f_iBudgetType_NonPondedCrop_LWU    , &
@@ -60,7 +60,7 @@ MODULE Package_RootZone
   USE RootZone_v411              , ONLY : RootZone_v411_Type
   USE RootZone_v412              , ONLY : RootZone_v412_Type
   USE RootZone_v413              , ONLY : RootZone_v413_Type
-  USE RootZone_v50               , ONLY : RootZone_v50_Type 
+  USE RootZone_v50               , ONLY : RootZone_v50_Type
   USE Package_PrecipitationET    , ONLY : PrecipitationType                  ,  &
                                           ETType
   USE Package_ComponentConnectors, ONLY : SupplyDestinationConnectorType
@@ -92,11 +92,11 @@ MODULE Package_RootZone
             f_iBudgetType_LWU                  , &
             f_iBudgetType_RootZone             , &
             f_iBudgetType_NonPondedCrop_LWU    , &
-            f_iBudgetType_NonPondedCrop_RZ     , & 
+            f_iBudgetType_NonPondedCrop_RZ     , &
             f_iBudgetType_PondedCrop_LWU       , &
             f_iBudgetType_PondedCrop_RZ        , &
             f_iZBudgetType_RootZone            , &
-            f_iZBudgetType_LWU             
+            f_iZBudgetType_LWU
   
   
   ! -------------------------------------------------------------
@@ -104,6 +104,7 @@ MODULE Package_RootZone
   ! -------------------------------------------------------------
   TYPE RootZoneType
       PRIVATE
+      TYPE(MessageLoggerType),POINTER     :: Logger => NULL()
       INTEGER                             :: iComponentVersion   =  0
       CLASS(BaseRootZoneType),ALLOCATABLE :: Me
   CONTAINS
@@ -210,9 +211,8 @@ MODULE Package_RootZone
   
   
   
-CONTAINS  
+CONTAINS
 
-  
 
 ! ******************************************************************
 ! ******************************************************************
@@ -227,8 +227,9 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- NEW ROOT ZONE DATA
   ! -------------------------------------------------------------
-  SUBROUTINE New(RootZone,IsForInquiry,cProjectNameForDSS,cFileName,cCropCoeffFileName,cWorkingDirectory,AppGrid,TimeStep,NTIME,ET,Precip,iStat,iStrmNodeIDs,iLakeIDs)
-    CLASS(RootZoneType),INTENT(OUT)    :: RootZone
+  SUBROUTINE New(RootZone,Logger,IsForInquiry,cProjectNameForDSS,cFileName,cCropCoeffFileName,cWorkingDirectory,AppGrid,TimeStep,NTIME,ET,Precip,iStat,iStrmNodeIDs,iLakeIDs)
+    CLASS(RootZoneType),INTENT(OUT)              :: RootZone
+    TYPE(MessageLoggerType),POINTER,INTENT(IN)   :: Logger
     LOGICAL,INTENT(IN)                 :: IsForInquiry
     CHARACTER(LEN=*),INTENT(IN)        :: cProjectNameForDSS,cFileName,cCropCoeffFileName,cWorkingDirectory
     TYPE(AppGridType),INTENT(IN)       :: AppGrid
@@ -238,13 +239,14 @@ CONTAINS
     TYPE(PrecipitationType),INTENT(IN) :: Precip
     INTEGER,INTENT(OUT)                :: iStat
     INTEGER,OPTIONAL,INTENT(IN)        :: iStrmNodeIDs(:),iLakeIDs(:)
-    
+
     !Local variables
     CHARACTER(LEN=ModNameLen+3) :: ThisProcedure = ModName // 'New'
     TYPE(GenericFileType)       :: RootZoneParamFile
     CHARACTER(:),ALLOCATABLE    :: cVersion
-    
+
     !Initialize
+    RootZone%Logger => Logger
     iStat = 0
     
     !Return if no filename is defined
@@ -252,9 +254,9 @@ CONTAINS
     
     !Open root zone file and retrieve version number
     CALL RootZoneParamFile%New(FileName=cFileName,InputFile=.TRUE.,IsTSFile=.FALSE.,iStat=iStat)  ;  IF (iStat .EQ. -1) RETURN
-    CALL ReadVersion(RootZoneParamFile,'ROOT ZONE',cVersion,iStat)
+    CALL ReadVersion(RootZoneParamFile,'ROOT ZONE',cVersion,iStat,RootZone%Logger)
     IF (iStat .EQ. -1) RETURN
-    
+
     !Close file to reset it
     CALL RootZoneParamFile%Kill()
     
@@ -285,14 +287,21 @@ CONTAINS
             ALLOCATE(RootZone_v50_Type :: RootZone%Me)
             RootZone%iComponentVersion = 50
         CASE DEFAULT
-            CALL SetLastMessage('Root Zone Component version number is not recognized ('//TRIM(cVersion)//')!',f_iFatal,ThisProcedure)
+            IF (ASSOCIATED(RootZone%Logger)) THEN
+                CALL RootZone%Logger%SetLastMessage('Root Zone Component version number is not recognized ('//TRIM(cVersion)//')!',f_iFatal,ThisProcedure)
+            ELSE
+                CALL RootZone%Logger%SetLastMessage('Root Zone Component version number is not recognized ('//TRIM(cVersion)//')!',f_iFatal,ThisProcedure)
+            END IF
             iStat = -1
             RETURN
     END SELECT
-        
+
+    !Propagate Logger to the version-specific type
+    IF (ALLOCATED(RootZone%Me)) RootZone%Me%Logger => RootZone%Logger
+
     !Now, instantiate
     CALL RootZone%Me%New(IsForInquiry,cProjectNameForDSS,cFileName,cCropCoeffFileName,cWorkingDirectory,AppGrid,TimeStep,NTIME,ET,Precip,iStat,iStrmNodeIDs=iStrmNodeIDs,iLakeIDs=iLakeIDs)
-    
+
   END SUBROUTINE New
   
   
@@ -462,14 +471,15 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET MONTHLY BUDGET FLOWS FROM A DEFINED BUDGET FILE
   ! -------------------------------------------------------------
-  SUBROUTINE GetBudget_MonthlyFlows_GivenFile(Budget,iBudgetType,iLUType,iSubregionIndex,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
-    TYPE(BudgetType),INTENT(IN)              :: Budget          !Assumes Budget file is already open
-    CHARACTER(LEN=*),INTENT(IN)              :: cBeginDate,cEndDate
-    INTEGER,INTENT(IN)                       :: iBudgetType,iLUType,iSubregionIndex  
-    REAL(8),INTENT(IN)                       :: rFactVL
-    REAL(8),ALLOCATABLE,INTENT(OUT)          :: rFlows(:,:)     !In (column,month) format
-    CHARACTER(LEN=*),ALLOCATABLE,INTENT(OUT) :: cFlowNames(:)
-    INTEGER,INTENT(OUT)                      :: iStat
+  SUBROUTINE GetBudget_MonthlyFlows_GivenFile(Budget,iBudgetType,iLUType,iSubregionIndex,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat,Logger)
+    TYPE(BudgetType),INTENT(IN)                :: Budget          !Assumes Budget file is already open
+    CHARACTER(LEN=*),INTENT(IN)                :: cBeginDate,cEndDate
+    INTEGER,INTENT(IN)                         :: iBudgetType,iLUType,iSubregionIndex
+    REAL(8),INTENT(IN)                         :: rFactVL
+    REAL(8),ALLOCATABLE,INTENT(OUT)            :: rFlows(:,:)     !In (column,month) format
+    CHARACTER(LEN=*),ALLOCATABLE,INTENT(OUT)   :: cFlowNames(:)
+    INTEGER,INTENT(OUT)                        :: iStat
+    TYPE(MessageLoggerType),OPTIONAL,INTENT(INOUT) :: Logger
     
     !Local variables
     CHARACTER(LEN=ModNameLen+32) :: ThisProcedure = ModName // 'GetBudget_MonthlyFlows_GivenFile'
@@ -497,12 +507,14 @@ CONTAINS
         CASE ('5.0')
             ALLOCATE(RootZone_v50_Type :: RootZone%Me)
         CASE DEFAULT
-            CALL SetLastMessage('Root Zone Component version number is not recognized ('//TRIM(cVersion)//')!',f_iFatal,ThisProcedure)
+            IF (PRESENT(Logger)) THEN
+                CALL Logger%SetLastMessage('Root Zone Component version number is not recognized ('//TRIM(cVersion)//')!',f_iFatal,ThisProcedure)
+            END IF
             iStat = -1
             RETURN
     END SELECT
-        
-    !Get monthly data    
+
+    !Get monthly data
     CALL RootZone%Me%GetBudget_MonthlyFlows_GivenFile(Budget,iBudgetType,iLUType,iSubregionIndex,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
     
     !Clear memory
@@ -632,14 +644,15 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET ANNUAL BUDGET FLOWS FROM A DEFINED BUDGET FILE
   ! -------------------------------------------------------------
-  SUBROUTINE GetBudget_AnnualFlows_GivenFile(Budget,iBudgetType,iLUType,iSubregionIndex,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
-    TYPE(BudgetType),INTENT(IN)              :: Budget          !Assumes Budget file is already open
-    CHARACTER(LEN=*),INTENT(IN)              :: cBeginDate,cEndDate
-    INTEGER,INTENT(IN)                       :: iBudgetType,iLUType,iSubregionIndex  
-    REAL(8),INTENT(IN)                       :: rFactVL
-    REAL(8),ALLOCATABLE,INTENT(OUT)          :: rFlows(:,:)     !In (column,month) format
-    CHARACTER(LEN=*),ALLOCATABLE,INTENT(OUT) :: cFlowNames(:)
-    INTEGER,INTENT(OUT)                      :: iStat
+  SUBROUTINE GetBudget_AnnualFlows_GivenFile(Budget,iBudgetType,iLUType,iSubregionIndex,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat,Logger)
+    TYPE(BudgetType),INTENT(IN)                :: Budget          !Assumes Budget file is already open
+    CHARACTER(LEN=*),INTENT(IN)                :: cBeginDate,cEndDate
+    INTEGER,INTENT(IN)                         :: iBudgetType,iLUType,iSubregionIndex
+    REAL(8),INTENT(IN)                         :: rFactVL
+    REAL(8),ALLOCATABLE,INTENT(OUT)            :: rFlows(:,:)     !In (column,month) format
+    CHARACTER(LEN=*),ALLOCATABLE,INTENT(OUT)   :: cFlowNames(:)
+    INTEGER,INTENT(OUT)                        :: iStat
+    TYPE(MessageLoggerType),OPTIONAL,INTENT(INOUT) :: Logger
     
     !Local variables
     CHARACTER(LEN=ModNameLen+31) :: ThisProcedure = ModName // 'GetBudget_AnnualFlows_GivenFile'
@@ -667,12 +680,14 @@ CONTAINS
         CASE ('5.0')
             ALLOCATE(RootZone_v50_Type :: RootZone%Me)
         CASE DEFAULT
-            CALL SetLastMessage('Root Zone Component version number is not recognized ('//TRIM(cVersion)//')!',f_iFatal,ThisProcedure)
+            IF (PRESENT(Logger)) THEN
+                CALL Logger%SetLastMessage('Root Zone Component version number is not recognized ('//TRIM(cVersion)//')!',f_iFatal,ThisProcedure)
+            END IF
             iStat = -1
             RETURN
     END SELECT
-        
-    !Get monthly data    
+
+    !Get monthly data
     CALL RootZone%Me%GetBudget_AnnualFlows_GivenFile(Budget,iBudgetType,iLUType,iSubregionIndex,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
     
     !Clear memory
@@ -1493,13 +1508,14 @@ CONTAINS
   ! --- GET AREAS OF A SPECIFIED LAND USE FOR ALL ELEMENTS FOR A RANGE OF TIME
   ! --- Note: This method is intended to be called outside of a Simulation run
   ! -------------------------------------------------------------
-  SUBROUTINE GetLandUseAreasForTimePeriod(cRootZoneMainFileName,cWorkingDirectory,cBeginDate,cEndDate,TimeStep,AppGrid,iLUType,iLU,rLUAreas,iStat)
-    CHARACTER(LEN=*),INTENT(IN)   :: cRootZoneMainFileName,cWorkingDirectory,cBeginDate,cEndDate
-    TYPE(TimeStepType),INTENT(IN) :: TimeStep
-    TYPE(AppGridType),INTENT(IN)  :: AppGrid
-    INTEGER,INTENT(IN)            :: iLUType,iLU
-    REAL(8),INTENT(OUT)           :: rLUAreas(:,:)  !For each (element,time)
-    INTEGER,INTENT(OUT)           :: iStat
+  SUBROUTINE GetLandUseAreasForTimePeriod(cRootZoneMainFileName,cWorkingDirectory,cBeginDate,cEndDate,TimeStep,AppGrid,iLUType,iLU,rLUAreas,iStat,Logger)
+    CHARACTER(LEN=*),INTENT(IN)                :: cRootZoneMainFileName,cWorkingDirectory,cBeginDate,cEndDate
+    TYPE(TimeStepType),INTENT(IN)              :: TimeStep
+    TYPE(AppGridType),INTENT(IN)               :: AppGrid
+    INTEGER,INTENT(IN)                         :: iLUType,iLU
+    REAL(8),INTENT(OUT)                        :: rLUAreas(:,:)  !For each (element,time)
+    INTEGER,INTENT(OUT)                        :: iStat
+    TYPE(MessageLoggerType),OPTIONAL,INTENT(INOUT) :: Logger
     
     !Local variables
     CHARACTER(LEN=ModNameLen+27) :: ThisProcedure = ModName // 'GetNPCropAreasForTimePeriod'
@@ -1516,9 +1532,13 @@ CONTAINS
     
     !Open root zone file and retrieve version number
     CALL RootZoneMainFile%New(FileName=cRootZoneMainFileName,InputFile=.TRUE.,IsTSFile=.FALSE.,iStat=iStat)  ;  IF (iStat .EQ. -1) RETURN
-    CALL ReadVersion(RootZoneMainFile,'ROOT ZONE',cVersion,iStat)
+    IF (PRESENT(Logger)) THEN
+        CALL ReadVersion(RootZoneMainFile,'ROOT ZONE',cVersion,iStat,Logger)
+    ELSE
+        CALL ReadVersion(RootZoneMainFile,'ROOT ZONE',cVersion,iStat,DefaultLogger)
+    END IF
     IF (iStat .EQ. -1) RETURN
-    
+
     !Close file to reset it
     CALL RootZoneMainFile%Kill()
     
@@ -1539,7 +1559,9 @@ CONTAINS
         CASE ('5.0')
             ALLOCATE(RootZone_v50_Type :: DummyRootZone%Me)
         CASE DEFAULT
-            CALL SetLastMessage('Root Zone Component version number is not recognized ('//TRIM(cVersion)//')!',f_iFatal,ThisProcedure)
+            IF (PRESENT(Logger)) THEN
+                CALL Logger%SetLastMessage('Root Zone Component version number is not recognized ('//TRIM(cVersion)//')!',f_iFatal,ThisProcedure)
+            END IF
             iStat = -1
             RETURN
    END SELECT
@@ -1723,8 +1745,12 @@ CONTAINS
     IF (RootZone%iComponentVersion .EQ. 0) RETURN
     
     !Print progress
-    CALL EchoProgress('Retrieving percolation at all elements')
-        
+    IF (ASSOCIATED(RootZone%Logger)) THEN
+        CALL RootZone%Logger%EchoProgress('Retrieving percolation at all elements')
+    ELSE
+        CALL RootZone%Logger%EchoProgress('Retrieving percolation at all elements')
+    END IF
+
     CALL RootZone%Me%GetElementPerc(iElemRegions,rPerc)
     
   END SUBROUTINE GetElementPerc
@@ -1742,8 +1768,12 @@ CONTAINS
     IF (RootZone%iComponentVersion .EQ. 0) RETURN
 
     !Print progress
-    CALL EchoProgress('Retrieving percolation at a specified element')
-    
+    IF (ASSOCIATED(RootZone%Logger)) THEN
+        CALL RootZone%Logger%EchoProgress('Retrieving percolation at a specified element')
+    ELSE
+        CALL RootZone%Logger%EchoProgress('Retrieving percolation at a specified element')
+    END IF
+
     Perc = RootZone%Me%GetPercElement(iLocation)
     
   END FUNCTION GetPercElement

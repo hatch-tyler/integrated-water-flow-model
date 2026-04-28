@@ -30,6 +30,14 @@
 .PARAMETER Coarray
     Enable Coarray Fortran multi-model build (Simulation_MM). Intel compiler only.
 
+.PARAMETER Library
+    Use the legacy library-mode build (single shared iwfm_kernel.lib for
+    every target). The default is monolithic — each executable compiles
+    its own kernel sources. Use library mode only if you need to match
+    the historical CMake build layout; it forces /Qopenmp onto the
+    kernel whenever the parallel/DLL targets are also built, which
+    causes the serial Simulation exe to inherit a live OpenMP runtime.
+
 .EXAMPLE
     .\Build-IWFM.ps1
     Builds all targets in Release mode.
@@ -65,7 +73,7 @@ param(
     [ValidateSet("Build", "Clean", "Configure", "Test", "Package", "All")]
     [string]$Action = "Build",
 
-    [ValidateSet("Simulation", "Simulation_Parallel", "Simulation_MM", "PreProcessor", "Budget", "ZBudget", "IWFM_C_DLL", "IWFM2OBS", "CalcTypeHyd", "ResultsExtract", "all")]
+    [ValidateSet("Simulation", "Simulation_Parallel", "Simulation_MM", "PreProcessor", "Budget", "ZBudget", "IWFM_C_DLL", "IWFM2OBS", "CalcTypeHyd", "ResultsExtract", "test_dss_read", "test_inquiry_load", "all")]
     [string]$Target = "all",
 
     [ValidateSet("Release", "Debug", "RelWithDebInfo")]
@@ -83,7 +91,15 @@ param(
 
     [switch]$ResultsExtract,
 
-    [switch]$Monolithic,
+    # Use the library-mode build (single shared iwfm_kernel.lib for every
+    # target). The default is the monolithic build (each executable
+    # compiles its own kernel sources), which is the only build mode that
+    # honestly separates serial from parallel: in library mode, /Qopenmp is
+    # forced onto iwfm_kernel.lib whenever any of IWFM_BUILD_PARALLEL/
+    # IWFM_BUILD_COARRAY/IWFM_BUILD_DLL is on, and the serial Simulation
+    # exe inherits a live OpenMP runtime. See SourceCode/IWFM-kernel/
+    # CMakeLists.txt:45-59 and cmake/IWFMMonolithic.cmake for the rationale.
+    [switch]$Library,
 
     [ValidateSet("Ninja", "NMake")]
     [string]$Generator = "Ninja",
@@ -258,9 +274,15 @@ function Invoke-Configure {
             $CMakeArgs += "-DIWFM_BUILD_RESULTSEXTRACT=ON"
             Write-Host "  ResultsExtract: Enabled" -ForegroundColor Yellow
         }
-        if ($Monolithic) {
+        # Monolithic build is the default. Pass -Library to opt back into
+        # the legacy library-mode build (single shared iwfm_kernel.lib),
+        # which leaks /Qopenmp from the parallel target into the serial
+        # target — see SourceCode/IWFM-kernel/CMakeLists.txt:45-59.
+        if ($Library) {
+            Write-Host "  Build Mode:     Library (legacy; serial exe inherits OpenMP)" -ForegroundColor Yellow
+        } else {
             $CMakeArgs += "-DIWFM_MONOLITHIC_BUILD=ON"
-            Write-Host "  Monolithic:     Enabled" -ForegroundColor Yellow
+            Write-Host "  Build Mode:     Monolithic (default; serial exe is truly serial)" -ForegroundColor Yellow
         }
         if ($UsePrebuiltDeps) {
             $AbsDepsDir = if ([System.IO.Path]::IsPathRooted($DepsDir)) { $DepsDir } else { Join-Path $SourceDir $DepsDir }

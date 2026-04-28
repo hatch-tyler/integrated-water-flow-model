@@ -22,8 +22,8 @@
 !***********************************************************************
 MODULE Class_BaseRootZone
   !$ USE OMP_LIB
-  USE MessageLogger               , ONLY: SetLastMessage                       , &
-                                          f_iFatal                               
+  USE MessageLogger               , ONLY: MessageLoggerType                    , &
+                                          f_iFatal
   USE IOInterface                 , ONLY: GenericFileType                      , &
                                           RealTSDataInFileType
   USE TimeSeriesUtilities         , ONLY: TimeStepType                         , &
@@ -71,7 +71,7 @@ MODULE Class_BaseRootZone
             CalculateUrbanFracDemand                , &
             ElementLU_InterpolateExtrapolate        , &
             f_iMeasuredLUDataForSubregion           , &
-            f_iMeasuredLUDataForModelDomain           
+            f_iMeasuredLUDataForModelDomain
   
   
   ! -------------------------------------------------------------
@@ -136,6 +136,7 @@ MODULE Class_BaseRootZone
   ! --- ABSTRACT BASE ROOT ZONE DATA TYPE
   ! -------------------------------------------------------------
   TYPE,ABSTRACT :: BaseRootZoneType
+      TYPE(MessageLoggerType),POINTER               :: Logger => NULL()
       CHARACTER(LEN=6)                              :: VarTimeUnit            = ''        !Time unit of rate-type variables
       TYPE(FlagsType)                               :: Flags                              !Flags that affect the simulation of root zone
       TYPE(ElemPrecipDataType),ALLOCATABLE          :: ElemPrecipData(:)                  !Precipitation data at each element
@@ -317,15 +318,16 @@ MODULE Class_BaseRootZone
      END SUBROUTINE Abstract_GetBudget_MonthlyFlows_GivenRootZone
      
      
-     SUBROUTINE Abstract_GetBudget_MonthlyFlows_GivenFile(Budget,iBudgetType,iLUType,iSubregionIndex,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
-       IMPORT                                   :: BudgetType
-       TYPE(BudgetType),INTENT(IN)              :: Budget      
+     SUBROUTINE Abstract_GetBudget_MonthlyFlows_GivenFile(Budget,iBudgetType,iLUType,iSubregionIndex,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat,Logger)
+       IMPORT                                   :: BudgetType,MessageLoggerType
+       TYPE(BudgetType),INTENT(IN)              :: Budget
        CHARACTER(LEN=*),INTENT(IN)              :: cBeginDate,cEndDate
-       INTEGER,INTENT(IN)                       :: iBudgetType,iLUType,iSubregionIndex  
+       INTEGER,INTENT(IN)                       :: iBudgetType,iLUType,iSubregionIndex
        REAL(8),INTENT(IN)                       :: rFactVL
-       REAL(8),ALLOCATABLE,INTENT(OUT)          :: rFlows(:,:)  
+       REAL(8),ALLOCATABLE,INTENT(OUT)          :: rFlows(:,:)
        CHARACTER(LEN=*),ALLOCATABLE,INTENT(OUT) :: cFlowNames(:)
        INTEGER,INTENT(OUT)                      :: iStat
+       TYPE(MessageLoggerType),OPTIONAL,INTENT(INOUT) :: Logger
      END SUBROUTINE Abstract_GetBudget_MonthlyFlows_GivenFile
      
      
@@ -341,15 +343,16 @@ MODULE Class_BaseRootZone
      END SUBROUTINE Abstract_GetBudget_AnnualFlows_GivenRootZone
      
      
-     SUBROUTINE Abstract_GetBudget_AnnualFlows_GivenFile(Budget,iBudgetType,iLUType,iSubregionIndex,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
-       IMPORT                                   :: BudgetType
-       TYPE(BudgetType),INTENT(IN)              :: Budget      
+     SUBROUTINE Abstract_GetBudget_AnnualFlows_GivenFile(Budget,iBudgetType,iLUType,iSubregionIndex,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat,Logger)
+       IMPORT                                   :: BudgetType,MessageLoggerType
+       TYPE(BudgetType),INTENT(IN)              :: Budget
        CHARACTER(LEN=*),INTENT(IN)              :: cBeginDate,cEndDate
-       INTEGER,INTENT(IN)                       :: iBudgetType,iLUType,iSubregionIndex  
+       INTEGER,INTENT(IN)                       :: iBudgetType,iLUType,iSubregionIndex
        REAL(8),INTENT(IN)                       :: rFactVL
-       REAL(8),ALLOCATABLE,INTENT(OUT)          :: rFlows(:,:)  
+       REAL(8),ALLOCATABLE,INTENT(OUT)          :: rFlows(:,:)
        CHARACTER(LEN=*),ALLOCATABLE,INTENT(OUT) :: cFlowNames(:)
        INTEGER,INTENT(OUT)                      :: iStat
+       TYPE(MessageLoggerType),OPTIONAL,INTENT(INOUT) :: Logger
      END SUBROUTINE Abstract_GetBudget_AnnualFlows_GivenFile
      
      
@@ -503,14 +506,15 @@ MODULE Class_BaseRootZone
      END SUBROUTINE Abstract_GetWaterSupply
      
      
-    SUBROUTINE Abstract_GetLandUseAreasForTimePeriod(cRootZoneMainFileName,cWorkingDirectory,cBeginDate,cEndDate,TimeStep,AppGrid,iLUType,iLU,rLUAreas,iStat)
-      IMPORT                        :: TimeStepType,AppGridType
+    SUBROUTINE Abstract_GetLandUseAreasForTimePeriod(cRootZoneMainFileName,cWorkingDirectory,cBeginDate,cEndDate,TimeStep,AppGrid,iLUType,iLU,rLUAreas,iStat,Logger)
+      IMPORT                        :: TimeStepType,AppGridType,MessageLoggerType
       CHARACTER(LEN=*),INTENT(IN)   :: cRootZoneMainFileName,cWorkingDirectory,cBeginDate,cEndDate
       TYPE(TimeStepType),INTENT(IN) :: TimeStep
       TYPE(AppGridType),INTENT(IN)  :: AppGrid
       INTEGER,INTENT(IN)            :: iLUType,iLU    !iLU is not used for urban lands
       REAL(8),INTENT(OUT)           :: rLUAreas(:,:)  !For each (element,time)
       INTEGER,INTENT(OUT)           :: iStat
+      TYPE(MessageLoggerType),OPTIONAL,INTENT(INOUT) :: Logger
     END SUBROUTINE Abstract_GetLandUseAreasForTimePeriod
 
   
@@ -788,9 +792,9 @@ MODULE Class_BaseRootZone
   ! -------------------------------------------------------------
   INTEGER,PARAMETER                   :: ModNameLen    = 20
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName       = 'Class_BaseRootZone::'
-  
-  
-  
+
+
+
 CONTAINS
 
 
@@ -1006,38 +1010,40 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET MONTHLY FLOWS FROM ZBUGDET OUTPUT (THIS WILL BE OVERWRITTEN WITH VERSIONS THAT HAVE ZBUDGET OUTPUT)
   ! -------------------------------------------------------------
-  SUBROUTINE GetZBudget_MonthlyFlows_GivenFile(ZBudget,iZBudgetType,ZoneList,iZoneID,iLUType,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
-     TYPE(ZBudgetType),INTENT(IN)             :: ZBudget              
-     TYPE(ZoneListType),INTENT(IN)            :: ZoneList
-     INTEGER,INTENT(IN)                       :: iZBudgetType,iZoneID,iLUType
-     CHARACTER(LEN=*),INTENT(IN)              :: cBeginDate,cEndDate  
-     REAL(8),INTENT(IN)                       :: rFactVL
-     REAL(8),ALLOCATABLE,INTENT(OUT)          :: rFlows(:,:)          
-     CHARACTER(LEN=*),ALLOCATABLE,INTENT(OUT) :: cFlowNames(:)
-     INTEGER,INTENT(OUT)                      :: iStat
-     
+  SUBROUTINE GetZBudget_MonthlyFlows_GivenFile(ZBudget,iZBudgetType,ZoneList,iZoneID,iLUType,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat,Logger)
+     TYPE(ZBudgetType),INTENT(IN)              :: ZBudget
+     TYPE(ZoneListType),INTENT(IN)             :: ZoneList
+     INTEGER,INTENT(IN)                        :: iZBudgetType,iZoneID,iLUType
+     CHARACTER(LEN=*),INTENT(IN)               :: cBeginDate,cEndDate
+     REAL(8),INTENT(IN)                        :: rFactVL
+     REAL(8),ALLOCATABLE,INTENT(OUT)           :: rFlows(:,:)
+     CHARACTER(LEN=*),ALLOCATABLE,INTENT(OUT)  :: cFlowNames(:)
+     INTEGER,INTENT(OUT)                       :: iStat
+     TYPE(MessageLoggerType),OPTIONAL,INTENT(INOUT) :: Logger
+
      iStat = 0
      ALLOCATE (rFlows(0,0) , cFlowNames(0))
-     
+
   END SUBROUTINE GetZBudget_MonthlyFlows_GivenFile
 
 
   ! -------------------------------------------------------------
   ! --- GET ANNUAL FLOWS FROM ZBUGDET OUTPUT (THIS WILL BE OVERWRITTEN WITH VERSIONS THAT HAVE ZBUDGET OUTPUT)
   ! -------------------------------------------------------------
-  SUBROUTINE GetZBudget_AnnualFlows_GivenFile(ZBudget,iZBudgetType,ZoneList,iZoneID,iLUType,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
-     TYPE(ZBudgetType),INTENT(IN)             :: ZBudget              
-     TYPE(ZoneListType),INTENT(IN)            :: ZoneList
-     INTEGER,INTENT(IN)                       :: iZBudgetType,iZoneID,iLUType
-     CHARACTER(LEN=*),INTENT(IN)              :: cBeginDate,cEndDate  
-     REAL(8),INTENT(IN)                       :: rFactVL
-     REAL(8),ALLOCATABLE,INTENT(OUT)          :: rFlows(:,:)          
-     CHARACTER(LEN=*),ALLOCATABLE,INTENT(OUT) :: cFlowNames(:)
-     INTEGER,INTENT(OUT)                      :: iStat
-     
+  SUBROUTINE GetZBudget_AnnualFlows_GivenFile(ZBudget,iZBudgetType,ZoneList,iZoneID,iLUType,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat,Logger)
+     TYPE(ZBudgetType),INTENT(IN)              :: ZBudget
+     TYPE(ZoneListType),INTENT(IN)             :: ZoneList
+     INTEGER,INTENT(IN)                        :: iZBudgetType,iZoneID,iLUType
+     CHARACTER(LEN=*),INTENT(IN)               :: cBeginDate,cEndDate
+     REAL(8),INTENT(IN)                        :: rFactVL
+     REAL(8),ALLOCATABLE,INTENT(OUT)           :: rFlows(:,:)
+     CHARACTER(LEN=*),ALLOCATABLE,INTENT(OUT)  :: cFlowNames(:)
+     INTEGER,INTENT(OUT)                       :: iStat
+     TYPE(MessageLoggerType),OPTIONAL,INTENT(INOUT) :: Logger
+
      iStat = 0
      ALLOCATE (rFlows(0,0) , cFlowNames(0))
-     
+
   END SUBROUTINE GetZBudget_AnnualFlows_GivenFile
 
 
@@ -1264,17 +1270,25 @@ CONTAINS
                 rElemAgDemand  = -1.0
                 rElemUrbDemand = -1.0
                 iStat          = -1
-                CALL SetLastMessage('Future demands for '//TRIM(cFutureDemandDate)//' have not been computed!',f_iFatal,ThisProcedure)
+                IF (ASSOCIATED(RootZone%Logger)) THEN
+                    CALL RootZone%Logger%SetLastMessage('Future demands for '//TRIM(cFutureDemandDate)//' have not been computed!',f_iFatal,ThisProcedure)
+                ELSE
+                    CALL RootZone%Logger%SetLastMessage('Future demands for '//TRIM(cFutureDemandDate)//' have not been computed!',f_iFatal,ThisProcedure)
+                END IF
             END IF
             RETURN
         END IF
     END IF
-    
+
     !Future demand for the specified date is not computed
     rElemAgDemand  = -1.0
     rElemUrbDemand = -1.0
     iStat          = -1
-    CALL SetLastMessage('Future demands for '//TRIM(cFutureDemandDate)//' have not been computed!',f_iFatal,ThisProcedure)
+    IF (ASSOCIATED(RootZone%Logger)) THEN
+        CALL RootZone%Logger%SetLastMessage('Future demands for '//TRIM(cFutureDemandDate)//' have not been computed!',f_iFatal,ThisProcedure)
+    ELSE
+        CALL RootZone%Logger%SetLastMessage('Future demands for '//TRIM(cFutureDemandDate)//' have not been computed!',f_iFatal,ThisProcedure)
+    END IF
 
   END SUBROUTINE GetFutureDemands
   
@@ -1472,14 +1486,15 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- INTERPOLATE/EXTRAPOLATE ELEMENT-LEVEL LAND USE BASED ON SUBREGIONAL DATA
   ! -------------------------------------------------------------
-  SUBROUTINE ElementLU_InterpolateExtrapolate(AppGrid,cLUCodes,iMeasuredLUDataFlag,indxForNV,lLakeElems,rCurrentDateAndTimeJulian,t1,t2,MeasuredRegionalLUArea,ElemObsAreas1,ElemObsAreas2,ExIntAreas,iStat)
-    TYPE(AppGridType),INTENT(IN) :: AppGrid
-    CHARACTER(LEN=*),INTENT(IN)  :: cLUCodes(:)
-    INTEGER,INTENT(IN)           :: iMeasuredLUDataFlag,indxForNV
-    LOGICAL,INTENT(IN)           :: lLakeElems(:)
-    REAL(8),INTENT(IN)           :: rCurrentDateAndTimeJulian,MeasuredRegionalLUArea(:,:),t1(:),t2(:),ElemObsAreas1(:,:),ElemObsAreas2(:,:)
-    REAL(8)                      :: ExIntAreas(:,:)
-    INTEGER,INTENT(OUT)          :: iStat
+  SUBROUTINE ElementLU_InterpolateExtrapolate(AppGrid,cLUCodes,iMeasuredLUDataFlag,indxForNV,lLakeElems,rCurrentDateAndTimeJulian,t1,t2,MeasuredRegionalLUArea,ElemObsAreas1,ElemObsAreas2,ExIntAreas,iStat,Logger)
+    TYPE(AppGridType),INTENT(IN)               :: AppGrid
+    CHARACTER(LEN=*),INTENT(IN)                :: cLUCodes(:)
+    INTEGER,INTENT(IN)                         :: iMeasuredLUDataFlag,indxForNV
+    LOGICAL,INTENT(IN)                         :: lLakeElems(:)
+    REAL(8),INTENT(IN)                         :: rCurrentDateAndTimeJulian,MeasuredRegionalLUArea(:,:),t1(:),t2(:),ElemObsAreas1(:,:),ElemObsAreas2(:,:)
+    REAL(8)                                    :: ExIntAreas(:,:)
+    INTEGER,INTENT(OUT)                        :: iStat
+    TYPE(MessageLoggerType),OPTIONAL,INTENT(INOUT) :: Logger
     
     !Local variables
     INTEGER         :: indxElem,indxLU,iDim,indxRegion,NLandUse
@@ -1538,7 +1553,7 @@ CONTAINS
         IF (pDiff .GE. 0.0) CYCLE
     
         !Distribute discrepancy to elements
-        CALL AdjustElemLandUseAreas(AppGrid,iMeasuredLUDataFlag,indxRegion,indxLU,SubregionalAreasFromElemAreas(indxLU,indxRegion),pDiff,cLUCodes(indxLU),ExIntAreas,iStat)
+        CALL AdjustElemLandUseAreas(AppGrid,iMeasuredLUDataFlag,indxRegion,indxLU,SubregionalAreasFromElemAreas(indxLU,indxRegion),pDiff,cLUCodes(indxLU),ExIntAreas,iStat,Logger)
         IF (iStat .EQ. -1) RETURN
       END DO     
     END DO
@@ -1561,7 +1576,7 @@ CONTAINS
           IF (pDiff .LE. 0.0) CYCLE
           
           !Distribute discrepancy to elements
-          CALL AdjustElemLandUseAreas(AppGrid,iMeasuredLUDataFlag,indxRegion,indxLU,SubregionalAreasFromElemAreas(indxLU,indxRegion),pDiff,cLUCodes(indxLU),ExIntAreas,iStat)
+          CALL AdjustElemLandUseAreas(AppGrid,iMeasuredLUDataFlag,indxRegion,indxLU,SubregionalAreasFromElemAreas(indxLU,indxRegion),pDiff,cLUCodes(indxLU),ExIntAreas,iStat,Logger)
           IF (iStat .EQ. -1) RETURN
         END DO
       END DO
@@ -1648,50 +1663,49 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- ADJUST ELEMENT LAND USE AREAS
   ! -------------------------------------------------------------
-  SUBROUTINE AdjustElemLandUseAreas(AppGrid,iMeasuredLUDataFlag,iRegion,iLandUse,SubregionalLandUseArea,Diff,cLUCode,ElemAreas,iStat)
-    TYPE(AppGridType),INTENT(IN) :: AppGrid
-    INTEGER,INTENT(IN)           :: iMeasuredLUDataFlag,iRegion,iLandUse
-    REAL(8),INTENT(IN)           :: SubregionalLandUseArea,Diff
-    CHARACTER(LEN=*),INTENT(IN)  :: cLUCode
-    REAL(8)                      :: ElemAreas(:,:)
-    INTEGER,INTENT(OUT)          :: iStat
-    
+  SUBROUTINE AdjustElemLandUseAreas(AppGrid,iMeasuredLUDataFlag,iRegion,iLandUse,SubregionalLandUseArea,Diff,cLUCode,ElemAreas,iStat,Logger)
+    TYPE(AppGridType),INTENT(IN)               :: AppGrid
+    INTEGER,INTENT(IN)                         :: iMeasuredLUDataFlag,iRegion,iLandUse
+    REAL(8),INTENT(IN)                         :: SubregionalLandUseArea,Diff
+    CHARACTER(LEN=*),INTENT(IN)                :: cLUCode
+    REAL(8)                                    :: ElemAreas(:,:)
+    INTEGER,INTENT(OUT)                        :: iStat
+    TYPE(MessageLoggerType),OPTIONAL,INTENT(INOUT) :: Logger
+
     IF (Diff .LT. 0.0)  &
       CALL AdjustElemLandUseAreasForDecrease(AppGrid,iMeasuredLUDataFlag,iRegion,iLandUse,SubregionalLandUseArea,Diff,ElemAreas,iStat)
-    
+
     IF (Diff .GT. 0.0)  &
-      CALL AdjustElemLandUseAreasForIncrease(AppGrid,iMeasuredLUDataFlag,iRegion,iLandUse,Diff,cLUCode,ElemAreas,iStat)
-  
+      CALL AdjustElemLandUseAreasForIncrease(AppGrid,iMeasuredLUDataFlag,iRegion,iLandUse,Diff,cLUCode,ElemAreas,iStat,Logger)
+
   END SUBROUTINE AdjustElemLandUseAreas
  
 
   ! -------------------------------------------------------------
   ! --- ADJUST ELEMENT LAND USE AREAS FOR INCREASE
   ! -------------------------------------------------------------
-  SUBROUTINE AdjustElemLandUseAreasForIncrease(AppGrid,iMeasuredLUDataFlag,iRegion,iLandUse,Diff,cLUCode,ElemAreas,iStat)
-    TYPE(AppGridType),TARGET,INTENT(IN) :: AppGrid
-    INTEGER,INTENT(IN)                  :: iMeasuredLUDataFlag,iRegion,iLandUse
-    REAL(8),INTENT(IN)                  :: Diff
-    CHARACTER(LEN=*),INTENT(IN)         :: cLUCode
-    REAL(8)                             :: ElemAreas(:,:)
-    INTEGER,INTENT(OUT)                 :: iStat
+  SUBROUTINE AdjustElemLandUseAreasForIncrease(AppGrid,iMeasuredLUDataFlag,iRegion,iLandUse,Diff,cLUCode,ElemAreas,iStat,Logger)
+    TYPE(AppGridType),TARGET,INTENT(IN)        :: AppGrid
+    INTEGER,INTENT(IN)                         :: iMeasuredLUDataFlag,iRegion,iLandUse
+    REAL(8),INTENT(IN)                         :: Diff
+    CHARACTER(LEN=*),INTENT(IN)                :: cLUCode
+    REAL(8)                                    :: ElemAreas(:,:)
+    INTEGER,INTENT(OUT)                        :: iStat
+    TYPE(MessageLoggerType),OPTIONAL,INTENT(INOUT) :: Logger
     
     !Local variables
     CHARACTER(LEN=ModNameLen+33),PARAMETER :: ThisProcedure = ModName // 'AdjustElemLandUseAreasForIncrease'
     INTEGER                                :: indxElem,iElem,iElemWork(AppGrid%NElements),iDim,iSubregionID
     REAL(8)                                :: TotalArea,rAvailableArea,rAdjust
     INTEGER,POINTER                        :: pElems(:)
-    INTEGER,ALLOCATABLE,TARGET,SAVE        :: iModelElements(:)
-    
+    INTEGER,TARGET                         :: iModelElements(AppGrid%NElements)
+
     !Initialize
     iStat = 0
     IF (iMeasuredLUDataFlag .EQ. f_iMeasuredLUDataForSubregion) THEN
         pElems => AppGrid%AppSubregion(iRegion)%RegionElements
     ELSE
-        IF (.NOT. ALLOCATED(iModelElements)) THEN
-            ALLOCATE (iModelElements(AppGrid%NElements))
-            iModelElements = [(indxElem,indxElem=1,AppGrid%NElements)]
-        END IF
+        iModelElements = [(indxElem,indxElem=1,AppGrid%NElements)]
         pElems => iModelElements
     END IF
     iDim      = SIZE(pElems)
@@ -1708,8 +1722,10 @@ CONTAINS
     !Make sure that there is at least one element for land-use adjustment
     IF (LocateInList(1,iElemWork) .EQ. 0) THEN
         iSubregionID = AppGrid%AppSubregion(iRegion)%ID
-        CALL SetLastMessage('There are no elements where land use can be adjusted for subregion '//TRIM(IntToText(iSubregionID))//  &
-                        ' and land use type '//TRIM(cLUCode)//'!',f_iFatal,ThisProcedure)
+        IF (PRESENT(Logger)) THEN
+            CALL Logger%SetLastMessage('There are no elements where land use can be adjusted for subregion '//TRIM(IntToText(iSubregionID))//  &
+                            ' and land use type '//TRIM(cLUCode)//'!',f_iFatal,ThisProcedure)
+        END IF
         iStat = -1
         RETURN
     END IF
@@ -1754,8 +1770,10 @@ CONTAINS
       
     ELSE
         iSubregionID = AppGrid%AppSubregion(iRegion)%ID
-        CALL SetLastMessage('Total land use area for land use type '//TRIM(cLUCode)//  &
-                            ' at subregion '//TRIM(IntToText(iSubregionID))//' is less than zero!',f_iFatal,ThisProcedure)
+        IF (PRESENT(Logger)) THEN
+            CALL Logger%SetLastMessage('Total land use area for land use type '//TRIM(cLUCode)//  &
+                                ' at subregion '//TRIM(IntToText(iSubregionID))//' is less than zero!',f_iFatal,ThisProcedure)
+        END IF
         iStat = -1
     END IF
     
@@ -1776,17 +1794,14 @@ CONTAINS
     INTEGER                         :: indxElem,iElem,iDim
     REAL(8)                         :: NewArea,rAdjust,rFractions(AppGrid%NElements),DiffWork
     INTEGER,POINTER                 :: pElems(:)
-    INTEGER,ALLOCATABLE,TARGET,SAVE :: iModelElements(:)
-    
+    INTEGER,TARGET                  :: iModelElements(AppGrid%NElements)
+
     !Initialize
     iStat = 0
     IF (iMeasuredLUDataFlag .EQ. f_iMeasuredLUDataForSubregion) THEN
         pElems => AppGrid%AppSubregion(iRegion)%RegionElements
     ELSE
-        IF (.NOT. ALLOCATED(iModelElements)) THEN
-            ALLOCATE (iModelElements(AppGrid%NElements))
-            iModelElements = [(indxElem,indxElem=1,AppGrid%NElements)]
-        END IF
+        iModelElements = [(indxElem,indxElem=1,AppGrid%NElements)]
         pElems => iModelElements
     END IF
     iDim      = SIZE(pElems)

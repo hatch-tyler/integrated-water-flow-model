@@ -23,9 +23,8 @@
 MODULE Class_AtmosphericData
   USE IOInterface          , ONLY: RealTSDataInFileType
   USE TimeSeriesUtilities  , ONLY: TimeStepType
-  USE MessageLogger        , ONLY: EchoProgress         , &
-                                   SetLastMessage       , &
-                                   f_iFatal 
+  USE MessageLogger        , ONLY: MessageLoggerType    , &
+                                   f_iFatal
   IMPLICIT NONE
 
 
@@ -45,7 +44,7 @@ MODULE Class_AtmosphericData
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: AtmosphericDataType 
+  PUBLIC :: AtmosphericDataType
   
 
   ! -------------------------------------------------------------
@@ -53,7 +52,7 @@ MODULE Class_AtmosphericData
   ! -------------------------------------------------------------
   TYPE,EXTENDS(RealTSDataInFileType) :: AtmosphericDataType
       REAL(8)                  :: Fact      = 1.0        !Conversion factor
-      CHARACTER(:),ALLOCATABLE :: cDataName              !Name of data     
+      CHARACTER(:),ALLOCATABLE :: cDataName              !Name of data
   CONTAINS
       PROCEDURE,PASS :: New   
       PROCEDURE,PASS :: Kill
@@ -79,7 +78,6 @@ CONTAINS
 
 
 
-
 ! ******************************************************************
 ! ******************************************************************
 ! ******************************************************************
@@ -93,25 +91,29 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- INITIALIZE ATMOSPHERIC DATA TIME SERIES DATA FILE
   ! -------------------------------------------------------------
-  SUBROUTINE New(AtmosphericData,cFileName,cWorkingDirectory,cDataName,TimeStep,iStat,cCropCoeffFileName) 
-    CLASS(AtmosphericDataType),INTENT(OUT) :: AtmosphericData
-    CHARACTER(LEN=*),INTENT(IN)            :: cFileName,cWorkingDirectory,cDataName
-    TYPE(TimeStepType),INTENT(IN)          :: TimeStep
-    INTEGER,INTENT(OUT)                    :: iStat
-    CHARACTER(LEN=*),OPTIONAL,INTENT(IN)   :: cCropCoeffFileName   !Optional, to be used with ET data type
+  SUBROUTINE New(AtmosphericData,Logger,cFileName,cWorkingDirectory,cDataName,TimeStep,iStat,cCropCoeffFileName)
+    CLASS(AtmosphericDataType),INTENT(OUT)   :: AtmosphericData
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
+    CHARACTER(LEN=*),INTENT(IN)              :: cFileName,cWorkingDirectory,cDataName
+    TYPE(TimeStepType),INTENT(IN)            :: TimeStep
+    INTEGER,INTENT(OUT)                      :: iStat
+    CHARACTER(LEN=*),OPTIONAL,INTENT(IN)     :: cCropCoeffFileName   !Optional, to be used with ET data type
 
     !Local variables
     REAL(8) :: Factor(1)
     LOGICAL :: DummyArray(1) = [.TRUE.]
-    
+
+    !Set Logger
+    AtmosphericData%Logger => Logger
+
     !Initialize
     iStat = 0
-    
+
     !Return if no file name is specified
     IF (cFileName .EQ. '') RETURN
-    
+
     !Print progress
-    CALL EchoProgress('Instantiating '//TRIM(cDataName)//' data...')
+    CALL AtmosphericData%Logger%EchoProgress('Instantiating '//TRIM(cDataName)//' data...')
 
     !Instantiate
     CALL AtmosphericData%Init(cFileName,cWorkingDirectory,TRIM(cDataName)//' data file',TimeStep%TrackTime,1,.TRUE.,Factor,DummyArray,iStat=iStat)  
@@ -219,12 +221,12 @@ CONTAINS
     !Check for negativity, if desired
     IF (lCheckForNegativity) THEN
         IF (ANY(rOutputValues(1:nActualOutput) .LT. 0.0)) THEN
-            CALL SetLastMessage('Timeseries input for '//TRIM(AtmosphericData%cDataName)//' data cannot be less than zero!',f_iFatal,ThisProcedure)
+            CALL AtmosphericData%Logger%SetLastMessage('Timeseries input for '//TRIM(AtmosphericData%cDataName)//' data cannot be less than zero!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
     END IF
-    
+
     !Rewind file if necessary
     IF (lForInquiry) CALL AtmosphericData%File%RewindFile_To_BeginningOfTSData(iStat)
 
@@ -245,7 +247,7 @@ CONTAINS
     INTEGER                      :: FileReadCode
 
     !Print progress
-    CALL EchoProgress('Reading time series '//AtmosphericData%cDataName//' data...')
+    CALL AtmosphericData%Logger%EchoProgress('Reading time series '//AtmosphericData%cDataName//' data...')
 
     !Read data
     CALL AtmosphericData%ReadTSData(TimeStep,AtmosphericData%cDataName,FileReadCode,iStat)
@@ -257,7 +259,7 @@ CONTAINS
         !Check for negativity if desired
         IF (lCheckForNegativity) THEN
             IF (ANY(AtmosphericData%rValues .LT. 0.0)) THEN
-                CALL SetLastMessage('Timeseries input for '//TRIM(AtmosphericData%cDataName)//' data cannot be less than zero!',f_iFatal,ThisProcedure)
+                CALL AtmosphericData%Logger%SetLastMessage('Timeseries input for '//TRIM(AtmosphericData%cDataName)//' data cannot be less than zero!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF

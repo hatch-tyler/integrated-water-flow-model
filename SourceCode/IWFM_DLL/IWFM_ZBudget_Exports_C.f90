@@ -24,7 +24,7 @@ MODULE IWFM_ZBudget_Exports
   USE,INTRINSIC :: ISO_C_BINDING , ONLY: C_INT                   , &
                                          C_DOUBLE                , &
                                          C_CHAR                  
-  USE MessageLogger              , ONLY: SetLastMessage          , &
+  USE MessageLogger              , ONLY: DefaultLogger           , &
                                          f_iFatal
   USE TimeSeriesUtilities        , ONLY: TimeStepType            , &
                                          IncrementTimeStamp      , &
@@ -50,10 +50,15 @@ MODULE IWFM_ZBudget_Exports
   
   ! -------------------------------------------------------------
   ! --- VARIABLES
+  ! --- Per-thread ZBudget singleton + zone list. THREADPRIVATE lets
+  ! --- each thread drive its own IW_ZBudget_OpenFile / zone-list /
+  ! --- getter sequence on its own ZBudget instance without contention
+  ! --- on shared module state.
   ! -------------------------------------------------------------
   TYPE(ZBudgetType),SAVE  :: ZBudget
-  TYPE(ZoneListType),SAVE :: ZoneList 
+  TYPE(ZoneListType),SAVE :: ZoneList
   LOGICAL,SAVE            :: lZBudget_Instantiated = .FALSE.
+  !$OMP THREADPRIVATE(ZBudget, ZoneList, lZBudget_Instantiated)
   
   
   ! -------------------------------------------------------------
@@ -61,12 +66,12 @@ MODULE IWFM_ZBudget_Exports
   ! -------------------------------------------------------------
   INTEGER,PARAMETER                   :: ModNameLen = 22
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'IWFM_ZBudget_Exports::'
-  
+
 
 CONTAINS
 
 
-    
+
 
 ! ******************************************************************
 ! ******************************************************************
@@ -92,19 +97,19 @@ CONTAINS
     
     CALL String_Copy_C_F(cFileName,cFileName_F)
     
-    !If a Z-Budget file is already open, close it
+    !If a Z-Budget file is already open on this thread, close it; then open new file
     IF (lZBudget_Instantiated) THEN
       CALL ZBudget%Kill()
       lZBudget_Instantiated = .FALSE.
     END IF
-    
+
     !Open file
-    CALL ZBudget%New(cFileName_F,iStat)
+    CALL ZBudget%New(DefaultLogger,cFileName_F,iStat)
     IF (iStat .EQ. -1) THEN
         CALL ZBudget%Kill()
-        RETURN
+    ELSE
+        lZBudget_Instantiated = .TRUE.
     END IF
-    lZBudget_Instantiated = .TRUE.
     
   END SUBROUTINE IW_ZBudget_OpenFile
   
@@ -128,7 +133,7 @@ CONTAINS
     CALL ZoneList%Kill()
     
     !Then create the zone list
-    CALL ZoneList%New(ZBudget%Header%iNData,ZBudget%Header%lFaceFlows_Defined,ZBudget%SystemData,TRIM(cFileName_F),iStat)
+    CALL ZoneList%New(DefaultLogger,ZBudget%Header%iNData,ZBudget%Header%lFaceFlows_Defined,ZBudget%SystemData,TRIM(cFileName_F),iStat)
     
   END SUBROUTINE IW_ZBudget_GenerateZoneList_FromFile
   
@@ -161,7 +166,7 @@ CONTAINS
     cZoneNamesArray(nZonesWithNames) = cZoneNames_F(iLocArray(nZonesWithNames):iLenZoneNames)
     
     !Then create the zone list
-    CALL ZoneList%New(ZBudget%Header%iNData,ZBudget%Header%lFaceFlows_Defined,ZBudget%SystemData,iZExtent,iElems,iLayers,iZones,iZonesWithNames,cZoneNamesArray,iStat)
+    CALL ZoneList%New(DefaultLogger,ZBudget%Header%iNData,ZBudget%Header%lFaceFlows_Defined,ZBudget%SystemData,iZExtent,iElems,iLayers,iZones,iZonesWithNames,cZoneNamesArray,iStat)
     
   END SUBROUTINE IW_ZBudget_GenerateZoneList
 
@@ -186,9 +191,10 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iStat
 
     iStat = 0
-    
+
     CALL ZBudget%Kill()
-    
+    lZBudget_Instantiated = .FALSE.
+
   END SUBROUTINE IW_ZBudget_CloseFile
   
 
@@ -606,7 +612,7 @@ CONTAINS
         TYPE IS (ZoneType)
             CALL ZBudget%GetTitleLines(iZone,pZone%Area*rFact_AR,pZone%cName,ZBudget%Header%ASCIIOutput%iLenTitles,cUnit_AR_F,cUnit_VL_F,cTitles_Work)
         CLASS DEFAULT
-            CALL SetLastMessage(TRIM(IntToText(iZone)) // ' cannot be located in the zone list!',f_iFatal,ThisProcedure)
+            CALL DefaultLogger%SetLastMessage_ThreadSafe(TRIM(IntToText(iZone)) // ' cannot be located in the zone list!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
     END SELECT

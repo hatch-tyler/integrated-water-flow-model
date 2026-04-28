@@ -25,7 +25,7 @@ MODULE IWFM_Model_Exports
   USE,INTRINSIC :: ISO_C_BINDING  , ONLY: C_INT                                    , &
                                           C_DOUBLE                                 , &
                                           C_CHAR
-  USE MessageLogger               , ONLY: SetLastMessage                           , &
+  USE MessageLogger               , ONLY: DefaultLogger                            , &
                                           f_iWarn
   USE GeneralUtilities            , ONLY: FirstLocation                            , &
                                           GetFileDirectory                         , &
@@ -33,8 +33,6 @@ MODULE IWFM_Model_Exports
                                           String_Copy_F_C                          , &
                                           CString_Len                              , &
                                           ConvertID_To_Index                       , &
-                                          LocateInList                             , &
-                                          ShellSort                                , &
                                           IntToText
   USE TimeSeriesUtilities         , ONLY: TimeStepType                             , &
                                           IncrementTimeStamp                       , &
@@ -57,38 +55,57 @@ MODULE IWFM_Model_Exports
                                           f_iLocationType_SmallWatershed  
   USE Package_AppSmallWatershed   , ONLY: f_iSWShedBudComp_RZ                      , &
                                           f_iSWShedBudComp_GW 
-  USE Package_Model               , ONLY: ModelType 
+  USE Package_Model               , ONLY: ModelType, DeleteModelInquiryDataFile
   IMPLICIT NONE
-  
+
 
   ! -------------------------------------------------------------
   ! --- PUBLIC VARIABLES
   ! -------------------------------------------------------------
   PUBLIC
-  
-  
+
+
   ! -------------------------------------------------------------
   ! --- VARIABLES
+  ! --- Models are heap-allocated via POINTER slots instead of
+  ! --- stored as values in a fixed SAVE array. This eliminates
+  ! --- pre-allocated memory for unused slots and ensures clean
+  ! --- deallocation on Kill.
   ! -------------------------------------------------------------
-  TYPE(ModelType),TARGET,PRIVATE,SAVE  :: Models(10)
-  INTEGER,PRIVATE,SAVE                 :: iNActiveModels     = 0
-  INTEGER,ALLOCATABLE,SAVE             :: iActiveModelIndices(:)
-  INTEGER,PRIVATE,SAVE                 :: iCurrentModelIndex = 0
-  TYPE(ModelType),POINTER,PRIVATE,SAVE :: pModel => NULL()            
-  
-  
+  INTEGER,PRIVATE,PARAMETER :: MAX_MODEL_SLOTS = 64
+
+  TYPE,PRIVATE :: ModelSlotType
+      TYPE(ModelType),POINTER :: ptr => NULL()
+  END TYPE ModelSlotType
+
+  TYPE(ModelSlotType),PRIVATE,SAVE   :: ModelSlots(MAX_MODEL_SLOTS)
+
+
   ! -------------------------------------------------------------
   ! --- MISC. DATA
   ! -------------------------------------------------------------
   INTEGER,PRIVATE,PARAMETER                    :: iModNameLen = 20
   CHARACTER(LEN=iModNameLen),PRIVATE,PARAMETER :: cModName    = 'IWFM_Model_Exports::'
-  
-  
-  
+
+
 CONTAINS
 
 
-    
+  ! -------------------------------------------------------------
+  ! --- GET MODEL POINTER BY ID (handle-based, stateless)
+  ! -------------------------------------------------------------
+  FUNCTION GetModelByID(iModelID) RESULT(pMdl)
+    INTEGER,INTENT(IN)      :: iModelID
+    TYPE(ModelType),POINTER :: pMdl
+    IF (iModelID .GE. 1 .AND. iModelID .LE. MAX_MODEL_SLOTS) THEN
+        pMdl => ModelSlots(iModelID)%ptr
+    ELSE
+        pMdl => NULL()
+    END IF
+  END FUNCTION GetModelByID
+
+
+
 
 ! ******************************************************************
 ! ******************************************************************
@@ -108,23 +125,21 @@ CONTAINS
     INTEGER(C_INT),INTENT(IN)         :: LenPPFileName,LenSimFileName,LenWSAFileName,IsRoutedStreams,IsForInquiry
     CHARACTER(KIND=C_CHAR),INTENT(IN) :: cPPFileName(LenPPFileName),cSimFileName(LenSimFileName),cWSAFileName(LenWSAFileName)
     INTEGER(C_INT),INTENT(OUT)        :: iModelIndex,iStat
-    
+
     !Local variables
-    INTEGER             :: indx
+    INTEGER             :: indx,iNewID
     CHARACTER           :: cPPFileName_F*LenPPFileName,cSimFileName_F*LenSimFileName,cWSAFileName_F*LenWSAFileName
     LOGICAL             :: lRoutedStreams,lForInquiry
-    TYPE(ModelType)     :: Model
-    INTEGER,ALLOCATABLE :: iTempList(:)
-    
+
     !Set environment for parallel processing
-    !$ CALL KMP_SET_BLOCKTIME(0)                                  !Let threads sleep right away 
-    !$ CALL OMP_SET_NUM_THREADS(MIN(OMP_GET_NUM_PROCS()-1 , 16))  !Set number of threads to minimum of 16 or number of available processors 
+    !$ CALL KMP_SET_BLOCKTIME(0)                                  !Let threads sleep right away
+    !$ CALL OMP_SET_NUM_THREADS(MIN(OMP_GET_NUM_PROCS()-1 , 16))  !Set number of threads to minimum of 16 or number of available processors
     !$ CALL OMP_SET_MAX_ACTIVE_LEVELS(2)                          !Maximum 2 levels of nested paralellization
     !$ CALL KMP_SET_STACKSIZE_S(16777216)                         !Set thread stack size to 16MB
-    
+
     !Initialize
     iStat = 0
-    
+
     !Logical variables
     IF (IsRoutedStreams .EQ. 0) THEN
         lRoutedStreams = .FALSE.
@@ -136,45 +151,47 @@ CONTAINS
     ELSE
         lForInquiry = .TRUE.
     END IF
-    
+
     !C strings to Fortran strings
     CALL String_Copy_C_F(cPPFileName,cPPFileName_F)
     CALL String_Copy_C_F(cSimFileName,cSimFileName_F)
     CALL String_Copy_C_F(cWSAFileName,cWSAFileName_F)
-    
-    !Read main control data for pre-processor and simulation (if filename is specified) and 
-    !  instantiate model components
-    !  Return if any errors
-    IF (LEN(cSimFileName_F).EQ.0  .AND. LEN(cWSAFileName_F).EQ.0) THEN
-        CALL Model%New(cPPFileName_F,lRoutedStreams=lRoutedStreams,lPrintBinFile=.FALSE.,iStat=iStat)
-    ELSE
-        CALL Model%New('IWFM',cPPFileName_F,cSimFileName_F,cWSAFileName_F,lRoutedStreams,lForInquiry,iStat=iStat)
-    END IF
-    IF (iStat .NE. 0) RETURN
-    
-    !Find an index for the model with the Models array
-    DO indx=1,SIZE(Models)
-        IF (LocateInList(indx,iActiveModelIndices) .EQ. 0) THEN
-            iCurrentModelIndex = indx
+
+    !Find an available slot and instantiate model (O(1) direct scan of pointer association)
+    !$OMP CRITICAL(IWFM_MODEL_MGMT)
+    iNewID = 0
+    DO indx=1,MAX_MODEL_SLOTS
+        IF (.NOT. ASSOCIATED(ModelSlots(indx)%ptr)) THEN
+            iNewID = indx
             EXIT
         END IF
     END DO
-        
-    !Store new model
-    Models(iCurrentModelIndex) =  Model
-    pModel                     => Models(iCurrentModelIndex)
+    IF (iNewID .NE. 0) THEN
+        !Heap-allocate a new model instance
+        ALLOCATE(ModelSlots(iNewID)%ptr)
 
-    !New model index
-    iModelIndex = iCurrentModelIndex
-    
-    !Update list of active model indicies
-    ALLOCATE (iTempList(iNActiveModels+1))
-    iTempList(1:iNActiveModels) = iActiveModelIndices
-    iTempList(iNActiveModels+1) = iCurrentModelIndex
-    CALL MOVE_ALLOC(iTempList , iActiveModelIndices)
-    CALL ShellSort(iActiveModelIndices)
-    iNActiveModels = iNActiveModels + 1
-    
+        !Read main control data for pre-processor and simulation (if filename is specified) and
+        !  instantiate model components
+        IF (LEN(cSimFileName_F).EQ.0  .AND. LEN(cWSAFileName_F).EQ.0) THEN
+            CALL ModelSlots(iNewID)%ptr%New(cPPFileName_F,lRoutedStreams=lRoutedStreams,lPrintBinFile=.FALSE.,iStat=iStat)
+        ELSE
+            CALL ModelSlots(iNewID)%ptr%New('IWFM',cPPFileName_F,cSimFileName_F,cWSAFileName_F,lRoutedStreams,lForInquiry,iStat=iStat)
+        END IF
+        IF (iStat .NE. 0) THEN
+            DEALLOCATE(ModelSlots(iNewID)%ptr)
+            iNewID = 0
+        ELSE
+            iModelIndex = iNewID
+        END IF
+    END IF
+    !$OMP END CRITICAL(IWFM_MODEL_MGMT)
+
+    !No slot available — emit error outside critical section
+    IF (iNewID .EQ. 0 .AND. iStat .EQ. 0) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Maximum number of concurrent models reached!',f_iWarn,cModName)
+        iStat = -1
+    END IF
+
   END SUBROUTINE IW_Model_WSA_New
 
   
@@ -186,23 +203,21 @@ CONTAINS
     INTEGER(C_INT),INTENT(IN)         :: LenPPFileName,LenSimFileName,IsRoutedStreams,IsForInquiry
     CHARACTER(KIND=C_CHAR),INTENT(IN) :: cPPFileName(LenPPFileName),cSimFileName(LenSimFileName)
     INTEGER(C_INT),INTENT(OUT)        :: iModelID,iStat
-    
+
     !Local variables
-    INTEGER             :: indx
+    INTEGER             :: indx,iNewID
     CHARACTER           :: cPPFileName_F*LenPPFileName,cSimFileName_F*LenSimFileName
     LOGICAL             :: lRoutedStreams,lForInquiry
-    TYPE(ModelType)     :: Model
-    INTEGER,ALLOCATABLE :: iTempList(:)
-    
+
     !Set environment for parallel processing
-    !$ CALL KMP_SET_BLOCKTIME(0)                                  !Let threads sleep right away 
-    !$ CALL OMP_SET_NUM_THREADS(MIN(OMP_GET_NUM_PROCS()-1 , 16))  !Set number of threads to minimum of 16 or number of available processors 
+    !$ CALL KMP_SET_BLOCKTIME(0)                                  !Let threads sleep right away
+    !$ CALL OMP_SET_NUM_THREADS(MIN(OMP_GET_NUM_PROCS()-1 , 16))  !Set number of threads to minimum of 16 or number of available processors
     !$ CALL OMP_SET_MAX_ACTIVE_LEVELS(2)                          !Maximum 2 levels of nested paralellization
     !$ CALL KMP_SET_STACKSIZE_S(16777216)                         !Set thread stack size to 16MB
-    
+
     !Initialize
     iStat = 0
-    
+
     !Logical variables
     IF (IsRoutedStreams .EQ. 0) THEN
         lRoutedStreams = .FALSE.
@@ -214,44 +229,46 @@ CONTAINS
     ELSE
         lForInquiry = .TRUE.
     END IF
-    
+
     !C strings to Fortran strings
     CALL String_Copy_C_F(cPPFileName,cPPFileName_F)
     CALL String_Copy_C_F(cSimFileName,cSimFileName_F)
-        
-    !Read main control data for pre-processor and simulation (if filename is specified) and 
-    !  instantiate model components
-    !  Return if any errors
-    IF (LEN(cSimFileName_F) .EQ. 0) THEN
-        CALL Model%New(cPPFileName_F,lRoutedStreams=lRoutedStreams,lPrintBinFile=.FALSE.,iStat=iStat)
-    ELSE
-        CALL Model%New('IWFM',cPPFileName_F,cSimFileName_F,'',lRoutedStreams,lForInquiry,iStat=iStat)
-    END IF
-    IF (iStat .NE. 0) RETURN
-    
-    !Find an index for the model with the Models array
-    DO indx=1,SIZE(Models)
-        IF (LocateInList(indx,iActiveModelIndices) .EQ. 0) THEN
-            iCurrentModelIndex = indx
+
+    !Find an available slot and instantiate model (O(1) direct scan of pointer association)
+    !$OMP CRITICAL(IWFM_MODEL_MGMT)
+    iNewID = 0
+    DO indx=1,MAX_MODEL_SLOTS
+        IF (.NOT. ASSOCIATED(ModelSlots(indx)%ptr)) THEN
+            iNewID = indx
             EXIT
         END IF
     END DO
-        
-    !Store new model
-    Models(iCurrentModelIndex) =  Model
-    pModel                     => Models(iCurrentModelIndex)
+    IF (iNewID .NE. 0) THEN
+        !Heap-allocate a new model instance
+        ALLOCATE(ModelSlots(iNewID)%ptr)
 
-    !New model index
-    iModelID = iCurrentModelIndex
-    
-    !Update list of active model indicies
-    ALLOCATE (iTempList(iNActiveModels+1))
-    iTempList(1:iNActiveModels) = iActiveModelIndices
-    iTempList(iNActiveModels+1) = iCurrentModelIndex
-    CALL MOVE_ALLOC(iTempList , iActiveModelIndices)
-    CALL ShellSort(iActiveModelIndices)
-    iNActiveModels = iNActiveModels + 1
-       
+        !Read main control data for pre-processor and simulation (if filename is specified) and
+        !  instantiate model components
+        IF (LEN(cSimFileName_F) .EQ. 0) THEN
+            CALL ModelSlots(iNewID)%ptr%New(cPPFileName_F,lRoutedStreams=lRoutedStreams,lPrintBinFile=.FALSE.,iStat=iStat)
+        ELSE
+            CALL ModelSlots(iNewID)%ptr%New('IWFM',cPPFileName_F,cSimFileName_F,'',lRoutedStreams,lForInquiry,iStat=iStat)
+        END IF
+        IF (iStat .NE. 0) THEN
+            DEALLOCATE(ModelSlots(iNewID)%ptr)
+            iNewID = 0
+        ELSE
+            iModelID = iNewID
+        END IF
+    END IF
+    !$OMP END CRITICAL(IWFM_MODEL_MGMT)
+
+    !No slot available — emit error outside critical section
+    IF (iNewID .EQ. 0 .AND. iStat .EQ. 0) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Maximum number of concurrent models reached!',f_iWarn,cModName)
+        iStat = -1
+    END IF
+
   END SUBROUTINE IW_Model_New
   
   
@@ -270,38 +287,24 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- KILL MODEL
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_Kill(iStat) BIND(C,NAME='IW_Model_Kill')
+  SUBROUTINE IW_Model_Kill(iModelID,iStat) BIND(C,NAME='IW_Model_Kill')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_Kill
+    INTEGER(C_INT),INTENT(IN)  :: iModelID
     INTEGER(C_INT),INTENT(OUT) :: iStat
-    
-    !Local variables
-    INTEGER             :: indx,iCount
-    INTEGER,ALLOCATABLE :: iTempList(:)
-    
+
     !Initialize
     iStat = 0
-    
-    !Return if there are no models instantaited
-    IF (iNActiveModels .EQ. 0) RETURN
-    
-    !Kill model
-    CALL Models(iCurrentModelIndex)%Kill()
-    
-    !Update the number and list of active models
-    ALLOCATE(iTempList(iNActiveModels-1)) 
-    iCount = 0
-    DO indx=1,iNActiveModels
-        IF (iActiveModelIndices(indx) .EQ. iCurrentModelIndex) CYCLE
-        iCount            = iCount + 1
-        iTempList(iCount) = iActiveModelIndices(indx)
-    END DO
-    CALL MOVE_ALLOC(iTempList , iActiveModelIndices)
-    
-    !Update the current model index and pointer
-    iCurrentModelIndex =  0
-    pModel             => NULL()
-    iNActiveModels     = iNActiveModels - 1
-    
+
+    !Return if model ID is out of range or slot is empty (idempotent)
+    IF (iModelID .LT. 1 .OR. iModelID .GT. MAX_MODEL_SLOTS) RETURN
+    IF (.NOT. ASSOCIATED(ModelSlots(iModelID)%ptr)) RETURN
+
+    !Kill model and deallocate heap memory (thread-safe)
+    !$OMP CRITICAL(IWFM_MODEL_MGMT)
+    CALL ModelSlots(iModelID)%ptr%Kill()
+    DEALLOCATE(ModelSlots(iModelID)%ptr)
+    !$OMP END CRITICAL(IWFM_MODEL_MGMT)
+
   END SUBROUTINE IW_Model_Kill
   
 
@@ -318,33 +321,24 @@ CONTAINS
 ! ******************************************************************
 
   ! -------------------------------------------------------------
-  ! --- GET THE INDEX OF THE CURRENT MODEL
+  ! --- GET NUMBER OF WELLS
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetCurrentModelID(iModelID,iStat) BIND(C,NAME='IW_Model_GetCurrentModelID')
-    !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetCurrentModelID
-    INTEGER(C_INT),INTENT(OUT) :: iModelID,iStat
-    
-    iStat    = 0
-    iModelID = iCurrentModelIndex
-    
-  END SUBROUTINE IW_Model_GetCurrentModelID
-  
-  
-  ! -------------------------------------------------------------
-  ! --- GET NUMBER OF WELLS 
-  ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetNWells(iNWells,iStat) BIND(C,NAME='IW_Model_GetNWells')
+  SUBROUTINE IW_Model_GetNWells(iModelID,iNWells,iStat) BIND(C,NAME='IW_Model_GetNWells')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetNWells
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(OUT) :: iNWells,iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    iNWells = pModel%GetNWells()
+    iNWells = pMdl%GetNWells()
     iStat   = 0
     
   END SUBROUTINE IW_Model_GetNWells
@@ -353,19 +347,23 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET WELL IDs
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetWellIDs(iNWells,IDs,iStat) BIND(C,NAME='IW_Model_GetWellIDs')
+  SUBROUTINE IW_Model_GetWellIDs(iModelID,iNWells,IDs,iStat) BIND(C,NAME='IW_Model_GetWellIDs')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetWellIDs
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: iNWells
     INTEGER(C_INT),INTENT(OUT) :: IDs(iNWells),iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetWellIDs(IDs)
+    CALL pMdl%GetWellIDs(IDs)
     iStat = 0
     
   END SUBROUTINE IW_Model_GetWellIDs
@@ -374,20 +372,24 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET WELL COORDINATES
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetWellCoordinates(iNWells,rX,rY,iStat) BIND(C,NAME='IW_Model_GetWellCoordinates')
+  SUBROUTINE IW_Model_GetWellCoordinates(iModelID,iNWells,rX,rY,iStat) BIND(C,NAME='IW_Model_GetWellCoordinates')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetWellCoordinates
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: iNWells
     REAL(C_DOUBLE),INTENT(OUT) :: rX(iNWells),rY(iNWells)
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetWellCoordinates(rX,rY)
+    CALL pMdl%GetWellCoordinates(rX,rY)
     iStat = 0
     
   END SUBROUTINE IW_Model_GetWellCoordinates
@@ -396,20 +398,24 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET WELL PERFORATION TOP AND BOTTOM ELEVATIONS
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetWellPerfTopBottom(iNWells,rTop,rBottom,iStat) BIND(C,NAME='IW_Model_GetWellPerfTopBottom')
+  SUBROUTINE IW_Model_GetWellPerfTopBottom(iModelID,iNWells,rTop,rBottom,iStat) BIND(C,NAME='IW_Model_GetWellPerfTopBottom')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetWellPerfTopBottom
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: iNWells
     REAL(C_DOUBLE),INTENT(OUT) :: rTop(iNWells),rBottom(iNWells)
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetWellPerfTopBottom(rTop,rBottom)
+    CALL pMdl%GetWellPerfTopBottom(rTop,rBottom)
     iStat = 0
     
   END SUBROUTINE IW_Model_GetWellPerfTopBottom
@@ -418,20 +424,24 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET NUMBER OF ELEMENTS SERVED BY A WELL
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetWellNElems(iWell,iNElems,iStat) BIND(C,NAME='IW_Model_GetWellNElems')
+  SUBROUTINE IW_Model_GetWellNElems(iModelID,iWell,iNElems,iStat) BIND(C,NAME='IW_Model_GetWellNElems')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetWellNElems
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: iWell
     INTEGER(C_INT),INTENT(OUT) :: iNElems,iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat   = 0
-    iNElems = pModel%GetWellNElems(iWell)
+    iNElems = pMdl%GetWellNElems(iWell)
     
   END SUBROUTINE IW_Model_GetWellNElems
 
@@ -439,8 +449,9 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET INDICES OF ELEMENTS SERVED BY A WELL
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetWellElems(iWell,iNElems,iElems,iStat) BIND(C,NAME='IW_Model_GetWellElems')
+  SUBROUTINE IW_Model_GetWellElems(iModelID,iWell,iNElems,iElems,iStat) BIND(C,NAME='IW_Model_GetWellElems')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetWellElems
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: iwell,iNElems
     INTEGER(C_INT),INTENT(OUT) :: iElems(iNElems),iStat
     
@@ -448,14 +459,17 @@ CONTAINS
     INTEGER,ALLOCATABLE :: iElems_Local(:)
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat = 0
-    CALL pModel%GetWellElems(iWell,iElems_Local)
+    CALL pMdl%GetWellElems(iWell,iElems_Local)
     iElems = iElems_Local
     
   END SUBROUTINE IW_Model_GetWellElems
@@ -464,18 +478,22 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET NUMBER OF ELEMENT PUMPING 
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetNElemPumps(iNElemPumps,iStat) BIND(C,NAME='IW_Model_GetNElemPumps')
+  SUBROUTINE IW_Model_GetNElemPumps(iModelID,iNElemPumps,iStat) BIND(C,NAME='IW_Model_GetNElemPumps')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetNElemPumps
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(OUT) :: iNElemPumps,iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    iNElemPumps = pModel%GetNElemPumps()
+    iNElemPumps = pMdl%GetNElemPumps()
     iStat       = 0
     
   END SUBROUTINE IW_Model_GetNElemPumps
@@ -484,19 +502,23 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET ELEMENT PUMPING IDs
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetElemPumpIDs(iNElemPumps,IDs,iStat) BIND(C,NAME='IW_Model_GetElemPumpIDs')
+  SUBROUTINE IW_Model_GetElemPumpIDs(iModelID,iNElemPumps,IDs,iStat) BIND(C,NAME='IW_Model_GetElemPumpIDs')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetElemPumpIDs
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: iNElemPumps
     INTEGER(C_INT),INTENT(OUT) :: IDs(iNElemPumps),iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetElemPumpIDs(IDs)
+    CALL pMdl%GetElemPumpIDs(IDs)
     iStat = 0
     
   END SUBROUTINE IW_Model_GetElemPumpIDs
@@ -510,8 +532,9 @@ CONTAINS
   ! ---       are rewound back to where they were after  
   ! ---       ReadTSData method was called. 
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetFutureWaterDemand_ForDiversion(iDiversion,iLenDate,cDemandDate,rFactor,rDemand,iStat) BIND(C,NAME='IW_Model_GetFutureWaterDemand_ForDiversion')
+  SUBROUTINE IW_Model_GetFutureWaterDemand_ForDiversion(iModelID,iDiversion,iLenDate,cDemandDate,rFactor,rDemand,iStat) BIND(C,NAME='IW_Model_GetFutureWaterDemand_ForDiversion')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetFutureWaterDemand_ForDiversion
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)         :: iDiversion,iLenDate
     CHARACTER(KIND=C_CHAR),INTENT(IN) :: cDemandDate(iLenDate)
     REAL(C_DOUBLE),INTENT(IN)         :: rFactor
@@ -522,8 +545,11 @@ CONTAINS
     CHARACTER :: cDemandDate_F*iLenDate
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -532,7 +558,7 @@ CONTAINS
     CALL String_Copy_C_F(cDemandDate,cDemandDate_F)
     
     !Retrieve
-    CALL pModel%GetFutureWaterDemand_ForDiversion(iDiversion,cDemandDate_F,rDemand,iStat)
+    CALL pMdl%GetFutureWaterDemand_ForDiversion(iDiversion,cDemandDate_F,rDemand,iStat)
     rDemand = rDemand * rFactor
     
   END SUBROUTINE IW_Model_GetFutureWaterDemand_ForDiversion
@@ -541,8 +567,9 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET CURRENT SIMULATION DATE AND TIME
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetCurrentDateAndTime(iLenDateTime,cCurrentDateAndTime,iStat) BIND(C,NAME='IW_Model_GetCurrentDateAndTime')
+  SUBROUTINE IW_Model_GetCurrentDateAndTime(iModelID,iLenDateTime,cCurrentDateAndTime,iStat) BIND(C,NAME='IW_Model_GetCurrentDateAndTime')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetCurrentDateAndTime
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)          :: iLenDateTime
     CHARACTER(KIND=C_CHAR),INTENT(OUT) :: cCurrentDateAndTime(iLenDateTime)
     INTEGER(C_INT),INTENT(OUT)         :: iStat
@@ -551,8 +578,11 @@ CONTAINS
     CHARACTER :: cCurrentDateAndTime_F*f_iTimeStampLength
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -561,7 +591,7 @@ CONTAINS
     iStat = 0
     
     !Get the current date and time
-    CALL pModel%GetCurrentDateAndTime(cCurrentDateAndTime_F)
+    CALL pMdl%GetCurrentDateAndTime(cCurrentDateAndTime_F)
     
     !Fortran strings to C strings
     CALL String_Copy_F_C(cCurrentDateAndTime_F , cCurrentDateAndTime)
@@ -572,16 +602,20 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET NUMBER OF TIMESTEPS IN THE SIMULATION
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetNTimeSteps(NTimeSteps,iStat) BIND(C,NAME='IW_Model_GetNTimeSteps')
+  SUBROUTINE IW_Model_GetNTimeSteps(iModelID,NTimeSteps,iStat) BIND(C,NAME='IW_Model_GetNTimeSteps')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetNTimeSteps
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(OUT) :: NTimeSteps,iStat
     
     !Local variables
     TYPE(TimeStepType) :: TimeStep
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -590,7 +624,7 @@ CONTAINS
     iStat = 0
     
     !Get the number of time steps
-    CALL pModel%GetTimeSpecs(TimeStep,NTimeSteps)
+    CALL pMdl%GetTimeSpecs(TimeStep,NTimeSteps)
         
   END SUBROUTINE IW_Model_GetNTimeSteps
   
@@ -598,8 +632,9 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET SIMULATION TIME RELATED DATA FROM Model OBJECT
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetTimeSpecs(cDataDatesAndTimes,iLenDates,cInterval,iLenInterval,NData,iLocArray,iStat) BIND(C,NAME='IW_Model_GetTimeSpecs')
+  SUBROUTINE IW_Model_GetTimeSpecs(iModelID,cDataDatesAndTimes,iLenDates,cInterval,iLenInterval,NData,iLocArray,iStat) BIND(C,NAME='IW_Model_GetTimeSpecs')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetTimeSpecs
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)          :: iLenDates,iLenInterval,NData
     CHARACTER(KIND=C_CHAR),INTENT(OUT) :: cDataDatesAndTimes(iLenDates),cInterval(iLenInterval)
     INTEGER(C_INT),INTENT(OUT)         :: iLocArray(NData),iStat
@@ -610,8 +645,11 @@ CONTAINS
     INTEGER            :: indx,nTime
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -621,7 +659,7 @@ CONTAINS
     cDataDatesAndTimes_F = ''
     
     !Get the time step data
-    CALL pModel%GetTimeSpecs(TimeStep,nTime)
+    CALL pMdl%GetTimeSpecs(TimeStep,nTime)
     
     !Data interval
     cInterval_F = TimeStep%Unit
@@ -648,8 +686,9 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET THE POSSIBLE RESULTS OUTPUT INTERVALS BASED ON SIMULATION TIME STEP
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetOutputIntervals(cOutputIntervals,iLenOutputIntervals,iLocArray,iDim_LocArray_In,iDim_LocArray_Out,iStat) BIND(C,NAME='IW_Model_GetOutputIntervals')
+  SUBROUTINE IW_Model_GetOutputIntervals(iModelID,cOutputIntervals,iLenOutputIntervals,iLocArray,iDim_LocArray_In,iDim_LocArray_Out,iStat) BIND(C,NAME='IW_Model_GetOutputIntervals')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetOutputIntervals
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)          :: iLenOutputIntervals,iDim_LocArray_In
     CHARACTER(KIND=C_CHAR),INTENT(OUT) :: cOutputIntervals(iLenOutputIntervals)
     INTEGER(C_INT),INTENT(OUT)         :: iDim_LocArray_Out
@@ -662,8 +701,11 @@ CONTAINS
     CHARACTER                    :: cOutputIntervals_F*iLenOutputIntervals
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -674,7 +716,7 @@ CONTAINS
     iCount = 1
     
     !Get model time specs
-    CALL pModel%GetTimeSpecs(TimeStep,nTime)
+    CALL pMdl%GetTimeSpecs(TimeStep,nTime)
     
     !Find the index of simulation time unit in RecognizedIntervals array
     indx              = IsTimeIntervalValid(TimeStep%Unit)  
@@ -702,19 +744,23 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET NUMBER OF AVAILABLE BUDGET OUTPUTS
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetBudget_N(iNBudgets,iStat) BIND(C,NAME='IW_Model_GetBudget_N')
+  SUBROUTINE IW_Model_GetBudget_N(iModelID,iNBudgets,iStat) BIND(C,NAME='IW_Model_GetBudget_N')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetBudget_N
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(OUT) :: iNBudgets,iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat     = 0
-    iNBudgets = pModel%GetBudget_N()
+    iNBudgets = pMdl%GetBudget_N()
 
   END SUBROUTINE IW_Model_GetBudget_N
   
@@ -722,8 +768,9 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET A LIST OF AVAILABLE BUDGET OUTPUTS
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetBudget_List(iNBudgets,iLocArray,iLenBudgetList,cBudgetList,iBudgetTypeList,iBudgetLocationTypeList,iStat) BIND(C,NAME='IW_Model_GetBudget_List')
+  SUBROUTINE IW_Model_GetBudget_List(iModelID,iNBudgets,iLocArray,iLenBudgetList,cBudgetList,iBudgetTypeList,iBudgetLocationTypeList,iStat) BIND(C,NAME='IW_Model_GetBudget_List')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetBudget_List
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)          :: iNBudgets,iLenBudgetList
     INTEGER(C_INT),INTENT(OUT)         :: iLocArray(iNBudgets),iBudgetTypeList(iNBudgets),iBudgetLocationTypeList(iNBudgets),iStat
     CHARACTER(KIND=C_CHAR),INTENT(OUT) :: cBudgetList(iLenBudgetList)
@@ -735,6 +782,9 @@ CONTAINS
     CHARACTER(LEN=500),ALLOCATABLE :: cFilesDummy(:)
     
     !Initialize
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
     iStat = 0
     
     !Return if number of Budgets is zero
@@ -744,14 +794,14 @@ CONTAINS
     END IF
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     !Get the list
-    CALL pModel%GetBudget_List(cBudgetList_Local,iBudgetTypeList_Local,iBudgetCompList_Local,iBudgetLocationTypeList_Local,cFilesDummy)
+    CALL pMdl%GetBudget_List(cBudgetList_Local,iBudgetTypeList_Local,iBudgetCompList_Local,iBudgetLocationTypeList_Local,cFilesDummy)
     
     !Budget location and hydrologic component list
     iBudgetLocationTypeList = iBudgetLocationTypeList_Local
@@ -767,19 +817,23 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET NUMBER OF COLUMNS FOR A SELECTED BUDGET (EXCLUDES TIME COLUMN)
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetBudget_NColumns(iBudgetType,iLocIndex,iNCols,iStat) BIND(C,NAME='IW_Model_GetBudget_NColumns')
+  SUBROUTINE IW_Model_GetBudget_NColumns(iModelID,iBudgetType,iLocIndex,iNCols,iStat) BIND(C,NAME='IW_Model_GetBudget_NColumns')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetBudget_NColumns
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: iBudgetType,iLocIndex
     INTEGER(C_INT),INTENT(OUT) :: iNCols,iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetBudget_NColumns(iBudgetType,iLocIndex,iNCols,iStat)
+    CALL pMdl%GetBudget_NColumns(iBudgetType,iLocIndex,iNCols,iStat)
 
   END SUBROUTINE IW_Model_GetBudget_NColumns  
     
@@ -787,8 +841,9 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET COLUMN TITLES FOR A SELECTED BUDGET (EXCLUDES TIME COLUMN)
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetBudget_ColumnTitles(iBudgetType,iLocIndex,iLenUnit,cUnitLT,cUnitAR,cUnitVL,iNCols,iLocArray,iLenTitles,cColTitles,iStat) BIND(C,NAME='IW_Model_GetBudget_ColumnTitles')
+  SUBROUTINE IW_Model_GetBudget_ColumnTitles(iModelID,iBudgetType,iLocIndex,iLenUnit,cUnitLT,cUnitAR,cUnitVL,iNCols,iLocArray,iLenTitles,cColTitles,iStat) BIND(C,NAME='IW_Model_GetBudget_ColumnTitles')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetBudget_ColumnTitles
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)          :: iBudgetType,iLocIndex,iLenUnit,iNCols,iLenTitles
     CHARACTER(KIND=C_CHAR),INTENT(IN)  :: cUnitLT(iLenUnit),cUnitAR(iLenUnit),cUnitVL(iLenUnit)
     CHARACTER(KIND=C_CHAR),INTENT(OUT) :: cColTitles(iLenTitles)
@@ -799,8 +854,11 @@ CONTAINS
     CHARACTER(LEN=iLenTitles)      :: cColTitles_F*iLenTitles,cUnitLT_F*iLenUnit,cUnitAR_F*iLenUnit,cUnitVL_F*iLenUnit
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -811,7 +869,7 @@ CONTAINS
     CALL String_Copy_C_F(cUnitVL , cUnitVL_F)
     
     !Retrieve column titles
-    CALL pModel%GetBudget_ColumnTitles(iBudgetType,iLocIndex,cUnitLT_F,cUnitAR_F,cUnitVL_F,cColTitles_Local,iStat)
+    CALL pMdl%GetBudget_ColumnTitles(iBudgetType,iLocIndex,cUnitLT_F,cUnitAR_F,cUnitVL_F,cColTitles_Local,iStat)
     IF (iStat .NE. 0) RETURN
 
     !Concatenate title array into a string scalar
@@ -826,8 +884,9 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET FULL MONTHLY AVERAGE BUDGET FOR A SELECTED BUDGET TYPE AND LOCATION 
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetBudget_MonthlyAverageFlows(iBudgetType,iLocationIndex,iLUType,iSWShedBudCompRZ,iLenDate,cBeginDate,cEndDate,rFactVL,iNFlows_In,rFlows,rSDFlows,iNFlows_Out,iLenFlowNames,cFlowNames,iLocArray,iStat) BIND(C,NAME='IW_Model_GetBudget_MonthlyAverageFlows')
+  SUBROUTINE IW_Model_GetBudget_MonthlyAverageFlows(iModelID,iBudgetType,iLocationIndex,iLUType,iSWShedBudCompRZ,iLenDate,cBeginDate,cEndDate,rFactVL,iNFlows_In,rFlows,rSDFlows,iNFlows_Out,iLenFlowNames,cFlowNames,iLocArray,iStat) BIND(C,NAME='IW_Model_GetBudget_MonthlyAverageFlows')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetBudget_MonthlyAverageFlows
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)          :: iBudgetType,iLocationIndex,iLUType,iSWShedBudCompRZ,iLenDate,iNFlows_In,iLenFlowNames
     CHARACTER(KIND=C_CHAR),INTENT(IN)  :: cBeginDate(iLenDate),cEndDate(iLenDate)
     REAL(C_DOUBLE),INTENT(IN)          :: rFactVL
@@ -842,8 +901,11 @@ CONTAINS
     CHARACTER(LEN=50),ALLOCATABLE :: cFlowNames_Local(:)
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -860,7 +922,7 @@ CONTAINS
     END IF    
     
     !Get full budget
-    CALL pModel%GetBudget_MonthlyAverageFlows(iBudgetType,iLocationIndex,iLUType,iSWShedBudType,cBeginDate_F,cEndDate_F,rFactVL,rFlows_Local,rSDFlows_Local,cFlowNames_Local,iStat)
+    CALL pMdl%GetBudget_MonthlyAverageFlows(iBudgetType,iLocationIndex,iLUType,iSWShedBudType,cBeginDate_F,cEndDate_F,rFactVL,rFlows_Local,rSDFlows_Local,cFlowNames_Local,iStat)
     IF (iStat .NE. 0) RETURN
     
     !Transfer flows to return arguments
@@ -880,8 +942,9 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET FULL ANNUAL BUDGET FOR A SELECTED BUDGET TYPE AND LOCATION FOR EACH WATER YEAR 
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetBudget_AnnualFlows(iBudgetType,iLocationIndex,iLUType,iSWShedBudCompRZ,iLenDate,cBeginDate,cEndDate,rFactVL,iNFlows_In,iNTimes_In,rFlows,iNFlows_Out,iNTimes_Out,iLenFlowNames,cFlowNames,iLocArray,iWaterYears,iStat) BIND(C,NAME='IW_Model_GetBudget_AnnualFlows')
+  SUBROUTINE IW_Model_GetBudget_AnnualFlows(iModelID,iBudgetType,iLocationIndex,iLUType,iSWShedBudCompRZ,iLenDate,cBeginDate,cEndDate,rFactVL,iNFlows_In,iNTimes_In,rFlows,iNFlows_Out,iNTimes_Out,iLenFlowNames,cFlowNames,iLocArray,iWaterYears,iStat) BIND(C,NAME='IW_Model_GetBudget_AnnualFlows')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetBudget_AnnualFlows
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)          :: iBudgetType,iLocationIndex,iLUType,iSWShedBudCompRZ,iLenDate,iNFlows_In,iNTimes_In,iLenFlowNames
     CHARACTER(KIND=C_CHAR),INTENT(IN)  :: cBeginDate(iLenDate),cEndDate(iLenDate)
     REAL(C_DOUBLE),INTENT(IN)          :: rFactVL
@@ -898,8 +961,11 @@ CONTAINS
     CHARACTER(LEN=50),ALLOCATABLE :: cFlowNames_Local(:)
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -919,7 +985,7 @@ CONTAINS
     lForCalendarYear = .FALSE.
     
     !Get full budget
-    CALL pModel%GetBudget_AnnualFlows(iBudgetType,iLocationIndex,iLUType,iSWShedBudType,cBeginDate_F,cEndDate_F,lForCalendarYear,rFactVL,rFlows_Local,cFlowNames_Local,iWaterYears_Local,iStat)
+    CALL pMdl%GetBudget_AnnualFlows(iBudgetType,iLocationIndex,iLUType,iSWShedBudType,cBeginDate_F,cEndDate_F,lForCalendarYear,rFactVL,rFlows_Local,cFlowNames_Local,iWaterYears_Local,iStat)
     IF (iStat .NE. 0) RETURN
     
     !Transfer flows and water years to return arguments
@@ -940,8 +1006,9 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET FULL ANNUAL BUDGET FOR A SELECTED BUDGET TYPE AND LOCATION FOR EITHER CALENDAR YEARS OR WATER YEARS 
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetBudget_AnnualFlows_1(iBudgetType,iLocationIndex,iLUType,iSWShedBudCompRZ,iLenDate,cBeginDate,cEndDate,iForCalendarYear,rFactVL,iNFlows_In,iNTimes_In,rFlows,iNFlows_Out,iNTimes_Out,iLenFlowNames,cFlowNames,iLocArray,iOutputYears,iStat) BIND(C,NAME='IW_Model_GetBudget_AnnualFlows_1')
+  SUBROUTINE IW_Model_GetBudget_AnnualFlows_1(iModelID,iBudgetType,iLocationIndex,iLUType,iSWShedBudCompRZ,iLenDate,cBeginDate,cEndDate,iForCalendarYear,rFactVL,iNFlows_In,iNTimes_In,rFlows,iNFlows_Out,iNTimes_Out,iLenFlowNames,cFlowNames,iLocArray,iOutputYears,iStat) BIND(C,NAME='IW_Model_GetBudget_AnnualFlows_1')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetBudget_AnnualFlows_1
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)          :: iBudgetType,iLocationIndex,iLUType,iSWShedBudCompRZ,iLenDate,iNFlows_In,iNTimes_In,iLenFlowNames,iForCalendarYear
     CHARACTER(KIND=C_CHAR),INTENT(IN)  :: cBeginDate(iLenDate),cEndDate(iLenDate)
     REAL(C_DOUBLE),INTENT(IN)          :: rFactVL
@@ -958,8 +1025,11 @@ CONTAINS
     CHARACTER(LEN=50),ALLOCATABLE :: cFlowNames_Local(:)
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -983,7 +1053,7 @@ CONTAINS
     END IF
     
     !Get full budget
-    CALL pModel%GetBudget_AnnualFlows(iBudgetType,iLocationIndex,iLUType,iSWShedBudType,cBeginDate_F,cEndDate_F,lForCalendarYear,rFactVL,rFlows_Local,cFlowNames_Local,iOutputYears_Local,iStat)
+    CALL pMdl%GetBudget_AnnualFlows(iBudgetType,iLocationIndex,iLUType,iSWShedBudType,cBeginDate_F,cEndDate_F,lForCalendarYear,rFactVL,rFlows_Local,cFlowNames_Local,iOutputYears_Local,iStat)
     IF (iStat .NE. 0) RETURN
     
     !Transfer flows and water years to return arguments
@@ -1004,8 +1074,9 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET BUDGET TIME SERIES DATA FROM A BUDGET FILE FOR A SELECTED LOCATION AND SELECTED COLUMNS
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetBudget_TSData(iBudgetType,iLocationIndex,iNCols,iCols,iLenDate,cBeginDate,cEndDate,iLenInterval,cInterval,rFactLT,rFactAR,rFactVL,rOutputDates,iNTimes_In,rOutputValues,iDataTypes,iNTimes_Out,iStat) BIND(C,NAME="IW_Model_GetBudget_TSData")
+  SUBROUTINE IW_Model_GetBudget_TSData(iModelID,iBudgetType,iLocationIndex,iNCols,iCols,iLenDate,cBeginDate,cEndDate,iLenInterval,cInterval,rFactLT,rFactAR,rFactVL,rOutputDates,iNTimes_In,rOutputValues,iDataTypes,iNTimes_Out,iStat) BIND(C,NAME="IW_Model_GetBudget_TSData")
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetBudget_TSData
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)         :: iBudgetType,iLocationIndex,iNCols,iCols(iNCols),iNTimes_In,iLenDate,iLenInterval
     CHARACTER(KIND=C_CHAR),INTENT(IN) :: cBeginDate(iLenDate),cEndDate(iLenDate),cInterval(iLenInterval)
     REAL(C_DOUBLE),INTENT(IN)         :: rFactLT,rFactAR,rFactVL
@@ -1016,8 +1087,11 @@ CONTAINS
     CHARACTER :: cBeginDate_F*iLenDate,cEndDate_F*iLenDate,cInterval_F*iLenInterval
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -1028,7 +1102,7 @@ CONTAINS
     CALL String_Copy_C_F(cInterval,cInterval_F)
     
     !Get the data
-    CALL pModel%GetBudget_TSData(iBudgetType,iLocationIndex,iCols,cBeginDate_F,cEndDate_F,cInterval_F,rFactLT,rFactAR,rFactVL,rOutputDates,rOutputValues,iDataTypes,iNTimes_Out,iStat)
+    CALL pMdl%GetBudget_TSData(iBudgetType,iLocationIndex,iCols,cBeginDate_F,cEndDate_F,cInterval_F,rFactLT,rFactAR,rFactVL,rOutputDates,rOutputValues,iDataTypes,iNTimes_Out,iStat)
     IF (iStat .NE. 0) RETURN
     
     !Convert Julian time to Excel-style Julian time
@@ -1040,8 +1114,9 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET CUMULATIVE CHANGE IN GW STORAGE FROM BUDGET OUTPUT FOR A SELECTED SUBREGION
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetBudget_CumGWStorChange(iSubregionIndex,iLenDate,cBeginDate,cEndDate,iLenInterval,cInterval,rFactVL,rOutputDates,iNTimes_In,rCumGWStorChange,iNTimes_Out,iStat) BIND(C,NAME='IW_Model_GetBudget_CumGWStorChange')
+  SUBROUTINE IW_Model_GetBudget_CumGWStorChange(iModelID,iSubregionIndex,iLenDate,cBeginDate,cEndDate,iLenInterval,cInterval,rFactVL,rOutputDates,iNTimes_In,rCumGWStorChange,iNTimes_Out,iStat) BIND(C,NAME='IW_Model_GetBudget_CumGWStorChange')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetBudget_CumGWStorChange
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)         :: iSubregionIndex,iNTimes_In,iLenDate,iLenInterval
     CHARACTER(KIND=C_CHAR),INTENT(IN) :: cBeginDate(iLenDate),cEndDate(iLenDate),cInterval(iLenInterval)
     REAL(C_DOUBLE),INTENT(IN)         :: rFactVL
@@ -1053,8 +1128,11 @@ CONTAINS
     REAL(8),ALLOCATABLE :: rDates(:),rStorChange(:)
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -1065,7 +1143,7 @@ CONTAINS
     CALL String_Copy_C_F(cInterval,cInterval_F)
     
     !Get the data
-    CALL pModel%GetBudget_CumGWStorChange(iSubregionIndex,cBeginDate_F,cEndDate_F,cInterval_F,rFactVL,rDates,rStorChange,iStat)
+    CALL pMdl%GetBudget_CumGWStorChange(iSubregionIndex,cBeginDate_F,cEndDate_F,cInterval_F,rFactVL,rDates,rStorChange,iStat)
     IF (iStat .NE. 0) RETURN
     
     !Copy data to return arguments
@@ -1082,8 +1160,9 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET ANNUAL CUMULATIVE CHANGE IN GW STORAGE FROM BUDGET OUTPUT FOR A SELECTED SUBREGION FOR WATER YEARS
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetBudget_AnnualCumGWStorChange(iSubregionIndex,iLenDate,cBeginDate,cEndDate,rFactVL,iNTimes_In,rCumGWStorChange,iWaterYears,iNTimes_Out,iStat) BIND(C,NAME='IW_Model_GetBudget_AnnualCumGWStorChange')
+  SUBROUTINE IW_Model_GetBudget_AnnualCumGWStorChange(iModelID,iSubregionIndex,iLenDate,cBeginDate,cEndDate,rFactVL,iNTimes_In,rCumGWStorChange,iWaterYears,iNTimes_Out,iStat) BIND(C,NAME='IW_Model_GetBudget_AnnualCumGWStorChange')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetBudget_AnnualCumGWStorChange
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)         :: iSubregionIndex,iNTimes_In,iLenDate
     CHARACTER(KIND=C_CHAR),INTENT(IN) :: cBeginDate(iLenDate),cEndDate(iLenDate)
     REAL(C_DOUBLE),INTENT(IN)         :: rFactVL
@@ -1097,8 +1176,11 @@ CONTAINS
     REAL(8),ALLOCATABLE :: rStorChange(:)
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -1111,7 +1193,7 @@ CONTAINS
     lForCalendarYear = .FALSE.
     
     !Get the data
-    CALL pModel%GetBudget_AnnualCumGWStorChange(iSubregionIndex,cBeginDate_F,cEndDate_F,lForCalendarYear,rFactVL,rStorChange,iWaterYears_Local,iStat)
+    CALL pMdl%GetBudget_AnnualCumGWStorChange(iSubregionIndex,cBeginDate_F,cEndDate_F,lForCalendarYear,rFactVL,rStorChange,iWaterYears_Local,iStat)
     IF (iStat .NE. 0) RETURN
     
     !Copy data to return arguments
@@ -1125,8 +1207,9 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET ANNUAL CUMULATIVE CHANGE IN GW STORAGE FROM BUDGET OUTPUT FOR A SELECTED SUBREGION FOR CALENDAR OR WATER YEARS
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetBudget_AnnualCumGWStorChange_1(iSubregionIndex,iLenDate,cBeginDate,cEndDate,iForCalendarYear,rFactVL,iNTimes_In,rCumGWStorChange,iOutputYears,iNTimes_Out,iStat) BIND(C,NAME='IW_Model_GetBudget_AnnualCumGWStorChange_1')
+  SUBROUTINE IW_Model_GetBudget_AnnualCumGWStorChange_1(iModelID,iSubregionIndex,iLenDate,cBeginDate,cEndDate,iForCalendarYear,rFactVL,iNTimes_In,rCumGWStorChange,iOutputYears,iNTimes_Out,iStat) BIND(C,NAME='IW_Model_GetBudget_AnnualCumGWStorChange_1')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetBudget_AnnualCumGWStorChange_1
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)         :: iSubregionIndex,iNTimes_In,iLenDate,iForCalendarYear
     CHARACTER(KIND=C_CHAR),INTENT(IN) :: cBeginDate(iLenDate),cEndDate(iLenDate)
     REAL(C_DOUBLE),INTENT(IN)         :: rFactVL
@@ -1140,8 +1223,11 @@ CONTAINS
     REAL(8),ALLOCATABLE :: rStorChange(:)
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -1158,7 +1244,7 @@ CONTAINS
     END IF
     
     !Get the data
-    CALL pModel%GetBudget_AnnualCumGWStorChange(iSubregionIndex,cBeginDate_F,cEndDate_F,lForCalendarYear,rFactVL,rStorChange,iOutputYears_Local,iStat)
+    CALL pMdl%GetBudget_AnnualCumGWStorChange(iSubregionIndex,cBeginDate_F,cEndDate_F,lForCalendarYear,rFactVL,rStorChange,iOutputYears_Local,iStat)
     IF (iStat .NE. 0) RETURN
     
     !Copy data to return arguments
@@ -1172,19 +1258,23 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET NUMBER OF AVAILABLE ZBUDGET OUTPUTS
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetZBudget_N(iNZBudgets,iStat) BIND(C,NAME='IW_Model_GetZBudget_N')
+  SUBROUTINE IW_Model_GetZBudget_N(iModelID,iNZBudgets,iStat) BIND(C,NAME='IW_Model_GetZBudget_N')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetZBudget_N
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(OUT) :: iNZBudgets,iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat      = 0
-    iNZBudgets = pModel%GetZBudget_N()
+    iNZBudgets = pMdl%GetZBudget_N()
 
   END SUBROUTINE IW_Model_GetZBudget_N
   
@@ -1192,8 +1282,9 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET A LIST OF AVAILABLE ZBUDGET OUTPUTS
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetZBudget_List(iNZBudgets,iLocArray,iLenZBudgetList,cZBudgetList,iZBudgetTypeList,iStat) BIND(C,NAME='IW_Model_GetZBudget_List')
+  SUBROUTINE IW_Model_GetZBudget_List(iModelID,iNZBudgets,iLocArray,iLenZBudgetList,cZBudgetList,iZBudgetTypeList,iStat) BIND(C,NAME='IW_Model_GetZBudget_List')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetZBudget_List
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)          :: iNZBudgets,iLenZBudgetList
     INTEGER(C_INT),INTENT(OUT)         :: iLocArray(iNZBudgets),iZBudgetTypeList(iNZBudgets),iStat
     CHARACTER(KIND=C_CHAR),INTENT(OUT) :: cZBudgetList(iLenZBudgetList)
@@ -1205,6 +1296,9 @@ CONTAINS
     CHARACTER(LEN=500),ALLOCATABLE :: cFilesDummy(:)
     
     !Initialize
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
     iStat = 0
     
     !Return if number of ZBudgets is zero
@@ -1214,14 +1308,14 @@ CONTAINS
     END IF
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     !Get the list
-    CALL pModel%GetZBudget_List(cZBudgetList_Local,iZBudgetTypeList_Local,cFilesDummy)
+    CALL pMdl%GetZBudget_List(cZBudgetList_Local,iZBudgetTypeList_Local,cFilesDummy)
     
     !ZBudget type list
     iZBudgetTypeList = iZBudgetTypeList_Local
@@ -1236,19 +1330,23 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET NUMBER OF COLUMNS FOR A SELECTED Z-BUDGET FOR A ZONE (EXCLUDES TIME COLUMN)
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetZBudget_NColumns(iZBudgetType,iZoneID,iZExtent,iDimZones,iElems,iLayers,iZoneIDs,iNCols,iStat) BIND(C,NAME='IW_Model_GetZBudget_NColumns')
+  SUBROUTINE IW_Model_GetZBudget_NColumns(iModelID,iZBudgetType,iZoneID,iZExtent,iDimZones,iElems,iLayers,iZoneIDs,iNCols,iStat) BIND(C,NAME='IW_Model_GetZBudget_NColumns')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetZBudget_NColumns
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: iZBudgetType,iZoneID,iZExtent,iDimZones,iElems(iDimZones),iLayers(iDimZones),iZoneIDs(iDimZones)
     INTEGER(C_INT),INTENT(OUT) :: iNCols,iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetZBudget_NColumns(iZBudgetType,iZoneID,iZExtent,iElems,iLayers,iZoneIDs,iNCols,iStat)
+    CALL pMdl%GetZBudget_NColumns(iZBudgetType,iZoneID,iZExtent,iElems,iLayers,iZoneIDs,iNCols,iStat)
 
   END SUBROUTINE IW_Model_GetZBudget_NColumns  
     
@@ -1256,8 +1354,9 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET COLUMN TITLES FOR A SELECTED Z-BUDGET FOR A ZONE (EXCLUDES TIME COLUMN)
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetZBudget_ColumnTitles(iZBudgetType,iZoneID,iZExtent,iDimZones,iElems,iLayers,iZoneIDs,iLenUnit,cUnitAR,cUnitVL,iNCols,iLocArray,iLenTitles,cColTitles,iStat) BIND(C,NAME='IW_Model_GetZBudget_ColumnTitles')
+  SUBROUTINE IW_Model_GetZBudget_ColumnTitles(iModelID,iZBudgetType,iZoneID,iZExtent,iDimZones,iElems,iLayers,iZoneIDs,iLenUnit,cUnitAR,cUnitVL,iNCols,iLocArray,iLenTitles,cColTitles,iStat) BIND(C,NAME='IW_Model_GetZBudget_ColumnTitles')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetZBudget_ColumnTitles
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)          :: iZBudgetType,iZoneID,iZExtent,iDimZones,iElems(iDimZones),iLayers(iDimZones),iZoneIDs(iDimZones),iLenUnit,iNCols,iLenTitles
     CHARACTER(KIND=C_CHAR),INTENT(IN)  :: cUnitAR(iLenUnit),cUnitVL(iLenUnit)
     CHARACTER(KIND=C_CHAR),INTENT(OUT) :: cColTitles(iLenTitles)
@@ -1268,8 +1367,11 @@ CONTAINS
     CHARACTER(LEN=iLenTitles)      :: cColTitles_F*iLenTitles,cUnitAR_F*iLenUnit,cUnitVL_F*iLenUnit
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -1279,7 +1381,7 @@ CONTAINS
     CALL String_Copy_C_F(cUnitVL , cUnitVL_F)
     
     !Retrieve column titles
-    CALL pModel%GetZBudget_ColumnTitles(iZBudgetType,iZoneID,iZExtent,iElems,iLayers,iZoneIDs,cUnitAR_F,cUnitVL_F,cColTitles_Local,iStat)
+    CALL pMdl%GetZBudget_ColumnTitles(iZBudgetType,iZoneID,iZExtent,iElems,iLayers,iZoneIDs,cUnitAR_F,cUnitVL_F,cColTitles_Local,iStat)
 
     !Concatenate title array into a string scalar
     CALL StringArray_To_StringScalar(cColTitles_Local,cColTitles_F,iLocArray)
@@ -1293,8 +1395,9 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET FULL MONTHLY AVERAGE ZONE BUDGET FOR A SELECTED ZONE 
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetZBudget_MonthlyAverageFlows(iZBudgetType,iZoneID,iLUType,iZExtent,iNZones,iElems,iLayers,iZoneIDs,iLenDate,cBeginDate,cEndDate,rFactVL,iNFlows_In,rFlows,rSDFlows,iNFlows_Out,iLenFlowNames,cFlowNames,iLocArray,iStat) BIND(C,NAME='IW_Model_GetZBudget_MonthlyAverageFlows')
+  SUBROUTINE IW_Model_GetZBudget_MonthlyAverageFlows(iModelID,iZBudgetType,iZoneID,iLUType,iZExtent,iNZones,iElems,iLayers,iZoneIDs,iLenDate,cBeginDate,cEndDate,rFactVL,iNFlows_In,rFlows,rSDFlows,iNFlows_Out,iLenFlowNames,cFlowNames,iLocArray,iStat) BIND(C,NAME='IW_Model_GetZBudget_MonthlyAverageFlows')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetZBudget_MonthlyAverageFlows
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)          :: iZBudgetType,iZoneID,iLUType,iZExtent,iNZones,iElems(iNZones),iLayers(iNZones),iZoneIDs(iNZones),iLenDate,iNFlows_In,iLenFlowNames
     CHARACTER(KIND=C_CHAR),INTENT(IN)  :: cBeginDate(iLenDate),cEndDate(iLenDate)
     REAL(C_DOUBLE),INTENT(IN)          :: rFactVL
@@ -1309,8 +1412,11 @@ CONTAINS
     CHARACTER(LEN=50),ALLOCATABLE :: cFlowNames_Local(:)
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -1320,7 +1426,7 @@ CONTAINS
     CALL String_Copy_C_F(cEndDate , cEndDate_F)
     
     !Get full budget
-    CALL pModel%GetZBudget_MonthlyAverageFlows(iZBudgetType,iZoneID,iLUType,iZExtent,iElems,iLayers,iZoneIDs,cBeginDate_F,cEndDate_F,rFactVL,rFlows_Local,rSDFlows_Local,cFlowNames_Local,iStat)
+    CALL pMdl%GetZBudget_MonthlyAverageFlows(iZBudgetType,iZoneID,iLUType,iZExtent,iElems,iLayers,iZoneIDs,cBeginDate_F,cEndDate_F,rFactVL,rFlows_Local,rSDFlows_Local,cFlowNames_Local,iStat)
     
     !Transfer flows to return arguments
     iNFlows_Out = SIZE(rFlows_Local,DIM=1)
@@ -1339,8 +1445,9 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET ANNUAL ZONE BUDGET FLOWS FOR A SELECTED ZONE 
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetZBudget_AnnualFlows(iZBudgetType,iZoneID,iLUType,iZExtent,iNZones,iElems,iLayers,iZoneIDs,iLenDate,cBeginDate,cEndDate,rFactVL,iNFlows_In,iNTimes_In,rFlows,iNFlows_Out,iNTimes_Out,iLenFlowNames,cFlowNames,iLocArray,iOutputYears,iStat) BIND(C,NAME='IW_Model_GetZBudget_AnnualFlows')
+  SUBROUTINE IW_Model_GetZBudget_AnnualFlows(iModelID,iZBudgetType,iZoneID,iLUType,iZExtent,iNZones,iElems,iLayers,iZoneIDs,iLenDate,cBeginDate,cEndDate,rFactVL,iNFlows_In,iNTimes_In,rFlows,iNFlows_Out,iNTimes_Out,iLenFlowNames,cFlowNames,iLocArray,iOutputYears,iStat) BIND(C,NAME='IW_Model_GetZBudget_AnnualFlows')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetZBudget_AnnualFlows
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)          :: iZBudgetType,iZoneID,iLUType,iZExtent,iNZones,iElems(iNZones),iLayers(iNZones),iZoneIDs(iNZones),iLenDate,iNFlows_In,iNTimes_In,iLenFlowNames
     CHARACTER(KIND=C_CHAR),INTENT(IN)  :: cBeginDate(iLenDate),cEndDate(iLenDate)
     REAL(C_DOUBLE),INTENT(IN)          :: rFactVL
@@ -1357,8 +1464,11 @@ CONTAINS
     CHARACTER(LEN=50),ALLOCATABLE :: cFlowNames_Local(:)
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -1371,7 +1481,7 @@ CONTAINS
     lForCalendarYear = .FALSE.
     
     !Get full budget
-    CALL pModel%GetZBudget_AnnualFlows(iZBudgetType,iZoneID,iLUType,iZExtent,iElems,iLayers,iZoneIDs,cBeginDate_F,cEndDate_F,lForCalendarYear,rFactVL,rFlows_Local,cFlowNames_Local,iOutputYears_Local,iStat)
+    CALL pMdl%GetZBudget_AnnualFlows(iZBudgetType,iZoneID,iLUType,iZExtent,iElems,iLayers,iZoneIDs,cBeginDate_F,cEndDate_F,lForCalendarYear,rFactVL,rFlows_Local,cFlowNames_Local,iOutputYears_Local,iStat)
     
     !Transfer flows and ouput years to return arguments
     iNFlows_Out = SIZE(rFlows_Local,DIM=1)
@@ -1391,8 +1501,9 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET ANNUAL ZONE BUDGET FLOWS FOR A SELECTED ZONE (FOR WATER YEARS OR CALANDER YEARS) 
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetZBudget_AnnualFlows_1(iZBudgetType,iZoneID,iLUType,iZExtent,iNZones,iElems,iLayers,iZoneIDs,iLenDate,cBeginDate,cEndDate,iForCalendarYear,rFactVL,iNFlows_In,iNTimes_In,rFlows,iNFlows_Out,iNTimes_Out,iLenFlowNames,cFlowNames,iLocArray,iOutputYears,iStat) BIND(C,NAME='IW_Model_GetZBudget_AnnualFlows_1')
+  SUBROUTINE IW_Model_GetZBudget_AnnualFlows_1(iModelID,iZBudgetType,iZoneID,iLUType,iZExtent,iNZones,iElems,iLayers,iZoneIDs,iLenDate,cBeginDate,cEndDate,iForCalendarYear,rFactVL,iNFlows_In,iNTimes_In,rFlows,iNFlows_Out,iNTimes_Out,iLenFlowNames,cFlowNames,iLocArray,iOutputYears,iStat) BIND(C,NAME='IW_Model_GetZBudget_AnnualFlows_1')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetZBudget_AnnualFlows_1
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)          :: iZBudgetType,iZoneID,iLUType,iZExtent,iNZones,iElems(iNZones),iLayers(iNZones),iZoneIDs(iNZones),iLenDate,iNFlows_In,iNTimes_In,iLenFlowNames,iForCalendarYear
     CHARACTER(KIND=C_CHAR),INTENT(IN)  :: cBeginDate(iLenDate),cEndDate(iLenDate)
     REAL(C_DOUBLE),INTENT(IN)          :: rFactVL
@@ -1409,8 +1520,11 @@ CONTAINS
     CHARACTER(LEN=50),ALLOCATABLE :: cFlowNames_Local(:)
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -1427,7 +1541,7 @@ CONTAINS
     END IF
     
     !Get full budget
-    CALL pModel%GetZBudget_AnnualFlows(iZBudgetType,iZoneID,iLUType,iZExtent,iElems,iLayers,iZoneIDs,cBeginDate_F,cEndDate_F,lForCalendarYear,rFactVL,rFlows_Local,cFlowNames_Local,iOutputYears_Local,iStat)
+    CALL pMdl%GetZBudget_AnnualFlows(iZBudgetType,iZoneID,iLUType,iZExtent,iElems,iLayers,iZoneIDs,cBeginDate_F,cEndDate_F,lForCalendarYear,rFactVL,rFlows_Local,cFlowNames_Local,iOutputYears_Local,iStat)
     
     !Transfer flows and ouput years to return arguments
     iNFlows_Out = SIZE(rFlows_Local,DIM=1)
@@ -1447,8 +1561,9 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET ZONE BUDGET TIME SERIES DATA FROM A ZBUDGET FILE FOR A SELECTED ZONE AND SELECTED COLUMNS
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetZBudget_TSData(iZBudgetType,iZoneID,iNCols,iCols,iZExtent,iNZones,iElems,iLayers,iZoneIDs,iLenDate,cBeginDate,cEndDate,iLenInterval,cInterval,rFactAR,rFactVL,rOutputDates,iNTimes_In,rOutputValues,iDataTypes,iNTimes_Out,iStat) BIND(C,NAME="IW_Model_GetZBudget_TSData")
+  SUBROUTINE IW_Model_GetZBudget_TSData(iModelID,iZBudgetType,iZoneID,iNCols,iCols,iZExtent,iNZones,iElems,iLayers,iZoneIDs,iLenDate,cBeginDate,cEndDate,iLenInterval,cInterval,rFactAR,rFactVL,rOutputDates,iNTimes_In,rOutputValues,iDataTypes,iNTimes_Out,iStat) BIND(C,NAME="IW_Model_GetZBudget_TSData")
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetZBudget_TSData
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)         :: iZBudgetType,iZoneID,iNCols,iCols(iNCols),iZExtent,iNZones,iElems(iNZones),iLayers(iNZones),iZoneIDs(iNZones),iNTimes_In,iLenDate,iLenInterval
     CHARACTER(KIND=C_CHAR),INTENT(IN) :: cBeginDate(iLenDate),cEndDate(iLenDate),cInterval(iLenInterval)
     REAL(C_DOUBLE),INTENT(IN)         :: rFactAR,rFactVL
@@ -1459,8 +1574,11 @@ CONTAINS
     CHARACTER :: cBeginDate_F*iLenDate,cEndDate_F*iLenDate,cInterval_F*iLenInterval
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -1471,7 +1589,7 @@ CONTAINS
     CALL String_Copy_C_F(cInterval,cInterval_F)
     
     !Get the data
-    CALL pModel%GetZBudget_TSData(iZBudgetType,iZoneID,iCols,iZExtent,iElems,iLayers,iZoneIDs,cBeginDate_F,cEndDate_F,cInterval_F,rFactAR,rFactVL,rOutputDates,rOutputValues,iDataTypes,iNTimes_Out,iStat)
+    CALL pMdl%GetZBudget_TSData(iZBudgetType,iZoneID,iCols,iZExtent,iElems,iLayers,iZoneIDs,cBeginDate_F,cEndDate_F,cInterval_F,rFactAR,rFactVL,rOutputDates,rOutputValues,iDataTypes,iNTimes_Out,iStat)
     IF (iStat .NE. 0) RETURN
     
     !Convert Julian time to Excel-style Julian time
@@ -1483,8 +1601,9 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET CUMULATIVE CHANGE IN GW STORAGE FROM Z-BUDGET OUTPUT FOR A SELECTED ZONE
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetZBudget_CumGWStorChange(iZoneID,iZExtent,iNZones,iElems,iLayers,iZoneIDs,iLenDate,cBeginDate,cEndDate,iLenInterval,cInterval,rFactVL,rOutputDates,iNTimes_In,rCumGWStorChange,iNTimes_Out,iStat) BIND(C,NAME='IW_Model_GetZBudget_CumGWStorChange')
+  SUBROUTINE IW_Model_GetZBudget_CumGWStorChange(iModelID,iZoneID,iZExtent,iNZones,iElems,iLayers,iZoneIDs,iLenDate,cBeginDate,cEndDate,iLenInterval,cInterval,rFactVL,rOutputDates,iNTimes_In,rCumGWStorChange,iNTimes_Out,iStat) BIND(C,NAME='IW_Model_GetZBudget_CumGWStorChange')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetZBudget_CumGWStorChange
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)         :: iZoneID,iZExtent,iNZones,iElems(iNZones),iLayers(iNZones),iZoneIDs(iNZones),iNTimes_In,iLenDate,iLenInterval
     CHARACTER(KIND=C_CHAR),INTENT(IN) :: cBeginDate(iLenDate),cEndDate(iLenDate),cInterval(iLenInterval)
     REAL(C_DOUBLE),INTENT(IN)         :: rFactVL
@@ -1496,8 +1615,11 @@ CONTAINS
     REAL(8),ALLOCATABLE :: rDates(:),rStorChange(:)
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -1508,7 +1630,7 @@ CONTAINS
     CALL String_Copy_C_F(cInterval,cInterval_F)
     
     !Get the data
-    CALL pModel%GetZBudget_CumGWStorChange(iZoneID,iZExtent,iElems,iLayers,iZoneIDs,cBeginDate_F,cEndDate_F,cInterval_F,rFactVL,rDates,rStorChange,iStat)
+    CALL pMdl%GetZBudget_CumGWStorChange(iZoneID,iZExtent,iElems,iLayers,iZoneIDs,cBeginDate_F,cEndDate_F,cInterval_F,rFactVL,rDates,rStorChange,iStat)
     IF (iStat .NE. 0) RETURN
     
     !Copy data to return arguments
@@ -1525,8 +1647,9 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET ANNUAL (FOR WATER YEARS) CUMULATIVE CHANGE IN GW STORAGE FROM BUDGET OUTPUT FOR A SELECTED SUBREGION
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetZBudget_AnnualCumGWStorChange(iZoneID,iZExtent,iNZones,iElems,iLayers,iZoneIDs,iLenDate,cBeginDate,cEndDate,rFactVL,iNTimes_In,rCumGWStorChange,iOutputYears,iNTimes_Out,iStat) BIND(C,NAME='IW_Model_GetZBudget_AnnualCumGWStorChange')
+  SUBROUTINE IW_Model_GetZBudget_AnnualCumGWStorChange(iModelID,iZoneID,iZExtent,iNZones,iElems,iLayers,iZoneIDs,iLenDate,cBeginDate,cEndDate,rFactVL,iNTimes_In,rCumGWStorChange,iOutputYears,iNTimes_Out,iStat) BIND(C,NAME='IW_Model_GetZBudget_AnnualCumGWStorChange')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetZBudget_AnnualCumGWStorChange
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)         :: iZoneID,iZExtent,iNZones,iElems(iNZones),iLayers(iNZones),iZoneIDs(iNZones),iNTimes_In,iLenDate
     CHARACTER(KIND=C_CHAR),INTENT(IN) :: cBeginDate(iLenDate),cEndDate(iLenDate)
     REAL(C_DOUBLE),INTENT(IN)         :: rFactVL
@@ -1540,8 +1663,11 @@ CONTAINS
     REAL(8),ALLOCATABLE :: rStorChange(:)
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -1554,7 +1680,7 @@ CONTAINS
     lForCalendarYear = .FALSE.
     
     !Get the data
-    CALL pModel%GetZBudget_AnnualCumGWStorChange(iZoneID,iZExtent,iElems,iLayers,iZoneIDs,cBeginDate_F,cEndDate_F,lForCalendarYear,rFactVL,rStorChange,iOutputYears_Local,iStat) 
+    CALL pMdl%GetZBudget_AnnualCumGWStorChange(iZoneID,iZExtent,iElems,iLayers,iZoneIDs,cBeginDate_F,cEndDate_F,lForCalendarYear,rFactVL,rStorChange,iOutputYears_Local,iStat) 
     IF (iStat .NE. 0) RETURN
     
     !Copy data to return arguments
@@ -1568,8 +1694,9 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET ANNUAL (EITHER FOR CALENDAR YEARS OR WATER YEARS) CUMULATIVE CHANGE IN GW STORAGE FROM BUDGET OUTPUT FOR A SELECTED SUBREGION
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetZBudget_AnnualCumGWStorChange_1(iZoneID,iZExtent,iNZones,iElems,iLayers,iZoneIDs,iLenDate,cBeginDate,cEndDate,iForCalendarYear,rFactVL,iNTimes_In,rCumGWStorChange,iOutputYears,iNTimes_Out,iStat) BIND(C,NAME='IW_Model_GetZBudget_AnnualCumGWStorChange_1')
+  SUBROUTINE IW_Model_GetZBudget_AnnualCumGWStorChange_1(iModelID,iZoneID,iZExtent,iNZones,iElems,iLayers,iZoneIDs,iLenDate,cBeginDate,cEndDate,iForCalendarYear,rFactVL,iNTimes_In,rCumGWStorChange,iOutputYears,iNTimes_Out,iStat) BIND(C,NAME='IW_Model_GetZBudget_AnnualCumGWStorChange_1')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetZBudget_AnnualCumGWStorChange_1
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)         :: iZoneID,iZExtent,iNZones,iElems(iNZones),iLayers(iNZones),iZoneIDs(iNZones),iNTimes_In,iLenDate,iForCalendarYear
     CHARACTER(KIND=C_CHAR),INTENT(IN) :: cBeginDate(iLenDate),cEndDate(iLenDate)
     REAL(C_DOUBLE),INTENT(IN)         :: rFactVL
@@ -1583,8 +1710,11 @@ CONTAINS
     REAL(8),ALLOCATABLE :: rStorChange(:)
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -1601,7 +1731,7 @@ CONTAINS
     END IF
     
     !Get the data
-    CALL pModel%GetZBudget_AnnualCumGWStorChange(iZoneID,iZExtent,iElems,iLayers,iZoneIDs,cBeginDate_F,cEndDate_F,lForCalendarYear,rFactVL,rStorChange,iOutputYears_Local,iStat) 
+    CALL pMdl%GetZBudget_AnnualCumGWStorChange(iZoneID,iZExtent,iElems,iLayers,iZoneIDs,cBeginDate_F,cEndDate_F,lForCalendarYear,rFactVL,rStorChange,iOutputYears_Local,iStat) 
     IF (iStat .NE. 0) RETURN
     
     !Copy data to return arguments
@@ -1615,8 +1745,9 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET NAME LIST FOR A SELECTED LOCATION TYPE
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetNames(iLocationType,iDimLocArray,iLocArray,iLenNamesList,cNamesList,iStat) BIND(C,NAME='IW_Model_GetNames')
+  SUBROUTINE IW_Model_GetNames(iModelID,iLocationType,iDimLocArray,iLocArray,iLenNamesList,cNamesList,iStat) BIND(C,NAME='IW_Model_GetNames')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetNames
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)          :: iLocationType,iDimLocArray,iLenNamesList
     INTEGER(C_INT),INTENT(OUT)         :: iLocArray(iDimLocArray),iStat
     CHARACTER(KIND=C_CHAR),INTENT(OUT) :: cNamesList(iLenNamesList)
@@ -1626,14 +1757,17 @@ CONTAINS
     CHARACTER          :: cNamesList_F*iLenNamesList
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     !Get names
-    CALL pModel%GetNames(iLocationType,cLocalNamesList,iStat)
+    CALL pMdl%GetNames(iLocationType,cLocalNamesList,iStat)
     
     !Compile the list in a single string variable
     CALL StringArray_To_StringScalar(cLocalNamesList,cNamesList_F,iLocArray)
@@ -1645,21 +1779,25 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET INITIAL GW HEADS
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetGWHeadsIC(iNNodes,iNLayers,rGWHeadsIC,iStat) BIND(C,NAME='IW_Model_GetGWHeadsIC')
+  SUBROUTINE IW_Model_GetGWHeadsIC(iModelID,iNNodes,iNLayers,rGWHeadsIC,iStat) BIND(C,NAME='IW_Model_GetGWHeadsIC')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetGWHeadsIC
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)         :: iNNodes,iNLayers
     REAL(C_DOUBLE),INTENT(OUT)        :: rGWHeadsIC(iNNodes,iNLayers)
     INTEGER(C_INT),INTENT(OUT)        :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     !Get data
-    CALL pModel%GetGWHeadsIC(rGWHeadsIC,iStat)
+    CALL pMdl%GetGWHeadsIC(rGWHeadsIC,iStat)
     
   END SUBROUTINE IW_Model_GetGWHeadsIC
   
@@ -1667,8 +1805,9 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET ALL GW HEADS AT A LAYER FOR POST-PROCESSING
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetGWHeads_ForALayer(iLayer,cOutputBeginDateAndTime,cOutputEndDateAndTime,iLenDateAndTime,rFact_LT,iNNodes,iNTime,rOutputDates,rGWHeads,iStat) BIND(C,NAME='IW_Model_GetGWHeads_ForALayer')
+  SUBROUTINE IW_Model_GetGWHeads_ForALayer(iModelID,iLayer,cOutputBeginDateAndTime,cOutputEndDateAndTime,iLenDateAndTime,rFact_LT,iNNodes,iNTime,rOutputDates,rGWHeads,iStat) BIND(C,NAME='IW_Model_GetGWHeads_ForALayer')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetGWHeads_ForALayer
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)         :: iLayer,iLenDateAndTime,iNNodes,iNTime
     CHARACTER(KIND=C_CHAR),INTENT(IN) :: cOutputBeginDateAndTime(iLenDateAndTime),cOutputEndDateAndTime(iLenDateAndTime)
     REAL(C_DOUBLE),INTENT(IN)         :: rFact_LT
@@ -1679,8 +1818,11 @@ CONTAINS
     CHARACTER :: cOutputBeginDateAndTime_F*iLenDateAndTime,cOutputEndDateAndTime_F*iLenDateAndTime
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -1693,7 +1835,7 @@ CONTAINS
     CALL String_Copy_C_F(cOutputEndDateAndTime,cOutputEndDateAndTime_F)
     
     !Get data
-    CALL pModel%GetGWHeads_ForALayer(iLayer,cOutputBeginDateAndTime_F,cOutputEndDateAndTime_F,rFact_LT,rOutputDates,rGWHeads,iStat)
+    CALL pMdl%GetGWHeads_ForALayer(iLayer,cOutputBeginDateAndTime_F,cOutputEndDateAndTime_F,rFact_LT,rOutputDates,rGWHeads,iStat)
     IF (iStat .EQ. -1) RETURN
     
     !Convert Julian time to Excel-style Julian time
@@ -1705,124 +1847,144 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET ALL GW HEADS AT EACH (node,layer) COMBINATION
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetGWHeads_All(iNNodes,iNLayers,iPrevious,rFact,Heads,iStat) BIND (C,NAME='IW_Model_GetGWHeads_All')
+  SUBROUTINE IW_Model_GetGWHeads_All(iModelID,iNNodes,iNLayers,iPrevious,rFact,Heads,iStat) BIND (C,NAME='IW_Model_GetGWHeads_All')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetGWHeads_All
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: iNNodes,iNLayers,iPrevious
     REAL(C_DOUBLE),INTENT(IN)  :: rFact
     REAL(C_DOUBLE),INTENT(OUT) :: Heads(iNNodes,iNLayers)
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
-    
+
     !Initialize
     iStat = 0
-    
+
     IF (iPrevious .EQ. 0) THEN
-        CALL pModel%GetGWHeads_All(.FALSE. , Heads)
+        CALL pMdl%GetGWHeads_All(.FALSE. , Heads)
     ELSE
-        CALL pModel%GetGWHeads_All(.TRUE. , Heads)
+        CALL pMdl%GetGWHeads_All(.TRUE. , Heads)
     END IF
     IF (rFact .NE. 1.0) Heads = Heads * rFact
-    
+
   END SUBROUTINE IW_Model_GetGWHeads_All
   
   
   ! -------------------------------------------------------------
   ! --- GET ALL SUBSIDENCE AT EACH (node,layer) COMBINATION
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetSubsidence_All(iNNodes,iNLayers,rFact,Subs,iStat) BIND (C,NAME='IW_Model_GetSubsidence_All')
+  SUBROUTINE IW_Model_GetSubsidence_All(iModelID,iNNodes,iNLayers,rFact,Subs,iStat) BIND (C,NAME='IW_Model_GetSubsidence_All')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetSubsidence_All
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: iNNodes,iNLayers
     REAL(C_DOUBLE),INTENT(IN)  :: rFact
     REAL(C_DOUBLE),INTENT(OUT) :: Subs(iNNodes,iNLayers)
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
-    
+
     !Initialize
     iStat = 0
-    
-    CALL pModel%GetSubsidence_All(Subs)
+
+    CALL pMdl%GetSubsidence_All(Subs)
     IF (rFact .NE. 1.0) Subs = Subs * rFact
-    
+
   END SUBROUTINE IW_Model_GetSubsidence_All
   
   
   ! -------------------------------------------------------------
   ! --- GET STREAM FLOW AT A STREAM NODE INDEX
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetStrmFlow(iStrmNode,rFact,rFlow,iStat) BIND (C,NAME='IW_Model_GetStrmFlow')
+  SUBROUTINE IW_Model_GetStrmFlow(iModelID,iStrmNode,rFact,rFlow,iStat) BIND (C,NAME='IW_Model_GetStrmFlow')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetStrmFlow
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: iStrmNode
     REAL(C_DOUBLE),INTENT(IN)  :: rFact
     REAL(C_DOUBLE),INTENT(OUT) :: rFlow
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
-    
+
     iStat = 0
-    rFlow = pModel%GetStrmFlow(iStrmNode) * rFact
-    
+    rFlow = pMdl%GetStrmFlow(iStrmNode) * rFact
+
   END SUBROUTINE IW_Model_GetStrmFlow
   
   
   ! -------------------------------------------------------------
   ! --- GET ALL STREAM FLOWS
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetStrmFlows(iNStrmNodes,rFact,Flows,iStat) BIND (C,NAME='IW_Model_GetStrmFlows')
+  SUBROUTINE IW_Model_GetStrmFlows(iModelID,iNStrmNodes,rFact,Flows,iStat) BIND (C,NAME='IW_Model_GetStrmFlows')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetStrmFlows
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: iNStrmNodes
     REAL(C_DOUBLE),INTENT(IN)  :: rFact
     REAL(C_DOUBLE),INTENT(OUT) :: Flows(iNStrmNodes)
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
-    
+
     !Initialize
     iStat = 0
-    
-    CALL pModel%GetStrmFlows(Flows)
+
+    CALL pMdl%GetStrmFlows(Flows)
     IF (rFact .NE. 1.0) Flows = Flows * rFact
-    
+
   END SUBROUTINE IW_Model_GetStrmFlows
   
   
   ! -------------------------------------------------------------
   ! --- GET NUMBER OF STREAM INFLOWS
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetStrmNInflows(iNInflows,iStat) BIND(C,NAME='IW_Model_GetStrmNInflows')
+  SUBROUTINE IW_Model_GetStrmNInflows(iModelID,iNInflows,iStat) BIND(C,NAME='IW_Model_GetStrmNInflows')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetStrmNInflows
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(OUT) :: iNInflows,iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat     = 0 
-    iNInflows = pModel%GetStrmNInflows()
+    iNInflows = pMdl%GetStrmNInflows()
     
   END SUBROUTINE IW_Model_GetStrmNInflows
   
@@ -1830,8 +1992,9 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET STREAM INFLOW NODES
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetStrmInflowNodes(iNNodes,iNodes,iStat) BIND(C,NAME='IW_Model_GetStrmInflowNodes')
+  SUBROUTINE IW_Model_GetStrmInflowNodes(iModelID,iNNodes,iNodes,iStat) BIND(C,NAME='IW_Model_GetStrmInflowNodes')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetStrmInflowNodes
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: iNNodes
     INTEGER(C_INT),INTENT(OUT) :: iNodes(iNNodes),iStat
     
@@ -1839,14 +2002,17 @@ CONTAINS
     INTEGER,ALLOCATABLE :: iNodes_Local(:)
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat = 0
-    CALL pModel%GetStrmInflowNodes(iNodes_Local)
+    CALL pMdl%GetStrmInflowNodes(iNodes_Local)
     iNodes = iNodes_Local
     
   END SUBROUTINE IW_Model_GetStrmInflowNodes
@@ -1855,8 +2021,9 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET STREAM INFLOW IDs
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetStrmInflowIDs(iNNodes,IDs,iStat) BIND(C,NAME='IW_Model_GetStrmInflowIDs')
+  SUBROUTINE IW_Model_GetStrmInflowIDs(iModelID,iNNodes,IDs,iStat) BIND(C,NAME='IW_Model_GetStrmInflowIDs')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetStrmInflowIDs
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: iNNodes
     INTEGER(C_INT),INTENT(OUT) :: IDs(iNNodes),iStat
     
@@ -1864,14 +2031,17 @@ CONTAINS
     INTEGER,ALLOCATABLE :: IDs_Local(:)
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat = 0
-    CALL pModel%GetStrmInflowIDs(IDs_Local)
+    CALL pMdl%GetStrmInflowIDs(IDs_Local)
     IDs = IDs_Local
     
   END SUBROUTINE IW_Model_GetStrmInflowIDs
@@ -1880,22 +2050,26 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET STREAM INFLOWS AT A SET OF INFLOWS
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetStrmInflows_AtSomeInflows(iNInflows,iInflows,rConvFactor,rInflows,iStat) BIND(C,NAME='IW_Model_GetStrmInflows_AtSomeInflows')
+  SUBROUTINE IW_Model_GetStrmInflows_AtSomeInflows(iModelID,iNInflows,iInflows,rConvFactor,rInflows,iStat) BIND(C,NAME='IW_Model_GetStrmInflows_AtSomeInflows')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetStrmInflows_AtSomeInflows
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: iNInflows,iInflows(iNInflows) 
     REAL(C_DOUBLE),INTENT(IN)  :: rConvFactor
     REAL(C_DOUBLE),INTENT(OUT) :: rInflows(iNInflows)
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat = 0
-    CALL pModel%GetStrmInflows_AtSomeInflows(iInflows,rInflows) 
+    CALL pMdl%GetStrmInflows_AtSomeInflows(iInflows,rInflows) 
     rInflows = rInflows * rConvFactor
     
   END SUBROUTINE IW_Model_GetStrmInflows_AtSomeInflows
@@ -1904,42 +2078,50 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET ALL STREAM STAGES
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetStrmStages(iNStrmNodes,rFact,Stages,iStat) BIND (C,NAME='IW_Model_GetStrmStages')
+  SUBROUTINE IW_Model_GetStrmStages(iModelID,iNStrmNodes,rFact,Stages,iStat) BIND (C,NAME='IW_Model_GetStrmStages')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetStrmStages
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: iNStrmNodes
     REAL(C_DOUBLE),INTENT(IN)  :: rFact
     REAL(C_DOUBLE),INTENT(OUT) :: Stages(iNStrmNodes)
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
-    
-    CALL pModel%GetStrmStages(Stages,iStat)
+
+    CALL pMdl%GetStrmStages(Stages,iStat)
     IF (rFact .NE. 1.0) Stages = Stages * rFact
-    
+
   END SUBROUTINE IW_Model_GetStrmStages
   
   
   ! -------------------------------------------------------------
   ! --- GET NUMBER OF AVAILABLE HYDROGRAPH TYPES
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetNHydrographTypes(iNHydTypes,iStat) BIND(C,NAME='IW_Model_GetNHydrographTypes')
+  SUBROUTINE IW_Model_GetNHydrographTypes(iModelID,iNHydTypes,iStat) BIND(C,NAME='IW_Model_GetNHydrographTypes')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetNHydrographTypes
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(OUT) :: iNHydTypes,iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat      = 0
-    iNHydTypes = pModel%GetNHydrographTypes()
+    iNHydTypes = pMdl%GetNHydrographTypes()
     
   END SUBROUTINE IW_Model_GetNHydrographTypes
   
@@ -1947,8 +2129,9 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET A LIST OF AVAILABLE HYDROGRAPH TYPES
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetHydrographTypeList(iNHydTypes,iLocArray,iLenHydTypeList,cHydTypeList,iHydLocationTypeList,iStat) BIND(C,NAME='IW_Model_GetHydrographTypeList')
+  SUBROUTINE IW_Model_GetHydrographTypeList(iModelID,iNHydTypes,iLocArray,iLenHydTypeList,cHydTypeList,iHydLocationTypeList,iStat) BIND(C,NAME='IW_Model_GetHydrographTypeList')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetHydrographTypeList
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)          :: iNHydTypes,iLenHydTypeList
     CHARACTER(KIND=C_CHAR),INTENT(OUT) :: cHydTypeList(iLenHydTypeList)
     INTEGER(C_INT),INTENT(OUT)         :: iLocArray(iNHydTypes),iHydLocationTypeList(iNHydTypes),iStat
@@ -1960,8 +2143,11 @@ CONTAINS
     CHARACTER(LEN=500),ALLOCATABLE :: cHydFileList_Local(:)
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -1970,7 +2156,7 @@ CONTAINS
     iStat = 0
     
     !Retrieve data
-    CALL pModel%GetHydrographTypeList(cHydTypeList_Local , iHydLocTypeList_Local , iHydCompList_Local , cHydFileList_Local)
+    CALL pMdl%GetHydrographTypeList(cHydTypeList_Local , iHydLocTypeList_Local , iHydCompList_Local , cHydFileList_Local)
     
     !Convert string array to string scalar
     CALL StringArray_To_StringScalar(cHydTypeList_Local,cHydTypeList_F,iLocArray)
@@ -1985,20 +2171,24 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET NUMBER OF PRINTED HYDROGRAPHS FOR A SPECIFIC HYDROGRAPH TYPE
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetNHydrographs(iLocationType,NHydrographs,iStat) BIND(C,NAME='IW_Model_GetNHydrographs')
+  SUBROUTINE IW_Model_GetNHydrographs(iModelID,iLocationType,NHydrographs,iStat) BIND(C,NAME='IW_Model_GetNHydrographs')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetNHydrographs
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: iLocationType
     INTEGER(C_INT),INTENT(OUT) :: NHydrographs,iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat        = 0
-    NHydrographs = pModel%GetNHydrographs(iLocationType)
+    NHydrographs = pMdl%GetNHydrographs(iLocationType)
     
   END SUBROUTINE IW_Model_GetNHydrographs
   
@@ -2006,20 +2196,24 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET HYDROGRAPH IDS
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetHydrographIDs(iLocationType,NHydrographs,IDs,iStat) BIND(C,NAME='IW_Model_GetHydrographIDs')
+  SUBROUTINE IW_Model_GetHydrographIDs(iModelID,iLocationType,NHydrographs,IDs,iStat) BIND(C,NAME='IW_Model_GetHydrographIDs')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetHydrographIDs
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: iLocationType,NHydrographs
     INTEGER(C_INT),INTENT(OUT) :: IDs(NHydrographs),iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat = 0
-    CALL pModel%GetHydrographIDs(iLocationType,IDs)
+    CALL pMdl%GetHydrographIDs(iLocationType,IDs)
     
   END SUBROUTINE IW_Model_GetHydrographIDs
   
@@ -2027,20 +2221,24 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET COORDINATES OF PRINTED HYDROGRAPHS
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetHydrographCoordinates(iLocationType,NHydrographs,X,Y,iStat) BIND(C,NAME='IW_Model_GetHydrographCoordinates')
+  SUBROUTINE IW_Model_GetHydrographCoordinates(iModelID,iLocationType,NHydrographs,X,Y,iStat) BIND(C,NAME='IW_Model_GetHydrographCoordinates')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetHydrographCoordinates
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: iLocationType,NHydrographs
     REAL(C_DOUBLE),INTENT(OUT) :: X(NHydrographs),Y(NHydrographs)
     INTEGER(C_INT),INTENT(OUT) :: iStat
       
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetHydrographCoordinates(iLocationType,X,Y,iStat)
+    CALL pMdl%GetHydrographCoordinates(iLocationType,X,Y,iStat)
     
   END SUBROUTINE IW_Model_GetHydrographCoordinates
   
@@ -2048,8 +2246,9 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET HYDROGRAPH FOR A GIVEN HYDROGRAPH INDEX 
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetHydrograph(iHydType,iHydIndex,iLayer,iLenDate,cBeginDate,cEndDate,iLenInterval,cInterval,rFactLT,rFactVL,iNTimes_In,rOutputDates,rOutputValues,iDataUnitType,iNTimes_Out,iStat) BIND(C,NAME='IW_Model_GetHydrograph')
+  SUBROUTINE IW_Model_GetHydrograph(iModelID,iHydType,iHydIndex,iLayer,iLenDate,cBeginDate,cEndDate,iLenInterval,cInterval,rFactLT,rFactVL,iNTimes_In,rOutputDates,rOutputValues,iDataUnitType,iNTimes_Out,iStat) BIND(C,NAME='IW_Model_GetHydrograph')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetHydrograph
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)         :: iHydType,iHydIndex,iLayer,iLenDate,iLenInterval,iNTimes_In
     CHARACTER(KIND=C_CHAR),INTENT(IN) :: cBeginDate(iLenDate),cEndDate(iLenDate),cInterval(iLenInterval)
     REAL(C_DOUBLE),INTENT(IN)         :: rFactLT,rFactVL
@@ -2061,8 +2260,11 @@ CONTAINS
     REAL(8),ALLOCATABLE :: rDates_Local(:),rValues_Local(:) 
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -2073,7 +2275,7 @@ CONTAINS
     CALL String_Copy_C_F(cInterval , cInterval_F)
     
     !Get data
-    CALL pModel%GetHydrograph(iHydType,iHydIndex,iLayer,rFactLT,rFactVL,cBeginDate_F,cEndDate_F,cInterval_F,iDataUnitType,rDates_Local,rValues_Local,iStat)
+    CALL pMdl%GetHydrograph(iHydType,iHydIndex,iLayer,rFactLT,rFactVL,cBeginDate_F,cEndDate_F,cInterval_F,iDataUnitType,rDates_Local,rValues_Local,iStat)
     IF (iStat .NE. 0) RETURN
     
     !Copy local data to return arguments; also convert Julian date to Excel-style Julian date
@@ -2087,21 +2289,25 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET NODE IDs
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetNodeIDs(NNodes,IDs,iStat) BIND(C,NAME='IW_Model_GetNodeIDs')
+  SUBROUTINE IW_Model_GetNodeIDs(iModelID,NNodes,IDs,iStat) BIND(C,NAME='IW_Model_GetNodeIDs')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetNodeIDs
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: NNodes
     INTEGER(C_INT),INTENT(OUT) :: IDs(NNodes)
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat = 0
-    CALL pModel%GetNodeIDs(IDs)
+    CALL pMdl%GetNodeIDs(IDs)
     
   END SUBROUTINE IW_Model_GetNodeIDs
   
@@ -2109,21 +2315,25 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET NODE COORDINATES
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetNodeXY(NNodes,X,Y,iStat) BIND(C,NAME='IW_Model_GetNodeXY')
+  SUBROUTINE IW_Model_GetNodeXY(iModelID,NNodes,X,Y,iStat) BIND(C,NAME='IW_Model_GetNodeXY')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetNodeXY
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: NNodes
     REAL(C_DOUBLE),INTENT(OUT) :: X(NNodes),Y(NNodes)
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat = 0
-    CALL pModel%GetNodeXY(X,Y)
+    CALL pMdl%GetNodeXY(X,Y)
     
   END SUBROUTINE IW_Model_GetNodeXY
   
@@ -2131,19 +2341,23 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET NUMBER OF NODES
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetNNodes(NNodes,iStat) BIND(C,NAME='IW_Model_GetNNodes')
+  SUBROUTINE IW_Model_GetNNodes(iModelID,NNodes,iStat) BIND(C,NAME='IW_Model_GetNNodes')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetNNodes
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(OUT) :: NNodes,iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat  = 0
-    NNodes = pModel%GetNNodes()
+    NNodes = pMdl%GetNNodes()
     
   END SUBROUTINE IW_Model_GetNNodes
   
@@ -2151,20 +2365,24 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET ELEMENT IDs
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetElementIDs(NElem,IDs,iStat) BIND(C,NAME='IW_Model_GetElementIDs')
+  SUBROUTINE IW_Model_GetElementIDs(iModelID,NElem,IDs,iStat) BIND(C,NAME='IW_Model_GetElementIDs')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetElementIDs
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: NElem
     INTEGER(C_INT),INTENT(OUT) :: IDs(NElem),iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat = 0
-    CALL pModel%GetElementIDs(IDs)
+    CALL pMdl%GetElementIDs(IDs)
     
   END SUBROUTINE IW_Model_GetElementIDs
   
@@ -2172,40 +2390,48 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET NUMBER OF ELEMENTS
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetNElements(NElem,iStat) BIND(C,NAME='IW_Model_GetNElements')
+  SUBROUTINE IW_Model_GetNElements(iModelID,NElem,iStat) BIND(C,NAME='IW_Model_GetNElements')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetNElements
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(OUT) :: NElem,iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat = 0
-    NElem = pModel%GetNElements()
+    NElem = pMdl%GetNElements()
     
   END SUBROUTINE IW_Model_GetNElements
   
   ! -------------------------------------------------------------
   ! --- GET ELEMENT AREAS
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetElementAreas(NElem,Areas,iStat) BIND(C,NAME='IW_Model_GetElementAreas')
+  SUBROUTINE IW_Model_GetElementAreas(iModelID,NElem,Areas,iStat) BIND(C,NAME='IW_Model_GetElementAreas')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetElementAreas
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN) :: NElem
     REAL(C_DOUBLE),INTENT(OUT) :: Areas(NElem)
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat = 0
-    CALL pModel%GetElementAreas(Areas)
+    CALL pMdl%GetElementAreas(Areas)
     
   END SUBROUTINE IW_Model_GetElementAreas
   
@@ -2213,19 +2439,23 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET NUMBER OF LAYERS
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetNLayers(NLayers,iStat) BIND(C,NAME='IW_Model_GetNLayers')
+  SUBROUTINE IW_Model_GetNLayers(iModelID,NLayers,iStat) BIND(C,NAME='IW_Model_GetNLayers')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetNLayers
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(OUT) :: NLayers,iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat   = 0
-    NLayers = pModel%GetNLayers()
+    NLayers = pMdl%GetNLayers()
     
   END SUBROUTINE IW_Model_GetNLayers
 
@@ -2233,19 +2463,23 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET NUMBER OF SUBREGIONS
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetNSubregions(NSubregions,iStat) BIND(C,NAME='IW_Model_GetNSubregions')
+  SUBROUTINE IW_Model_GetNSubregions(iModelID,NSubregions,iStat) BIND(C,NAME='IW_Model_GetNSubregions')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetNSubregions
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(OUT) :: NSubregions,iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat       = 0
-    NSubregions = pModel%GetNSubregions()
+    NSubregions = pMdl%GetNSubregions()
     
   END SUBROUTINE IW_Model_GetNSubregions
   
@@ -2253,20 +2487,24 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET SUBREGION IDs
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetSubregionIDs(NSubregion,IDs,iStat) BIND(C,NAME='IW_Model_GetSubregionIDs')
+  SUBROUTINE IW_Model_GetSubregionIDs(iModelID,NSubregion,IDs,iStat) BIND(C,NAME='IW_Model_GetSubregionIDs')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetSubregionIDs
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: NSubregion
     INTEGER(C_INT),INTENT(OUT) :: IDs(NSubregion),iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat = 0
-    CALL pModel%GetSubregionIDs(IDs)
+    CALL pMdl%GetSubregionIDs(IDs)
     
   END SUBROUTINE IW_Model_GetSubregionIDs
   
@@ -2274,8 +2512,9 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET NAME OF A SUBREGION
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetSubregionName(iRegion,iLen,cName,iStat) BIND(C,NAME='IW_Model_GetSubregionName')
+  SUBROUTINE IW_Model_GetSubregionName(iModelID,iRegion,iLen,cName,iStat) BIND(C,NAME='IW_Model_GetSubregionName')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetSubregionName
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)          :: iRegion,iLen
     CHARACTER(KIND=C_CHAR),INTENT(OUT) :: cName(iLen)
     INTEGER(C_INT),INTENT(OUT)         :: iStat    
@@ -2284,15 +2523,18 @@ CONTAINS
     CHARACTER :: cName_F*iLen
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat = 0
     
-    CALL pModel%GetSubregionName(iRegion,cName_F)
+    CALL pMdl%GetSubregionName(iRegion,cName_F)
     
     CALL String_Copy_F_C(cName_F,cName)
     
@@ -2302,20 +2544,24 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET ELEMENT SUBREGIONS
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetElemSubregions(NElem,ElemSubregions,iStat) BIND(C,NAME='IW_Model_GetElemSubregions')
+  SUBROUTINE IW_Model_GetElemSubregions(iModelID,NElem,ElemSubregions,iStat) BIND(C,NAME='IW_Model_GetElemSubregions')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetElemSubregions
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: NElem
     INTEGER(C_INT),INTENT(OUT) :: ElemSubregions(NElem),iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat = 0    
-    CALL pModel%GetElemSubregions(ElemSubregions)
+    CALL pMdl%GetElemSubregions(ElemSubregions)
     
   END SUBROUTINE IW_Model_GetElemSubregions
   
@@ -2323,21 +2569,25 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET STRATIGRAPHY AT X-Y COORDINATE
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetStratigraphy_AtXYCoordinate(iNLayers,rX,rY,rGSElev,rTopElevs,rBottomElevs,iStat) BIND(C,NAME='IW_Model_GetStratigraphy_AtXYCoordinate')
+  SUBROUTINE IW_Model_GetStratigraphy_AtXYCoordinate(iModelID,iNLayers,rX,rY,rGSElev,rTopElevs,rBottomElevs,iStat) BIND(C,NAME='IW_Model_GetStratigraphy_AtXYCoordinate')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetStratigraphy_AtXYCoordinate
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: iNLayers
     REAL(C_DOUBLE),INTENT(IN)  :: rX,rY
     REAL(C_DOUBLE),INTENT(OUT) :: rGSElev,rTopElevs(iNLayers),rBottomElevs(iNLayers)
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetStratigraphy_AtXYCoordinate(rX,rY,rGSElev,rTopElevs,rBottomElevs,iStat)
+    CALL pMdl%GetStratigraphy_AtXYCoordinate(rX,rY,rGSElev,rTopElevs,rBottomElevs,iStat)
     
   END SUBROUTINE IW_Model_GetStratigraphy_AtXYCoordinate
   
@@ -2345,21 +2595,25 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET GROUND SURFACE ELEVATION 
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetGSElev(NNodes,GSElev,iStat) BIND(C,NAME='IW_Model_GetGSElev')
+  SUBROUTINE IW_Model_GetGSElev(iModelID,NNodes,GSElev,iStat) BIND(C,NAME='IW_Model_GetGSElev')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetGSElev
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: NNodes
     REAL(C_DOUBLE),INTENT(OUT) :: GSElev(NNodes)
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat = 0    
-    CALL pModel%GetGSElev(GSElev)
+    CALL pMdl%GetGSElev(GSElev)
     
   END SUBROUTINE IW_Model_GetGSElev
   
@@ -2367,21 +2621,25 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET ELEVATIONS OF AQUIFER TOPS 
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetAquiferTopElev(NNodes,NLayers,TopElev,iStat) BIND(C,NAME='IW_Model_GetAquiferTopElev')
+  SUBROUTINE IW_Model_GetAquiferTopElev(iModelID,NNodes,NLayers,TopElev,iStat) BIND(C,NAME='IW_Model_GetAquiferTopElev')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetAquiferTopElev
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: NNodes,NLayers
     REAL(C_DOUBLE),INTENT(OUT) :: TopElev(NNodes,NLayers)
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat = 0    
-    CALL pModel%GetAquiferTopElev(TopElev)
+    CALL pMdl%GetAquiferTopElev(TopElev)
     
   END SUBROUTINE IW_Model_GetAquiferTopElev
 
@@ -2389,21 +2647,25 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET ELEVATIONS OF AQUIFER BOTTOMS 
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetAquiferBottomElev(NNodes,NLayers,BottomElev,iStat) BIND(C,NAME='IW_Model_GetAquiferBottomElev')
+  SUBROUTINE IW_Model_GetAquiferBottomElev(iModelID,NNodes,NLayers,BottomElev,iStat) BIND(C,NAME='IW_Model_GetAquiferBottomElev')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetAquiferBottomElev
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: NNodes,NLayers
     REAL(C_DOUBLE),INTENT(OUT) :: BottomElev(NNodes,NLayers)
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat = 0
-    CALL pModel%GetAquiferBottomElev(BottomElev)
+    CALL pMdl%GetAquiferBottomElev(BottomElev)
     
   END SUBROUTINE IW_Model_GetAquiferBottomElev
 
@@ -2411,20 +2673,24 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET AQUIFER HORIZONTAL K 
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetAquiferHorizontalK(NNodes,NLayers,Kh,iStat) BIND(C,NAME='IW_Model_GetAquiferHorizontalK')
+  SUBROUTINE IW_Model_GetAquiferHorizontalK(iModelID,NNodes,NLayers,Kh,iStat) BIND(C,NAME='IW_Model_GetAquiferHorizontalK')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetAquiferHorizontalK
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: NNodes,NLayers
     REAL(C_DOUBLE),INTENT(OUT) :: Kh(NNodes,NLayers)
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetAquiferHorizontalK(Kh,iStat)
+    CALL pMdl%GetAquiferHorizontalK(Kh,iStat)
     
   END SUBROUTINE IW_Model_GetAquiferHorizontalK
 
@@ -2432,20 +2698,24 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET AQUITARD VERTICAL K 
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetAquitardVerticalK(NNodes,NLayers,Kv,iStat) BIND(C,NAME='IW_Model_GetAquitardVerticalK')
+  SUBROUTINE IW_Model_GetAquitardVerticalK(iModelID,NNodes,NLayers,Kv,iStat) BIND(C,NAME='IW_Model_GetAquitardVerticalK')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetAquitardVerticalK
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: NNodes,NLayers
     REAL(C_DOUBLE),INTENT(OUT) :: Kv(NNodes,NLayers)
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetAquitardVerticalK(Kv,iStat)
+    CALL pMdl%GetAquitardVerticalK(Kv,iStat)
     
   END SUBROUTINE IW_Model_GetAquitardVerticalK
 
@@ -2453,20 +2723,24 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET AQUIFER VERTICAL K 
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetAquiferVerticalK(NNodes,NLayers,Kv,iStat) BIND(C,NAME='IW_Model_GetAquiferVerticalK')
+  SUBROUTINE IW_Model_GetAquiferVerticalK(iModelID,NNodes,NLayers,Kv,iStat) BIND(C,NAME='IW_Model_GetAquiferVerticalK')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetAquiferVerticalK
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: NNodes,NLayers
     REAL(C_DOUBLE),INTENT(OUT) :: Kv(NNodes,NLayers)
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetAquiferVerticalK(Kv,iStat)
+    CALL pMdl%GetAquiferVerticalK(Kv,iStat)
     
   END SUBROUTINE IW_Model_GetAquiferVerticalK
 
@@ -2474,20 +2748,24 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET AQUIFER SPECIFIC YIELD 
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetAquiferSy(NNodes,NLayers,Sy,iStat) BIND(C,NAME='IW_Model_GetAquiferSy')
+  SUBROUTINE IW_Model_GetAquiferSy(iModelID,NNodes,NLayers,Sy,iStat) BIND(C,NAME='IW_Model_GetAquiferSy')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetAquiferSy
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: NNodes,NLayers
     REAL(C_DOUBLE),INTENT(OUT) :: Sy(NNodes,NLayers)
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetAquiferSy(Sy,iStat)
+    CALL pMdl%GetAquiferSy(Sy,iStat)
     
   END SUBROUTINE IW_Model_GetAquiferSy
 
@@ -2495,20 +2773,24 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET AQUIFER STORAGE COEFFICIENT (AFTER SPECIFIC STOARGE IS MULTIPLIED BY AQUIFER THICKNESS)
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetAquiferSs(NNodes,NLayers,Ss,iStat) BIND(C,NAME='IW_Model_GetAquiferSs')
+  SUBROUTINE IW_Model_GetAquiferSs(iModelID,NNodes,NLayers,Ss,iStat) BIND(C,NAME='IW_Model_GetAquiferSs')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetAquiferSs
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: NNodes,NLayers
     REAL(C_DOUBLE),INTENT(OUT) :: Ss(NNodes,NLayers)
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetAquiferSs(Ss,iStat)
+    CALL pMdl%GetAquiferSs(Ss,iStat)
     
   END SUBROUTINE IW_Model_GetAquiferSs
 
@@ -2516,20 +2798,24 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET ALL AQUIFER PARAMETERS IN ONE SHOT
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetAquiferParameters(NNodes,NLayers,Kh,AquiferKv,AquitardKv,Sy,Ss,iStat) BIND(C,NAME='IW_Model_GetAquiferParameters')
+  SUBROUTINE IW_Model_GetAquiferParameters(iModelID,NNodes,NLayers,Kh,AquiferKv,AquitardKv,Sy,Ss,iStat) BIND(C,NAME='IW_Model_GetAquiferParameters')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetAquiferParameters
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: NNodes,NLayers
     REAL(C_DOUBLE),INTENT(OUT) :: Kh(NNodes,NLayers),AquiferKv(NNodes,NLayers),AquitardKv(NNodes,NLayers),Sy(NNodes,NLayers),Ss(NNodes,NLayers)
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetAquiferParameters(Kh,AquiferKv,AquitardKv,Sy,Ss,iStat)
+    CALL pMdl%GetAquiferParameters(Kh,AquiferKv,AquitardKv,Sy,Ss,iStat)
     
   END SUBROUTINE IW_Model_GetAquiferParameters
 
@@ -2537,19 +2823,23 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET NUMBER OF GW PARAMETRIC GRIDS
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetGWNParametricGrids(iNParamGrids,iStat) BIND(C,NAME='IW_Model_GetGWNParametricGrids')
+  SUBROUTINE IW_Model_GetGWNParametricGrids(iModelID,iNParamGrids,iStat) BIND(C,NAME='IW_Model_GetGWNParametricGrids')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetGWNParametricGrids
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(OUT) :: iNParamGrids,iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     !Get data
-    CALL pModel%GetGWNParametricGrids(iNParamGrids,iStat)
+    CALL pMdl%GetGWNParametricGrids(iNParamGrids,iStat)
     
   END SUBROUTINE IW_Model_GetGWNParametricGrids
 
@@ -2557,20 +2847,24 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET NUMBER OF PARAMETRIC NODES IN A GW PARAMETRIC GRID
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetGWNParametricNodes(iParamGridID,iNParamNodes,iStat) BIND(C,NAME='IW_Model_GetGWNParametricNodes')
+  SUBROUTINE IW_Model_GetGWNParametricNodes(iModelID,iParamGridID,iNParamNodes,iStat) BIND(C,NAME='IW_Model_GetGWNParametricNodes')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetGWNParametricNodes
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: iParamGridID
     INTEGER(C_INT),INTENT(OUT) :: iNParamNodes,iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     !Get data
-    CALL pModel%GetGWNParametricNodes(iParamGridID,iNParamNodes,iStat)
+    CALL pMdl%GetGWNParametricNodes(iParamGridID,iNParamNodes,iStat)
     
   END SUBROUTINE IW_Model_GetGWNParametricNodes
 
@@ -2578,20 +2872,24 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET NUMBER OF PARAMETRIC ELEMENTS IN A GW PARAMETRIC GRID
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetGWNParametricElements(iParamGridID,iNParamElements,iStat) BIND(C,NAME='IW_Model_GetGWNParametricElements')
+  SUBROUTINE IW_Model_GetGWNParametricElements(iModelID,iParamGridID,iNParamElements,iStat) BIND(C,NAME='IW_Model_GetGWNParametricElements')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetGWNParametricElements
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: iParamGridID
     INTEGER(C_INT),INTENT(OUT) :: iNParamElements,iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     !Get data
-    CALL pModel%GetGWNParametricElements(iParamGridID,iNParamElements,iStat)
+    CALL pMdl%GetGWNParametricElements(iParamGridID,iNParamElements,iStat)
     
   END SUBROUTINE IW_Model_GetGWNParametricElements
 
@@ -2599,21 +2897,25 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET PARAMETRIC NODE COORDINATES FOR A GW PARAMETRIC GRID
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetGWParametricNodeXY(iParamGridID,iNParamNodes,rX,rY,iStat) BIND(C,NAME='IW_Model_GetGWParametricNodeXY')
+  SUBROUTINE IW_Model_GetGWParametricNodeXY(iModelID,iParamGridID,iNParamNodes,rX,rY,iStat) BIND(C,NAME='IW_Model_GetGWParametricNodeXY')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetGWParametricNodeXY
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: iParamGridID,iNParamNodes
     REAL(C_DOUBLE),INTENT(OUT) :: rX(iNParamNodes),rY(iNParamNodes)
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     !Get data
-    CALL pModel%GetGWParametricNodeXY(iParamGridID,rX,rY,iStat)
+    CALL pMdl%GetGWParametricNodeXY(iParamGridID,rX,rY,iStat)
     
   END SUBROUTINE IW_Model_GetGWParametricNodeXY
 
@@ -2621,20 +2923,24 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET VERTICES OF A PARAMETRIC ELEMENT FOR A GW PARAMETRIC GRID
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetGWParametricElementConfigData(iParamGridID,iParamElemID,iVertices,iStat) BIND(C,NAME='IW_Model_GetGWParametricElementConfigData')
+  SUBROUTINE IW_Model_GetGWParametricElementConfigData(iModelID,iParamGridID,iParamElemID,iVertices,iStat) BIND(C,NAME='IW_Model_GetGWParametricElementConfigData')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetGWParametricElementConfigData
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: iParamGridID,iParamElemID
     INTEGER(C_INT),INTENT(OUT) :: iVertices(4),iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     !Get data
-    CALL pModel%GetGWParametricElementConfigData(iParamGridID,iParamElemID,iVertices,iStat)
+    CALL pMdl%GetGWParametricElementConfigData(iParamGridID,iParamElemID,iVertices,iStat)
     
   END SUBROUTINE IW_Model_GetGWParametricElementConfigData
 
@@ -2642,21 +2948,25 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET PARAMETRIC AQUIFER PARAMETERS FOR A GW PARAMETRIC GRID
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetGWParametricAquiferParameters(iParamGridID,iNParamNodes,iNLayers,rKh,rAquiferKv,rAquitardKv,rSy,rSs,iStat) BIND(C,NAME='IW_Model_GetGWParametricAquiferParameters')
+  SUBROUTINE IW_Model_GetGWParametricAquiferParameters(iModelID,iParamGridID,iNParamNodes,iNLayers,rKh,rAquiferKv,rAquitardKv,rSy,rSs,iStat) BIND(C,NAME='IW_Model_GetGWParametricAquiferParameters')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetGWParametricAquiferParameters
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: iParamGridID,iNParamNodes,iNLayers
     REAL(C_DOUBLE),INTENT(OUT) :: rKh(iNParamNodes,iNLayers),rAquiferKv(iNParamNodes,iNLayers),rAquitardKv(iNParamNodes,iNLayers),rSy(iNParamNodes,iNLayers),rSs(iNParamNodes,iNLayers)
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     !Get data
-    CALL pModel%GetGWParametricAquiferParameters(iParamGridID,rKh,rAquiferKv,rAquitardKv,rSy,rSs,iStat)
+    CALL pMdl%GetGWParametricAquiferParameters(iParamGridID,rKh,rAquiferKv,rAquitardKv,rSy,rSs,iStat)
     
   END SUBROUTINE IW_Model_GetGWParametricAquiferParameters
 
@@ -2664,20 +2974,24 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET ELEMENT NODES
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetElementConfigData(iElem,iDim,Nodes,iStat) BIND(C,NAME='IW_Model_GetElementConfigData')
+  SUBROUTINE IW_Model_GetElementConfigData(iModelID,iElem,iDim,Nodes,iStat) BIND(C,NAME='IW_Model_GetElementConfigData')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetElementConfigData
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: iElem,iDim
     INTEGER(C_INT),INTENT(OUT) :: Nodes(iDim),iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat = 0    
-    CALL pModel%GetElementConfigData(iElem,Nodes)
+    CALL pMdl%GetElementConfigData(iElem,Nodes)
     
   END SUBROUTINE IW_Model_GetElementConfigData
   
@@ -2685,19 +2999,23 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET REACH INDICES FOR SOME STREAM NODES
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetReaches_ForStrmNodes(iNNodes,iStrmNodes,iReachs,iStat) BIND(C,NAME='IW_Model_GetReaches_ForStrmNodes')
+  SUBROUTINE IW_Model_GetReaches_ForStrmNodes(iModelID,iNNodes,iStrmNodes,iReachs,iStat) BIND(C,NAME='IW_Model_GetReaches_ForStrmNodes')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetReaches_ForStrmNodes
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)   :: iNNodes,iStrmNodes(iNNodes)
     INTEGER(C_INT),INTENT(OUT)  :: iReachs(iNNodes),iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetReaches_ForStrmNodes(iStrmNodes,iReachs,iStat)
+    CALL pMdl%GetReaches_ForStrmNodes(iStrmNodes,iReachs,iStat)
     
   END SUBROUTINE IW_Model_GetReaches_ForStrmNodes
   
@@ -2705,20 +3023,24 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET STREAM NODE IDS
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetStrmNodeIDs(NStrmNodes,IDs,iStat) BIND(C,NAME='IW_Model_GetStrmNodeIDs')
+  SUBROUTINE IW_Model_GetStrmNodeIDs(iModelID,NStrmNodes,IDs,iStat) BIND(C,NAME='IW_Model_GetStrmNodeIDs')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetStrmNodeIDs
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: NStrmNodes
     INTEGER(C_INT),INTENT(OUT) :: IDs(NStrmNodes),iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat = 0
-    CALL pModel%GetStrmNodeIDs(IDs)
+    CALL pMdl%GetStrmNodeIDs(IDs)
     
   END SUBROUTINE IW_Model_GetStrmNodeIDs
 
@@ -2726,19 +3048,23 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET NUMBER OF STREAM NODES
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetNStrmNodes(NStrmNodes,iStat) BIND(C,NAME='IW_Model_GetNStrmNodes')
+  SUBROUTINE IW_Model_GetNStrmNodes(iModelID,NStrmNodes,iStat) BIND(C,NAME='IW_Model_GetNStrmNodes')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetNStrmNodes
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(OUT) :: NStrmNodes,iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat      = 0
-    NStrmNodes = pModel%GetNStrmNodes()
+    NStrmNodes = pMdl%GetNStrmNodes()
     
   END SUBROUTINE IW_Model_GetNStrmNodes
 
@@ -2746,20 +3072,24 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET STREAM REACH IDS
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetReachIDs(iNReaches,IDs,iStat) BIND(C,NAME='IW_Model_GetReachIDs')
+  SUBROUTINE IW_Model_GetReachIDs(iModelID,iNReaches,IDs,iStat) BIND(C,NAME='IW_Model_GetReachIDs')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetReachIDs
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: iNReaches
     INTEGER(C_INT),INTENT(OUT) :: IDs(iNReaches),iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat = 0
-    CALL pModel%GetStrmReachIDs(IDs)
+    CALL pMdl%GetStrmReachIDs(IDs)
     
   END SUBROUTINE IW_Model_GetReachIDs
 
@@ -2767,20 +3097,24 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET NUMBER OF STREAM NODES DRAINING INTO A NODE
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetStrmNUpstrmNodes(iStrmNode,iNNodes,iStat) BIND(C,NAME='IW_Model_GetStrmNUpstrmNodes')
+  SUBROUTINE IW_Model_GetStrmNUpstrmNodes(iModelID,iStrmNode,iNNodes,iStat) BIND(C,NAME='IW_Model_GetStrmNUpstrmNodes')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetStrmNUpstrmNodes
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
      INTEGER(C_INT),INTENT(IN) :: iStrmNode
      INTEGER(C_INT),INTENT(OUT) :: iNNodes, iStat
      
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
      iStat   = 0
-     iNNodes = pModel%GetStrmNUpstrmNodes(iStrmNode)
+     iNNodes = pMdl%GetStrmNUpstrmNodes(iStrmNode)
      
   END SUBROUTINE IW_Model_GetStrmNUpstrmNodes
      
@@ -2788,8 +3122,9 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET STREAM NODE INDICES FLOWING INTO ANOTHER NODE 
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetStrmUpstrmNodes(iStrmNode,iNNodes,iUpstrmNodes,iStat) BIND(C,NAME='IW_Model_GetStrmUpstrmNodes')
+  SUBROUTINE IW_Model_GetStrmUpstrmNodes(iModelID,iStrmNode,iNNodes,iUpstrmNodes,iStat) BIND(C,NAME='IW_Model_GetStrmUpstrmNodes')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetStrmUpstrmNodes
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: iStrmNode,iNNodes
     INTEGER(C_INT),INTENT(OUT) :: iUpstrmNodes(iNNodes),iStat
     
@@ -2797,14 +3132,17 @@ CONTAINS
     INTEGER,ALLOCATABLE :: iNodes_Local(:)
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat = 0
-    CALL pModel%GetStrmUpstrmNodes(iStrmNode,iNodes_Local)
+    CALL pMdl%GetStrmUpstrmNodes(iStrmNode,iNodes_Local)
     iUpstrmNodes = iNodes_Local
     
   END SUBROUTINE IW_Model_GetStrmUpstrmNodes
@@ -2813,47 +3151,54 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- CHECK IF STREAM NODE ID 1 IS UPSTREAM OF STREAM NODE ID 2, CONSIDERING THE ENTIRE NETWORK
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_IsStrmUpstreamNode(iStrmNode1,iStrmNode2,iUpstrm,iStat) BIND (C,NAME='IW_Model_IsStrmUpstreamNode')
+  SUBROUTINE IW_Model_IsStrmUpstreamNode(iModelID,iStrmNode1,iStrmNode2,iUpstrm,iStat) BIND (C,NAME='IW_Model_IsStrmUpstreamNode')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_IsStrmUpstreamNode
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)   :: iStrmNode1,iStrmNode2
     INTEGER(C_INT),INTENT(OUT)  :: iUpstrm,iStat
     
     !Local variables
     LOGICAL :: lUpstrm
-    
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
-    
-    CALL pModel%IsStrmUpstreamNode(iStrmNode1,iStrmNode2,lUpstrm,iStat)
+
+    CALL pMdl%IsStrmUpstreamNode(iStrmNode1,iStrmNode2,lUpstrm,iStat)
     IF (lUpstrm) THEN
         iUpstrm = 1
     ELSE
         iUpstrm = 0
     END IF
-    
+
   END SUBROUTINE IW_Model_IsStrmUpstreamNode
   
   
   ! -------------------------------------------------------------
   ! --- GET NUMBER OF STREAM REACHES
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetNReaches(NReach,iStat) BIND(C,NAME='IW_Model_GetNReaches')
+  SUBROUTINE IW_Model_GetNReaches(iModelID,NReach,iStat) BIND(C,NAME='IW_Model_GetNReaches')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetNReaches
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(OUT) :: NReach,iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat  = 0
-    NReach = pModel%GetNReaches()
+    NReach = pMdl%GetNReaches()
     
   END SUBROUTINE IW_Model_GetNReaches
 
@@ -2861,20 +3206,24 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET NUMBER OF REACHES THAT ARE IMMEDIATELY UPSTREAM OF A GIVEN REACH
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetReachNUpstrmReaches(iReach,iNReaches,iStat) BIND(C,NAME='IW_Model_GetReachNUpstrmReaches')
+  SUBROUTINE IW_Model_GetReachNUpstrmReaches(iModelID,iReach,iNReaches,iStat) BIND(C,NAME='IW_Model_GetReachNUpstrmReaches')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetReachNUpstrmReaches
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: iReach
     INTEGER(C_INT),INTENT(OUT) :: iNReaches,iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat     = 0
-    iNReaches = pModel%GetReachNUpstrmReaches(iReach)
+    iNReaches = pMdl%GetReachNUpstrmReaches(iReach)
     
   END SUBROUTINE IW_Model_GetReachNUpstrmReaches
   
@@ -2882,8 +3231,9 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET REACHES IMMEDIATELY UPSTREAM OF A GIVEN REACH
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetReachUpstrmReaches(iReach,iNReaches,iUpstrmReaches,iStat) BIND(C,NAME='IW_Model_GetReachUpstrmReaches')
+  SUBROUTINE IW_Model_GetReachUpstrmReaches(iModelID,iReach,iNReaches,iUpstrmReaches,iStat) BIND(C,NAME='IW_Model_GetReachUpstrmReaches')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetReachUpstrmReaches
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: iReach,iNReaches
     INTEGER(C_INT),INTENT(OUT) :: iUpstrmReaches(iNReaches),iStat
     
@@ -2891,14 +3241,17 @@ CONTAINS
     INTEGER,ALLOCATABLE :: iUpstrmReaches_Local(:)
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat = 0
-    CALL pModel%GetReachUpstrmReaches(iReach,iUpstrmReaches_Local)
+    CALL pMdl%GetReachUpstrmReaches(iReach,iUpstrmReaches_Local)
     iUpstrmReaches = iUpstrmReaches_Local
 
   END SUBROUTINE IW_Model_GetReachUpstrmReaches
@@ -2907,20 +3260,24 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET NUMBER OF DATA POINTS IN STREAM RATING TABLE FOR A STREAM NODE
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetNStrmRatingTablePoints(iStrmNode,N,iStat) BIND(C,NAME='IW_Model_GetNStrmRatingTablePoints')
+  SUBROUTINE IW_Model_GetNStrmRatingTablePoints(iModelID,iStrmNode,N,iStat) BIND(C,NAME='IW_Model_GetNStrmRatingTablePoints')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetNStrmRatingTablePoints
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: iStrmNode
     INTEGER(C_INT),INTENT(OUT) :: N,iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat = 0
-    N     = pModel%GetNRatingTablePoints(iStrmNode)
+    N     = pMdl%GetNRatingTablePoints(iStrmNode)
     
   END SUBROUTINE IW_Model_GetNStrmRatingTablePoints
 
@@ -2928,20 +3285,24 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET ALL REACH UPSTREAM NODES
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetReachUpstrmNodes(NReaches,iNodes,iStat) BIND(C,NAME='IW_Model_GetReachUpstrmNodes')
+  SUBROUTINE IW_Model_GetReachUpstrmNodes(iModelID,NReaches,iNodes,iStat) BIND(C,NAME='IW_Model_GetReachUpstrmNodes')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetReachUpstrmNodes
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: NReaches
     INTEGER(C_INT),INTENT(OUT) :: iNodes(NReaches),iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat = 0
-    CALL pModel%GetReachUpstrmNodes(iNodes)
+    CALL pMdl%GetReachUpstrmNodes(iNodes)
         
   END SUBROUTINE IW_Model_GetReachUpstrmNodes
 
@@ -2949,20 +3310,24 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET ALL REACH DOWNSTREAM NODES
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetReachDownstrmNodes(NReaches,iNodes,iStat) BIND(C,NAME='IW_Model_GetReachDownstrmNodes')
+  SUBROUTINE IW_Model_GetReachDownstrmNodes(iModelID,NReaches,iNodes,iStat) BIND(C,NAME='IW_Model_GetReachDownstrmNodes')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetReachDownstrmNodes
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: NReaches
     INTEGER(C_INT),INTENT(OUT) :: iNodes(NReaches),iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat = 0
-    CALL pModel%GetReachDownstrmNodes(iNodes)
+    CALL pMdl%GetReachDownstrmNodes(iNodes)
     
   END SUBROUTINE IW_Model_GetReachDownstrmNodes
 
@@ -2970,20 +3335,24 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET ALL REACH OUTFLOW DESTINATIONS
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetReachOutflowDest(NReaches,iDest,iStat) BIND(C,NAME='IW_Model_GetReachOutflowDest')
+  SUBROUTINE IW_Model_GetReachOutflowDest(iModelID,NReaches,iDest,iStat) BIND(C,NAME='IW_Model_GetReachOutflowDest')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetReachOutflowDest
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: NReaches
     INTEGER(C_INT),INTENT(OUT) :: iDest(NReaches),iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat = 0
-    CALL pModel%GetReachOutflowDest(iDest)
+    CALL pMdl%GetReachOutflowDest(iDest)
         
   END SUBROUTINE IW_Model_GetReachOutflowDest
 
@@ -2991,20 +3360,24 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET ALL REACH OUTFLOW DESTINATION TYPES
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetReachOutflowDestTypes(NReaches,iDestType,iStat) BIND(C,NAME='IW_Model_GetReachOutflowDestTypes')
+  SUBROUTINE IW_Model_GetReachOutflowDestTypes(iModelID,NReaches,iDestType,iStat) BIND(C,NAME='IW_Model_GetReachOutflowDestTypes')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetReachOutflowDestTypes
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: NReaches
     INTEGER(C_INT),INTENT(OUT) :: iDestType(NReaches),iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat = 0
-    CALL pModel%GetReachOutflowDestTypes(iDestType)
+    CALL pMdl%GetReachOutflowDestTypes(iDestType)
         
   END SUBROUTINE IW_Model_GetReachOutflowDestTypes
 
@@ -3012,20 +3385,24 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET NUMBER OF NODES FOR A REACH
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetReachNNodes(iReach,iReachNNodes,iStat) BIND(C,NAME='IW_Model_GetReachNNodes')
+  SUBROUTINE IW_Model_GetReachNNodes(iModelID,iReach,iReachNNodes,iStat) BIND(C,NAME='IW_Model_GetReachNNodes')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetReachNNodes
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: iReach
     INTEGER(C_INT),INTENT(OUT) :: iReachNNodes,iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat        = 0
-    iReachNNodes = pModel%GetReachNNodes(iReach)
+    iReachNNodes = pMdl%GetReachNNodes(iReach)
     
   END SUBROUTINE IW_Model_GetReachNNodes
 
@@ -3033,20 +3410,24 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET GROUNDWATER NODES FOR EACH STREAM NODE AT A REACH
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetReachGWNodes(iReach,NNodes,iGWNodes,iStat) BIND(C,NAME='IW_Model_GetReachGWNodes')
+  SUBROUTINE IW_Model_GetReachGWNodes(iModelID,iReach,NNodes,iGWNodes,iStat) BIND(C,NAME='IW_Model_GetReachGWNodes')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetReachGWNodes
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: iReach,NNodes
     INTEGER(C_INT),INTENT(OUT) :: iGWNodes(NNodes),iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat = 0
-    CALL pModel%GetReachGWNodes(iReach,NNodes,iGWNodes)
+    CALL pMdl%GetReachGWNodes(iReach,NNodes,iGWNodes)
     
   END SUBROUTINE IW_Model_GetReachGWNodes
 
@@ -3054,8 +3435,9 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET STREAM NODES FOR A GIVEN REACH 
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetReachStrmNodes(iReach,iNNodes,iStrmNodes,iStat) BIND(C,NAME='IW_Model_GetReachStrmNodes')
+  SUBROUTINE IW_Model_GetReachStrmNodes(iModelID,iReach,iNNodes,iStrmNodes,iStat) BIND(C,NAME='IW_Model_GetReachStrmNodes')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetReachStrmNodes
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: iReach,iNNodes
     INTEGER(C_INT),INTENT(OUT) :: iStrmNodes(iNNodes),iStat
     
@@ -3063,13 +3445,16 @@ CONTAINS
     INTEGER,ALLOCATABLE :: iStrmNodes_Local(:)
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetReachStrmNodes(iReach,iStrmNodes_Local,iStat) 
+    CALL pMdl%GetReachStrmNodes(iReach,iStrmNodes_Local,iStat) 
     IF (iStat .EQ. 0) iStrmNodes = iStrmNodes_Local
     
   END SUBROUTINE IW_Model_GetReachStrmNodes
@@ -3078,20 +3463,24 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET STREAM BOTTOM ELEVATIONS
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetStrmBottomElevs(NNodes,rElevs,iStat) BIND(C,NAME='IW_Model_GetStrmBottomElevs')
+  SUBROUTINE IW_Model_GetStrmBottomElevs(iModelID,NNodes,rElevs,iStat) BIND(C,NAME='IW_Model_GetStrmBottomElevs')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetStrmBottomElevs
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: NNodes
     REAL(C_DOUBLE),INTENT(OUT) :: rElevs(NNodes)
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetStrmBottomElevs(rElevs,iStat)
+    CALL pMdl%GetStrmBottomElevs(rElevs,iStat)
     
   END SUBROUTINE IW_Model_GetStrmBottomElevs
   
@@ -3099,21 +3488,25 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET STREAM RATING TABLE
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetStrmRatingTable(iStrmNode,NPoints,Stage,Flow,iStat) BIND(C,NAME='IW_Model_GetStrmRatingTable')
+  SUBROUTINE IW_Model_GetStrmRatingTable(iModelID,iStrmNode,NPoints,Stage,Flow,iStat) BIND(C,NAME='IW_Model_GetStrmRatingTable')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetStrmRatingTable
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: iStrmNode,NPoints
     REAL(C_DOUBLE),INTENT(OUT) :: Stage(NPoints),Flow(NPoints)
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat = 0
-    CALL pModel%GetStrmRatingTable(iStrmNode,NPoints,Stage,Flow)
+    CALL pMdl%GetStrmRatingTable(iStrmNode,NPoints,Stage,Flow)
     
   END SUBROUTINE IW_Model_GetStrmRatingTable
 
@@ -3121,8 +3514,9 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET NET INFLOW (EXCLUDING DIVERSIONS AND BOUNDARY INFLOWS) AT ALL STREAM NODES
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetStrmNetInflows_ExcDivsInflows(iNNodes,rConvFactor,rFlows,iStat) BIND(C,NAME='IW_Model_GetStrmNetInflows_ExcDivsInflows')
+  SUBROUTINE IW_Model_GetStrmNetInflows_ExcDivsInflows(iModelID,iNNodes,rConvFactor,rFlows,iStat) BIND(C,NAME='IW_Model_GetStrmNetInflows_ExcDivsInflows')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetStrmNetInflows_ExcDivsInflows
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: iNNodes
     REAL(C_DOUBLE),INTENT(IN)  :: rConvFactor
     REAL(C_DOUBLE),INTENT(OUT) :: rFlows(iNNodes)
@@ -3132,21 +3526,24 @@ CONTAINS
     REAL(8) :: rFlowsTemp(iNNodes)
         
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     !Tributary inflows
-    CALL pModel%GetStrmTributaryInflows(rFlows,iStat)
+    CALL pMdl%GetStrmTributaryInflows(rFlows,iStat)
     IF (iStat .EQ. -1) THEN
         rFlows = 0.0
         RETURN
     END IF
     
     !Rainfall runoff
-    CALL pModel%GetStrmRainfallRunoff(rFlowsTemp,iStat)
+    CALL pMdl%GetStrmRainfallRunoff(rFlowsTemp,iStat)
     IF (iStat .EQ. -1) THEN
         rFlows = 0.0
         RETURN
@@ -3154,7 +3551,7 @@ CONTAINS
     rFlows = rFlows + rFlowsTemp
     
     !Return flow
-    CALL pModel%GetStrmReturnFlows(rFlowsTemp,iStat)
+    CALL pMdl%GetStrmReturnFlows(rFlowsTemp,iStat)
     IF (iStat .EQ. -1) THEN
         rFlows = 0.0
         RETURN
@@ -3162,7 +3559,7 @@ CONTAINS
     rFlows = rFlows + rFlowsTemp
     
     !Tile drains
-    CALL pModel%GetStrmTileDrains(rFlowsTemp,iStat)
+    CALL pMdl%GetStrmTileDrains(rFlowsTemp,iStat)
     IF (iStat .EQ. -1) THEN
         rFlows = 0.0
         RETURN
@@ -3170,7 +3567,7 @@ CONTAINS
     rFlows = rFlows + rFlowsTemp
     
     !Riparian ET
-    CALL pModel%GetStrmRiparianETs(rFlowsTemp,iStat)
+    CALL pMdl%GetStrmRiparianETs(rFlowsTemp,iStat)
     IF (iStat .EQ. -1) THEN
         rFlows = 0.0
         RETURN
@@ -3178,7 +3575,7 @@ CONTAINS
     rFlows = rFlows - rFlowsTemp
     
     !Gain from GW
-    CALL pModel%GetStrmGainFromGW(rFlowsTemp,iStat)
+    CALL pMdl%GetStrmGainFromGW(rFlowsTemp,iStat)
     IF (iStat .EQ. -1) THEN
         rFlows = 0.0
         RETURN
@@ -3186,7 +3583,7 @@ CONTAINS
     rFlows = rFlows + rFlowsTemp
     
     !Gain from lakes
-    CALL pModel%GetStrmGainFromLakes(rFlowsTemp,iStat)
+    CALL pMdl%GetStrmGainFromLakes(rFlowsTemp,iStat)
     IF (iStat .EQ. -1) THEN
         rFlows = 0.0
         RETURN
@@ -3194,7 +3591,7 @@ CONTAINS
     rFlows = rFlows + rFlowsTemp
     
     !Net bypass Inflows
-    CALL pModel%GetStrmNetBypassInflows(rFlowsTemp,iStat)
+    CALL pMdl%GetStrmNetBypassInflows(rFlowsTemp,iStat)
     IF (iStat .EQ. -1) THEN
         rFlows = 0.0
         RETURN
@@ -3210,8 +3607,9 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET NET INFLOW (EXCLUDING DIVERSIONS, BOUNDARY INFLOWS AND GW INTERACTION) AT ALL STREAM NODES
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetStrmNetInflows_ExcDivsInflowsGW(iNNodes,rConvFactor,rFlows,iStat) BIND(C,NAME='IW_Model_GetStrmNetInflows_ExcDivsInflowsGW')
+  SUBROUTINE IW_Model_GetStrmNetInflows_ExcDivsInflowsGW(iModelID,iNNodes,rConvFactor,rFlows,iStat) BIND(C,NAME='IW_Model_GetStrmNetInflows_ExcDivsInflowsGW')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetStrmNetInflows_ExcDivsInflowsGW
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: iNNodes
     REAL(C_DOUBLE),INTENT(IN)  :: rConvFactor
     REAL(C_DOUBLE),INTENT(OUT) :: rFlows(iNNodes)
@@ -3221,21 +3619,24 @@ CONTAINS
     REAL(8) :: rFlowsTemp(iNNodes)
         
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     !Tributary inflows
-    CALL pModel%GetStrmTributaryInflows(rFlows,iStat)
+    CALL pMdl%GetStrmTributaryInflows(rFlows,iStat)
     IF (iStat .EQ. -1) THEN
         rFlows = 0.0
         RETURN
     END IF
     
     !Rainfall runoff
-    CALL pModel%GetStrmRainfallRunoff(rFlowsTemp,iStat)
+    CALL pMdl%GetStrmRainfallRunoff(rFlowsTemp,iStat)
     IF (iStat .EQ. -1) THEN
         rFlows = 0.0
         RETURN
@@ -3243,7 +3644,7 @@ CONTAINS
     rFlows = rFlows + rFlowsTemp
     
     !Return flow
-    CALL pModel%GetStrmReturnFlows(rFlowsTemp,iStat)
+    CALL pMdl%GetStrmReturnFlows(rFlowsTemp,iStat)
     IF (iStat .EQ. -1) THEN
         rFlows = 0.0
         RETURN
@@ -3251,7 +3652,7 @@ CONTAINS
     rFlows = rFlows + rFlowsTemp
     
     !Tile drains
-    CALL pModel%GetStrmTileDrains(rFlowsTemp,iStat)
+    CALL pMdl%GetStrmTileDrains(rFlowsTemp,iStat)
     IF (iStat .EQ. -1) THEN
         rFlows = 0.0
         RETURN
@@ -3259,7 +3660,7 @@ CONTAINS
     rFlows = rFlows + rFlowsTemp
     
     !Riparian ET
-    CALL pModel%GetStrmRiparianETs(rFlowsTemp,iStat)
+    CALL pMdl%GetStrmRiparianETs(rFlowsTemp,iStat)
     IF (iStat .EQ. -1) THEN
         rFlows = 0.0
         RETURN
@@ -3267,7 +3668,7 @@ CONTAINS
     rFlows = rFlows - rFlowsTemp
     
     !Gain from lakes
-    CALL pModel%GetStrmGainFromLakes(rFlowsTemp,iStat)
+    CALL pMdl%GetStrmGainFromLakes(rFlowsTemp,iStat)
     IF (iStat .EQ. -1) THEN
         rFlows = 0.0
         RETURN
@@ -3275,7 +3676,7 @@ CONTAINS
     rFlows = rFlows + rFlowsTemp
     
     !Net bypass Inflows
-    CALL pModel%GetStrmNetBypassInflows(rFlowsTemp,iStat)
+    CALL pMdl%GetStrmNetBypassInflows(rFlowsTemp,iStat)
     IF (iStat .EQ. -1) THEN
         rFlows = 0.0
         RETURN
@@ -3291,21 +3692,25 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET TRIBUTARY INFLOWS AT ALL STREAM NODES
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetStrmTributaryInflows(iNNodes,rConvFactor,rFlows,iStat) BIND(C,NAME='IW_Model_GetStrmTributaryInflows')
+  SUBROUTINE IW_Model_GetStrmTributaryInflows(iModelID,iNNodes,rConvFactor,rFlows,iStat) BIND(C,NAME='IW_Model_GetStrmTributaryInflows')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetStrmTributaryInflows
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: iNNodes
     REAL(C_DOUBLE),INTENT(IN)  :: rConvFactor
     REAL(C_DOUBLE),INTENT(OUT) :: rFlows(iNNodes)
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetStrmTributaryInflows(rFlows,iStat)
+    CALL pMdl%GetStrmTributaryInflows(rFlows,iStat)
     IF (iStat .EQ. -1) THEN
         rFlows = 0.0
         RETURN
@@ -3320,21 +3725,25 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET RAINFALL RUNOFF AT ALL STREAM NODES
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetStrmRainfallRunoff(iNNodes,rConvFactor,rFlows,iStat) BIND(C,NAME='IW_Model_GetStrmRainfallRunoff')
+  SUBROUTINE IW_Model_GetStrmRainfallRunoff(iModelID,iNNodes,rConvFactor,rFlows,iStat) BIND(C,NAME='IW_Model_GetStrmRainfallRunoff')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetStrmRainfallRunoff
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: iNNodes
     REAL(C_DOUBLE),INTENT(IN)  :: rConvFactor
     REAL(C_DOUBLE),INTENT(OUT) :: rFlows(iNNodes)
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetStrmRainfallRunoff(rFlows,iStat)
+    CALL pMdl%GetStrmRainfallRunoff(rFlows,iStat)
     IF (iStat .EQ. -1) THEN
         rFlows = 0.0
         RETURN
@@ -3349,21 +3758,25 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET RETURN FLOW AT ALL STREAM NODES
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetStrmReturnFlows(iNNodes,rConvFactor,rFlows,iStat) BIND(C,NAME='IW_Model_GetStrmReturnFlows')
+  SUBROUTINE IW_Model_GetStrmReturnFlows(iModelID,iNNodes,rConvFactor,rFlows,iStat) BIND(C,NAME='IW_Model_GetStrmReturnFlows')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetStrmReturnFlows
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: iNNodes
     REAL(C_DOUBLE),INTENT(IN)  :: rConvFactor
     REAL(C_DOUBLE),INTENT(OUT) :: rFlows(iNNodes)
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetStrmReturnFlows(rFlows,iStat)
+    CALL pMdl%GetStrmReturnFlows(rFlows,iStat)
     IF (iStat .EQ. -1) THEN
         rFlows = 0.0
         RETURN
@@ -3378,21 +3791,25 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET POND DRAINS INTO ALL STREAM NODES
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetStrmPondDrains(iNNodes,rConvFactor,rFlows,iStat) BIND(C,NAME='IW_Model_GetStrmPondDrains')
+  SUBROUTINE IW_Model_GetStrmPondDrains(iModelID,iNNodes,rConvFactor,rFlows,iStat) BIND(C,NAME='IW_Model_GetStrmPondDrains')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetStrmPondDrains
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: iNNodes
     REAL(C_DOUBLE),INTENT(IN)  :: rConvFactor
     REAL(C_DOUBLE),INTENT(OUT) :: rFlows(iNNodes)
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetStrmPondDrains(rFlows,iStat)
+    CALL pMdl%GetStrmPondDrains(rFlows,iStat)
     IF (iStat .EQ. -1) THEN
         rFlows = 0.0
         RETURN
@@ -3407,21 +3824,25 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET TILE DRAINS INTO ALL STREAM NODES
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetStrmTileDrains(iNNodes,rConvFactor,rFlows,iStat) BIND(C,NAME='IW_Model_GetStrmTileDrains')
+  SUBROUTINE IW_Model_GetStrmTileDrains(iModelID,iNNodes,rConvFactor,rFlows,iStat) BIND(C,NAME='IW_Model_GetStrmTileDrains')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetStrmTileDrains
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: iNNodes
     REAL(C_DOUBLE),INTENT(IN)  :: rConvFactor
     REAL(C_DOUBLE),INTENT(OUT) :: rFlows(iNNodes)
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetStrmTileDrains(rFlows,iStat)
+    CALL pMdl%GetStrmTileDrains(rFlows,iStat)
     IF (iStat .EQ. -1) THEN
         rFlows = 0.0
         RETURN
@@ -3436,21 +3857,25 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET RIPARIAN ET FROM ALL STREAM NODES
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetStrmRiparianETs(iNNodes,rConvFactor,rFlows,iStat) BIND(C,NAME='IW_Model_GetStrmRiparianETs')
+  SUBROUTINE IW_Model_GetStrmRiparianETs(iModelID,iNNodes,rConvFactor,rFlows,iStat) BIND(C,NAME='IW_Model_GetStrmRiparianETs')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetStrmRiparianETs
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: iNNodes
     REAL(C_DOUBLE),INTENT(IN)  :: rConvFactor
     REAL(C_DOUBLE),INTENT(OUT) :: rFlows(iNNodes)
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetStrmRiparianETs(rFlows,iStat)
+    CALL pMdl%GetStrmRiparianETs(rFlows,iStat)
     IF (iStat .EQ. -1) THEN
         rFlows = 0.0
         RETURN
@@ -3465,21 +3890,25 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET STREAM SURFACE EVAPORATION AT ALL STREAM NODES
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetStrmEvap(iNNodes,rConvFactor,rEvap,iStat) BIND(C,NAME='IW_Model_GetStrmEvap')
+  SUBROUTINE IW_Model_GetStrmEvap(iModelID,iNNodes,rConvFactor,rEvap,iStat) BIND(C,NAME='IW_Model_GetStrmEvap')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetStrmEvap
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: iNNodes
     REAL(C_DOUBLE),INTENT(IN)  :: rConvFactor
     REAL(C_DOUBLE),INTENT(OUT) :: rEvap(iNNodes)
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetStrmEvap(rEvap,iStat)
+    CALL pMdl%GetStrmEvap(rEvap,iStat)
     IF (iStat .EQ. -1) THEN
         rEvap = 0.0
         RETURN
@@ -3494,21 +3923,25 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET GAIN FROM GROUNDWATER AT ALL STREAM NODES
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetStrmGainFromGW(iNNodes,rConvFactor,rFlows,iStat) BIND(C,NAME='IW_Model_GetStrmGainFromGW')
+  SUBROUTINE IW_Model_GetStrmGainFromGW(iModelID,iNNodes,rConvFactor,rFlows,iStat) BIND(C,NAME='IW_Model_GetStrmGainFromGW')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetStrmGainFromGW
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: iNNodes
     REAL(C_DOUBLE),INTENT(IN)  :: rConvFactor
     REAL(C_DOUBLE),INTENT(OUT) :: rFlows(iNNodes)
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetStrmGainFromGW(rFlows,iStat)
+    CALL pMdl%GetStrmGainFromGW(rFlows,iStat)
     IF (iStat .EQ. -1) THEN
         rFlows = 0.0
         RETURN
@@ -3523,21 +3956,25 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET INFLOWS FROM LAKES AT ALL STREAM NODES
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetStrmGainFromLakes(iNNodes,rConvFactor,rFlows,iStat) BIND(C,NAME='IW_Model_GetStrmGainFromLakes')
+  SUBROUTINE IW_Model_GetStrmGainFromLakes(iModelID,iNNodes,rConvFactor,rFlows,iStat) BIND(C,NAME='IW_Model_GetStrmGainFromLakes')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetStrmGainFromLakes
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: iNNodes
     REAL(C_DOUBLE),INTENT(IN)  :: rConvFactor
     REAL(C_DOUBLE),INTENT(OUT) :: rFlows(iNNodes)
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetStrmGainFromLakes(rFlows,iStat)
+    CALL pMdl%GetStrmGainFromLakes(rFlows,iStat)
     IF (iStat .EQ. -1) THEN
         rFlows = 0.0
         RETURN
@@ -3552,21 +3989,25 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET WATER SUPPLY ADJUSTMENT (WSA) AT ALL STREAM NODES
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetStrmWSAs(iNNodes,rConvFactor,rWSAs,iStat) BIND(C,NAME='IW_Model_GetStrmWSAs')
+  SUBROUTINE IW_Model_GetStrmWSAs(iModelID,iNNodes,rConvFactor,rWSAs,iStat) BIND(C,NAME='IW_Model_GetStrmWSAs')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetStrmWSAs
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: iNNodes
     REAL(C_DOUBLE),INTENT(IN)  :: rConvFactor
     REAL(C_DOUBLE),INTENT(OUT) :: rWSAs(iNNodes)
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetStrmWSAs(rWSAs,iStat)
+    CALL pMdl%GetStrmWSAs(rWSAs,iStat)
     IF (iStat .EQ. -1) THEN
         rWSAs = 0.0
         RETURN
@@ -3581,21 +4022,25 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET NET BYPASS INFLOWS AT ALL STREAM NODES
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetStrmNetBypassInflows(iNNodes,rConvFactor,rFlows,iStat) BIND(C,NAME='IW_Model_GetStrmNetBypassInflows')
+  SUBROUTINE IW_Model_GetStrmNetBypassInflows(iModelID,iNNodes,rConvFactor,rFlows,iStat) BIND(C,NAME='IW_Model_GetStrmNetBypassInflows')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetStrmNetBypassInflows
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: iNNodes
     REAL(C_DOUBLE),INTENT(IN)  :: rConvFactor
     REAL(C_DOUBLE),INTENT(OUT) :: rFlows(iNNodes)
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetStrmNetBypassInflows(rFlows,iStat)
+    CALL pMdl%GetStrmNetBypassInflows(rFlows,iStat)
     IF (iStat .EQ. -1) THEN
         rFlows = 0.0
         RETURN
@@ -3610,21 +4055,25 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET BYPASS INFLOWS (DIFFERENT THAN NET INFLOWS) AT ALL STREAM NODES
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetStrmBypassInflows(iNNodes,rConvFactor,rFlows,iStat) BIND(C,NAME='IW_Model_GetStrmBypassInflows')
+  SUBROUTINE IW_Model_GetStrmBypassInflows(iModelID,iNNodes,rConvFactor,rFlows,iStat) BIND(C,NAME='IW_Model_GetStrmBypassInflows')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetStrmBypassInflows
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: iNNodes
     REAL(C_DOUBLE),INTENT(IN)  :: rConvFactor
     REAL(C_DOUBLE),INTENT(OUT) :: rFlows(iNNodes)
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetStrmBypassInflows(rFlows,iStat)
+    CALL pMdl%GetStrmBypassInflows(rFlows,iStat)
     IF (iStat .EQ. -1) THEN
         rFlows = 0.0
         RETURN
@@ -3639,21 +4088,25 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET REQUIRED DIVERSIONS AT SOME DIVERSIONS
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetStrmRequiredDiversions_AtSomeDiversions(iNDivs,iDivs,rConvFactor,rDivs,iStat) BIND(C,NAME='IW_Model_GetStrmRequiredDiversions_AtSomeDiversions')
+  SUBROUTINE IW_Model_GetStrmRequiredDiversions_AtSomeDiversions(iModelID,iNDivs,iDivs,rConvFactor,rDivs,iStat) BIND(C,NAME='IW_Model_GetStrmRequiredDiversions_AtSomeDiversions')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetStrmRequiredDiversions_AtSomeDiversions
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: iNDivs,iDivs(iNDivs)
     REAL(C_DOUBLE),INTENT(IN)  :: rConvFactor
     REAL(C_DOUBLE),INTENT(OUT) :: rDivs(iNDivs)
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetStrmRequiredDiversions_AtSomeDiversions(iDivs,rDivs,iStat)
+    CALL pMdl%GetStrmRequiredDiversions_AtSomeDiversions(iDivs,rDivs,iStat)
     IF (iStat .EQ. -1) THEN
         rDivs = 0.0
         RETURN
@@ -3668,21 +4121,25 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET ACTUAL DIVERSIONS AT SOME DIVERSIONS
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetStrmActualDiversions_AtSomeDiversions(iNDivs,iDivs,rConvFactor,rDivs,iStat) BIND(C,NAME='IW_Model_GetStrmActualDiversions_AtSomeDiversions')
+  SUBROUTINE IW_Model_GetStrmActualDiversions_AtSomeDiversions(iModelID,iNDivs,iDivs,rConvFactor,rDivs,iStat) BIND(C,NAME='IW_Model_GetStrmActualDiversions_AtSomeDiversions')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetStrmActualDiversions_AtSomeDiversions
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: iNDivs,iDivs(iNDivs)
     REAL(C_DOUBLE),INTENT(IN)  :: rConvFactor
     REAL(C_DOUBLE),INTENT(OUT) :: rDivs(iNDivs)
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetStrmActualDiversions_AtSomeDiversions(iDivs,rDivs,iStat)
+    CALL pMdl%GetStrmActualDiversions_AtSomeDiversions(iDivs,rDivs,iStat)
     IF (iStat .EQ. -1) THEN
         rDivs = 0.0
         RETURN
@@ -3697,20 +4154,24 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET STREAM NODE INDICES FOR A GIVEN SET OF DIVERSION INDICES
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetStrmDiversionsExportNodes(iNDivs,iDivList,iStrmNodeList,iStat) BIND(C,NAME='IW_Model_GetStrmDiversionsExportNodes')
+  SUBROUTINE IW_Model_GetStrmDiversionsExportNodes(iModelID,iNDivs,iDivList,iStrmNodeList,iStat) BIND(C,NAME='IW_Model_GetStrmDiversionsExportNodes')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetStrmDiversionsExportNodes
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: iNDivs,iDivList(iNDivs)
     INTEGER(C_INT),INTENT(OUT) :: iStrmNodeList(iNDivs),iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat = 0
-    CALL pModel%GetStrmDiversionsExportNodes(iDivList,iStrmNodeList)
+    CALL pMdl%GetStrmDiversionsExportNodes(iDivList,iStrmNodeList)
     
   END SUBROUTINE IW_Model_GetStrmDiversionsExportNodes
 
@@ -3718,20 +4179,24 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET NUMBER OF ELEMENTS SERVED BY A DIVERSION
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetStrmDiversionNElems(iDiv,iNElems,iStat) BIND(C,NAME='IW_Model_GetStrmDiversionNElems')
+  SUBROUTINE IW_Model_GetStrmDiversionNElems(iModelID,iDiv,iNElems,iStat) BIND(C,NAME='IW_Model_GetStrmDiversionNElems')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetStrmDiversionNElems
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: iDiv
     INTEGER(C_INT),INTENT(OUT) :: iNElems,iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat   = 0
-    iNElems = pModel%GetStrmDiversionNElems(iDiv)
+    iNElems = pMdl%GetStrmDiversionNElems(iDiv)
     
   END SUBROUTINE IW_Model_GetStrmDiversionNElems
 
@@ -3739,8 +4204,9 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET INDICES OF ELEMENTS SERVED BY A DIVERSION
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetStrmDiversionElems(iDiv,iNElems,iElems,iStat) BIND(C,NAME='IW_Model_GetStrmDiversionElems')
+  SUBROUTINE IW_Model_GetStrmDiversionElems(iModelID,iDiv,iNElems,iElems,iStat) BIND(C,NAME='IW_Model_GetStrmDiversionElems')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetStrmDiversionElems
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: iDiv,iNElems
     INTEGER(C_INT),INTENT(OUT) :: iElems(iNElems),iStat
     
@@ -3748,14 +4214,17 @@ CONTAINS
     INTEGER,ALLOCATABLE :: iELems_Local(:)
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat = 0
-    CALL pModel%GetStrmDiversionElems(iDiv,iElems_Local)
+    CALL pMdl%GetStrmDiversionElems(iDiv,iElems_Local)
     iElems = iElems_Local
     
   END SUBROUTINE IW_Model_GetStrmDiversionElems
@@ -3764,18 +4233,22 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET NUMBER OF DIVERSIONS
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetNDiversions(iNDiversions,iStat) BIND(C,NAME='IW_Model_GetNDiversions')
+  SUBROUTINE IW_Model_GetNDiversions(iModelID,iNDiversions,iStat) BIND(C,NAME='IW_Model_GetNDiversions')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetNDiversions
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(OUT) :: iNDiversions,iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    iNDiversions = pModel%GetNDiversions()
+    iNDiversions = pMdl%GetNDiversions()
     iStat        = 0
         
   END SUBROUTINE IW_Model_GetNDiversions
@@ -3784,20 +4257,24 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET DIVERSION IDS
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetDiversionIDs(iNDiversions,iDiversionIDs,iStat) BIND(C,NAME='IW_Model_GetDiversionIDs')
+  SUBROUTINE IW_Model_GetDiversionIDs(iModelID,iNDiversions,iDiversionIDs,iStat) BIND(C,NAME='IW_Model_GetDiversionIDs')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetDiversionIDs
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: iNDiversions
     INTEGER(C_INT),INTENT(OUT) :: iDiversionIDs(iNDiversions),iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat = 0
-    CALL pModel%GetDiversionIDs(iDiversionIDs)
+    CALL pMdl%GetDiversionIDs(iDiversionIDs)
         
   END SUBROUTINE IW_Model_GetDiversionIDs
 
@@ -3805,8 +4282,9 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET NUMBER OF ELEMENTS IN THE RECHARGE ZONE FOR A DIVERSION GIVEN BY INDEX
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetStrmDiversionNRechargeZoneElems(iDiv,iNElems,iStat) BIND(C,NAME='IW_Model_GetStrmDiversionNRechargeZoneElems')
+  SUBROUTINE IW_Model_GetStrmDiversionNRechargeZoneElems(iModelID,iDiv,iNElems,iStat) BIND(C,NAME='IW_Model_GetStrmDiversionNRechargeZoneElems')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetStrmDiversionNRechargeZoneElems
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: iDiv
     INTEGER(C_INT),INTENT(OUT) :: iNElems,iStat
     
@@ -3815,13 +4293,16 @@ CONTAINS
     REAL(8),ALLOCATABLE :: rFracs_Local(:)
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetStrmDiversionRechargeZone(iDiv,iElems_Local,rFracs_Local,iStat)
+    CALL pMdl%GetStrmDiversionRechargeZone(iDiv,iElems_Local,rFracs_Local,iStat)
     iNElems = SIZE(iElems_Local)
     
   END SUBROUTINE IW_Model_GetStrmDiversionNRechargeZoneElems
@@ -3830,8 +4311,9 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET RECHARGE ZONE ELEMENTS FOR A DIVERSION GIVEN BY INDEX
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetStrmDiversionRechargeZoneElems(iDiv,iNElems,iElems,rFracs,iStat) BIND(C,NAME='IW_Model_GetStrmDiversionRechargeZoneElems')
+  SUBROUTINE IW_Model_GetStrmDiversionRechargeZoneElems(iModelID,iDiv,iNElems,iElems,rFracs,iStat) BIND(C,NAME='IW_Model_GetStrmDiversionRechargeZoneElems')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetStrmDiversionRechargeZoneElems
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: iDiv,iNElems
     REAL(C_DOUBLE),INTENT(OUT) :: rFracs(iNElems)
     INTEGER(C_INT),INTENT(OUT) :: iElems(iNElems),iStat
@@ -3841,13 +4323,16 @@ CONTAINS
     REAL(8),ALLOCATABLE :: rFracs_Local(:)
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetStrmDiversionRechargeZone(iDiv,iElems_Local,rFracs_Local,iStat)
+    CALL pMdl%GetStrmDiversionRechargeZone(iDiv,iElems_Local,rFracs_Local,iStat)
     iElems = iElems_Local
     rFracs = rFracs_Local
     
@@ -3857,18 +4342,22 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET NUMBER OF BYPASSES
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetNBypasses(iNBypasses,iStat) BIND(C,NAME='IW_Model_GetNBypasses')
+  SUBROUTINE IW_Model_GetNBypasses(iModelID,iNBypasses,iStat) BIND(C,NAME='IW_Model_GetNBypasses')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetNBypasses
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(OUT) :: iNBypasses,iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetNBypasses(iNBypasses,iStat)
+    CALL pMdl%GetNBypasses(iNBypasses,iStat)
         
   END SUBROUTINE IW_Model_GetNBypasses
 
@@ -3876,20 +4365,24 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET BYPASS IDS
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetBypassIDs(iNBypasses,iBypassIDs,iStat) BIND(C,NAME='IW_Model_GetBypassIDs')
+  SUBROUTINE IW_Model_GetBypassIDs(iModelID,iNBypasses,iBypassIDs,iStat) BIND(C,NAME='IW_Model_GetBypassIDs')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetBypassIDs
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: iNBypasses
     INTEGER(C_INT),INTENT(OUT) :: iBypassIDs(iNBypasses),iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat = 0
-    CALL pModel%GetBypassIDs(iBypassIDs)
+    CALL pMdl%GetBypassIDs(iBypassIDs)
         
   END SUBROUTINE IW_Model_GetBypassIDs
 
@@ -3897,8 +4390,9 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET STREAM NODE INDICES FOR A GIVEN SET OF BYPASS INDICES
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetBypassExportNodes(iNBypass,iBypassList,iStrmNodeList,iStat) BIND(C,NAME='IW_Model_GetBypassExportNodes')
+  SUBROUTINE IW_Model_GetBypassExportNodes(iModelID,iNBypass,iBypassList,iStrmNodeList,iStat) BIND(C,NAME='IW_Model_GetBypassExportNodes')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetBypassExportNodes
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: iNBypass,iBypassList(iNBypass)
     INTEGER(C_INT),INTENT(OUT) :: iStrmNodeList(iNBypass),iStat
     
@@ -3906,15 +4400,18 @@ CONTAINS
     INTEGER :: indx,iDummy
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat = 0
     DO indx=1,iNBypass
-        CALL pModel%GetBypassDiversionOriginDestData(.TRUE.,iBypassList(indx),iStrmNodeList(indx),iDummy,iDummy)
+        CALL pMdl%GetBypassDiversionOriginDestData(.TRUE.,iBypassList(indx),iStrmNodeList(indx),iDummy,iDummy)
     END DO
     
   END SUBROUTINE IW_Model_GetBypassExportNodes
@@ -3923,8 +4420,9 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET EXPORT STREAM NODE INDICES, DESTINATION TYPES AND INDICIES FOR A GIVEN SET OF BYPASS INDICES
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetBypassExportDestinationData(iNBypass,iBypassList,iExpStrmNodeList,iDestTypeList,iDestList,iStat) BIND(C,NAME='IW_Model_GetBypassExportDestinationData')
+  SUBROUTINE IW_Model_GetBypassExportDestinationData(iModelID,iNBypass,iBypassList,iExpStrmNodeList,iDestTypeList,iDestList,iStat) BIND(C,NAME='IW_Model_GetBypassExportDestinationData')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetBypassExportDestinationData
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: iNBypass,iBypassList(iNBypass)
     INTEGER(C_INT),INTENT(OUT) :: iExpStrmNodeList(iNBypass),iDestTypeList(iNBypass),iDestList(iNBypass),iStat
     
@@ -3932,15 +4430,18 @@ CONTAINS
     INTEGER :: indx
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat = 0
     DO indx=1,iNBypass
-        CALL pModel%GetBypassDiversionOriginDestData(.TRUE.,iBypassList(indx),iExpStrmNodeList(indx),iDestTypeList(indx),iDestList(indx))
+        CALL pMdl%GetBypassDiversionOriginDestData(.TRUE.,iBypassList(indx),iExpStrmNodeList(indx),iDestTypeList(indx),iDestList(indx))
     END DO
     
   END SUBROUTINE IW_Model_GetBypassExportDestinationData
@@ -3949,22 +4450,26 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET BYPASS OUTFLOWS AT ALL BYPASSES
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetBypassOutflows(iNBypass,rConvFactor,rOutflows,iStat) BIND(C,NAME='IW_Model_GetBypassOutflows')
+  SUBROUTINE IW_Model_GetBypassOutflows(iModelID,iNBypass,rConvFactor,rOutflows,iStat) BIND(C,NAME='IW_Model_GetBypassOutflows')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetBypassOutflows
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: iNBypass
     REAL(C_DOUBLE),INTENT(IN)  :: rConvFactor
     REAL(C_DOUBLE),INTENT(OUT) :: rOutflows(iNBypass)
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat = 0
-    CALL pModel%GetBypassOutflows(rOutflows)
+    CALL pMdl%GetBypassOutflows(rOutflows)
     rOutflows = rConvFactor * rOutflows
     
   END SUBROUTINE IW_Model_GetBypassOutflows
@@ -3973,21 +4478,25 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET RECOVERABLE LOSS FACTOR FOR A GIVEN BYPASS
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetBypassRecoverableLossFactor(iBypass,rFactor,iStat) BIND(C,NAME='IW_Model_GetBypassRecoverableLossFactor')
+  SUBROUTINE IW_Model_GetBypassRecoverableLossFactor(iModelID,iBypass,rFactor,iStat) BIND(C,NAME='IW_Model_GetBypassRecoverableLossFactor')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetBypassRecoverableLossFactor
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: iBypass
     REAL(C_DOUBLE),INTENT(OUT) :: rFactor
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat   = 0
-    rFactor = pModel%GetBypassRecoverableLossFactor(iBypass)
+    rFactor = pMdl%GetBypassRecoverableLossFactor(iBypass)
     
   END SUBROUTINE IW_Model_GetBypassRecoverableLossFactor
 
@@ -3995,21 +4504,25 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET NON-RECOVERABLE LOSS FACTOR FOR A GIVEN BYPASS
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetBypassNonRecoverableLossFactor(iBypass,rFactor,iStat) BIND(C,NAME='IW_Model_GetBypassNonRecoverableLossFactor')
+  SUBROUTINE IW_Model_GetBypassNonRecoverableLossFactor(iModelID,iBypass,rFactor,iStat) BIND(C,NAME='IW_Model_GetBypassNonRecoverableLossFactor')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetBypassNonRecoverableLossFactor
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: iBypass
     REAL(C_DOUBLE),INTENT(OUT) :: rFactor
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat   = 0
-    rFactor = pModel%GetBypassNonRecoverableLossFactor(iBypass)
+    rFactor = pMdl%GetBypassNonRecoverableLossFactor(iBypass)
     
   END SUBROUTINE IW_Model_GetBypassNonRecoverableLossFactor
 
@@ -4017,19 +4530,23 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET FLAG TO CHECK IF A SUPPLY IS SERVING AG, URBAN OR BOTH
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetSupplyPurpose(iSupplyType,iNSupplies,iSupplies,iAgOrUrban,iStat) BIND(C,NAME='IW_Model_GetSupplyPurpose')
+  SUBROUTINE IW_Model_GetSupplyPurpose(iModelID,iSupplyType,iNSupplies,iSupplies,iAgOrUrban,iStat) BIND(C,NAME='IW_Model_GetSupplyPurpose')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetSupplyPurpose
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: iSupplyType,iNSupplies,iSupplies(iNSupplies)
     INTEGER(C_INT),INTENT(OUT) :: iAgOrUrban(iNSupplies),iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetSupplyPurpose(iSupplyType,iSupplies,iAgOrUrban,iStat)
+    CALL pMdl%GetSupplyPurpose(iSupplyType,iSupplies,iAgOrUrban,iStat)
     
   END SUBROUTINE IW_Model_GetSupplyPurpose
   
@@ -4037,19 +4554,23 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET NUMBER OF LAKES
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetNLakes(NLakes,iStat) BIND(C,NAME='IW_Model_GetNLakes')
+  SUBROUTINE IW_Model_GetNLakes(iModelID,NLakes,iStat) BIND(C,NAME='IW_Model_GetNLakes')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetNLakes
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(OUT) :: NLakes,iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat  = 0
-    NLakes = pModel%GetNLakes()
+    NLakes = pMdl%GetNLakes()
     
   END SUBROUTINE IW_Model_GetNLakes
   
@@ -4057,20 +4578,24 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET LAKE IDS
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetLakeIDs(NLakes,IDs,iStat) BIND(C,NAME='IW_Model_GetLakeIDs')
+  SUBROUTINE IW_Model_GetLakeIDs(iModelID,NLakes,IDs,iStat) BIND(C,NAME='IW_Model_GetLakeIDs')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetLakeIDs
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: NLakes
     INTEGER(C_INT),INTENT(OUT) :: IDs(NLakes),iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat  = 0
-    CALL pModel%GetLakeIDs(IDs)
+    CALL pMdl%GetLakeIDs(IDs)
     
   END SUBROUTINE IW_Model_GetLakeIDs
   
@@ -4078,20 +4603,24 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET NUMBER OF ELEMENTS IN A LAKE
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetNElementsInLake(iLake,NElements,iStat) BIND(C,NAME='IW_Model_GetNElementsInLake')
+  SUBROUTINE IW_Model_GetNElementsInLake(iModelID,iLake,NElements,iStat) BIND(C,NAME='IW_Model_GetNElementsInLake')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetNElementsInLake
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: iLake
     INTEGER(C_INT),INTENT(OUT) :: NElements,iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat     = 0
-    NElements = pModel%GetNElementsInLake(iLake)
+    NElements = pMdl%GetNElementsInLake(iLake)
     
   END SUBROUTINE IW_Model_GetNElementsInLake
   
@@ -4099,20 +4628,24 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET ELEMENTS IN A LAKE
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetElementsInLake(iLake,NElems,Elems,iStat) BIND(C,NAME='IW_Model_GetElementsInLake')
+  SUBROUTINE IW_Model_GetElementsInLake(iModelID,iLake,NElems,Elems,iStat) BIND(C,NAME='IW_Model_GetElementsInLake')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetElementsInLake
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: iLake,NElems
     INTEGER(C_INT),INTENT(OUT) :: Elems(NElems),iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat = 0
-    CALL pModel%GetElementsInLake(iLake,NElems,Elems)
+    CALL pMdl%GetElementsInLake(iLake,NElems,Elems)
     
   END SUBROUTINE IW_Model_GetElementsInLake
 
@@ -4120,19 +4653,23 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET NUMBER OF TILE DRAIN NODES
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetNTileDrainNodes(NTDNodes,iStat) BIND(C,NAME='IW_Model_GetNTileDrainNodes')
+  SUBROUTINE IW_Model_GetNTileDrainNodes(iModelID,NTDNodes,iStat) BIND(C,NAME='IW_Model_GetNTileDrainNodes')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetNTileDrainNodes
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(OUT) :: NTDNodes,iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat    = 0
-    NTDNodes = pModel%GetNTileDrainNodes()
+    NTDNodes = pMdl%GetNTileDrainNodes()
     
   END SUBROUTINE IW_Model_GetNTileDrainNodes
   
@@ -4140,20 +4677,24 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET TILE DRAIN IDS
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetTileDrainIDs(NTDNodes,IDs,iStat) BIND(C,NAME='IW_Model_GetTileDrainIDs')
+  SUBROUTINE IW_Model_GetTileDrainIDs(iModelID,NTDNodes,IDs,iStat) BIND(C,NAME='IW_Model_GetTileDrainIDs')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetTileDrainIDs
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: NTDNodes
     INTEGER(C_INT),INTENT(OUT) :: IDs(NTDNodes),iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat = 0
-    CALL pModel%GetTileDrainIDs(IDs)
+    CALL pMdl%GetTileDrainIDs(IDs)
     
   END SUBROUTINE IW_Model_GetTileDrainIDs
   
@@ -4161,8 +4702,9 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET GROUNDWATER NODES CORRESPONDING TO TILE DRAIN NODES
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetTileDrainNodes(iDim,TDNodes,iStat) BIND(C,NAME='IW_Model_GetTileDrainNodes')
+  SUBROUTINE IW_Model_GetTileDrainNodes(iModelID,iDim,TDNodes,iStat) BIND(C,NAME='IW_Model_GetTileDrainNodes')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetTileDrainNodes
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: iDim
     INTEGER(C_INT),INTENT(OUT) :: TDNodes(iDim),iStat
     
@@ -4171,13 +4713,16 @@ CONTAINS
     INTEGER,ALLOCATABLE :: iLocalTDNodes(:)
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetTileDrainNodes(iLocalTDNodes,iStat)
+    CALL pMdl%GetTileDrainNodes(iLocalTDNodes,iStat)
     TDNodes = iLocalTDNodes
     
     DEALLOCATE (iLocalTDNodes , STAT=ErrorCode)
@@ -4189,8 +4734,9 @@ CONTAINS
   ! --- GET LAND USE AREAS OF A SPECIFIC LAND USE FOR ALL ELEMENTS FOR A GIVEN PERIOD 
   ! --- Note: This method is intended to be called outside of a Simulation run
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetLandUseAreasForTimePeriod(iLenDate,cBeginDate,cEndDate,iLUType,iLU,iNElements,iNTimes,rFactArea,rLUAreas,iStat) BIND(C,NAME='IW_Model_GetLandUseAreasForTimePeriod')
+  SUBROUTINE IW_Model_GetLandUseAreasForTimePeriod(iModelID,iLenDate,cBeginDate,cEndDate,iLUType,iLU,iNElements,iNTimes,rFactArea,rLUAreas,iStat) BIND(C,NAME='IW_Model_GetLandUseAreasForTimePeriod')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetLandUseAreasForTimePeriod
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)         :: iLenDate,iLUType,iLU,iNElements,iNTimes
     CHARACTER(KIND=C_CHAR),INTENT(IN) :: cBeginDate(iLenDate),cEndDate(iLenDate)
     REAL(C_DOUBLE),INTENT(IN)         :: rFactArea
@@ -4202,8 +4748,11 @@ CONTAINS
     REAL(8),ALLOCATABLE     :: rLUAreasWork(:,:)
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -4212,7 +4761,7 @@ CONTAINS
     CALL String_Copy_C_F(cBeginDate,cBeginDate_F)
     CALL String_Copy_C_F(cEndDate,cEndDate_F)
 
-    CALL pModel%GetLandUseAreasForTimePeriod(cBeginDate_F,cEndDate_F,iLUType,iLU,rFactArea,rLUAreasWork,iStat)
+    CALL pMdl%GetLandUseAreasForTimePeriod(cBeginDate_F,cEndDate_F,iLUType,iLU,rFactArea,rLUAreasWork,iStat)
     rLUAreas = rLUAreasWork
     
   END SUBROUTINE IW_Model_GetLandUseAreasForTimePeriod
@@ -4221,20 +4770,24 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET AG PUMPING-WEIGHTED-AVERAGE DEPTH-TO-GW AT EACH SUBREGION
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetSubregionAgPumpingAverageDepthToGW(NSubregions,AveDepthToGW,iStat) BIND(C,NAME='IW_Model_GetSubregionAgPumpingAverageDepthToGW')
+  SUBROUTINE IW_Model_GetSubregionAgPumpingAverageDepthToGW(iModelID,NSubregions,AveDepthToGW,iStat) BIND(C,NAME='IW_Model_GetSubregionAgPumpingAverageDepthToGW')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetSubregionAgPumpingAverageDepthToGW
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: NSubregions
     REAL(C_DOUBLE),INTENT(OUT) :: AveDepthToGW(NSubregions)
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetSubregionAgPumpingAverageDepthToGW(AveDepthToGW,iStat)
+    CALL pMdl%GetSubregionAgPumpingAverageDepthToGW(AveDepthToGW,iStat)
     
   END SUBROUTINE IW_Model_GetSubregionAgPumpingAverageDepthToGW
   
@@ -4242,20 +4795,24 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET AG PUMPING-WEIGHTED-AVERAGE DEPTH-TO-GW AT ZONES DEFINED BY ELEMENT GROUPS
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetZoneAgPumpingAverageDepthToGW(iNElems,iElems,iElemZones,iNZones,rAveDepthToGW,iStat) BIND(C,NAME='IW_Model_GetZoneAgPumpingAverageDepthToGW')
+  SUBROUTINE IW_Model_GetZoneAgPumpingAverageDepthToGW(iModelID,iNElems,iElems,iElemZones,iNZones,rAveDepthToGW,iStat) BIND(C,NAME='IW_Model_GetZoneAgPumpingAverageDepthToGW')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetZoneAgPumpingAverageDepthToGW
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: iNElems,iNZones,iElems(iNElems),iElemZones(iNElems)
     REAL(C_DOUBLE),INTENT(OUT) :: rAveDepthToGW(iNZones)
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetZoneAgPumpingAverageDepthToGW(iElems,iElemZones,rAveDepthToGW,iStat)
+    CALL pMdl%GetZoneAgPumpingAverageDepthToGW(iElems,iElemZones,rAveDepthToGW,iStat)
     
   END SUBROUTINE IW_Model_GetZoneAgPumpingAverageDepthToGW
   
@@ -4263,18 +4820,22 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET NUMBER OF SIMULATED AG CROPS
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetNAgCrops(NAgCrops,iStat) BIND(C,NAME='IW_Model_GetNAgCrops')
+  SUBROUTINE IW_Model_GetNAgCrops(iModelID,NAgCrops,iStat) BIND(C,NAME='IW_Model_GetNAgCrops')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetNAgCrops
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(OUT) :: NAgCrops,iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetNAgCrops(NAgCrops,iStat)
+    CALL pMdl%GetNAgCrops(NAgCrops,iStat)
     
   END SUBROUTINE IW_Model_GetNAgCrops
   
@@ -4282,21 +4843,25 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET AG SUPPLY REQUIREMENT AT SELECTED LOCATIONS
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetSupplyRequirement_Ag(iLocationTypeID,iNLocations,iLocationList,rFactor,rSupplyReq,iStat) BIND(C,NAME='IW_Model_GetSupplyRequirement_Ag')
+  SUBROUTINE IW_Model_GetSupplyRequirement_Ag(iModelID,iLocationTypeID,iNLocations,iLocationList,rFactor,rSupplyReq,iStat) BIND(C,NAME='IW_Model_GetSupplyRequirement_Ag')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetSupplyRequirement_Ag
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: iLocationTypeID,iNLocations,iLocationList(iNLocations)
     REAL(C_DOUBLE),INTENT(IN)  :: rFactor
     REAL(C_DOUBLE),INTENT(OUT) :: rSupplyReq(iNLocations)
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetSupplyRequirement(iLocationTypeID,iLocationList,f_iLandUse_Ag,rFactor,rSupplyReq,iStat)
+    CALL pMdl%GetSupplyRequirement(iLocationTypeID,iLocationList,f_iLandUse_Ag,rFactor,rSupplyReq,iStat)
     
   END SUBROUTINE IW_Model_GetSupplyRequirement_Ag
   
@@ -4304,21 +4869,25 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET URBAN SUPPLY REQUIREMENT AT SELECTED LOCATIONS
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetSupplyRequirement_Urb(iLocationTypeID,iNLocations,iLocationList,rFactor,rSupplyReq,iStat) BIND(C,NAME='IW_Model_GetSupplyRequirement_Urb')
+  SUBROUTINE IW_Model_GetSupplyRequirement_Urb(iModelID,iLocationTypeID,iNLocations,iLocationList,rFactor,rSupplyReq,iStat) BIND(C,NAME='IW_Model_GetSupplyRequirement_Urb')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetSupplyRequirement_Urb
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: iLocationTypeID,iNLocations,iLocationList(iNLocations)
     REAL(C_DOUBLE),INTENT(IN)  :: rFactor
     REAL(C_DOUBLE),INTENT(OUT) :: rSupplyReq(iNLocations)
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetSupplyRequirement(iLocationTypeID,iLocationList,f_iLandUse_Urb,rFactor,rSupplyReq,iStat)
+    CALL pMdl%GetSupplyRequirement(iLocationTypeID,iLocationList,f_iLandUse_Urb,rFactor,rSupplyReq,iStat)
     
   END SUBROUTINE IW_Model_GetSupplyRequirement_Urb
  
@@ -4326,21 +4895,25 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET AG SUPPLY SHORTAGE AT THE ORIGIN OF SELECTED SUPPLIES
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetSupplyShortAtOrigin_Ag(iSupplyTypeID,iNSupplies,iSupplyList,rFactor,rSupplyShort,iStat) BIND(C,NAME='IW_Model_GetSupplyShortAtOrigin_Ag')
+  SUBROUTINE IW_Model_GetSupplyShortAtOrigin_Ag(iModelID,iSupplyTypeID,iNSupplies,iSupplyList,rFactor,rSupplyShort,iStat) BIND(C,NAME='IW_Model_GetSupplyShortAtOrigin_Ag')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetSupplyShortAtOrigin_Ag
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: iSupplyTypeID,iNSupplies,iSupplyList(iNSupplies)
     REAL(C_DOUBLE),INTENT(IN)  :: rFactor
     REAL(C_DOUBLE),INTENT(OUT) :: rSupplyShort(iNSupplies)
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetSupplyShortAtOrigin_ForSomeSupplies(iSupplyTypeID,iSupplyList,f_iLandUse_Ag,rFactor,rSupplyShort,iStat)
+    CALL pMdl%GetSupplyShortAtOrigin_ForSomeSupplies(iSupplyTypeID,iSupplyList,f_iLandUse_Ag,rFactor,rSupplyShort,iStat)
     
   END SUBROUTINE IW_Model_GetSupplyShortAtOrigin_Ag
   
@@ -4348,21 +4921,25 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET URBAN SUPPLY SHORATGE AT THEORIGIN OF SELECTED SUPPLIES
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetSupplyShortAtOrigin_Urb(iSupplyTypeID,iNSupplies,iSupplyList,rFactor,rSupplyShort,iStat) BIND(C,NAME='IW_Model_GetSupplyShortAtOrigin_Urb')
+  SUBROUTINE IW_Model_GetSupplyShortAtOrigin_Urb(iModelID,iSupplyTypeID,iNSupplies,iSupplyList,rFactor,rSupplyShort,iStat) BIND(C,NAME='IW_Model_GetSupplyShortAtOrigin_Urb')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetSupplyShortAtOrigin_Urb
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: iSupplyTypeID,iNSupplies,iSupplyList(iNSupplies)
     REAL(C_DOUBLE),INTENT(IN)  :: rFactor
     REAL(C_DOUBLE),INTENT(OUT) :: rSupplyShort(iNSupplies)
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%GetSupplyShortAtOrigin_ForSomeSupplies(iSupplyTypeID,iSupplyList,f_iLandUse_Urb,rFactor,rSupplyShort,iStat)
+    CALL pMdl%GetSupplyShortAtOrigin_ForSomeSupplies(iSupplyTypeID,iSupplyList,f_iLandUse_Urb,rFactor,rSupplyShort,iStat)
     
   END SUBROUTINE IW_Model_GetSupplyShortAtOrigin_Urb
   
@@ -4370,20 +4947,24 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET NUMBER OF LOCATIONS GIVEN LOCATION TYPE
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetNLocations(iLocationType,iNLocations,iStat) BIND(C,NAME='IW_Model_GetNLocations')
+  SUBROUTINE IW_Model_GetNLocations(iModelID,iLocationType,iNLocations,iStat) BIND(C,NAME='IW_Model_GetNLocations')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetNLocations
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: iLocationType
     INTEGER(C_INT),INTENT(OUT) :: iNLocations,iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat       = 0
-    iNLocations = pModel%GetNLocations(iLocationType)
+    iNLocations = pMdl%GetNLocations(iLocationType)
     
   END SUBROUTINE IW_Model_GetNLocations
   
@@ -4391,8 +4972,9 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET LOCATION IDS GIVEN LOCATION TYPE
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_GetLocationIDs(iLocationType,iNLocations,iLocationIDs,iStat) BIND(C,NAME='IW_Model_GetLocationIDs')
+  SUBROUTINE IW_Model_GetLocationIDs(iModelID,iLocationType,iNLocations,iLocationIDs,iStat) BIND(C,NAME='IW_Model_GetLocationIDs')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetLocationIDs
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: iLocationType,iNLocations
     INTEGER(C_INT),INTENT(OUT) :: iLOcationIDs(iNLocations),iStat
     
@@ -4401,14 +4983,17 @@ CONTAINS
     INTEGER,ALLOCATABLE :: iIDs(:)
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat = 0
-    CALL pModel%GetLocationIDs(iLocationType,iIDs)
+    CALL pMdl%GetLocationIDs(iLocationType,iIDs)
     iLocationIDs = iIDs
     
     DEALLOCATE (iIDs , STAT=ErrorCode)
@@ -4418,8 +5003,9 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- FINITE ELEMENT INTERPOLATION
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_FEInterpolate(rX,rY,iElemIndex,iNodes,rCoeff) BIND(C,NAME='IW_Model_FEInterpolate')
+  SUBROUTINE IW_Model_FEInterpolate(iModelID,rX,rY,iElemIndex,iNodes,rCoeff) BIND(C,NAME='IW_Model_FEInterpolate')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_FEInterpolate
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     REAL(C_DOUBLE),INTENT(IN)              :: rX,rY
     INTEGER(C_INT),INTENT(OUT)             :: iElemIndex
     INTEGER(C_INT), INTENT(OUT)            :: iNodes(4)
@@ -4430,7 +5016,10 @@ CONTAINS
     REAL(8),ALLOCATABLE :: rCoeff_local(:)
     INTEGER             :: iNVertices 
     
-    CALL pModel%FEInterpolate(rX,rY,iElemIndex,iNodes_local,rCoeff_local)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    CALL pMdl%FEInterpolate(rX,rY,iElemIndex,iNodes_local,rCoeff_local)
     
     iNVertices = SIZE(iNodes_local)
     iNodes(1:iNVertices) = iNodes_local
@@ -4452,19 +5041,23 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- SET MAXIMUM NUMBER OF SUPPLY ADJUSTMENT ITERATIONS
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_SetSupplyAdjustmentMaxIters(iMaxIters,iStat) BIND(C,NAME='IW_Model_SetSupplyAdjustmentMaxIters')
+  SUBROUTINE IW_Model_SetSupplyAdjustmentMaxIters(iModelID,iMaxIters,iStat) BIND(C,NAME='IW_Model_SetSupplyAdjustmentMaxIters')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_SetSupplyAdjustmentMaxIters
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: iMaxIters
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%SetSupplyAdjustmentMaxIters(iMaxIters,iStat)
+    CALL pMdl%SetSupplyAdjustmentMaxIters(iMaxIters,iStat)
   
   END SUBROUTINE IW_Model_SetSupplyAdjustmentMaxIters
   
@@ -4472,19 +5065,23 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- SET SUPPLY ADJUSTMENT TOLERANCE
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_SetSupplyAdjustmentTolerance(rToler,iStat) BIND(C,NAME='IW_Model_SetSupplyAdjustmentTolerance')
+  SUBROUTINE IW_Model_SetSupplyAdjustmentTolerance(iModelID,rToler,iStat) BIND(C,NAME='IW_Model_SetSupplyAdjustmentTolerance')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_SetSupplyAdjustmentTolerance
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     REAL(C_DOUBLE),INTENT(IN)  :: rToler
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%SetSupplyAdjustmentTolerance(rToler,iStat)
+    CALL pMdl%SetSupplyAdjustmentTolerance(rToler,iStat)
   
   END SUBROUTINE IW_Model_SetSupplyAdjustmentTolerance
   
@@ -4509,41 +5106,48 @@ CONTAINS
     INTEGER(C_INT),INTENT(IN)         :: iLenSimFileName
     CHARACTER(KIND=C_CHAR),INTENT(IN) :: cSimFileName(iLenSimFileName)
     INTEGER(C_INT),INTENT(OUT)        :: iStat
-    
+
     !Local variables
     CHARACTER(LEN=iLenSimFileName) :: cSimFileName_F
     CHARACTER(:),ALLOCATABLE       :: cSimWorkingDirectory
-    
-    !Initialize
+
+    !This is a static utility — no live model instance required.
+    !The module-level DeleteModelInquiryDataFile is imported from
+    !Package_Model and used directly so callers can clean up stale
+    !inquiry-data files before instantiating any model.
     iStat = 0
-    
+
     !C strings to Fortran strings
     CALL String_Copy_C_F(cSimFileName,cSimFileName_F)
-    
+
     !Working directory
     CALL GetFileDirectory(cSimFileName_F,cSIMWorkingDirectory)
 
     !Delete file location in the working directory
-    CALL pModel%DeleteModelInquiryDataFile(cSIMWorkingDirectory)
-    
-  END SUBROUTINE IW_Model_DeleteInquiryDataFile    
+    CALL DeleteModelInquiryDataFile(cSIMWorkingDirectory)
+
+  END SUBROUTINE IW_Model_DeleteInquiryDataFile
 
   
   ! -------------------------------------------------------------
   ! --- SIMULATE MODEL FOR THE ENTIRE PERIOD
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_SimulateAll(iStat) BIND(C,NAME='IW_Model_SimulateAll')
+  SUBROUTINE IW_Model_SimulateAll(iModelID,iStat) BIND(C,NAME='IW_Model_SimulateAll')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_SimulateAll
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(OUT) :: iStat
   
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%Simulate(0,iStat)
+    CALL pMdl%Simulate(0,iStat)
                                              
   END SUBROUTINE IW_Model_SimulateAll
   
@@ -4551,18 +5155,22 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- SIMULATE MODEL FOR A SINGLE TIME STEP
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_SimulateForOneTimeStep(iStat) BIND(C,NAME='IW_Model_SimulateForOneTimeStep')
+  SUBROUTINE IW_Model_SimulateForOneTimeStep(iModelID,iStat) BIND(C,NAME='IW_Model_SimulateForOneTimeStep')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_SimulateForOneTimeStep
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(OUT) :: iStat
 
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%Simulate(iStat)
+    CALL pMdl%Simulate(iStat)
                                              
   END SUBROUTINE IW_Model_SimulateForOneTimeStep
   
@@ -4570,8 +5178,9 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- SIMULATE MODEL FOR AN INTERVAL
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_SimulateForAnInterval(iLen,cInterval,iStat) BIND(C,NAME='IW_Model_SimulateForAnInterval')
+  SUBROUTINE IW_Model_SimulateForAnInterval(iModelID,iLen,cInterval,iStat) BIND(C,NAME='IW_Model_SimulateForAnInterval')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_SimulateForAnInterval
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)         :: iLen
     CHARACTER(KIND=C_CHAR),INTENT(IN) :: cInterval(iLen)
     INTEGER(C_INT),INTENT(OUT)        :: iStat
@@ -4580,15 +5189,18 @@ CONTAINS
     CHARACTER :: cInterval_F*iLen
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     CALL String_Copy_C_F(cInterval,cInterval_F)
 
-    CALL pModel%Simulate(cInterval_F,iStat)
+    CALL pMdl%Simulate(cInterval_F,iStat)
                                              
   END SUBROUTINE IW_Model_SimulateForAnInterval
   
@@ -4596,19 +5208,23 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- ADVANCE SIMULATION TIME STEP
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_AdvanceTime(iStat) BIND(C,NAME='IW_Model_AdvanceTime')
+  SUBROUTINE IW_Model_AdvanceTime(iModelID,iStat) BIND(C,NAME='IW_Model_AdvanceTime')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_AdvanceTime
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(OUT) :: iStat
   
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat = 0
-    CALL pModel%AdvanceTime()
+    CALL pMdl%AdvanceTime()
                                              
   END SUBROUTINE IW_Model_AdvanceTime
   
@@ -4616,18 +5232,22 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- READ TIME SERIES DATA
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_ReadTSData(iStat) BIND(C,NAME='IW_Model_ReadTSData')
+  SUBROUTINE IW_Model_ReadTSData(iModelID,iStat) BIND(C,NAME='IW_Model_ReadTSData')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_ReadTSData
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%ReadTSData(iStat)
+    CALL pMdl%ReadTSData(iStat)
                                              
   END SUBROUTINE IW_Model_ReadTSData
 
@@ -4635,22 +5255,26 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- READ TIME SERIES DATA BUT OVERWRITE SOME BY USER DEFINED VALUES
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_ReadTSData_Overwrite(iNLandUse,iNSubregions,rRegionLUAreas,iNDiversions,iDiversions,rDiversions,iNStrmInflows,iStrmInflows,rStrmInflows,iNBypasses,iBypasses,rBypasses,iStat) BIND(C,NAME='IW_Model_ReadTSData_Overwrite')
+  SUBROUTINE IW_Model_ReadTSData_Overwrite(iModelID,iNLandUse,iNSubregions,rRegionLUAreas,iNDiversions,iDiversions,rDiversions,iNStrmInflows,iStrmInflows,rStrmInflows,iNBypasses,iBypasses,rBypasses,iStat) BIND(C,NAME='IW_Model_ReadTSData_Overwrite')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_ReadTSData_Overwrite
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: iNLandUse,iNSubregions,iNDiversions,iNStrmInflows,iNBypasses
     INTEGER(C_INT),INTENT(IN)  :: iDiversions(iNDiversions),iStrmInflows(iNStrmInflows),iBypasses(iNBypasses)
     REAL(C_DOUBLE),INTENT(IN)  :: rRegionLUAreas(iNSubregions,iNLandUse),rDiversions(iNDiversions),rStrmInflows(iNStrmInflows),rBypasses(iNBypasses)
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat = 0
-    CALL pModel%ReadTSData(iStat,rRegionLUAreas,iDiversions,rDiversions,iStrmInflows,rStrmInflows,iBypasses,rBypasses)
+    CALL pMdl%ReadTSData(iStat,rRegionLUAreas,iDiversions,rDiversions,iStrmInflows,rStrmInflows,iBypasses,rBypasses)
                                              
   END SUBROUTINE IW_Model_ReadTSData_Overwrite
 
@@ -4658,18 +5282,22 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- PRINT SIMULATION RESULTS
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_PrintResults(iStat) BIND(C,NAME='IW_Model_PrintResults')
+  SUBROUTINE IW_Model_PrintResults(iModelID,iStat) BIND(C,NAME='IW_Model_PrintResults')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_PrintResults
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%PrintResults(iStat)
+    CALL pMdl%PrintResults(iStat)
                                              
   END SUBROUTINE IW_Model_PrintResults
   
@@ -4677,19 +5305,23 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- ADVANCE STATE OF THE MODEL IN TIME
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_AdvanceState(iStat) BIND(C,NAME='IW_Model_AdvanceState') 
+  SUBROUTINE IW_Model_AdvanceState(iModelID,iStat) BIND(C,NAME='IW_Model_AdvanceState')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_AdvanceState
+    INTEGER(C_INT),INTENT(IN)  :: iModelID
     INTEGER(C_INT),INTENT(OUT) :: iStat
 
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat = 0
-    CALL pModel%AdvanceState()
+    CALL pMdl%AdvanceState()
                                              
   END SUBROUTINE IW_Model_AdvanceState
   
@@ -4697,19 +5329,23 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- IS IT END OF SIMULATION?
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_IsEndOfSimulation(iEndOfSimulation,iStat) BIND(C,NAME='IW_Model_IsEndOfSimulation')
+  SUBROUTINE IW_Model_IsEndOfSimulation(iModelID,iEndOfSimulation,iStat) BIND(C,NAME='IW_Model_IsEndOfSimulation')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_IsEndOfSimulation
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(OUT) :: iEndOfSimulation,iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
     iStat = 0
-    IF (pModel%IsEndOfSimulation()) THEN
+    IF (pMdl%IsEndOfSimulation()) THEN
         iEndOfSImulation = 1
     ELSE
         iEndOfSimulation = 0
@@ -4727,26 +5363,26 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT) :: iInstantiated,iStat
     
     iStat = 0
-    
-    IF (iNActiveModels .EQ. 0) THEN
-        iInstantiated = 0
-        RETURN
-    END IF
-    
-    IF (LocateInList(iModelIndex,iActiveModelIndices) .GT. 0) THEN
-        iInstantiated = 1
+
+    IF (iModelIndex .GE. 1 .AND. iModelIndex .LE. MAX_MODEL_SLOTS) THEN
+        IF (ASSOCIATED(ModelSlots(iModelIndex)%ptr)) THEN
+            iInstantiated = 1
+        ELSE
+            iInstantiated = 0
+        END IF
     ELSE
         iInstantiated = 0
     END IF
-    
+
   END SUBROUTINE IW_Model_IsModelInstantiated
   
   
   ! -------------------------------------------------------------
   ! --- TURN SUPPLY ADJUSTMENTS ON/OFF
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_TurnSupplyAdjustOnOff(iDivAdjustOn,iPumpAdjustOn,iStat) BIND(C,NAME='IW_Model_TurnSupplyAdjustOnOff')
+  SUBROUTINE IW_Model_TurnSupplyAdjustOnOff(iModelID,iDivAdjustOn,iPumpAdjustOn,iStat) BIND(C,NAME='IW_Model_TurnSupplyAdjustOnOff')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_TurnSupplyAdjustOnOff
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)  :: iDivAdjustOn,iPumpAdjustOn
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
@@ -4754,8 +5390,11 @@ CONTAINS
     LOGICAL :: lDivAdjustOn,lPumpAdjustOn
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -4773,7 +5412,7 @@ CONTAINS
         lPumpAdjustOn = .TRUE.
     END IF
     
-    CALL pModel%TurnSupplyAdjustOnOff(lDivAdjustOn,lPumpAdjustOn,iStat)
+    CALL pMdl%TurnSupplyAdjustOnOff(lDivAdjustOn,lPumpAdjustOn,iStat)
     
   END SUBROUTINE IW_Model_TurnSupplyAdjustOnOff
   
@@ -4781,18 +5420,22 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- RESTORE PUMPING TO READ VALUES
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_RestorePumpingToReadValues(iStat) BIND(C,NAME='IW_Model_RestorePumpingToReadValues')
+  SUBROUTINE IW_Model_RestorePumpingToReadValues(iModelID,iStat) BIND(C,NAME='IW_Model_RestorePumpingToReadValues')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_RestorePumpingToReadValues
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(OUT) :: iStat
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
     
-    CALL pModel%RestorePumpingToReadValues(iStat)
+    CALL pMdl%RestorePumpingToReadValues(iStat)
     
   END SUBROUTINE IW_Model_RestorePumpingToReadValues
   
@@ -4805,8 +5448,9 @@ CONTAINS
   ! ---       are rewound back to where they were after  
   ! ---       ReadTSData method was called. 
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_ComputeFutureWaterDemands(iLenDate,cEndComputeDate,iStat) BIND(C,NAME='IW_Model_ComputeFutureWaterDemands')
+  SUBROUTINE IW_Model_ComputeFutureWaterDemands(iModelID,iLenDate,cEndComputeDate,iStat) BIND(C,NAME='IW_Model_ComputeFutureWaterDemands')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_ComputeFutureWaterDemands
+    INTEGER(C_INT),INTENT(IN)         :: iModelID
     INTEGER(C_INT),INTENT(IN)         :: iLenDate
     CHARACTER(KIND=C_CHAR),INTENT(IN) :: cEndComputeDate(iLenDate)
     INTEGER(C_INT),INTENT(OUT)        :: iStat
@@ -4815,8 +5459,11 @@ CONTAINS
     CHARACTER(LEN=iLenDate) :: cEndComputeDate_F
     
     !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
         iStat = -1
         RETURN
     END IF
@@ -4825,59 +5472,32 @@ CONTAINS
     CALL String_Copy_C_F(cEndComputeDate,cEndComputeDate_F)
     
     !Compute
-    CALL pModel%ComputeFutureWaterDemands(cEndComputeDate_F,iStat)
+    CALL pMdl%ComputeFutureWaterDemands(cEndComputeDate_F,iStat)
     
   END SUBROUTINE IW_Model_ComputeFutureWaterDemands
-  
-  
-  ! -------------------------------------------------------------
-  ! --- SWITCH TO A DIFFERENT MODEL
-  ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_Switch(iModelID,iStat) BIND(C,NAME='IW_Model_Switch')
-    !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_Switch
-    INTEGER(C_INT),INTENT(IN)  :: iModelID
-    INTEGER(C_INT),INTENT(OUT) :: iStat
-    
-    !Local variables
-    INTEGER :: indx
-    
-    !First make sure that the model index is occupied
-    indx = LocateInList(iModelID,iActiveModelIndices)
-    IF (indx .EQ. 0) THEN
-        CALL SetLastMessage('Model with identifier '//TRIM(IntToText(iModelID))//' is not instantiated!',f_iWarn,cModName)
-        iStat = -1
-        RETURN
-    END IF
-    
-    iStat              = 0
-    iCurrentModelIndex = indx
-    pModel             => Models(iCurrentModelIndex)
-    
-  END SUBROUTINE IW_Model_Switch
-  
-  
+
+
   ! -------------------------------------------------------------
   ! --- PACK A CHARACTER ARRAY INTO A SINGLE CHARACTER VARIABLES
   ! -------------------------------------------------------------
   SUBROUTINE StringArray_To_StringScalar(cArray,cScalar,iLocArray)
-    CHARACTER(LEN=*),INTENT(IN) :: cArray(:)
-    CHARACTER(LEN=*)            :: cScalar
-    INTEGER,INTENT(OUT)         :: iLocArray(:)
-    
+    CHARACTER(LEN=*),INTENT(IN)  :: cArray(:)
+    CHARACTER(LEN=*),INTENT(OUT) :: cScalar
+    INTEGER,INTENT(OUT)          :: iLocArray(:)
+
     !Local variables
-    INTEGER :: indx
-    
-    !Initialize
+    INTEGER :: indx,iPos,iLen
+
+    !Single-pass O(n) direct substring assignment (replaces O(n^2) concatenation)
     cScalar = ''
-    
-    !Compile the array into a single string variable
-    DO indx=1,SIZE(cArray)  
-        IF (indx .EQ. 1) THEN
-            iLocArray(indx) = 1
-        ELSE
-            iLocArray(indx) = LEN_TRIM(cScalar) + 1
+    iPos = 1
+    DO indx=1,SIZE(cArray)
+        iLocArray(indx) = iPos
+        iLen = LEN_TRIM(cArray(indx))
+        IF (iLen .GT. 0) THEN
+            cScalar(iPos:iPos+iLen-1) = cArray(indx)(1:iLen)
+            iPos = iPos + iLen
         END IF
-        cScalar = TRIM(cScalar) // TRIM(cArray(indx))
     END DO
 
   END SUBROUTINE StringArray_To_StringScalar

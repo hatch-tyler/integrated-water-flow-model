@@ -24,10 +24,10 @@ MODULE GeneralUtilities
   !$ USE OMP_LIB
   USE ISO_C_BINDING , ONLY: C_CHAR      , &
                             C_NULL_CHAR 
-  USE MessageLogger , ONLY: SetLastMessage  , &
+  USE MessageLogger , ONLY: DefaultLogger     , &
                             f_iFatal
   IMPLICIT NONE
-  
+
   
   PRIVATE
   PUBLIC :: IntToText                     , &
@@ -74,11 +74,13 @@ MODULE GeneralUtilities
             EstablishAbsolutePathFileName , &
             GetFileDirectory                
                                             
-  !Public misc. utilities                   
+  !Public misc. utilities
   PUBLIC :: GetDate                       , &
             GetTime                       , &
             Tolerance                     , &
             ConvertID_To_Index            , &
+            PrepareIDIndex                , &
+            LookupIDInIndex               , &
             FEXP
 
 
@@ -187,7 +189,8 @@ MODULE GeneralUtilities
   ! that disambiguates dates (09/30/1990), file paths, and DSS pathnames
   CHARACTER(LEN=1),PARAMETER  :: f_cInlineCommentChar = '/'
 
-  INTEGER                     :: ErrorCode
+  ! ErrorCode removed from module scope (was thread-unsafe SAVE variable).
+  ! Now declared as local variable in each allocation subroutine.
           
           
           
@@ -380,7 +383,7 @@ CONTAINS
     
     !Make sure that string to be replaced and string to replace with has the same length
     IF (LEN(StringToReplace) .NE. LEN(StringToReplaceWith)) THEN
-        CALL SetLastMessage('String to be replaced with must have the same length as the replacing string!',f_iFatal,ThisProcedure)
+        CALL DefaultLogger%SetLastMessage('String to be replaced with must have the same length as the replacing string!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -1043,6 +1046,24 @@ CONTAINS
 
   
   ! -------------------------------------------------------------
+  ! --- HANDLE ALLOCATION ERROR (private helper)
+  ! -------------------------------------------------------------
+  SUBROUTINE HandleAllocError(iErrorCode,cSendingProcedure,iStat)
+    INTEGER,INTENT(IN)          :: iErrorCode
+    CHARACTER(LEN=*),INTENT(IN) :: cSendingProcedure
+    INTEGER,INTENT(OUT)         :: iStat
+
+    IF (iErrorCode .NE. 0) THEN
+        CALL DefaultLogger%SetLastMessage('Error in allocating memory in '//TRIM(ADJUSTL(cSendingProcedure)),f_iFatal,ThisProcedure)
+        iStat = -1
+    ELSE
+        iStat = 0
+    END IF
+
+  END SUBROUTINE HandleAllocError
+
+
+  ! -------------------------------------------------------------
   ! --- ALLOCATE MEMORY FOR 1-D INTEGER ARRAY
   ! -------------------------------------------------------------
   SUBROUTINE Alloc1DIntArray(IntArray,ncolumn,SendingProcedure,iStat)
@@ -1050,17 +1071,11 @@ CONTAINS
     INTEGER,INTENT(IN)::ncolumn
     CHARACTER(LEN=*),INTENT(IN)::SendingProcedure
     INTEGER,INTENT(OUT) :: iStat
+    INTEGER :: ErrorCode
 
-    !Initialize
-    iStat = 0
-    
-    IF (ALLOCATED(IntArray)) DEALLOCATE(IntArray) 
+    IF (ALLOCATED(IntArray)) DEALLOCATE(IntArray)
     ALLOCATE (IntArray(ncolumn) ,STAT=ErrorCode)
-    IF (ErrorCode.NE.0) THEN
-        CALL SetLastMessage('Error in allocating memory in '//TRIM(ADJUSTL(SendingProcedure)),f_iFatal,ThisProcedure)
-        iStat = -1
-        RETURN
-    END IF
+    CALL HandleAllocError(ErrorCode,SendingProcedure,iStat) ; IF (iStat .EQ. -1) RETURN
     IntArray=0
 
   END SUBROUTINE Alloc1DIntArray
@@ -1074,17 +1089,11 @@ CONTAINS
     INTEGER,INTENT(IN)::ncolumn
     CHARACTER(LEN=*),INTENT(IN)::SendingProcedure
     INTEGER,INTENT(OUT) :: iStat
+    INTEGER :: ErrorCode
 
-    !Initialize
-    iStat = 0
-    
-    IF (ALLOCATED(RealArray)) DEALLOCATE(RealArray) 
+    IF (ALLOCATED(RealArray)) DEALLOCATE(RealArray)
     ALLOCATE (RealArray(ncolumn) ,STAT=ErrorCode)
-    IF (ErrorCode.NE.0) THEN
-        CALL SetLastMessage('Error in allocating memory in '//TRIM(ADJUSTL(SendingProcedure)),f_iFatal,ThisProcedure)
-        iStat = -1
-        RETURN
-    END IF
+    CALL HandleAllocError(ErrorCode,SendingProcedure,iStat) ; IF (iStat .EQ. -1) RETURN
     RealArray=0.0
 
   END SUBROUTINE Alloc1DRealArray
@@ -1098,17 +1107,11 @@ CONTAINS
     INTEGER,INTENT(IN)::ncolumn
     CHARACTER(LEN=*),INTENT(IN)::SendingProcedure
     INTEGER,INTENT(OUT) :: iStat
+    INTEGER :: ErrorCode
 
-    !Initialize
-    iStat = 0
-    
-    IF (ALLOCATED(LogicalArray)) DEALLOCATE(LogicalArray) 
+    IF (ALLOCATED(LogicalArray)) DEALLOCATE(LogicalArray)
     ALLOCATE (LogicalArray(ncolumn) ,STAT=ErrorCode)
-    IF (ErrorCode.NE.0) THEN
-        CALL SetLastMessage('Error in allocating memory in '//TRIM(ADJUSTL(SendingProcedure)),f_iFatal,ThisProcedure)
-        iStat = -1
-        RETURN
-    END IF
+    CALL HandleAllocError(ErrorCode,SendingProcedure,iStat) ; IF (iStat .EQ. -1) RETURN
     LogicalArray = .FALSE.
 
   END SUBROUTINE Alloc1DLogicalArray
@@ -1122,17 +1125,11 @@ CONTAINS
     INTEGER,INTENT(IN)::ncolumn
     CHARACTER(LEN=*),INTENT(IN)::SendingProcedure
     INTEGER,INTENT(OUT) :: iStat
+    INTEGER :: ErrorCode
 
-    !Initialize
-    iStat = 0
-    
-    IF (ALLOCATED(CharacterArray)) DEALLOCATE(CharacterArray) 
+    IF (ALLOCATED(CharacterArray)) DEALLOCATE(CharacterArray)
     ALLOCATE (CharacterArray(ncolumn) ,STAT=ErrorCode)
-    IF (ErrorCode.NE.0) THEN
-        CALL SetLastMessage('Error in allocating memory in '//TRIM(ADJUSTL(SendingProcedure)),f_iFatal,ThisProcedure)
-        iStat = -1
-        RETURN
-    END IF
+    CALL HandleAllocError(ErrorCode,SendingProcedure,iStat) ; IF (iStat .EQ. -1) RETURN
     CharacterArray=''
 
   END SUBROUTINE Alloc1DCharacterArray
@@ -1146,17 +1143,11 @@ CONTAINS
     INTEGER,INTENT(IN)::nrow,ncolumn
     CHARACTER(LEN=*),INTENT(IN)::SendingProcedure
     INTEGER,INTENT(OUT) :: iStat
+    INTEGER :: ErrorCode
 
-    !Initialize
-    iStat = 0
-    
-    IF (ALLOCATED(CharacterArray)) DEALLOCATE(CharacterArray) 
+    IF (ALLOCATED(CharacterArray)) DEALLOCATE(CharacterArray)
     ALLOCATE (CharacterArray(nrow,ncolumn) ,STAT=ErrorCode)
-    IF (ErrorCode.NE.0) THEN
-        CALL SetLastMessage('Error in allocating memory in '//TRIM(ADJUSTL(SendingProcedure)),f_iFatal,ThisProcedure)
-        iStat = -1
-        RETURN
-    END IF
+    CALL HandleAllocError(ErrorCode,SendingProcedure,iStat) ; IF (iStat .EQ. -1) RETURN
     CharacterArray=''
 
   END SUBROUTINE Alloc2DCharacterArray
@@ -1170,17 +1161,11 @@ CONTAINS
     INTEGER,INTENT(IN)::nrow,ncolumn
     CHARACTER(LEN=*),INTENT(IN)::SendingProcedure
     INTEGER,INTENT(OUT) :: iStat
+    INTEGER :: ErrorCode
 
-    !Initialize
-    iStat = 0
-    
-    IF (ALLOCATED(RealArray)) DEALLOCATE(RealArray) 
+    IF (ALLOCATED(RealArray)) DEALLOCATE(RealArray)
     ALLOCATE (RealArray(nrow,ncolumn) ,STAT=ErrorCode)
-    IF (ErrorCode.NE.0) THEN
-        CALL SetLastMessage('Error in allocating memory in '//TRIM(ADJUSTL(SendingProcedure)),f_iFatal,ThisProcedure)
-        iStat = -1
-        RETURN
-    END IF
+    CALL HandleAllocError(ErrorCode,SendingProcedure,iStat) ; IF (iStat .EQ. -1) RETURN
     RealArray=0.0
 
   END SUBROUTINE Alloc2DRealArray
@@ -1194,17 +1179,11 @@ CONTAINS
     INTEGER,INTENT(IN)::n1,n2,n3
     CHARACTER(LEN=*),INTENT(IN)::SendingProcedure
     INTEGER,INTENT(OUT) :: iStat
+    INTEGER :: ErrorCode
 
-    !Initialize
-    iStat = 0
-    
-    IF (ALLOCATED(RealArray)) DEALLOCATE(RealArray) 
+    IF (ALLOCATED(RealArray)) DEALLOCATE(RealArray)
     ALLOCATE (RealArray(n1,n2,n3) ,STAT=ErrorCode)
-    IF (ErrorCode.NE.0) THEN
-        CALL SetLastMessage('Error in allocating memory in '//TRIM(ADJUSTL(SendingProcedure)),f_iFatal,ThisProcedure)
-        iStat = -1
-        RETURN
-    END IF
+    CALL HandleAllocError(ErrorCode,SendingProcedure,iStat) ; IF (iStat .EQ. -1) RETURN
     RealArray=0.0
 
   END SUBROUTINE Alloc3DRealArray
@@ -1218,89 +1197,65 @@ CONTAINS
     INTEGER,INTENT(IN)::nrow,ncolumn
     CHARACTER(LEN=*),INTENT(IN)::SendingProcedure
     INTEGER,INTENT(OUT) :: iStat
+    INTEGER :: ErrorCode
 
-    !Initialize
-    iStat = 0
-    
-    IF (ALLOCATED(IntArray)) DEALLOCATE(IntArray) 
+    IF (ALLOCATED(IntArray)) DEALLOCATE(IntArray)
     ALLOCATE (IntArray(nrow,ncolumn) ,STAT=ErrorCode)
-    IF (ErrorCode.NE.0) THEN
-        CALL SetLastMessage('Error in allocating memory in '//TRIM(ADJUSTL(SendingProcedure)),f_iFatal,ThisProcedure)
-        iStat = -1
-        RETURN
-    END IF
+    CALL HandleAllocError(ErrorCode,SendingProcedure,iStat) ; IF (iStat .EQ. -1) RETURN
     IntArray=0
 
   END SUBROUTINE Alloc2DIntArray
 
 
   ! -------------------------------------------------------------
-  ! --- ALLOCATE MEMORY FOR POINTER TO 1-D LOGICAL ARRAY 
+  ! --- ALLOCATE MEMORY FOR POINTER TO 1-D LOGICAL ARRAY
   ! -------------------------------------------------------------
   SUBROUTINE AllocPointerTo1DLogicalArray(LogicalArray,ncolumn,SendingProcedure,iStat)
     LOGICAL,DIMENSION(:),POINTER::LogicalArray
     INTEGER,INTENT(IN)::ncolumn
     CHARACTER(LEN=*),INTENT(IN)::SendingProcedure
     INTEGER,INTENT(OUT) :: iStat
+    INTEGER :: ErrorCode
 
-    !Initialize
-    iStat = 0
-    
-    IF (ASSOCIATED(LogicalArray)) DEALLOCATE(LogicalArray) 
+    IF (ASSOCIATED(LogicalArray)) DEALLOCATE(LogicalArray)
     ALLOCATE (LogicalArray(ncolumn) ,STAT=ErrorCode)
-    IF (ErrorCode.NE.0) THEN
-        CALL SetLastMessage('Error in allocating memory in '//TRIM(ADJUSTL(SendingProcedure)),f_iFatal,ThisProcedure)
-        iStat = -1
-        RETURN
-    END IF
+    CALL HandleAllocError(ErrorCode,SendingProcedure,iStat) ; IF (iStat .EQ. -1) RETURN
     LogicalArray = .FALSE.
 
   END SUBROUTINE AllocPointerTo1DLogicalArray
 
 
   ! -------------------------------------------------------------
-  ! --- ALLOCATE MEMORY FOR POINTER TO 1-D REAL ARRAY 
+  ! --- ALLOCATE MEMORY FOR POINTER TO 1-D REAL ARRAY
   ! -------------------------------------------------------------
   SUBROUTINE AllocPointerTo1DRealArray(RealArray,ncolumn,SendingProcedure,iStat)
     REAL(8),DIMENSION(:),POINTER::RealArray
     INTEGER,INTENT(IN)::ncolumn
     CHARACTER(LEN=*),INTENT(IN)::SendingProcedure
     INTEGER,INTENT(OUT) :: iStat
+    INTEGER :: ErrorCode
 
-    !Initialize
-    iStat = 0
-    
-    IF (ASSOCIATED(RealArray)) DEALLOCATE(RealArray) 
+    IF (ASSOCIATED(RealArray)) DEALLOCATE(RealArray)
     ALLOCATE (RealArray(ncolumn) ,STAT=ErrorCode)
-    IF (ErrorCode.NE.0) THEN
-        CALL SetLastMessage('Error in allocating memory in '//TRIM(ADJUSTL(SendingProcedure)),f_iFatal,ThisProcedure)
-        iStat = -1
-        RETURN
-    END IF
+    CALL HandleAllocError(ErrorCode,SendingProcedure,iStat) ; IF (iStat .EQ. -1) RETURN
     RealArray=0.0
 
   END SUBROUTINE AllocPointerTo1DRealArray
 
 
   ! -------------------------------------------------------------
-  ! --- ALLOCATE MEMORY FOR POINTER TO 1-D CHARACTER ARRAY 
+  ! --- ALLOCATE MEMORY FOR POINTER TO 1-D CHARACTER ARRAY
   ! -------------------------------------------------------------
   SUBROUTINE AllocPointerTo1DCharacterArray(CharacterArray,ncolumn,SendingProcedure,iStat)
     CHARACTER(LEN=*),DIMENSION(:),POINTER::CharacterArray
     INTEGER,INTENT(IN)::ncolumn
     CHARACTER(LEN=*),INTENT(IN)::SendingProcedure
     INTEGER,INTENT(OUT) :: iStat
+    INTEGER :: ErrorCode
 
-    !Initialize
-    iStat = 0
-    
-    IF (ASSOCIATED(CharacterArray)) DEALLOCATE(CharacterArray) 
+    IF (ASSOCIATED(CharacterArray)) DEALLOCATE(CharacterArray)
     ALLOCATE (CharacterArray(ncolumn) ,STAT=ErrorCode)
-    IF (ErrorCode.NE.0) THEN
-        CALL SetLastMessage('Error in allocating memory in '//TRIM(ADJUSTL(SendingProcedure)),f_iFatal,ThisProcedure)
-        iStat = -1
-        RETURN
-    END IF
+    CALL HandleAllocError(ErrorCode,SendingProcedure,iStat) ; IF (iStat .EQ. -1) RETURN
     CharacterArray=''
 
   END SUBROUTINE AllocPointerTo1DCharacterArray
@@ -1687,7 +1642,7 @@ CONTAINS
     
     !MAke sure arrays are matched properly
     IF (iSizeA - iRewound*iSizeSA .GT. 0) THEN
-        CALL SetLastMessage('Sizes of source array and destination arrays are not matched properly!',f_iFatal,cProcess)
+        CALL DefaultLogger%SetLastMessage('Sizes of source array and destination arrays are not matched properly!',f_iFatal,cProcess)
         iStat = -1
         RETURN
     END IF
@@ -1724,7 +1679,7 @@ CONTAINS
     
     !MAke sure arrays are matched properly
     IF (iSizeA - iRewound*iSizeSA .GT. 0) THEN
-        CALL SetLastMessage('Sizes of source array and destination arrays are not matched properly!',f_iFatal,cProcess)
+        CALL DefaultLogger%SetLastMessage('Sizes of source array and destination arrays are not matched properly!',f_iFatal,cProcess)
         iStat = -1
         RETURN
     END IF
@@ -1761,7 +1716,7 @@ CONTAINS
     
     !MAke sure arrays are matched properly
     IF (iSizeA - iRewound*iSizeSA .GT. 0) THEN
-        CALL SetLastMessage('Sizes of source array and destination arrays are not matched properly!',f_iFatal,cProcess)
+        CALL DefaultLogger%SetLastMessage('Sizes of source array and destination arrays are not matched properly!',f_iFatal,cProcess)
         iStat = -1
         RETURN
     END IF
@@ -1798,7 +1753,7 @@ CONTAINS
     
     !Make sure arrays are matched properly
     IF (iSizeA - iRewound*iSizeSA .GT. 0) THEN
-        CALL SetLastMessage('Sizes of source array and destination arrays are not matched properly!',f_iFatal,cProcess)
+        CALL DefaultLogger%SetLastMessage('Sizes of source array and destination arrays are not matched properly!',f_iFatal,cProcess)
         iStat = -1
         RETURN
     END IF
@@ -1838,7 +1793,7 @@ CONTAINS
       READ (SourceString,*) rArray(indx)
       iLoc         = FirstLocation(' ',SourceString)
       IF (iLoc .EQ. 0) THEN
-          CALL SetLastMessage('Error in data entry for '//TRIM(cProcess)//'!',f_iFatal,ThisProcedure)
+          CALL DefaultLogger%SetLastMessage('Error in data entry for '//TRIM(cProcess)//'!',f_iFatal,ThisProcedure)
           iStat = -1
           RETURN
       END IF
@@ -1872,7 +1827,7 @@ CONTAINS
       READ (SourceString,*) iArray(indx)
       iLoc         = FirstLocation(' ',SourceString)
       IF (iLoc .EQ. 0) THEN
-          CALL SetLastMessage('Error in data entry for '//TRIM(cProcess)//'!',f_iFatal,ThisProcedure)
+          CALL DefaultLogger%SetLastMessage('Error in data entry for '//TRIM(cProcess)//'!',f_iFatal,ThisProcedure)
           iStat = -1
           RETURN
       END IF
@@ -2260,5 +2215,80 @@ CONTAINS
     
   END SUBROUTINE ConvertID_To_Index_Scalar
 
-  
+
+  ! -------------------------------------------------------------
+  ! --- BUILD A SORTED INDEX OVER AN ID ARRAY
+  ! ---
+  ! --- Given AllIDs(N), produces:
+  ! ---   iSortedIDs(N)    — copy of AllIDs sorted ascending
+  ! ---   iSortedToOrig(N) — permutation such that
+  ! ---                      AllIDs(iSortedToOrig(k)) == iSortedIDs(k)
+  ! ---
+  ! --- Use with LookupIDInIndex to replace per-call linear searches
+  ! --- through AllIDs with O(log N) binary searches. The cost of this
+  ! --- prep is O(N log N) (Shell sort). Worth it whenever a routine
+  ! --- needs to look up more than ~log(N) items in the same AllIDs
+  ! --- array.
+  ! ---
+  ! --- Both output arrays are allocated by this routine and must be
+  ! --- deallocated by the caller.
+  ! -------------------------------------------------------------
+  SUBROUTINE PrepareIDIndex(AllIDs, iSortedIDs, iSortedToOrig)
+    INTEGER,INTENT(IN)               :: AllIDs(:)
+    INTEGER,ALLOCATABLE,INTENT(OUT)  :: iSortedIDs(:), iSortedToOrig(:)
+
+    !Local variables
+    INTEGER :: i, N
+
+    N = SIZE(AllIDs)
+    ALLOCATE(iSortedIDs(N), iSortedToOrig(N))
+
+    !Initialize: copy values, identity permutation
+    iSortedIDs = AllIDs
+    DO i = 1, N
+        iSortedToOrig(i) = i
+    END DO
+
+    !Sort the copy ascending; ShellSort_IntSecondArray reorders
+    !iSortedToOrig in lockstep so the permutation tracks the move.
+    IF (N .GT. 1) CALL ShellSort(iSortedIDs, iSortedToOrig)
+
+  END SUBROUTINE PrepareIDIndex
+
+
+  ! -------------------------------------------------------------
+  ! --- BINARY-SEARCH AN ID IN A SORTED INDEX
+  ! ---
+  ! --- Given a sorted index built by PrepareIDIndex, finds the
+  ! --- original-array index of ID in O(log N), or 0 if ID is not
+  ! --- present. Returns 0 immediately for ID == 0 (the convention
+  ! --- ConvertID_To_Index_Scalar uses for "not specified").
+  ! -------------------------------------------------------------
+  SUBROUTINE LookupIDInIndex(ID, iSortedIDs, iSortedToOrig, Index)
+    INTEGER,INTENT(IN)  :: ID, iSortedIDs(:), iSortedToOrig(:)
+    INTEGER,INTENT(OUT) :: Index
+
+    !Local variables
+    INTEGER       :: lo, hi, mid
+
+    Index = 0
+    IF (ID .EQ. 0) RETURN
+
+    lo = 1
+    hi = SIZE(iSortedIDs)
+    DO WHILE (lo .LE. hi)
+        mid = (lo + hi) / 2
+        IF (iSortedIDs(mid) .EQ. ID) THEN
+            Index = iSortedToOrig(mid)
+            RETURN
+        ELSE IF (iSortedIDs(mid) .LT. ID) THEN
+            lo = mid + 1
+        ELSE
+            hi = mid - 1
+        END IF
+    END DO
+
+  END SUBROUTINE LookupIDInIndex
+
+
 END MODULE

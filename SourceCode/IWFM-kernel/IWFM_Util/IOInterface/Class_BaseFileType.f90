@@ -21,8 +21,8 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 MODULE Class_BaseFileType
-  USE MessageLogger     , ONLY: SetLastMessage  , &
-                                MessageArray    , & 
+  USE MessageLogger     , ONLY: MessageLoggerType , &
+                                DefaultLogger     , &
                                 f_iFatal
   USE GeneralUtilities
   USE,INTRINSIC :: ISO_FORTRAN_ENV
@@ -55,15 +55,16 @@ MODULE Class_BaseFileType
   INTEGER,PARAMETER :: f_iDefaultUnitNumber = -200   ,&
                        f_iMinUnitNumber     = 8      ,&
                        f_iMaxUnitNumber     = 50008     
-  INTEGER,SAVE      :: LastUnitConnected    = f_iMinUnitNumber - 1
+  INTEGER,SAVE      :: LastUnitConnected    = f_iMinUnitNumber - 1  !Used only by GetAUnitNumber (DSS files)
   
   
   ! -------------------------------------------------------------
   ! --- BASE FILE DATA TYPE
   ! -------------------------------------------------------------
   TYPE,ABSTRACT :: BaseFileType
-      INTEGER                  :: UnitN = f_iDefaultUnitNumber   !File unit number
-      CHARACTER(:),ALLOCATABLE :: Name                           !Name of file
+      INTEGER                              :: UnitN = f_iDefaultUnitNumber   !File unit number
+      CHARACTER(:),ALLOCATABLE             :: Name                           !Name of file
+      TYPE(MessageLoggerType),POINTER      :: Logger => NULL()               !Logger instance
   CONTAINS
       PROCEDURE(Abstract_New),PASS,DEFERRED             :: New
       PROCEDURE(Abstract_Kill),PASS,DEFERRED            :: Kill
@@ -179,7 +180,7 @@ CONTAINS
   ! --- HANDLE IOSTAT
   ! -------------------------------------------------------------
   SUBROUTINE IOStatHandler(ThisFile,Error,iStat,Status,iErrorLine,cDataType)
-    CLASS(BaseFileType),INTENT(IN)       :: ThisFile
+    CLASS(BaseFileType)                   :: ThisFile
     INTEGER,INTENT(IN)                   :: Error
     INTEGER,INTENT(OUT)                  :: iStat
     INTEGER,OPTIONAL,INTENT(OUT)         :: Status
@@ -193,7 +194,8 @@ CONTAINS
     
     !Initialize
     iStat = 0
-    
+    IF (.NOT. ASSOCIATED(ThisFile%Logger)) ThisFile%Logger => DefaultLogger
+
     IF (PRESENT(Status)) THEN
         Status = Error
         RETURN
@@ -202,10 +204,10 @@ CONTAINS
     IF (Error .EQ. 0) THEN
         !Do nothing; read/write action was successful
     ELSEIF (IS_IOSTAT_END(Error)) THEN
-        CALL SetLastMessage('Error in reading data! End-of-file reached in file '//TRIM(ThisFile%Name),f_iFatal,ThisProcedure)
+        CALL ThisFile%Logger%SetLastMessage('Error in reading data! End-of-file reached in file '//TRIM(ThisFile%Name),f_iFatal,ThisProcedure)
         iStat = -1
     ELSEIF (Error .EQ. 47) THEN
-        CALL SetLastMessage('Error in writing out to file! File '//TRIM(ThisFile%Name)//' is read-only',f_iFatal,ThisProcedure)
+        CALL ThisFile%Logger%SetLastMessage('Error in writing out to file! File '//TRIM(ThisFile%Name)//' is read-only',f_iFatal,ThisProcedure)
         iStat = -1
     ELSE
         IF (PRESENT(iErrorLine)) THEN
@@ -214,12 +216,12 @@ CONTAINS
                 iLen                    = LEN(cDataType)
                 cDataType_Local(1:iLen) = LowerCase(cDataType)
                 cDataType_Local         = ADJUSTL(cDataType_Local)
-                CALL SetLastMessage('Error in reading '//TRIM(cDataType_Local)//' data from file '//TRIM(ThisFile%Name)//' at or around line '//TRIM(IntToText(iErrorLine))//'!',f_iFatal,ThisProcedure)
+                CALL ThisFile%Logger%SetLastMessage('Error in reading '//TRIM(cDataType_Local)//' data from file '//TRIM(ThisFile%Name)//' at or around line '//TRIM(IntToText(iErrorLine))//'!',f_iFatal,ThisProcedure)
             ELSE 
-                CALL SetLastMessage('Error in reading data from file '//TRIM(ThisFile%Name)//' at or around line '//TRIM(IntToText(iErrorLine))//'!',f_iFatal,ThisProcedure)
+                CALL ThisFile%Logger%SetLastMessage('Error in reading data from file '//TRIM(ThisFile%Name)//' at or around line '//TRIM(IntToText(iErrorLine))//'!',f_iFatal,ThisProcedure)
             END IF
         ELSE
-            CALL SetLastMessage('Error in reading data from file '//TRIM(ThisFile%Name)//'!',f_iFatal,ThisProcedure)
+            CALL ThisFile%Logger%SetLastMessage('Error in reading data from file '//TRIM(ThisFile%Name)//'!',f_iFatal,ThisProcedure)
         END IF
         iStat = -1
     END IF 
@@ -233,6 +235,7 @@ CONTAINS
   FUNCTION GetAUnitNumber() RESULT(UnitNumber)
     INTEGER :: UnitNumber
 
+    !$OMP CRITICAL(IWFM_UNIT_ALLOC)
     DO UnitNumber=LastUnitConnected+1,f_iMaxUnitNumber
       IF (UnitNumber .EQ. ERROR_UNIT) CYCLE
       IF (UnitNumber .EQ. INPUT_UNIT) CYCLE
@@ -241,6 +244,7 @@ CONTAINS
     END DO
 
     LastUnitConnected = UnitNumber
+    !$OMP END CRITICAL(IWFM_UNIT_ALLOC)
 
   END FUNCTION GetAUnitNumber
 

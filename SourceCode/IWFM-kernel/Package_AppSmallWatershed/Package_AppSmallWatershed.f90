@@ -24,21 +24,20 @@ MODULE Package_AppSmallWatershed
   USE IWFM_Kernel_Version         , ONLY: ReadVersion                   
   USE TimeSeriesUtilities         , ONLY: TimeStepType                  
   USE IOInterface                 , ONLY: GenericFileType                  
-  USE MessageLogger               , ONLY: SetLastMessage              , &
-                                          EchoProgress                , &
-                                          f_iFatal                      
+  USE MessageLogger               , ONLY: MessageLoggerType           , &
+                                          f_iFatal
   USE Package_Discretization      , ONLY: AppGridType                 , &
                                           StratigraphyType            
   USE Package_PrecipitationET     , ONLY: PrecipitationType           , &
                                           ETType                      
   USE Package_Budget              , ONLY: BudgetType                  
   USE Package_Matrix              , ONLY: MatrixType                  
-  USE Class_BaseAppSmallWatershed , ONLY: BaseAppSmallWatershedType   , &
-                                          f_iSWShedBaseFlowBCID       , &
-                                          f_iSWShedPercFlowBCID       , &
-                                          f_iBudgetType_SWShed        , & 
-                                          f_iSWShedBudComp_RZ         , &
-                                          f_iSWShedBudComp_GW 
+  USE Class_BaseAppSmallWatershed , ONLY: BaseAppSmallWatershedType        , &
+                                          f_iSWShedBaseFlowBCID            , &
+                                          f_iSWShedPercFlowBCID            , &
+                                          f_iBudgetType_SWShed             , &
+                                          f_iSWShedBudComp_RZ              , &
+                                          f_iSWShedBudComp_GW
   USE Class_AppSmallWatershed_v40 , ONLY: AppSmallWaterShed_v40_Type
   USE Class_AppSmallWatershed_v41 , ONLY: AppSmallWaterShed_v41_Type
   IMPLICIT NONE
@@ -60,12 +59,12 @@ MODULE Package_AppSmallWatershed
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: AppSmallWatershedType  , &
-            f_iSWShedBaseFlowBCID  , &
-            f_iSWShedPercFlowBCID  , &
-            f_iBudgetType_SWShed   , & 
-            f_iSWShedBudComp_RZ    , &
-            f_iSWShedBudComp_GW 
+  PUBLIC :: AppSmallWatershedType                    , &
+            f_iSWShedBaseFlowBCID                   , &
+            f_iSWShedPercFlowBCID                   , &
+            f_iBudgetType_SWShed                    , &
+            f_iSWShedBudComp_RZ                     , &
+            f_iSWShedBudComp_GW
   
   
   ! -------------------------------------------------------------
@@ -73,6 +72,7 @@ MODULE Package_AppSmallWatershed
   ! -------------------------------------------------------------
   TYPE AppSmallWatershedType
       PRIVATE
+      TYPE(MessageLoggerType),POINTER              :: Logger => NULL()
       INTEGER                                      :: iComponentVersion = 0
       LOGICAL                                      :: lDefined          = .FALSE. !Flag to check if small watersheds are simulated
       CLASS(BaseAppSmallWatershedType),ALLOCATABLE :: Me
@@ -136,7 +136,6 @@ CONTAINS
 
 
 
-
 ! ******************************************************************
 ! ******************************************************************
 ! ******************************************************************
@@ -150,9 +149,10 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- NEW SMALL WATERSHED DATABASE
   ! -------------------------------------------------------------
-  SUBROUTINE New(AppSWShed,IsForInquiry,cFileName,cCropCoeffFileName,cWorkingDirectory,TimeStep,NTIME,NStrmNodes,iStrmNodeIDs,AppGrid,Stratigraphy,Precip,ET,iStat,cVersionOverride) 
-    CLASS(AppSmallWatershedType),INTENT(OUT) :: AppSWShed
-    LOGICAL,INTENT(IN)                       :: IsForInquiry
+  SUBROUTINE New(AppSWShed,Logger,IsForInquiry,cFileName,cCropCoeffFileName,cWorkingDirectory,TimeStep,NTIME,NStrmNodes,iStrmNodeIDs,AppGrid,Stratigraphy,Precip,ET,iStat,cVersionOverride)
+    CLASS(AppSmallWatershedType),INTENT(OUT)   :: AppSWShed
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT)  :: Logger
+    LOGICAL,INTENT(IN)                         :: IsForInquiry
     CHARACTER(LEN=*),INTENT(IN)              :: cFileName,cCropCoeffFileName,cWorkingDirectory
     TYPE(TimeStepType),INTENT(IN)            :: TimeStep
     INTEGER,INTENT(IN)                       :: NStrmNodes,iStrmNodeIDs(NStrmNodes),NTIME
@@ -169,20 +169,23 @@ CONTAINS
     INTEGER                        :: iGWNodeIDs(AppGrid%NNodes),iErrorCode
     CHARACTER(:),ALLOCATABLE       :: cVersion
     
+    !Set logger
+    AppSWShed%Logger => Logger
+
     !Initialize
     iStat      = 0
     iGWNodeIDs = AppGrid%AppNode%ID
-    
+
     !Return if no filename is specified
     IF (cFileName .EQ. '') RETURN
     
     !Inform user
-    CALL EchoProgress('Instantiating small watershed component...')
+    CALL AppSWShed%Logger%EchoProgress('Instantiating small watershed component...')
     
     !Open main input file and retrive AppSmallWatershed version number
     CALL MainFile%New(FileName=cFileName,InputFile=.TRUE.,IsTSFile=.FALSE.,Descriptor='small watershed parameters',iStat=iStat) 
     IF (iStat .EQ. -1) RETURN
-    CALL ReadVersion(MainFile,'SMALL WATERSHED',cVersion,iStat)
+    CALL ReadVersion(MainFile,'SMALL WATERSHED',cVersion,iStat,AppSWShed%Logger)
     IF (iStat .EQ. -1) RETURN
 
     !Close file to reset it
@@ -203,11 +206,14 @@ CONTAINS
             ALLOCATE(AppSmallWatershed_v41_Type :: AppSWShed%Me)
             AppSWShed%iComponentVersion = 41
         CASE DEFAULT
-            CALL SetLastMessage('Small Watershed Component version number is not recognized ('//TRIM(cVersion)//')!',f_iFatal,ThisProcedure)
+            CALL AppSWShed%Logger%SetLastMessage('Small Watershed Component version number is not recognized ('//TRIM(cVersion)//')!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
     END SELECT
-        
+
+    !Propagate logger to Me
+    AppSWShed%Me%Logger => AppSWShed%Logger
+
     !Now, instantiate
     CALL AppSWShed%Me%New(IsForInquiry,cFileName,cCropCoeffFileName,cWorkingDirectory,TimeStep,NTIME,NStrmNodes,iStrmNodeIDs,AppGrid,Stratigraphy,Precip,ET,iStat,cVersionOverride)
     IF (iStat .NE. 0) RETURN

@@ -23,9 +23,9 @@
 MODULE VerticalFlow
   USE IOInterface              , ONLY: GenericFileType      , &  
                                        PrepareTSDOutputFile
-  USE MessageLogger            , ONLY: LogMessage           , &
-                                       MessageArray         , &
-                                       f_iWarn                
+  USE MessageLogger            , ONLY: MessageArray         , &
+                                       MessageLoggerType    , &
+                                       f_iWarn
   USe GeneralUtilities         , ONLY: FEXP                 , &
                                        IntToText            , &
                                        ArrangeText          , &
@@ -57,11 +57,11 @@ MODULE VerticalFlow
             VerticalFlowOutput_New                             , &
             VerticalFlowOutput_Kill                            , &
             VerticalFlowOutput_PrintResults                    , &
-  
+
             !Entities related to vertical flow computation
             VerticalFlow_ComputeAtNodesLayer                   , &
             VerticalFlow_ComputeDerivativesAtNodesLayer        , &
-            VerticalFlow_ComputeElementsUpwardDownward_AtLayer 
+            VerticalFlow_ComputeElementsUpwardDownward_AtLayer
   
   
   ! -------------------------------------------------------------
@@ -82,9 +82,9 @@ MODULE VerticalFlow
   
   
 CONTAINS
-    
-    
-    
+
+
+
 ! ******************************************************************
 ! ******************************************************************
 ! ******************************************************************
@@ -98,13 +98,14 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- PREPARE LAYER VERTICAL FLOW OUTPUT FILE
   ! -------------------------------------------------------------
-  SUBROUTINE VerticalFlowOutput_New(IsForInquiry,TimeStep,NLayers,NRegions,UNITVLOU,cOutFileName,VertFlowOutput,iStat)
-    LOGICAL,INTENT(IN)            :: IsForInquiry
-    TYPE(TimeStepType),INTENT(IN) :: TimeStep
-    INTEGER,INTENT(IN)            :: NLayers,NRegions
-    CHARACTER(LEN=*),INTENT(IN)   :: UNITVLOU,cOutFileName
-    TYPE(VerticalFlowOutputType)  :: VertFlowOutput
-    INTEGER,INTENT(OUT)           :: iStat
+  SUBROUTINE VerticalFlowOutput_New(IsForInquiry,TimeStep,NLayers,NRegions,UNITVLOU,cOutFileName,VertFlowOutput,iStat,Logger)
+    LOGICAL,INTENT(IN)                         :: IsForInquiry
+    TYPE(TimeStepType),INTENT(IN)              :: TimeStep
+    INTEGER,INTENT(IN)                         :: NLayers,NRegions
+    CHARACTER(LEN=*),INTENT(IN)                :: UNITVLOU,cOutFileName
+    TYPE(VerticalFlowOutputType)               :: VertFlowOutput
+    INTEGER,INTENT(OUT)                        :: iStat
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
     
     !Local variables
     CHARACTER(LEN=ModNameLen+22) :: ThisProcedure = ModName // 'VerticalFlowOutput_New'
@@ -125,7 +126,7 @@ CONTAINS
     IF (NLayers .EQ. 1) THEN
         MessageArray(1) = 'Only one aquifer layer is modeled!'
         MessageArray(2) = 'Generation of vertical flow output file is supressed.'
-        CALL LogMessage(MessageArray(1:2),f_iWarn,ThisProcedure)
+        CALL Logger%LogMessage(MessageArray(1:2),f_iWarn,ThisProcedure)
         RETURN
     END IF
     

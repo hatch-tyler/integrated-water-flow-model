@@ -1,7 +1,7 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2025  
-!  State of California, Department of Water Resources 
+!  Copyright (C) 2005-2025
+!  State of California, Department of Water Resources
 !
 !  This program is free software; you can redistribute it and/or
 !  modify it under the terms of the GNU General Public License
@@ -18,12 +18,14 @@
 !  along with this program; if not, write to the Free Software
 !  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 !
-!  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
+!  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov
 !***********************************************************************
 MODULE Package_AppGW
-  USE Package_AppTileDrain  , ONLY : f_iTileDrain     , &
-                                     f_iSubIrig
-  USE Package_AppPumping    , ONLY : f_iPump_Well     , &
-                                     f_iPump_ElemPump
-  USE Class_AppGW  
+  USE Package_AppTileDrain , ONLY: f_iTileDrain                      , &
+                                   f_iSubIrig
+  USE Package_AppPumping   , ONLY: f_iPump_Well                      , &
+                                   f_iPump_ElemPump
+  USE Class_AppGW   ! Re-export all public entities (AppGWType, constants, etc.)
+  IMPLICIT NONE
+
 END MODULE

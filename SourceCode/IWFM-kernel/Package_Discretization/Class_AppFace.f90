@@ -23,10 +23,10 @@
 MODULE Class_AppFace
   !$ USE OMP_LIB
   USE GenericLinkedList  , ONLY: GenericLinkedListType
-  USE MessageLogger      , ONLY: SetLastMessage            , &
+  USE MessageLogger      , ONLY: MessageLoggerType         , &
                                  f_iFatal
   USE GeneralUtilities   , ONLY: LocateInList
-  USE IOInterface        , ONLY: GenericFileType       
+  USE IOInterface        , ONLY: GenericFileType
   IMPLICIT NONE
   
 
@@ -46,13 +46,14 @@ MODULE Class_AppFace
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: AppFaceType              
+  PUBLIC :: AppFaceType
     
     
   ! -------------------------------------------------------------
   ! --- AQUIFER FACE DATA TYPE
   ! -------------------------------------------------------------
   TYPE AppFaceType
+      TYPE(MessageLoggerType),POINTER :: Logger => NULL()
       INTEGER,ALLOCATABLE :: Node(:,:)               !Nodes that make the face; defined as (2,face)
       INTEGER,ALLOCATABLE :: Element(:,:)            !Elements on both sides of the face; defined as (2,face) array
       REAL(8),ALLOCATABLE :: Length(:)               !Length of face; defined for each (face)
@@ -76,10 +77,12 @@ MODULE Class_AppFace
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'Class_AppFace::'
 
 
-  
-  
-  
+
+
+
 CONTAINS
+
+
 
 
 
@@ -97,28 +100,30 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- NEW APPLICATION FACES BY READING FROM A FILE
   ! -------------------------------------------------------------
-  SUBROUTINE ReadData(AppFace,InFile,NFace,iStat)
-    CLASS(AppFaceType),INTENT(OUT) :: AppFace
-    INTEGER,INTENT(IN)             :: NFace
-    TYPE(GenericFileType)          :: InFile
-    INTEGER,INTENT(OUT)            :: iStat
-   
+  SUBROUTINE ReadData(AppFace,Logger,InFile,NFace,iStat)
+    CLASS(AppFaceType),INTENT(OUT)              :: AppFace
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT)   :: Logger
+    INTEGER,INTENT(IN)                          :: NFace
+    TYPE(GenericFileType)                        :: InFile
+    INTEGER,INTENT(OUT)                         :: iStat
+
     !Local variables
     CHARACTER(LEN=ModNameLen+8),PARAMETER :: ThisProcedure = ModName // 'ReadData'
     INTEGER                               :: ErrorCode,indx
     CHARACTER                             :: cErrorMsg*500
-    
+
+    AppFace%Logger => Logger
     ALLOCATE (AppFace%Node(2,NFace)            , &
               AppFace%Element(2,NFace)         , &
               AppFace%Length(NFace)            , &
               AppFace%BoundaryFace(NFace)      , &
               STAT=ErrorCode , ERRMSG=cErrorMsg)
     IF (ErrorCode .NE. 0) THEN
-        CALL SetLastMessage('Error in allocating memory for element faces!'//NEW_LINE('x')//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
+        CALL AppFace%Logger%SetLastMessage('Error in allocating memory for element faces!'//NEW_LINE('x')//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
-              
+
     DO indx=1,NFace
         CALL InFile%ReadData(AppFace%Node(:,indx),iStat)          ;  IF (iStat .EQ. -1) RETURN        
         CALL InFile%ReadData(AppFace%Element(:,indx),iStat)       ;  IF (iStat .EQ. -1) RETURN
@@ -132,11 +137,12 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- COMPILE FACE LIST
   ! -------------------------------------------------------------
-  SUBROUTINE Construct(AppFace,NVertex,Vertex,X,Y,iStat)
-    CLASS(AppFaceType),INTENT(OUT) :: AppFace
-    INTEGER,INTENT(IN)             :: NVertex(:),Vertex(:,:)
-    REAL(8),INTENT(IN)             :: X(:),Y(:)
-    INTEGER,INTENT(OUT)            :: iStat
+  SUBROUTINE Construct(AppFace,Logger,NVertex,Vertex,X,Y,iStat)
+    CLASS(AppFaceType),INTENT(OUT)              :: AppFace
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT)   :: Logger
+    INTEGER,INTENT(IN)                          :: NVertex(:),Vertex(:,:)
+    REAL(8),INTENT(IN)                          :: X(:),Y(:)
+    INTEGER,INTENT(OUT)                         :: iStat
 
     !Local data type - data for one face
     TYPE FaceDataType
@@ -161,9 +167,10 @@ CONTAINS
     CLASS(*),POINTER            :: pCurrent
 
     !Initialize
+    AppFace%Logger => Logger
     iStat     = 0
     NElements = SIZE(NVertex)
-    
+
     !$OMP PARALLEL DEFAULT(PRIVATE) SHARED(NVertex,Vertex,NElements,X,Y,AppFaceList)  
     !$OMP DO SCHEDULE(STATIC,500)
     !Construct the face list
@@ -229,7 +236,7 @@ CONTAINS
              AppFace%BoundaryFace(NFace)      , &
              STAT=ErrorCode , ERRMSG=cErrorMsg)
     IF (ErrorCode .NE. 0) THEN
-        CALL SetLastMessage('Error in allocating memory for element faces!'//NEW_LINE('x')//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
+        CALL AppFace%Logger%SetLastMessage('Error in allocating memory for element faces!'//NEW_LINE('x')//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF

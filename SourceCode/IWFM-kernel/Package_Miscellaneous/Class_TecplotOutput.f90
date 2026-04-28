@@ -21,7 +21,7 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 MODULE Class_TecplotOutput
-  USE MessageLogger           , ONLY: EchoProgress
+  USE MessageLogger           , ONLY: MessageLoggerType
   USE TimeSeriesUtilities     , ONLY: TimeStepType       , &
                                       f_iTimeStampLength
   USE GeneralUtilities        , ONLY: IntToText
@@ -45,7 +45,7 @@ MODULE Class_TecplotOutput
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: TecplotOutputType                 
+  PUBLIC :: TecplotOutputType
   
   
   ! -------------------------------------------------------------
@@ -53,6 +53,7 @@ MODULE Class_TecplotOutput
   ! -------------------------------------------------------------
   TYPE TecplotOutputType
       PRIVATE
+      TYPE(MessageLoggerType),POINTER,PUBLIC :: Logger => NULL()
       TYPE(GenericFileType) :: OutFile
   CONTAINS
       PROCEDURE,PASS :: New
@@ -65,10 +66,9 @@ MODULE Class_TecplotOutput
   
   
 CONTAINS
-    
-    
 
-    
+
+
 ! ******************************************************************
 ! ******************************************************************
 ! ******************************************************************
@@ -82,17 +82,19 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- INSTANTIATE TECPLOT OUTPUT FILE
   ! -------------------------------------------------------------
-  SUBROUTINE New(TecplotOut,IsForInquiry,cFileName,cDescriptor,iStat)
-    CLASS(TecplotOutputType)    :: TecplotOut
-    LOGICAL,INTENT(IN)          :: IsForInquiry
-    CHARACTER(LEN=*),INTENT(IN) :: cFileName,cDescriptor
-    INTEGER,INTENT(OUT)         :: iStat
-    
+  SUBROUTINE New(TecplotOut,Logger,IsForInquiry,cFileName,cDescriptor,iStat)
+    CLASS(TecplotOutputType)                    :: TecplotOut
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT)   :: Logger
+    LOGICAL,INTENT(IN)                          :: IsForInquiry
+    CHARACTER(LEN=*),INTENT(IN)                 :: cFileName,cDescriptor
+    INTEGER,INTENT(OUT)                         :: iStat
+
     !Initialize
+    TecplotOut%Logger => Logger
     iStat = 0
-    
+
     !Inform user
-    CALL EchoProgress('   Instantiating '//TRIM(cDescriptor))
+    CALL TecplotOut%Logger%EchoProgress('   Instantiating '//TRIM(cDescriptor))
     
     !Open file
     IF (IsForInquiry) THEN

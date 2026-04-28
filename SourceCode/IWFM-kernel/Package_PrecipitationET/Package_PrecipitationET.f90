@@ -21,7 +21,7 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 MODULE Package_PrecipitationET
-  USE MessageLogger          , ONLY: SetLastMessage       , &
+  USE MessageLogger          , ONLY: MessageLoggerType    , &
                                      f_iFatal
   USE IOInterface            , ONLY: RealTSDataInFileType
   USE TimeSeriesUtilities    , ONLY: TimeStepType
@@ -45,8 +45,8 @@ MODULE Package_PrecipitationET
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: PrecipitationType , &
-            ETType                              
+  PUBLIC :: PrecipitationType                  , &
+            ETType
 
   
   ! -------------------------------------------------------------
@@ -83,7 +83,8 @@ MODULE Package_PrecipitationET
 
 CONTAINS
 
-    
+
+
 ! ******************************************************************
 ! ******************************************************************
 ! ******************************************************************
@@ -97,19 +98,20 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- NEW ET DATA OBJECT
   ! -------------------------------------------------------------
-  SUBROUTINE ETType_New(AtmosphericData,cFileName,cWorkingDirectory,cDataName,TimeStep,iStat,cCropCoeffFileName) 
-    CLASS(ETType),INTENT(OUT)            :: AtmosphericData      !This is ETData
-    CHARACTER(LEN=*),INTENT(IN)          :: cFileName,cWorkingDirectory,cDataName
-    TYPE(TimeStepType),INTENT(IN)        :: TimeStep
-    INTEGER,INTENT(OUT)                  :: iStat
-    CHARACTER(LEN=*),OPTIONAL,INTENT(IN) :: cCropCoeffFileName   !Optionally, to be used with ET data type
-    
+  SUBROUTINE ETType_New(AtmosphericData,Logger,cFileName,cWorkingDirectory,cDataName,TimeStep,iStat,cCropCoeffFileName)
+    CLASS(ETType),INTENT(OUT)                    :: AtmosphericData      !This is ETData
+    TYPE(MessageLoggerType),POINTER,INTENT(IN)   :: Logger
+    CHARACTER(LEN=*),INTENT(IN)                  :: cFileName,cWorkingDirectory,cDataName
+    TYPE(TimeStepType),INTENT(IN)                :: TimeStep
+    INTEGER,INTENT(OUT)                          :: iStat
+    CHARACTER(LEN=*),OPTIONAL,INTENT(IN)         :: cCropCoeffFileName   !Optionally, to be used with ET data type
+
     !Local variables
     REAL(8) :: rDummyFactor(1)
-    
+
     !First, instantiate the parent component of the ETData object
     ASSOCIATE (pETData => AtmosphericData)
-        CALL pETData%AtmosphericDataType%New(cFileName,cWorkingDirectory,cDataName,TimeStep,iStat)
+        CALL pETData%AtmosphericDataType%New(Logger,cFileName,cWorkingDirectory,cDataName,TimeStep,iStat)
         IF (iStat .NE. 0) RETURN
         
         !Now, instantiate crop coeffcient file, if provided
@@ -259,7 +261,7 @@ CONTAINS
             
             !Make sure that actual output for ET and coeff are the same
             IF (inActualOutput_Coeff .NE. nActualOutput) THEN
-                CALL SetLastMessage('Time intervals for ETo and Kc input data do not match!',f_iFatal,ThisProcedure)
+                CALL AtmosphericData%Logger%SetLastMessage('Time intervals for ETo and Kc input data do not match!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF

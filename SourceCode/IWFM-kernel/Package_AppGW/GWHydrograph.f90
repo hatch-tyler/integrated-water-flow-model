@@ -21,9 +21,8 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 MODULE GWHydrograph
-  USE MessageLogger          , ONLY: SetLastMessage            , &
-                                     EchoProgress              , &
-                                     MessageArray              , &
+  USE MessageLogger          , ONLY: MessageArray              , &
+                                     MessageLoggerType         , &
                                      f_iFatal
   USE IOInterface            , ONLY: GenericFileType           , &
                                      Real2DTSDataInFileType    , &
@@ -74,8 +73,8 @@ MODULE GWHydrograph
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: GWHydrographType          , & 
-            f_iTecPlot_PrintGWHeads   
+  PUBLIC :: GWHydrographType          , &
+            f_iTecPlot_PrintGWHeads
   
   
   ! -------------------------------------------------------------
@@ -104,6 +103,7 @@ MODULE GWHydrograph
   ! -------------------------------------------------------------
   TYPE GWHydrographType
       PRIVATE
+      TYPE(MessageLoggerType),POINTER          :: Logger => NULL()
       LOGICAL                                  :: lTecPlot_PrintGWHeads         = .TRUE.     !What is going to be printed to TecPlot for gw heads?
       TYPE(HydOutputType),ALLOCATABLE          :: GWHydOutput                                !Groundwater hydrograph at user-defined locations print-out data 
       TYPE(GenericFileType),ALLOCATABLE        :: AllHeadOutFile                             !File to print heads at all nodes and layers
@@ -153,10 +153,9 @@ MODULE GWHydrograph
   
   
 CONTAINS
-    
-    
-    
-    
+
+
+
 ! ******************************************************************
 ! ******************************************************************
 ! ******************************************************************
@@ -170,9 +169,10 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- NEW GW HYDROGRAPH DATA
   ! -------------------------------------------------------------
-  SUBROUTINE New(GWHydData,lIsForInquiry,AppGrid,Stratigraphy,cWorkingDirectory,iGWNodeIDs,iTecPlotFlag,rFACTLTOU,cUNITLTOU,cUNITVLOU,cUNITVROU,cAllHeadOutFileName,cCellVelocityFileName,cHeadTecplotFileName,cVelTecplotFileName,TimeStep,NTIME,InFile,iStat)
-    CLASS(GWHydrographType),INTENT(OUT) :: GWHydData
-    LOGICAL,INTENT(IN)                  :: lIsForInquiry
+  SUBROUTINE New(GWHydData,Logger,lIsForInquiry,AppGrid,Stratigraphy,cWorkingDirectory,iGWNodeIDs,iTecPlotFlag,rFACTLTOU,cUNITLTOU,cUNITVLOU,cUNITVROU,cAllHeadOutFileName,cCellVelocityFileName,cHeadTecplotFileName,cVelTecplotFileName,TimeStep,NTIME,InFile,iStat)
+    CLASS(GWHydrographType),INTENT(OUT)        :: GWHydData
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
+    LOGICAL,INTENT(IN)                         :: lIsForInquiry
     TYPE(AppGridType),INTENT(IN)        :: AppGrid
     TYPE(StratigraphyType),INTENT(IN)   :: Stratigraphy
     INTEGER,INTENT(IN)                  :: iGWNodeIDs(:),iTecPlotFlag,NTIME
@@ -188,10 +188,11 @@ CONTAINS
     CHARACTER                   :: cErrorMsg*300
     
     !Initialize
+    GWHydData%Logger => Logger
     iStat = 0
-    
+
     !Inform user
-    CALL EchoProgress('   Instantiating groundwater hydrograph print-out data...')
+    CALL GWHydData%Logger%EchoProgress('   Instantiating groundwater hydrograph print-out data...')
     
     !Initialize
     iNLayers   = Stratigraphy%NLayers
@@ -200,9 +201,9 @@ CONTAINS
     !Instantiate file for the output of all heads
     IF (cAllHeadOutFileName .NE. '') THEN
         IF (lIsForInquiry) THEN
-            CALL AllHeadOutFile_ForInquiry_New(cAllHeadOutFileName,AppGrid%NNodes,iNLayers,iGWNodeIDs,TimeStep,GWHydData%AllHeadOutFile_ForInquiry,iStat)
+            CALL AllHeadOutFile_ForInquiry_New(GWHydData%Logger,cAllHeadOutFileName,AppGrid%NNodes,iNLayers,iGWNodeIDs,TimeStep,GWHydData%AllHeadOutFile_ForInquiry,iStat)
         ELSE
-            CALL AllHeadOutFile_New(cAllHeadOutFileName,cUNITLTOU,AppGrid%NNodes,iNLayers,iGWNodeIDs,TimeStep,NTIME,GWHydData%AllHeadOutFile,iStat)
+            CALL AllHeadOutFile_New(GWHydData%Logger,cAllHeadOutFileName,cUNITLTOU,AppGrid%NNodes,iNLayers,iGWNodeIDs,TimeStep,NTIME,GWHydData%AllHeadOutFile,iStat)
         END IF
         IF (iStat .EQ. -1) RETURN
         GWHydData%lAllHeadOutFile_Defined = .TRUE.
@@ -215,11 +216,11 @@ CONTAINS
                   GWHydData%ElemCentroid_Y(iNElements)  , &
                   STAT=iErrorCode ,ERRMSG=cErrorMsg     )
         IF (iErrorCode .NE. 0) THEN
-            CALL SetLastMessage('Error in allocating memory for the print-out of groundwater velocities at cell centroids!'//NEW_LINE('')//TRIM(cErrorMsg),f_iFatal,cThisProcedure)
+            CALL GWHydData%Logger%SetLastMessage('Error in allocating memory for the print-out of groundwater velocities at cell centroids!'//NEW_LINE('')//TRIM(cErrorMsg),f_iFatal,cThisProcedure)
             iStat = -1
             RETURN
         END IF
-        CALL CellVelocityFile_New(lIsForInquiry,cCellVelocityFileName,iNLayers,AppGrid,GWHydData%CellVelocityOutFile,cUNITLTOU,cUNITVROU,rFACTLTOU,GWHydData%ElemCentroid_X,GWHydData%ElemCentroid_Y,iStat)
+        CALL CellVelocityFile_New(GWHydData%Logger,lIsForInquiry,cCellVelocityFileName,iNLayers,AppGrid,GWHydData%CellVelocityOutFile,cUNITLTOU,cUNITVROU,rFACTLTOU,GWHydData%ElemCentroid_X,GWHydData%ElemCentroid_Y,iStat)
         IF (iStat .EQ. -1) RETURN
         GWHydData%lCellVelocityOutFile_Defined = .TRUE.
     END IF
@@ -228,11 +229,11 @@ CONTAINS
     IF (cHeadTecplotFileName .NE. '') THEN
         ALLOCATE (GWHydData%HeadTecplotFile , STAT=iErrorCode ,ERRMSG=cErrorMsg)
         IF (iErrorCode .NE. 0) THEN
-            CALL SetLastMessage('Error in allocating memory for groundwater head print-out for TecPlot!'//NEW_LINE('')//TRIM(cErrorMsg),f_iFatal,cThisProcedure)
+            CALL GWHydData%Logger%SetLastMessage('Error in allocating memory for groundwater head print-out for TecPlot!'//NEW_LINE('')//TRIM(cErrorMsg),f_iFatal,cThisProcedure)
             iStat = -1
             RETURN
         END IF
-        CALL GWHydData%HeadTecplotFile%New(lIsForInquiry,cHeadTecplotFileName,'groundwater head print-out for TecPlot',iStat)  ;  IF (iStat .EQ. -1) RETURN
+        CALL GWHydData%HeadTecplotFile%New(GWHydData%Logger,lIsForInquiry,cHeadTecplotFileName,'groundwater head print-out for TecPlot',iStat)  ;  IF (iStat .EQ. -1) RETURN
         GWHydData%lHeadTecplotFile_Defined = .TRUE.
     END IF
     
@@ -249,11 +250,11 @@ CONTAINS
     IF (cVelTecplotFileName .NE. '') THEN
         ALLOCATE (GWHydData%VelocityTecplotFile , STAT=iErrorCode ,ERRMSG=cErrorMsg)
         IF (iErrorCode .NE. 0) THEN
-            CALL SetLastMessage('Error in allocating memory for groundwater velocities print-out for TecPlot!'//NEW_LINE('')//TRIM(cErrorMsg),f_iFatal,cThisProcedure)
+            CALL GWHydData%Logger%SetLastMessage('Error in allocating memory for groundwater velocities print-out for TecPlot!'//NEW_LINE('')//TRIM(cErrorMsg),f_iFatal,cThisProcedure)
             iStat = -1
             RETURN
         END IF
-        CALL GWHydData%VelocityTecplotFile%New(lIsForInquiry,cVelTecplotFileName,'groundwater velocities print-out for TecPlot',iStat=iStat)
+        CALL GWHydData%VelocityTecplotFile%New(GWHydData%Logger,lIsForInquiry,cVelTecplotFileName,'groundwater velocities print-out for TecPlot',iStat=iStat)
         IF (iStat .EQ. -1) RETURN
         GWHydData%lVelocityTecplotFile_Defined = .TRUE.
     END IF
@@ -261,11 +262,11 @@ CONTAINS
     !Instantiate the user-specified hydrographs output data
     ALLOCATE (GWHydData%GWHydOutput , STAT=iErrorCode ,ERRMSG=cErrorMsg)
     IF (iErrorCode .NE. 0) THEN
-        CALL SetLastMessage('Error in allocating memory for groundwater hydrograph printing at user-specified locations!'//NEW_LINE('')//TRIM(cErrorMsg),f_iFatal,cThisProcedure)
+        CALL GWHydData%Logger%SetLastMessage('Error in allocating memory for groundwater hydrograph printing at user-specified locations!'//NEW_LINE('')//TRIM(cErrorMsg),f_iFatal,cThisProcedure)
         iStat = -1
         RETURN
     END IF
-    CALL GWHydData%GWHydOutput%New(lIsForInquiry,InFile,cWorkingDirectory,AppGrid,Stratigraphy,iGWNodeIDs,f_iHyd_GWHead,cUNITLTOU,'HEAD',TimeStep,iStat)
+    CALL GWHydData%GWHydOutput%New(GWHydData%Logger,lIsForInquiry,InFile,cWorkingDirectory,AppGrid,Stratigraphy,iGWNodeIDs,f_iHyd_GWHead,cUNITLTOU,'HEAD',TimeStep,iStat)
     IF (iStat .EQ. -1) RETURN
     GWHydData%lGWHydOutput_Defined = GWHydData%GWHydOutput%IsDefined()
     IF (.NOT. GWHydData%lGWHydOutput_Defined) DEALLOCATE (GWHydData%GWHydOutput , STAT=iErrorCode)
@@ -273,11 +274,11 @@ CONTAINS
     !Instantiate face flow hydrographs output data
     ALLOCATE (GWHydData%FaceFlowOutput , STAT=iErrorCode ,ERRMSG=cErrorMsg)
     IF (iErrorCode .NE. 0) THEN
-        CALL SetLastMessage('Error in allocating memory for face flow hydrograph printing!'//NEW_LINE('')//TRIM(cErrorMsg),f_iFatal,cThisProcedure)
+        CALL GWHydData%Logger%SetLastMessage('Error in allocating memory for face flow hydrograph printing!'//NEW_LINE('')//TRIM(cErrorMsg),f_iFatal,cThisProcedure)
         iStat = -1
         RETURN
     END IF
-    CALL FaceFlowOutput_New(lIsForInquiry,InFile,cWorkingDirectory,AppGrid%AppFace,iNLayers,AppGrid%AppElement%ID,cUNITVLOU,TimeStep,GWHydData%FaceFlowOutput,iStat)
+    CALL FaceFlowOutput_New(GWHydData%Logger,lIsForInquiry,InFile,cWorkingDirectory,AppGrid%AppFace,iNLayers,AppGrid%AppElement%ID,cUNITVLOU,TimeStep,GWHydData%FaceFlowOutput,iStat)
     IF (iStat .EQ. -1) RETURN
     IF (GWHydData%FaceFlowOutput%OutFile%iGetFileType() .EQ. f_iUNKNOWN) THEN
         DEALLOCATE (GWHydData%FaceFlowOutput , STAT=iErrorCode)
@@ -292,7 +293,8 @@ CONTAINS
   ! --- NEW OUTPUT FILE FOR CELL VELOCITIES
   ! --- Note: Assumes a filename is specified
   ! -------------------------------------------------------------
-  SUBROUTINE CellVelocityFile_New(IsForInquiry,cFileName,NLayers,AppGrid,CellVelocityFile,UNITLTOU,UNITVROU,FACTLTOU,XC,YC,iStat)
+  SUBROUTINE CellVelocityFile_New(Logger,IsForInquiry,cFileName,NLayers,AppGrid,CellVelocityFile,UNITLTOU,UNITVROU,FACTLTOU,XC,YC,iStat)
+    TYPE(MessageLoggerType),INTENT(INOUT) :: Logger
     LOGICAL,INTENT(IN)           :: IsForInquiry
     CHARACTER(LEN=*),INTENT(IN)  :: cFileName,UNITLTOU,UNITVROU
     INTEGER,INTENT(IN)           :: NLayers
@@ -322,7 +324,7 @@ CONTAINS
 
     !Make sure that the file is a text file
     IF (CellVelocityFile%iGetFileType() .NE. f_iTXT) THEN
-        CALL SetLastMessage('Output file ('//TRIM(cFileName)//') for cell groundwater velocities must be a text file!',f_iFatal,ThisProcedure)
+        CALL Logger%SetLastMessage('Output file ('//TRIM(cFileName)//') for cell groundwater velocities must be a text file!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -358,7 +360,8 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- NEW OUTPUT FOR FACE FLOW HYDROGRAPH PRINTING
   ! -------------------------------------------------------------
-  SUBROUTINE FaceFlowOutput_New(IsForInquiry,InFile,cWorkingDirectory,AppFace,NLayers,ElementIDs,UNITVLOU,TimeStep,FaceFlowOutput,iStat)
+  SUBROUTINE FaceFlowOutput_New(Logger,IsForInquiry,InFile,cWorkingDirectory,AppFace,NLayers,ElementIDs,UNITVLOU,TimeStep,FaceFlowOutput,iStat)
+    TYPE(MessageLoggerType),INTENT(INOUT) :: Logger
     LOGICAL,INTENT(IN)            :: IsForInquiry
     TYPE(GenericFileType)         :: InFile
     CHARACTER(LEN=*),INTENT(IN)   :: cWorkingDirectory
@@ -396,7 +399,7 @@ CONTAINS
     !Allocate memory
     ALLOCATE (FaceFlowOutput%HydList(NOUTF) ,STAT=ErrorCode , ERRMSG=cErrorMsg)
     IF (ErrorCode .NE. 0) THEN
-        CALL SetLastMessage('Error in allocating memory for face flow hydrograph list!'//NEW_LINE(' ')//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
+        CALL Logger%SetLastMessage('Error in allocating memory for face flow hydrograph list!'//NEW_LINE(' ')//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -409,7 +412,7 @@ CONTAINS
             READ (ALine,*) iDummyArray(indx1)
             iLoc = FirstLocation(' ',ALine)
             IF (iLoc .EQ. 0) THEN
-                CALL SetLastMessage('Error in data entry for face flow hydrograph specification '//TRIM(IntToText(indx))//'!',f_iFatal,ThisProcedure)
+                CALL Logger%SetLastMessage('Error in data entry for face flow hydrograph specification '//TRIM(IntToText(indx))//'!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -425,14 +428,14 @@ CONTAINS
             MessageArray(1) = 'Face flow hydrograph print-out specifications must be entered sequentially.'
             MessageArray(2) = 'Expected hydrograph ID = ' // TRIM(IntToText(indx))
             MessageArray(3) = 'Entered hydrograph ID  = ' // TRIM(IntToText(ID))
-            CALL SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+            CALL Logger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
-        
+
         !Make sure layer is modeled
         IF (iHydLayer .LT. 1   .OR.   iHydLayer .GT. NLayers) THEN
-            CALL SetLastMessage('Face flow hydrograph layer listed for hydrograph ID '//TRIM(IntToText(ID))//' is outside model bounds!',f_iFatal,ThisProcedure)
+            CALL Logger%SetLastMessage('Face flow hydrograph layer listed for hydrograph ID '//TRIM(IntToText(ID))//' is outside model bounds!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -443,7 +446,7 @@ CONTAINS
         IF (iFace .EQ. 0) THEN
             MessageArray(1) = 'Groundwater nodes '//TRIM(IntToText(iNodes(1)))//' and '//TRIM(IntToText(iNodes(2)))//' do not define a face'
             MessageArray(2) = 'for element face flow printing!'
-            CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)            
+            CALL Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF 
@@ -455,7 +458,7 @@ CONTAINS
     END DO
     
     !Instantiate the output file 
-    CALL PrepFaceFlowOutFile(IsForInquiry,cFileName,ElementIDs,UNITVLOU,NOUTF,FaceFlowOutput%HydList,AppFace,TimeStep,FaceFlowOutput%OutFile,iStat)
+    CALL PrepFaceFlowOutFile(Logger,IsForInquiry,cFileName,ElementIDs,UNITVLOU,NOUTF,FaceFlowOutput%HydList,AppFace,TimeStep,FaceFlowOutput%OutFile,iStat)
     
   END SUBROUTINE FaceFlowOutput_New
   
@@ -463,7 +466,8 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- NEW OUTPUT FILE FOR ALL HEADS
   ! -------------------------------------------------------------
-  SUBROUTINE AllHeadOutFile_New(cFileName,UNITLTOU,NNodes,NLayers,NodeIDs,TimeStep,NTIME,OutFile,iStat)
+  SUBROUTINE AllHeadOutFile_New(Logger,cFileName,UNITLTOU,NNodes,NLayers,NodeIDs,TimeStep,NTIME,OutFile,iStat)
+    TYPE(MessageLoggerType),INTENT(INOUT) :: Logger
     CHARACTER(LEN=*),INTENT(IN)       :: cFileName,UNITLTOU
     INTEGER,INTENT(IN)                :: NNodes,NLayers,NodeIDs(NNodes),NTIME
     TYPE(TimeStepType),INTENT(IN)     :: TimeStep
@@ -482,7 +486,7 @@ CONTAINS
     iStat = 0
     
     !Inform user
-    CALL EchoProgress('   Instantiating output file for groundwater heads at all nodes...') 
+    CALL Logger%EchoProgress('   Instantiating output file for groundwater heads at all nodes...')
     
     !Initialize
     Header     = ''
@@ -491,19 +495,19 @@ CONTAINS
     !Allocate memory for the file
     ALLOCATE (OutFile , STAT=ErrorCode ,ERRMSG=cErrorMsg)
     IF (ErrorCode .NE. 0) THEN
-        CALL SetLastMessage('Error in allocating memory for groundwater head print-out at all nodes!'//NEW_LINE('')//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
+        CALL Logger%SetLastMessage('Error in allocating memory for groundwater head print-out at all nodes!'//NEW_LINE('')//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
-    
+
     !Open file
     CALL OutFile%New(FileName=cFileName,InputFile=.FALSE.,IsTSFile=.TRUE.,Descriptor='groundwater head at all nodes output',iStat=iStat)
     IF (iStat .EQ. -1) RETURN
-    
+
     !Make sure DSS file is used only if it is a time-tracking simulation
     IF (OutFile%iGetFileType() .EQ. f_iDSS) THEN
         IF (.NOT. TimeStep%TrackTime) THEN
-            CALL SetLastMessage('DSS files for groundwater head printing at all nodes can only be used for time-tracking simulations.',f_iFatal,ThisProcedure)
+            CALL Logger%SetLastMessage('DSS files for groundwater head printing at all nodes can only be used for time-tracking simulations.',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -575,7 +579,8 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- NEW FILE FOR ALL HEADS OPENED FOR INPUT FOR POST-PROCESSING
   ! -------------------------------------------------------------
-  SUBROUTINE AllHeadOutFile_ForInquiry_New(cFileName,NNodes,NLayers,NodeIDs,TimeStep,InFile,iStat)
+  SUBROUTINE AllHeadOutFile_ForInquiry_New(Logger,cFileName,NNodes,NLayers,NodeIDs,TimeStep,InFile,iStat)
+    TYPE(MessageLoggerType),INTENT(INOUT)    :: Logger
     CHARACTER(LEN=*),INTENT(IN)              :: cFileName
     INTEGER,INTENT(IN)                       :: NNodes,NLayers,NodeIDs(NNodes)
     TYPE(TimeStepType),INTENT(IN)            :: TimeStep
@@ -593,11 +598,11 @@ CONTAINS
     !Allocate memory for the file
     ALLOCATE (InFile , STAT=ErrorCode , ERRMSG=cErrorMsg)
     IF (ErrorCode .NE. 0) THEN
-        CALL SetLastMessage('Error in allocating memory for groundwater head print-out at all nodes!'//NEW_LINE('')//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
+        CALL Logger%SetLastMessage('Error in allocating memory for groundwater head print-out at all nodes!'//NEW_LINE('')//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
-      
+
     !Instantiate file according to its type
     IF (iGetFileType_FromName(cFileName) .EQ. f_iDSS) THEN
         !Form pathnames
@@ -1302,7 +1307,8 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- PREPARE FACE FLOW HYDROGRAPH OUTPUT FILE FOR PRINT-OUT
   ! -------------------------------------------------------------
-  SUBROUTINE PrepFaceFlowOutFile(IsForInquiry,cFileName,ElementIDs,UNITVLOU,NHyd,HydList,AppFace,TimeStep,OutFile,iStat)
+  SUBROUTINE PrepFaceFlowOutFile(Logger,IsForInquiry,cFileName,ElementIDs,UNITVLOU,NHyd,HydList,AppFace,TimeStep,OutFile,iStat)
+    TYPE(MessageLoggerType),INTENT(INOUT) :: Logger
     LOGICAL,INTENT(IN)               :: IsForInquiry
     CHARACTER(LEN=*),INTENT(IN)      :: cFileName,UNITVLOU
     INTEGER,INTENT(IN)               :: ElementIDs(:),NHyd
@@ -1336,7 +1342,7 @@ CONTAINS
     !Make sure that DSS file is used only if it is a time tracking simulation
     IF (OutFile%iGetFileType() .EQ. f_iDSS) THEN
         IF (.NOT. TimeStep%TrackTime) THEN
-            CALL SetLastMessage('DSS files for face flow hydrograph printing can only be used for time-tracking simulations.',f_iFatal,ThisProcedure)
+            CALL Logger%SetLastMessage('DSS files for face flow hydrograph printing can only be used for time-tracking simulations.',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -1423,7 +1429,7 @@ CONTAINS
     TYPE(TimeStepType),INTENT(IN) :: TimeStep
     REAL(8),INTENT(IN)            :: rFactHead
     INTEGER,INTENT(OUT)           :: iStat
-    
+
     !Local variables
     INTEGER                  :: NColumns(1),FileReadCode,indxTime
     REAL(8)                  :: rGWHeads(NNodes*NLayers,1),rConvFactor
@@ -1431,13 +1437,24 @@ CONTAINS
     TYPE(GenericFileType)    :: OutFile
     CHARACTER(:),ALLOCATABLE :: cFileName
     TYPE(TimeStepType)       :: TimeStep_Local
-    
-    !Get the name of the text/DSS file 
+    LOGICAL                  :: lHDFExists
+
+    iStat = 0
+
+    !Get the name of the text/DSS file
     CALL AllHeadsInFile%GetFileName(cFileName)
-    
+
     !Name for the HDF file
     cHDFFileName = TRIM(ADJUSTL(StripTextUntilCharacter(cFileName,'.',Back=.TRUE.))) // '.hdf'
-    
+
+    !Skip the conversion if the HDF already exists. The .out file is
+    !written once by the simulation and never modified, so the .hdf
+    !built from it on a previous inquiry-mode load remains correct.
+    !Users who re-run the simulation should delete the .hdf alongside
+    !IW_ModelData_ForInquiry.bin to force a rebuild.
+    INQUIRE(FILE=TRIM(cHDFFileName), EXIST=lHDFExists)
+    IF (lHDFExists) RETURN
+
     !Open output file HDF file
     CALL OutFile%New(FileName=TRIM(cHDFFileName),InputFile=.FALSE.,IsTSFile=.TRUE.,iStat=iStat)
     IF (iStat .EQ. -1) RETURN

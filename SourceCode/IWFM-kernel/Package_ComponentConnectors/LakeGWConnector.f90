@@ -21,9 +21,8 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 MODULE LakeGWConnector
-  USE MessageLogger          , ONLY: SetLastMessage           , &
-                                     EchoProgress             , &
-                                     f_iFatal                 
+  USE MessageLogger          , ONLY: MessageLoggerType        , &
+                                     f_iFatal
   USE GeneralUtilities       , ONLY: ShellSort                , &
                                      GetUniqueArrayComponents , &
                                      AllocArray               , &
@@ -53,7 +52,7 @@ MODULE LakeGWConnector
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: LakeGWConnectorType               
+  PUBLIC :: LakeGWConnectorType
   
   
   ! -------------------------------------------------------------
@@ -84,7 +83,7 @@ MODULE LakeGWConnector
   ! --- LAKE-GW CONNECTOR TYPE
   ! -------------------------------------------------------------
   TYPE LakeGWConnectorType
-      PRIVATE
+      TYPE(MessageLoggerType),POINTER,PUBLIC       :: Logger              => NULL()
       LOGICAL                                     :: lDefined            = .FALSE.
       CHARACTER(LEN=6)                            :: TimeUnitConductance = ''      !Time unit of conductance
       TYPE(SingleLakeGWConnectorType),ALLOCATABLE :: Lakes(:)                      !List of connectors for all lakes
@@ -115,11 +114,13 @@ MODULE LakeGWConnector
   ! -------------------------------------------------------------
   INTEGER,PARAMETER                   :: ModNameLen = 17
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'LakeGWConnector::'
-  
-  
-  
-  
+
+
+
+
 CONTAINS
+
+
 
 
 
@@ -515,7 +516,7 @@ CONTAINS
           !Make sure that time unit for conductance is consistent within all lakes
           IF (Connector%TimeUnitConductance .NE. '') THEN
               IF (TRIM(Connector%TimeUnitConductance) .NE. TRIM(ADJUSTL(UpperCase(TimeUnitConductance)))) THEN
-                  CALL SetLastMessage('Time unit for conductance between lakes is not consistent!',f_iFatal,ThisProcedure)
+                  CALL Connector%Logger%SetLastMessage('Time unit for conductance between lakes is not consistent!',f_iFatal,ThisProcedure)
                   iStat = -1
                   RETURN
               END IF
@@ -544,15 +545,18 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- READ PRE-PROCESSED DATA
   ! -------------------------------------------------------------
-  SUBROUTINE ReadPreprocessedData(Connector,InFile,iStat)
-    CLASS(LakeGWConnectorType),INTENT(OUT) :: Connector
-    TYPE(GenericFileType)                  :: InFile
-    INTEGER,INTENT(OUT)                    :: iStat
-    
+  SUBROUTINE ReadPreprocessedData(Connector,Logger,InFile,iStat)
+    CLASS(LakeGWConnectorType),INTENT(OUT)  :: Connector
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
+    TYPE(GenericFileType)                    :: InFile
+    INTEGER,INTENT(OUT)                      :: iStat
+
     !Local variables
     INTEGER :: nLakes,indxLake,indxElem,nGWNode
-    
-    CALL InFile%ReadData(nLakes,iStat)  
+
+    Connector%Logger => Logger
+
+    CALL InFile%ReadData(nLakes,iStat)
     IF (iStat .EQ. -1) RETURN
     IF (nLakes .EQ. 0) RETURN
     
@@ -814,8 +818,9 @@ CONTAINS
     iStat = 0
     
     !Inform user
-    IF (SIZE(Connector%Lakes) .GT. 0) &
-        CALL EchoProgress('Registering lake-groundwater connector with matrix...')
+    IF (SIZE(Connector%Lakes) .GT. 0) THEN
+        CALL Connector%Logger%EchoProgress('Registering lake-groundwater connector with matrix...')
+    END IF
     
     !Initialize
     NNodes = AppGrid%NNodes

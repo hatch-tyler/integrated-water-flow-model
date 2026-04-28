@@ -22,16 +22,16 @@
 !***********************************************************************
 MODULE BudgetControls
   USE IWFM_Kernel_Version  , ONLY: IWFMKernelVersion
-  USE MessageLogger        , ONLY: SetLastMessage            , &
-                                   LogMessage                , &
+  USE MessageLogger        , ONLY: MessageLoggerType         , &
+                                   DefaultLogger             , &
                                    LogLastMessage            , &
-                                   PrintRunTime              , &
                                    MessageArray              , &
                                    f_iWarn                   , &
                                    f_iFatal                  , &
                                    f_iMessage                , &
-                                   f_iSCREEN                 
-  USE ProgramTimer         , ONLY: StopTimer      
+                                   f_iSCREEN
+  USE ProgramTimer         , ONLY: DefaultTimer           , &
+                                   ProgramTimerType
   USE GeneralUtilities     , ONLY: StripTextUntilCharacter   , &
                                    CleanSpecialCharacters    , &
                                    LocateInList              , &
@@ -106,15 +106,13 @@ MODULE BudgetControls
   ! --- MISC. ENTITIES
   ! ------------------------------------------------------------- 
   INTEGER,PARAMETER                   :: ModNameLen = 16
-  CHARACTER(LEN=ModNameLen),PARAMETER :: ModName = 'BudgetControls::' 
+  CHARACTER(LEN=ModNameLen),PARAMETER :: ModName = 'BudgetControls::'
 
 
 
 
   
 CONTAINS
-
-
 
 
   ! -------------------------------------------------------------
@@ -183,7 +181,7 @@ CONTAINS
         IF (IsTimeStampValid(ALine)) THEN
           PrintInterval%PrintEndDateAndTime = StripTimeStamp(ALine)
         ELSE
-          CALL SetLastMessage('Budget output ending time should be in MM/DD/YYYY_hh:mm format!',f_iFatal,ThisProcedure)
+          CALL DefaultLogger%SetLastMessage('Budget output ending time should be in MM/DD/YYYY_hh:mm format!',f_iFatal,ThisProcedure)
           iStat = -1
           RETURN
         END IF
@@ -193,7 +191,7 @@ CONTAINS
         !Set the budget output beginning time
         READ (ALine,*,IOSTAT=ErrorCode) PrintInterval%PrintBeginTime
         IF (ErrorCode .NE. 0) THEN
-            CALL SetLastMessage('Error in reading the budget output beginning time!',f_iFatal,ThisProcedure) 
+            CALL DefaultLogger%SetLastMessage('Error in reading the budget output beginning time!',f_iFatal,ThisProcedure) 
             iStat = -1
             RETURN
         END IF
@@ -240,7 +238,7 @@ CONTAINS
     MessageArray(2) = '  IWFM       : '//TRIM(IWFMVersion%GetVersion())
     MessageArray(3) = '  IWFM Kernel: '//TRIM(IWFMKernelVersion%GetVersion())
     
-    CALL LogMessage(MessageArray(1:3),f_iMessage,'',iDestination=f_iSCREEN)
+    CALL DefaultLogger%LogMessage(MessageArray(1:3),f_iMessage,'',iDestination=f_iSCREEN)
   
   END SUBROUTINE PrintVersionNumbers
   
@@ -269,7 +267,7 @@ CONTAINS
     
     !If NBUdget is zero, message to the user and return
     IF (NBudget .EQ. 0) THEN
-        CALL LogMessage('Number of budget tables to be processed is set to zero!',f_iWarn,ThisProcedure)
+        CALL DefaultLogger%LogMessage('Number of budget tables to be processed is set to zero!',f_iWarn,ThisProcedure)
         RETURN
     END IF
     
@@ -304,11 +302,11 @@ CONTAINS
     IF (BudgetClass%cBudgetOutputFileName .EQ. '') RETURN
     
     !Instantiate the budget data
-    CALL Budget%New(BudgetClass%cBudgetInputFileName,iStat)
+    CALL Budget%New(DefaultLogger,BudgetClass%cBudgetInputFileName,iStat)
     IF (iStat .EQ. -1) RETURN
     
     !Inform user
-    CALL LogMessage('Processing '//TRIM(Budget%GetDescriptor())//'.',f_iMessage,'')
+    CALL DefaultLogger%LogMessage('Processing '//TRIM(Budget%GetDescriptor())//'.',f_iMessage,'')
     
     !Print locations
     IF (BudgetClass%iPrintLocs(1) .EQ. -1) THEN
@@ -321,7 +319,7 @@ CONTAINS
       iPrintLocations = BudgetClass%iPrintLocs
       !Make sure that all print location indices are in range
       IF (ANY(iPrintLocations .GT. Budget%GetNLocations()) .OR. ANY(iPrintLocations .LT. -1)) THEN
-          CALL SetLastMessage('One or more location indices for '//TRIM(Budget%GetDescriptor())//' printing is out of range!',f_iFatal,ThisProcedure) 
+          CALL DefaultLogger%SetLastMessage('One or more location indices for '//TRIM(Budget%GetDescriptor())//' printing is out of range!',f_iFatal,ThisProcedure) 
           iStat = -1
           RETURN
       END IF
@@ -346,10 +344,10 @@ CONTAINS
      IF (iStat .EQ. -1) THEN
          CALL LogLastMessage()
      ELSE
-         CALL LogMessage(f_cLineFeed//'Program completed successfully.',f_iMessage,'')
+         CALL DefaultLogger%LogMessage(f_cLineFeed//'Program completed successfully.',f_iMessage,'')
      END IF
-     CALL StopTimer()
-     CALL PrintRunTime()
+     CALL DefaultTimer%Stop()
+     CALL DefaultLogger%PrintRunTime()
      STOP
   
   END SUBROUTINE EndExecution

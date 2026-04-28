@@ -21,8 +21,7 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 MODULE Class_GenericMoistureData
-  USE MessageLogger       , ONLY: SetLastMessage        , &
-                                  EchoProgress          , &
+  USE MessageLogger       , ONLY: MessageLoggerType     , &
                                   f_iFatal
   USE TimeSeriesUtilities , ONLY: TimeStepType
   USE IOInterface         , ONLY: RealTSDataInFileType  
@@ -45,7 +44,7 @@ MODULE Class_GenericMoistureData
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: GenericMoistureDataType        
+  PUBLIC :: GenericMoistureDataType
   
   
   ! -------------------------------------------------------------
@@ -72,8 +71,6 @@ MODULE Class_GenericMoistureData
 
   
 CONTAINS
-
-
 
 
 ! ******************************************************************
@@ -107,7 +104,7 @@ CONTAINS
     !Allocate memory for rGenericMoisture no matter what
     ALLOCATE (GenericMoistureData%rGenericMoisture(NSoils,NLocations) , STAT=ErrorCode)
     IF (ErrorCode .NE. 0) THEN
-        CALL SetLastMessage('Error in allocating memory for generic moisture data!',f_iFatal,ThisProcedure)
+        CALL GenericMoistureData%Logger%SetLastMessage('Error in allocating memory for generic moisture data!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -183,7 +180,7 @@ CONTAINS
     INTEGER :: FileReadCode,indxLocation
     
     !Inform user about progress
-    CALL EchoProgress('Reading generic moisture time series data')
+    CALL GenericMoistureData%Logger%EchoProgress('Reading generic moisture time series data')
     
     !Read data
     CALL GenericMoistureData%ReadTSData(TimeStep,'Generic moisture data',FileReadCode,iStat)

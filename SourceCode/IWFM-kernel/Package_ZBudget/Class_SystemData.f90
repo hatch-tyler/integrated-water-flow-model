@@ -21,17 +21,15 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 MODULE Class_SystemData
-  USE MessageLogger      , ONLY: SetLastMessage   , &
+  USE MessageLogger      , ONLY: MessageLoggerType , &
                                  f_iFatal
   USE IOInterface        , ONLY: GenericFileType  , &
                                  f_iGroup
   USE ZBudget_Parameters , ONLY: f_cAttributesDir
   USE ZBudget_Util       , ONLY: IsZBudgetFile
   IMPLICIT NONE
-  
-  
 
-  
+
 ! ******************************************************************
 ! ******************************************************************
 ! ******************************************************************
@@ -46,13 +44,14 @@ MODULE Class_SystemData
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: SystemDataType    
+  PUBLIC :: SystemDataType
   
   
   ! -------------------------------------------------------------
   ! --- PHYSICAL SYSTEM DATA TYPE 
   ! -------------------------------------------------------------
   TYPE SystemDataType
+      TYPE(MessageLoggerType),POINTER :: Logger => NULL()
       INTEGER             :: NNodes                   = 0
       INTEGER             :: NElements                = 0
       INTEGER             :: NLayers                  = 0    !Number of layers considred for the hydrologic system (not necessarily equal to the aquifer layers)
@@ -100,20 +99,24 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- READ SYSTEM DATA FROM HDF FILE
   ! -------------------------------------------------------------
-  SUBROUTINE ReadFromFile(SystemData,HDFFile,iStat)
-    CLASS(SystemDataType),INTENT(OUT) :: SystemData
-    TYPE(GenericFileType)             :: HDFFile
-    INTEGER,INTENT(OUT)               :: iStat
-    
+  SUBROUTINE ReadFromFile(SystemData,Logger,HDFFile,iStat)
+    CLASS(SystemDataType),INTENT(OUT)         :: SystemData
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT) :: Logger
+    TYPE(GenericFileType)                     :: HDFFile
+    INTEGER,INTENT(OUT)                       :: iStat
+
     !Local variables
     CHARACTER(LEN=ModNameLen+12),PARAMETER :: ThisProcedure = ModName // 'ReadFromFile'
     INTEGER                                :: indxLayer,indxNode,indxLayerBelow,indx
     CHARACTER(:),ALLOCATABLE               :: cFileName
-    
+
+    !Set logger
+    SystemData%Logger => Logger
+
     !Check that this is indeed Z-Budget data file by checking if an object that Budget file doesn't have exist
     IF (.NOT. IsZBudgetFile(HDFFile)) THEN
         CALL HDFFile%GetName(cFileName)
-        CALL SetLastMessage('File '//TRIM(cFileName)//' is not a Z-Budget file type!',f_iFatal,ThisProcedure)
+        CALL SystemData%Logger%SetLastMessage('File '//TRIM(cFileName)//' is not a Z-Budget file type!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -227,6 +230,4 @@ CONTAINS
         
   END SUBROUTINE Kill
 
-  
-  
 END MODULE

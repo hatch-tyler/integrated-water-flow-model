@@ -22,8 +22,9 @@
 !***********************************************************************
 MODULE Class_BaseAppSubsidence
   USE MessageLogger           , ONLY: LogMessage          , &
+                                      MessageLoggerType   , &
                                       f_iFILE             , &
-                                      f_iMessage            
+                                      f_iMessage
   USE IOInterface             , ONLY: GenericFileType      , &
                                       f_iHDF
   USE GeneralUtilities        , ONLY: IntToText           
@@ -53,8 +54,8 @@ MODULE Class_BaseAppSubsidence
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: BaseAppSubsidenceType        , &
-            ComputeRegionalCumSubsidence , &
+  PUBLIC :: BaseAppSubsidenceType             , &
+            ComputeRegionalCumSubsidence      , &
             f_cDescription_SubsHyd
 
   
@@ -68,6 +69,7 @@ MODULE Class_BaseAppSubsidence
   ! --- BASE APPLICATION LAKES DATA TYPE
   ! -------------------------------------------------------------
   TYPE,ABSTRACT :: BaseAppSubsidenceType
+      TYPE(MessageLoggerType),POINTER     :: Logger => NULL()
       REAL(8)                             :: FactorLen                = 1.0      !Factor for output unit conversion
       CHARACTER(LEN=6)                    :: cUnitLen                 = ''       !Output unit
       REAL(8),ALLOCATABLE                 :: ElasticSC(:,:)                      !Elastic storage coefficent at (node,layer)
@@ -130,9 +132,10 @@ MODULE Class_BaseAppSubsidence
   ! -------------------------------------------------------------
   ABSTRACT INTERFACE
 
-    SUBROUTINE Abstract_New(AppSubsidence,IsForInquiry,cFileName,cWorkingDirectory,iGWNodeIDs,AppGrid,Stratigraphy,StrmConnectivity,TimeStep,iStat,SubsICFile,NTIME) 
-        IMPORT                                   :: BaseAppSubsidenceType,AppGridType,StratigraphyType,TimeStepType,GenericFileType
+    SUBROUTINE Abstract_New(AppSubsidence,Logger,IsForInquiry,cFileName,cWorkingDirectory,iGWNodeIDs,AppGrid,Stratigraphy,StrmConnectivity,TimeStep,iStat,SubsICFile,NTIME)
+        IMPORT                                   :: BaseAppSubsidenceType,AppGridType,StratigraphyType,TimeStepType,GenericFileType,MessageLoggerType
         CLASS(BaseAppSubsidenceType),INTENT(OUT) :: AppSubsidence
+        TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
         LOGICAL,INTENT(IN)                       :: IsForInquiry
         CHARACTER(LEN=*),INTENT(IN)              :: cFileName,cWorkingDirectory
         INTEGER,INTENT(IN)                       :: iGWNodeIDs(:)
@@ -229,10 +232,10 @@ MODULE Class_BaseAppSubsidence
   
   
 CONTAINS
-    
-    
-    
-    
+
+
+
+
 ! ******************************************************************
 ! ******************************************************************
 ! ******************************************************************

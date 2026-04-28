@@ -21,7 +21,8 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 MODULE Class_IrigFracFile
-  USE MessageLogger        , ONLY: SetLastMessage       , &
+  USE MessageLogger        , ONLY: MessageLoggerType    , &
+                                   SetLastMessage       , &
                                    MessageArray         , &
                                    f_iFatal
   USE GeneralUtilities     , ONLY: IntToText
@@ -57,7 +58,8 @@ MODULE Class_IrigFracFile
   TYPE,EXTENDS(RealTSDataInFileType) :: IrigFracFileType
     PRIVATE
   CONTAINS
-    PROCEDURE,PASS :: New 
+    PROCEDURE,PASS :: SetLogger
+    PROCEDURE,PASS :: New
     PROCEDURE,PASS :: Kill
     PROCEDURE,PASS :: IrigFracFile_ReadTSData
     GENERIC        :: ReadTSData              => IrigFracFile_ReadTSData
@@ -75,8 +77,18 @@ MODULE Class_IrigFracFile
     
 CONTAINS
 
-    
-    
+
+  ! -------------------------------------------------------------
+  ! --- SET LOGGER INSTANCE
+  ! -------------------------------------------------------------
+  SUBROUTINE SetLogger(IrigFracFile,Logger)
+    CLASS(IrigFracFileType),INTENT(INOUT)     :: IrigFracFile
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT) :: Logger
+
+    IrigFracFile%Logger => Logger
+
+  END SUBROUTINE SetLogger
+
 
   ! -------------------------------------------------------------
   ! --- NEW IRRIGATION FRACTIONS FILE
@@ -149,7 +161,7 @@ CONTAINS
                         MessageArray(2) = 'a water supply is serving both agricultural and urban water demands.'
                         MessageArray(3) = 'This is no longer supported due to computational difficulties. A supply can'
                         MessageArray(4) = 'now be either an agricultural water supply or urban water supply, but not both.'
-                        CALL SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
+                        CALL IrigFracFile%Logger%SetLastMessage(MessageArray(1:4),f_iFatal,ThisProcedure)
                         iStat = -1
                         RETURN
                     END IF

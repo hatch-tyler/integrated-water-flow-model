@@ -27,9 +27,9 @@ MODULE Class_StrmInflow
                                    StripTextUntilCharacter , &
                                    CleanSpecialCharacters
   USE TimeSeriesUtilities  , ONLY: TimeStepType
-  USE MessageLogger        , ONLY: SetLastMessage          , &
-                                   MessageArray            , &
-                                   f_iFatal                  
+  USE MessageLogger        , ONLY: MessageArray            , &
+                                   MessageLoggerType       , &
+                                   f_iFatal
   USE IOInterface          , ONLY: RealTSDataInFileType   
   IMPLICIT NONE
   
@@ -50,7 +50,7 @@ MODULE Class_StrmInflow
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: StrmInflowType         
+  PUBLIC :: StrmInflowType
   
   
   ! -------------------------------------------------------------
@@ -92,6 +92,7 @@ CONTAINS
 
 
 
+
 ! ******************************************************************
 ! ******************************************************************
 ! ******************************************************************
@@ -105,12 +106,13 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- INITIALIZE STREAM INFLOW TIME SERIES DATA FILE
   ! -------------------------------------------------------------
-  SUBROUTINE New(StrmInflow,FileName,cWorkingDirectory,TimeStep,NStrmNodes,iStrmNodeIDs,iStat)
-    CLASS(StrmInflowType),INTENT(OUT) :: StrmInflow
-    CHARACTER(LEN=*),INTENT(IN)       :: FileName,cWorkingDirectory
-    TYPE(TimeStepType),INTENT(IN)     :: TimeStep
-    INTEGER,INTENT(IN)                :: NStrmNodes,iStrmNodeIDs(NStrmNodes)
-    INTEGER,INTENT(OUT)               :: iStat
+  SUBROUTINE New(StrmInflow,Logger,FileName,cWorkingDirectory,TimeStep,NStrmNodes,iStrmNodeIDs,iStat)
+    CLASS(StrmInflowType),INTENT(OUT)          :: StrmInflow
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
+    CHARACTER(LEN=*),INTENT(IN)                :: FileName,cWorkingDirectory
+    TYPE(TimeStepType),INTENT(IN)              :: TimeStep
+    INTEGER,INTENT(IN)                         :: NStrmNodes,iStrmNodeIDs(NStrmNodes)
+    INTEGER,INTENT(OUT)                        :: iStat
 
     !Local variables
     CHARACTER(LEN=ModNameLen+3)     :: ThisProcedure = ModName // 'New'
@@ -118,9 +120,10 @@ CONTAINS
     REAL(8)                         :: Factor(1)
     LOGICAL                         :: lReadID_And_Node,DummyArray(1) = [.TRUE.]
     CHARACTER(LEN=1000),ALLOCATABLE :: cInflowNodes(:,:)
-    
+
     !Initialize
     iStat = 0
+    StrmInflow%Logger => Logger
     
     !Return if no file name is specified
     IF (FileName .EQ. '') RETURN
@@ -137,7 +140,7 @@ CONTAINS
               StrmInflow%Inflows(NStrmNodes)           , &
               STAT=ErrorCode                           )
     IF (ErrorCode .NE. 0) THEN
-        CALL SetLastMessage('Error in allocating memory for time series stream inflows!',f_iFatal,ThisProcedure)
+        CALL StrmInflow%Logger%SetLastMessage('Error in allocating memory for time series stream inflows!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -169,7 +172,7 @@ CONTAINS
         END IF
         CALL ConvertID_To_Index(iStrmNodeID,iStrmNodeIDs,StrmInflow%InflowNodes(indx))
         IF (StrmInflow%InflowNodes(indx) .EQ. 0) THEN
-            CALL SetLastMessage('Stream node ID '//TRIM(IntToText(iStrmNodeID))//' listed as receiving stream inflow is not in the model!',f_iFatal,ThisProcedure)
+            CALL StrmInflow%Logger%SetLastMessage('Stream node ID '//TRIM(IntToText(iStrmNodeID))//' listed as receiving stream inflow is not in the model!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -438,7 +441,7 @@ CONTAINS
                     ID = StrmInflow%IDs(indx)
                     MessageArray(1) = 'Stream inflows cannot be less than zero.'
                     MessageArray(2) = 'Inflow specified at inflow ID '//TRIM(IntToText(ID))//' is less than zero!'
-                    CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                    CALL StrmInflow%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                     iStat = -1
                     RETURN
                 END IF

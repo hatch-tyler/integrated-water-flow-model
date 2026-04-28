@@ -10,8 +10,8 @@
 !***********************************************************************
 MODULE Class_CalcTypeHyd
 
-  USE MessageLogger        , ONLY: SetLastMessage , &
-                                    LogMessage     , &
+  USE MessageLogger        , ONLY: MessageLoggerType , &
+                                    DefaultLogger     , &
                                     f_iFatal       , &
                                     f_iWarn        , &
                                     f_iInfo
@@ -115,7 +115,7 @@ CONTAINS
     ! ================================================================
     OPEN(UNIT=iInUnit, FILE=cInputFile, STATUS='OLD', IOSTAT=iErr)
     IF (iErr /= 0) THEN
-      CALL SetLastMessage('Cannot open input file: '//TRIM(cInputFile), &
+      CALL DefaultLogger%SetLastMessage('Cannot open input file: '//TRIM(cInputFile), &
            f_iFatal, cModName)
       iStat = -1; RETURN
     END IF
@@ -142,7 +142,7 @@ CONTAINS
     READ(cClean, *) This%iNHydro
 
     IF (This%iNClus <= 0 .OR. This%iNClusWells <= 0 .OR. This%iNHydro <= 0) THEN
-      CALL SetLastMessage('Invalid NCLUS, NCLUSWELLS, or NHYDRO in input file', &
+      CALL DefaultLogger%SetLastMessage('Invalid NCLUS, NCLUSWELLS, or NHYDRO in input file', &
            f_iFatal, cModName)
       iStat = -1; RETURN
     END IF
@@ -153,7 +153,7 @@ CONTAINS
       CALL StripHashComment(cLine, cClean)
       READ(cClean, *) This%iClusID(i)
       IF (This%iClusID(i) < 1 .OR. This%iClusID(i) > This%iNClus) THEN
-        CALL SetLastMessage('Cluster ID '//TRIM(IntToText(This%iClusID(i)))// &
+        CALL DefaultLogger%SetLastMessage('Cluster ID '//TRIM(IntToText(This%iClusID(i)))// &
              ' is outside range 1-'//TRIM(IntToText(This%iNClus)), &
              f_iFatal, cModName)
         iStat = -1; RETURN
@@ -196,7 +196,7 @@ CONTAINS
     END DO
     CLOSE(iInUnit)
 
-    CALL LogMessage('  Start='//TRIM(This%cStartDate)//' End='//TRIM(This%cEndDate)// &
+    CALL DefaultLogger%LogMessage('  Start='//TRIM(This%cStartDate)//' End='//TRIM(This%cEndDate)// &
          '  Clusters='//TRIM(IntToText(This%iNClus))// &
          '  Wells='//TRIM(IntToText(This%iNClusWells))// &
          '  Hydros='//TRIM(IntToText(This%iNHydro)), f_iInfo, cModName)
@@ -204,17 +204,17 @@ CONTAINS
     ! ================================================================
     ! Read cluster weights file
     ! ================================================================
-    CALL LogMessage('Reading cluster weights: '//TRIM(cWtsFile), f_iInfo, cModName)
+    CALL DefaultLogger%LogMessage('Reading cluster weights: '//TRIM(cWtsFile), f_iInfo, cModName)
     ALLOCATE(This%rClusWt(This%iNClusWells, This%iNClus), &
              This%cWellNames(This%iNClusWells), STAT=iErr)
     IF (iErr /= 0) THEN
-      CALL SetLastMessage('Cannot allocate cluster weight arrays', f_iFatal, cModName)
+      CALL DefaultLogger%SetLastMessage('Cannot allocate cluster weight arrays', f_iFatal, cModName)
       iStat = -1; RETURN
     END IF
 
     OPEN(UNIT=180, FILE=TRIM(cWtsFile), STATUS='OLD', IOSTAT=iErr)
     IF (iErr /= 0) THEN
-      CALL SetLastMessage('Cannot open weights file: '//TRIM(cWtsFile), &
+      CALL DefaultLogger%SetLastMessage('Cannot open weights file: '//TRIM(cWtsFile), &
            f_iFatal, cModName)
       iStat = -1; RETURN
     END IF
@@ -226,7 +226,7 @@ CONTAINS
       IF (iErr == 0) THEN
         BACKSPACE(180)
       ELSE
-        CALL LogMessage('  Skipped header line in weights file', f_iInfo, cModName)
+        CALL DefaultLogger%LogMessage('  Skipped header line in weights file', f_iInfo, cModName)
       END IF
     END IF
 
@@ -236,11 +236,11 @@ CONTAINS
            (This%rClusWt(i, j), j=1, This%iNClus)
       IF (iErr /= 0) THEN
         IF (i == 1) THEN
-          CALL SetLastMessage('Cannot read first well from weights file: '// &
+          CALL DefaultLogger%SetLastMessage('Cannot read first well from weights file: '// &
                TRIM(cWtsFile), f_iFatal, cModName)
           CLOSE(180); iStat = -1; RETURN
         END IF
-        CALL LogMessage('  WARNING: Weights file has only '// &
+        CALL DefaultLogger%LogMessage('  WARNING: Weights file has only '// &
              TRIM(IntToText(i-1))//' rows (expected '// &
              TRIM(IntToText(This%iNClusWells))//')', f_iWarn, cModName)
         This%iNClusWells = i - 1
@@ -250,7 +250,7 @@ CONTAINS
     END DO
     CLOSE(180)
 
-    CALL LogMessage('  Read '//TRIM(IntToText(iActualRows))// &
+    CALL DefaultLogger%LogMessage('  Read '//TRIM(IntToText(iActualRows))// &
          ' wells from weights file', f_iInfo, cModName)
 
     ! Build sorted well index for O(log N) lookup
@@ -266,7 +266,7 @@ CONTAINS
     ! ================================================================
     ! Set up date arrays using month arithmetic
     ! ================================================================
-    CALL LogMessage('Setting up date arrays...', f_iInfo, cModName)
+    CALL DefaultLogger%LogMessage('Setting up date arrays...', f_iInfo, cModName)
     BLOCK
       INTEGER :: iStartMon, iStartYr, iEndMon, iEndYr, iE
       CALL ParseDateFromString(This%cStartDate, 2, iDD, iStartMon, iStartYr, iE)
@@ -277,7 +277,7 @@ CONTAINS
     END BLOCK
 
     IF (This%iNVal <= 0) THEN
-      CALL SetLastMessage('End date must be after start date', f_iFatal, cModName)
+      CALL DefaultLogger%SetLastMessage('End date must be after start date', f_iFatal, cModName)
       iStat = -1; RETURN
     END IF
 
@@ -309,7 +309,7 @@ CONTAINS
     ! ================================================================
     ! Read water level data
     ! ================================================================
-    CALL LogMessage('Reading water levels: '//TRIM(cWLFile), f_iInfo, cModName)
+    CALL DefaultLogger%LogMessage('Reading water levels: '//TRIM(cWLFile), f_iInfo, cModName)
     CALL ReadWaterLevels(This, cWLFile, iStartM, iEndM, iStat)
     IF (iStat /= 0) RETURN
 
@@ -357,7 +357,7 @@ CONTAINS
 
     OPEN(UNIT=iUnit, FILE=cWLFile, STATUS='OLD', IOSTAT=iErr)
     IF (iErr /= 0) THEN
-      CALL SetLastMessage('Cannot open water level file: '//TRIM(cWLFile), &
+      CALL DefaultLogger%SetLastMessage('Cannot open water level file: '//TRIM(cWLFile), &
            f_iFatal, cModName)
       iStat = -1; RETURN
     END IF
@@ -373,7 +373,7 @@ CONTAINS
         IF (iChk == 0) THEN
           BACKSPACE(iUnit)
         ELSE
-          CALL LogMessage('  Skipped header line in SMP file', f_iInfo, cModName)
+          CALL DefaultLogger%LogMessage('  Skipped header line in SMP file', f_iInfo, cModName)
         END IF
       END BLOCK
     END IF
@@ -443,13 +443,13 @@ CONTAINS
       END BLOCK
     END DO
 
-    CALL LogMessage('  Read '//TRIM(IntToText(iRecordsRead))//' records, '// &
+    CALL DefaultLogger%LogMessage('  Read '//TRIM(IntToText(iRecordsRead))//' records, '// &
          TRIM(IntToText(iRecordsMatched))//' matched, '// &
          TRIM(IntToText(iWellsMatched))//' of '// &
          TRIM(IntToText(This%iNClusWells))//' wells have data', f_iInfo, cModName)
 
     IF (iWellsMatched == 0) THEN
-      CALL SetLastMessage('No wells matched between water level file and cluster '// &
+      CALL DefaultLogger%SetLastMessage('No wells matched between water level file and cluster '// &
            'weights file. Check that well names are consistent.', f_iFatal, cModName)
       iStat = -1; RETURN
     END IF
@@ -507,14 +507,14 @@ CONTAINS
     iStat = 0
 
     IF (.NOT. This%lActive) THEN
-      CALL SetLastMessage('CalcTypeHyd not initialized', f_iFatal, cModName)
+      CALL DefaultLogger%SetLastMessage('CalcTypeHyd not initialized', f_iFatal, cModName)
       iStat = -1; RETURN
     END IF
 
     ALLOCATE(rNonZeroWts(This%iNVal, This%iNClusWells), &
              rDeMeaned(This%iNVal, This%iNClusWells), STAT=iErr)
     IF (iErr /= 0) THEN
-      CALL SetLastMessage('Cannot allocate work arrays', f_iFatal, cModName)
+      CALL DefaultLogger%SetLastMessage('Cannot allocate work arrays', f_iFatal, cModName)
       iStat = -1; RETURN
     END IF
 
@@ -529,12 +529,12 @@ CONTAINS
         END IF
       END DO
     END DO
-    CALL LogMessage('  Data coverage: '//TRIM(IntToText(iValid))//' valid, '// &
+    CALL DefaultLogger%LogMessage('  Data coverage: '//TRIM(IntToText(iValid))//' valid, '// &
          TRIM(IntToText(iMissing))//' missing ('// &
          TRIM(IntToText(This%iNVal))//' timesteps x '// &
          TRIM(IntToText(This%iNClusWells))//' wells)', f_iInfo, cModName)
 
-    CALL LogMessage('Generating type hydrographs...', f_iInfo, cModName)
+    CALL DefaultLogger%LogMessage('Generating type hydrographs...', f_iInfo, cModName)
 
     DO n = 1, This%iNHydro
       iCls = This%iClusID(n)
@@ -572,7 +572,7 @@ CONTAINS
 
       OPEN(UNIT=iOutUnit, FILE=cOutFile, STATUS='REPLACE', IOSTAT=iErr)
       IF (iErr /= 0) THEN
-        CALL SetLastMessage('Cannot open output file: '//TRIM(cOutFile), &
+        CALL DefaultLogger%SetLastMessage('Cannot open output file: '//TRIM(cOutFile), &
              f_iFatal, cModName)
         iStat = -1; RETURN
       END IF
@@ -601,11 +601,11 @@ CONTAINS
       END DO
 
       CLOSE(iOutUnit)
-      CALL LogMessage('  Wrote '//TRIM(cOutFile), f_iInfo, cModName)
+      CALL DefaultLogger%LogMessage('  Wrote '//TRIM(cOutFile), f_iInfo, cModName)
     END DO
 
     DEALLOCATE(rNonZeroWts, rDeMeaned)
-    CALL LogMessage('Type hydrograph generation complete.', f_iInfo, cModName)
+    CALL DefaultLogger%LogMessage('Type hydrograph generation complete.', f_iInfo, cModName)
 
   END SUBROUTINE Run
 

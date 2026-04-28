@@ -21,9 +21,8 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 MODULE Class_StrmGWConnector_v40
-  USE MessageLogger              , ONLY: SetLastMessage           , &
-                                         LogMessage               , &
-                                         MessageArray             , &
+  USE MessageLogger              , ONLY: MessageArray             , &
+                                         MessageLoggerType        , &
                                          f_iWarn                  , &
                                          f_iFatal
   USE IOInterface                , ONLY: GenericFileType 
@@ -59,7 +58,7 @@ MODULE Class_StrmGWConnector_v40
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: StrmGWConnector_v40_Type                    
+  PUBLIC :: StrmGWConnector_v40_Type
   
   
   ! -------------------------------------------------------------
@@ -85,8 +84,6 @@ MODULE Class_StrmGWConnector_v40
   
   
 CONTAINS
-
-
 
 
   ! -------------------------------------------------------------
@@ -137,13 +134,13 @@ CONTAINS
     DO indxNode=1,NStrmNodes
         iStrmNodeID = INT(DummyArray(indxNode,1))
         CALL ConvertID_To_Index(iStrmNodeID,iStrmNodeIDs,iNode)
-        IF (iNode .EQ. 0) THEN 
-            CALL SetLastMessage('Stream node '//TRIM(IntToText(iStrmNodeID))//' listed for stream bed parameters is not in the model!',f_iFatal,ThisProcedure)
+        IF (iNode .EQ. 0) THEN
+            CALL Connector%Logger%SetLastMessage('Stream node '//TRIM(IntToText(iStrmNodeID))//' listed for stream bed parameters is not in the model!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
         IF (lProcessed(iNode)) THEN
-            CALL SetLastMessage('Stream bed parameters for stream node '//TRIM(IntToText(iStrmNodeID))//' are defined more than once!',f_iFatal,ThisProcedure)
+            CALL Connector%Logger%SetLastMessage('Stream bed parameters for stream node '//TRIM(IntToText(iStrmNodeID))//' are defined more than once!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -152,9 +149,9 @@ CONTAINS
         BedThick(iNode)     = DummyArray(indxNode,3)*FACTL
         WetPerimeter(iNode) = DummyArray(indxNode,4)*FACTL
     END DO
-    
+
     IF (PRESENT(rWetPerimeter)) rWetPerimeter = WetPerimeter
-    
+
     !Compute conductance
     DO indxNode=1,NStrmNodes
         iGWNode = iGWNodes(indxNode)
@@ -166,11 +163,11 @@ CONTAINS
                 BedThick(indxNode) = BottomElevs(indxNode) - Stratigraphy%BottomElev(iGWNode,iLayer)
                 MessageArray(1)    = 'Stream bed thickness at stream node ' // TRIM(IntToText(iStrmNodeID)) // ' and GW node '// TRIM(IntToText(iGWNodeID)) // ' penetrates into second active aquifer layer!'
                 MessageArray(2)    = 'It is adjusted to penetrate only into the top active layer.'
-                CALL LogMessage(MessageArray(1:2),f_iWarn,ThisProcedure) 
+                CALL Connector%Logger%LogMessage(MessageArray(1:2),f_iWarn,ThisProcedure)
                 IF (BedThick(indxNode) .LE. 0.0) THEN
                     MessageArray(1) = 'Stream bed thickness at stream node ' // TRIM(IntToText(iStrmNodeID)) // ' and GW node '// TRIM(IntToText(iGWNodeID)) // ' is less than or equal to zero!'
                     MessageArray(2) = 'Check the stratigraphy and bed thickness at this location.'
-                    CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                    CALL Connector%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                     iStat = -1
                     RETURN
                 END IF
@@ -178,11 +175,11 @@ CONTAINS
         END IF
         Conductivity(indxNode)  = Conductivity(indxNode)*WetPerimeter(indxNode)*rLength(indxNode)/BedThick(indxNode)
     END DO
-    
+
     !Allocate memory
     ALLOCATE (Connector%Conductance(NStrmNodes) , Connector%rBedThickness(NStrmNodes) , Connector%StrmGWFlow(NStrmNodes) , Connector%rDisconnectElev(NStrmNodes) , STAT=ErrorCode)
     IF (ErrorCode .NE. 0) THEN
-        CALL SetLastMessage('Error allocating memory for stream-gw connection data!',f_iFatal,ThisProcedure)
+        CALL Connector%Logger%SetLastMessage('Error allocating memory for stream-gw connection data!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF

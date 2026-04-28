@@ -21,7 +21,7 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 MODULE Class_BudgetInputFile
-  USE MessageLogger           , ONLY: SetLastMessage        , &
+  USE MessageLogger           , ONLY: MessageLoggerType     , &
                                       f_iFatal
   USE TimeSeriesUtilities     , ONLY: TimeStepType 
   USE GeneralUtilities        , ONLY: IntToText             , &
@@ -34,7 +34,7 @@ MODULE Class_BudgetInputFile
                                       f_iGroup
   USE Budget_Parameters
   IMPLICIT NONE
-  
+
   
 
 ! ******************************************************************
@@ -53,7 +53,7 @@ MODULE Class_BudgetInputFile
   PRIVATE
   PUBLIC :: BudgetInputFileType               , &
             LocationDataType                  , &
-            BudgetHeaderType                        
+            BudgetHeaderType
   
   
   ! -------------------------------------------------------------
@@ -61,6 +61,7 @@ MODULE Class_BudgetInputFile
   ! -------------------------------------------------------------
   TYPE,EXTENDS(GenericFileType) :: BudgetInputFileType
   CONTAINS
+      PROCEDURE,PASS :: SetLogger => BudgetInputFile_SetLogger
       PROCEDURE,PASS :: Create
       PROCEDURE,PASS :: Open
       PROCEDURE,PASS :: Close
@@ -139,6 +140,17 @@ MODULE Class_BudgetInputFile
 CONTAINS
 
 
+  ! -------------------------------------------------------------
+  ! --- SET LOGGER
+  ! -------------------------------------------------------------
+  SUBROUTINE BudgetInputFile_SetLogger(BudgetFile,Logger)
+    CLASS(BudgetInputFileType)              :: BudgetFile
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT) :: Logger
+
+    BudgetFile%Logger => Logger
+
+  END SUBROUTINE BudgetInputFile_SetLogger
+
 
 ! ******************************************************************
 ! ******************************************************************
@@ -153,22 +165,26 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- CREATE BUDGET INPUT FILE
   ! -------------------------------------------------------------
-  SUBROUTINE Create(BudgetFile,cFileName,OutputData,iStat)
-    CLASS(BudgetInputFileType)        :: BudgetFile
-    CHARACTER(LEN=*),INTENT(IN)       :: cFileName
-    TYPE(BudgetHeaderType),INTENT(IN) :: OutputData
-    INTEGER,INTENT(OUT)               :: iStat
+  SUBROUTINE Create(BudgetFile,Logger,cFileName,OutputData,iStat)
+    CLASS(BudgetInputFileType)                :: BudgetFile
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT) :: Logger
+    CHARACTER(LEN=*),INTENT(IN)               :: cFileName
+    TYPE(BudgetHeaderType),INTENT(IN)         :: OutputData
+    INTEGER,INTENT(OUT)                       :: iStat
     
     !Local variables
     CHARACTER(LEN=ModNameLen+6),PARAMETER :: ThisProcedure = ModName // 'Create'
     INTEGER                               :: nDataColumns(OutputData%NLocations)
     
+    !Set logger
+    BudgetFile%Logger => Logger
+
     !Initialize
     iStat = 0
-    
+
     !Make sure that file is an HDF5 file
     IF (iGetFileType_FromName(cFileName) .NE. f_iHDF) THEN
-        CALL SetLastMessage('File '//TRIM(ADJUSTL(cFileName))//' must be an HDF5 file for budget output!',f_iFatal,ThisProcedure)
+        CALL BudgetFile%Logger%SetLastMessage('File '//TRIM(ADJUSTL(cFileName))//' must be an HDF5 file for budget output!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -194,10 +210,14 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- OPEN AN EXISTING BUDGET INPUT FILE
   ! -------------------------------------------------------------
-  SUBROUTINE Open(BudgetFile,cFileName,iStat) 
-    CLASS(BudgetInputFileType)  :: BudgetFile
-    CHARACTER(LEN=*),INTENT(IN) :: cFileName
-    INTEGER,INTENT(OUT)         :: iStat
+  SUBROUTINE Open(BudgetFile,Logger,cFileName,iStat)
+    CLASS(BudgetInputFileType)                :: BudgetFile
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT) :: Logger
+    CHARACTER(LEN=*),INTENT(IN)               :: cFileName
+    INTEGER,INTENT(OUT)                       :: iStat
+
+    !Set logger
+    BudgetFile%Logger => Logger
 
     !Open file
     CALL BudgetFile%New(FileName=cFileName,InputFile=.TRUE.,iStat=iStat)
@@ -360,7 +380,7 @@ CONTAINS
     INTEGER,INTENT(OUT)                :: iStat
     
     IF (InputFile%iGetFileType() .EQ. f_iHDF) THEN
-        CALL ReadHeader_FromHDFFile(InputFile,Header,iStat)
+        CALL ReadHeader_FromHDFFile(InputFile,Header,iStat,InputFile%Logger)
     ELSE
         CALL ReadHeader_FromBinFile(InputFile,Header,iStat)
     END IF
@@ -371,10 +391,11 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- READ HEADER DATA FROM HDF5 FILE
   ! -------------------------------------------------------------
-  SUBROUTINE ReadHeader_FromHDFFile(InputFile,Header,iStat)
-    CLASS(GenericFileType)             :: InputFile
-    TYPE(BudgetHeaderType),INTENT(OUT) :: Header
-    INTEGER,INTENT(OUT)                :: iStat
+  SUBROUTINE ReadHeader_FromHDFFile(InputFile,Header,iStat,Logger)
+    CLASS(GenericFileType)                     :: InputFile
+    TYPE(BudgetHeaderType),INTENT(OUT)        :: Header
+    INTEGER,INTENT(OUT)                       :: iStat
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
     
     !Local variables
     CHARACTER(LEN=ModNameLen+22) :: ThisProcedure = ModName // 'ReadHeader_FromHDFFile'
@@ -399,7 +420,7 @@ CONTAINS
       !Make sure that this is inded a Budget file
       IF (.NOT. InputFile%DoesHDFObjectExist(cAttributesDir//'/DSSOutput%cPathNames')) THEN
           CALL InputFile%GetName(cFileName)
-          CALL SetLastMessage('File '//TRIM(cFileName)//' is not a Budget file type!',f_iFatal,ThisProcedure)
+          CALL Logger%SetLastMessage('File '//TRIM(cFileName)//' is not a Budget file type!',f_iFatal,ThisProcedure)
           iStat = -1
           RETURN
       END IF
@@ -594,5 +615,6 @@ CONTAINS
     END ASSOCIATE  
 
   END SUBROUTINE ReadHeader_FromBinFile
-  
+
+
 END MODULE

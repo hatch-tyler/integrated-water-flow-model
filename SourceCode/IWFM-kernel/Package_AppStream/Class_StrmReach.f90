@@ -21,8 +21,8 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 MODULE Class_StrmReach
-  USE MessageLogger    , ONLY: SetLastMessage       , &
-                               MessageArray         , &
+  USE MessageLogger    , ONLY: MessageArray         , &
+                               MessageLoggerType    , &
                                f_iFatal
   USE Package_Misc     , ONLY: FlowDestinationType  , &
                                f_iFlowDest_StrmNode , &
@@ -65,6 +65,7 @@ MODULE Class_StrmReach
   ! --- REACH DATA TYPE
   ! -------------------------------------------------------------
   TYPE StrmReachType
+      TYPE(MessageLoggerType),POINTER :: Logger => NULL()
       INTEGER             :: ID              = 0
       CHARACTER(LEN=20)   :: cName           = ''
       INTEGER             :: UpstrmNode      = 0
@@ -96,6 +97,7 @@ CONTAINS
 
 
 
+
 ! ******************************************************************
 ! ******************************************************************
 ! ******************************************************************
@@ -109,16 +111,18 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- READ PREPROCESSED DATA
   ! -------------------------------------------------------------
-  SUBROUTINE StrmReach_ReadPreprocessedData(NReach,InFile,Reaches,iStat)
-    INTEGER,INTENT(IN)    :: NReach
-    TYPE(GenericFileType) :: InFile
-    TYPE(StrmReachType)   :: Reaches(NReach)
-    INTEGER,INTENT(OUT)   :: iStat
-    
+  SUBROUTINE StrmReach_ReadPreprocessedData(NReach,Logger,InFile,Reaches,iStat)
+    INTEGER,INTENT(IN)                        :: NReach
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
+    TYPE(GenericFileType)                      :: InFile
+    TYPE(StrmReachType)                        :: Reaches(NReach)
+    INTEGER,INTENT(OUT)                        :: iStat
+
     !Local variables
     INTEGER :: indxReach,NUpstrmReaches
-    
+
     DO indxReach=1,NReach
+      Reaches(indxReach)%Logger => Logger
       CALL InFile%ReadData(Reaches(indxReach)%ID,iStat)               ;  IF (iStat .EQ. -1) RETURN
       CALL InFile%ReadData(Reaches(indxReach)%cName,iStat)            ;  IF (iStat .EQ. -1) RETURN
       CALL InFile%ReadData(Reaches(indxReach)%UpstrmNode,iStat)       ;  IF (iStat .EQ. -1) RETURN
@@ -243,10 +247,11 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- CONVERT REACH DESTINATION IDs TO INDICES (MAINLY FOR LAKE DESTINATIONS)
   ! -------------------------------------------------------------
-  SUBROUTINE StrmReach_DestinationIDs_To_Indices(Reaches,iLakeIDs,iStat)
-    TYPE(StrmReachType) :: Reaches(:)
-    INTEGER,INTENT(IN)  :: iLakeIDs(:)
-    INTEGER,INTENT(OUT) :: iStat
+  SUBROUTINE StrmReach_DestinationIDs_To_Indices(Reaches,iLakeIDs,Logger,iStat)
+    TYPE(StrmReachType)                        :: Reaches(:)
+    INTEGER,INTENT(IN)                         :: iLakeIDs(:)
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
+    INTEGER,INTENT(OUT)                        :: iStat
     
     !Local variables
     CHARACTER(LEN=ModNameLen+35),PARAMETER :: ThisProcedure = ModName // 'StrmReach_DestinationIDs_To_Indices'
@@ -262,7 +267,11 @@ CONTAINS
             iLake   = LocateInList(iLakeID,iLakeIDs)
             IF (iLake .EQ. 0) THEN
                 iReachID = Reaches(indx)%ID
-                CALL SetLastMessage('Lake '//TRIM(IntToText(iLakeID))//' that receive flow from stream reach '//TRIM(IntToText(iReachID))//' is not in the model!',f_iFatal,ThisProcedure)
+                IF (ASSOCIATED(Logger)) THEN
+                    CALL Logger%SetLastMessage('Lake '//TRIM(IntToText(iLakeID))//' that receive flow from stream reach '//TRIM(IntToText(iReachID))//' is not in the model!',f_iFatal,ThisProcedure)
+                ELSE
+                    CALL Logger%SetLastMessage('Lake '//TRIM(IntToText(iLakeID))//' that receive flow from stream reach '//TRIM(IntToText(iReachID))//' is not in the model!',f_iFatal,ThisProcedure)
+                END IF
                 iStat = -1
                 RETURN
             END IF
@@ -276,11 +285,12 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- COMPILE REACH NETWORK
   ! -------------------------------------------------------------
-  SUBROUTINE StrmReach_CompileReachNetwork(NReaches,Reaches,iStat,iBypassOutReachIDs,iBypassInReachIDs)
-    INTEGER,INTENT(IN)          :: NReaches
-    TYPE(StrmReachType)         :: Reaches(NReaches)
-    INTEGER,INTENT(OUT)         :: iStat
-    INTEGER,OPTIONAL,INTENT(IN) :: iBypassOutReachIDs(:),iBypassInReachIDs(:)
+  SUBROUTINE StrmReach_CompileReachNetwork(NReaches,Reaches,Logger,iStat,iBypassOutReachIDs,iBypassInReachIDs)
+    INTEGER,INTENT(IN)                         :: NReaches
+    TYPE(StrmReachType)                        :: Reaches(NReaches)
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
+    INTEGER,INTENT(OUT)                        :: iStat
+    INTEGER,OPTIONAL,INTENT(IN)                :: iBypassOutReachIDs(:),iBypassInReachIDs(:)
     
     !Local variables
     CHARACTER(LEN=ModNameLen+29),PARAMETER :: ThisProcedure = ModName // 'StrmReach_CompileReachNetwork'
@@ -315,7 +325,11 @@ CONTAINS
     IF (NDownstrmReaches .EQ. 0) THEN
         MessageArray(1) = 'There is something wrong with stream network set-up!'
         MessageArray(2) = 'Cannot find the most downstream reach(es).'
-        CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+        IF (ASSOCIATED(Logger)) THEN
+            CALL Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+        ELSE
+            CALL Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+        END IF
         iStat = -1
         RETURN
     END IF

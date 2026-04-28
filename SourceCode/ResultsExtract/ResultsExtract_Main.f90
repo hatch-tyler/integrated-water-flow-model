@@ -19,13 +19,12 @@
 !***********************************************************************
 PROGRAM ResultsExtract_Main
 
-  USE ProgramTimer  , ONLY: StartTimer  , &
-                             StopTimer
-  USE MessageLogger , ONLY: PrintRunTime , &
-                             SetLogFileName, &
+  USE ProgramTimer  , ONLY: DefaultTimer  , &
+                             ProgramTimerType
+  USE MessageLogger , ONLY: SetLogFileName, &
                              KillLogFile   , &
                              LogLastMessage, &
-                             LogMessage    , &
+                             DefaultLogger , &
                              f_iInfo
   USE Class_ResultsExtract, ONLY: ResultsExtractType
 
@@ -36,7 +35,7 @@ PROGRAM ResultsExtract_Main
   INTEGER            :: iStat, iNArgs
 
   ! Start timer
-  CALL StartTimer()
+  CALL DefaultTimer%Start()
 
   DO  ! Single-pass block for structured error exit
 
@@ -48,12 +47,12 @@ PROGRAM ResultsExtract_Main
     END IF
 
     ! Banner
-    CALL LogMessage(' ', f_iInfo, 'ResultsExtract')
-    CALL LogMessage('Program ResultsExtract - Generalized Hydrograph Extractor', &
+    CALL DefaultLogger%LogMessage(' ', f_iInfo, 'ResultsExtract')
+    CALL DefaultLogger%LogMessage('Program ResultsExtract - Generalized Hydrograph Extractor', &
                     f_iInfo, 'ResultsExtract')
-    CALL LogMessage('Extracts hydrographs from all-node output files (HEAD/SUBSIDENCE)', &
+    CALL DefaultLogger%LogMessage('Extracts hydrographs from all-node output files (HEAD/SUBSIDENCE)', &
                     f_iInfo, 'ResultsExtract')
-    CALL LogMessage(' ', f_iInfo, 'ResultsExtract')
+    CALL DefaultLogger%LogMessage(' ', f_iInfo, 'ResultsExtract')
 
     ! Get input file from command line or prompt
     iNArgs = COMMAND_ARGUMENT_COUNT()
@@ -86,14 +85,14 @@ PROGRAM ResultsExtract_Main
     ! Clean up
     CALL App%Kill()
 
-    CALL LogMessage(' ', f_iInfo, 'ResultsExtract')
-    CALL LogMessage('NORMAL TERMINATION - ResultsExtract', f_iInfo, 'ResultsExtract')
+    CALL DefaultLogger%LogMessage(' ', f_iInfo, 'ResultsExtract')
+    CALL DefaultLogger%LogMessage('NORMAL TERMINATION - ResultsExtract', f_iInfo, 'ResultsExtract')
 
     EXIT  ! Normal exit from single-pass block
   END DO
 
-  CALL StopTimer()
-  CALL PrintRunTime()
+  CALL DefaultTimer%Stop()
+  CALL DefaultLogger%PrintRunTime()
   CALL KillLogFile()
 
 END PROGRAM ResultsExtract_Main

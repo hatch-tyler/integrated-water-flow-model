@@ -21,8 +21,8 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 MODULE Class_LossDestination
-  USE MessageLogger     , ONLY: SetLastMessage , &
-                                MessageArray   , &
+  USE MessageLogger     , ONLY: MessageArray       , &
+                                MessageLoggerType  , &
                                 f_iFatal
   USE GeneralUtilities
   USE IOInterface
@@ -45,7 +45,7 @@ MODULE Class_LossDestination
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: LossDestinationType   , &
+  PUBLIC :: LossDestinationType          , &
             LossDestination_New
   
 
@@ -53,6 +53,7 @@ MODULE Class_LossDestination
   ! --- LOSS DESTINATION DATA TYPE
   ! -------------------------------------------------------------
   TYPE LossDestinationType
+    TYPE(MessageLoggerType),POINTER :: Logger => NULL()
     INTEGER             :: iNDest        = 0
     INTEGER,ALLOCATABLE :: iDestList(:)
     REAL(8),ALLOCATABLE :: rFracs(:)
@@ -71,6 +72,7 @@ CONTAINS
 
 
 
+
 ! ******************************************************************
 ! ******************************************************************
 ! ******************************************************************
@@ -84,13 +86,15 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- READ FROM FILE
   ! -------------------------------------------------------------
-  SUBROUTINE LossDestination_New(iNDiver,iDiverIDs,iDestIDs,cBypassOrDiver,cDestDescription,InFile,LossDestinations,iStat)
-    INTEGER,INTENT(IN)               :: iNDiver,iDiverIDs(iNDiver),iDestIDs(:)
-    CHARACTER(LEN=*),INTENT(IN)      :: cBypassOrDiver,cDestDescription
-    TYPE(GenericFileType)            :: InFile
-    TYPE(LossDestinationType),TARGET :: LossDestinations(iNDiver)
-    INTEGER,INTENT(OUT)              :: iStat
-    
+  SUBROUTINE LossDestination_New(iNDiver,Logger,iDiverIDs,iDestIDs,cBypassOrDiver,cDestDescription,InFile,LossDestinations,iStat)
+    INTEGER,INTENT(IN)                         :: iNDiver
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
+    INTEGER,INTENT(IN)                         :: iDiverIDs(iNDiver),iDestIDs(:)
+    CHARACTER(LEN=*),INTENT(IN)                :: cBypassOrDiver,cDestDescription
+    TYPE(GenericFileType)                       :: InFile
+    TYPE(LossDestinationType),TARGET           :: LossDestinations(iNDiver)
+    INTEGER,INTENT(OUT)                        :: iStat
+
     !Local variables
     CHARACTER(LEN=ModNameLen+19)      :: ThisProcedure = ModName // 'LossDestination_New'
     INTEGER                           :: iNDest,indxDiver,ID,indxDest,iErrorCode,iDiver
@@ -98,10 +102,15 @@ CONTAINS
     LOGICAL                           :: lProcessed(iNDiver)
     INTEGER,ALLOCATABLE               :: iDestList(:)
     TYPE(LossDestinationType),POINTER :: pDest
-    
+
     !Initialize
     iStat      = 0
     lProcessed = .FALSE.
+
+    !Set Logger on all instances
+    DO indxDiver=1,iNDiver
+        LossDestinations(indxDiver)%Logger => Logger
+    END DO
     
     !Iterate over diversions
     DO indxDiver=1,iNDiver
@@ -113,14 +122,22 @@ CONTAINS
         ID = INT(rDummyArray(1))
         CALL ConvertID_To_Index(ID,iDiverIDs,iDiver)
         IF (iDiver .EQ. 0) THEN
-            CALL SetLastMessage(TRIM(cBypassOrDiver)//' ID '//TRIM(IntToText(ID))//' listed for '//TRIM(cDestDescription)//' is not in the model!',f_iFatal,ThisProcedure)
+            IF (ASSOCIATED(Logger)) THEN
+                CALL Logger%SetLastMessage(TRIM(cBypassOrDiver)//' ID '//TRIM(IntToText(ID))//' listed for '//TRIM(cDestDescription)//' is not in the model!',f_iFatal,ThisProcedure)
+            ELSE
+                CALL Logger%SetLastMessage(TRIM(cBypassOrDiver)//' ID '//TRIM(IntToText(ID))//' listed for '//TRIM(cDestDescription)//' is not in the model!',f_iFatal,ThisProcedure)
+            END IF
             iStat = -1
             RETURN
         END IF
         
         !Make sure same diversion ID is not used
         IF (lProcessed(iDiver)) THEN
-            CALL SetLastMessage(TRIM(cBypassOrDiver)//' ID '//TRIM(IntToText(ID))//' is used more than once for '//TRIM(cDestDescription)//' description!',f_iFatal,ThisProcedure)
+            IF (ASSOCIATED(Logger)) THEN
+                CALL Logger%SetLastMessage(TRIM(cBypassOrDiver)//' ID '//TRIM(IntToText(ID))//' is used more than once for '//TRIM(cDestDescription)//' description!',f_iFatal,ThisProcedure)
+            ELSE
+                CALL Logger%SetLastMessage(TRIM(cBypassOrDiver)//' ID '//TRIM(IntToText(ID))//' is used more than once for '//TRIM(cDestDescription)//' description!',f_iFatal,ThisProcedure)
+            END IF
             iStat = -1
             RETURN
         END IF
@@ -137,7 +154,11 @@ CONTAINS
         DEALLOCATE (iDestList , STAT=iErrorCode)
         ALLOCATE (iDestList(iNDest) , pDest%iDestList(iNDest) , pDest%rFracs(iNDest) ,STAT=iErrorCode)
         IF (iErrorCode .NE. 0) THEN
-            CALL SetLastMessage('Error allocating memory for '//TRIM(cDestDescription)//' for '//TRIM(LowerCase(cBypassOrDiver))//' '//TRIM(IntToText(ID))//'!',f_iFatal,ThisProcedure)
+            IF (ASSOCIATED(Logger)) THEN
+                CALL Logger%SetLastMessage('Error allocating memory for '//TRIM(cDestDescription)//' for '//TRIM(LowerCase(cBypassOrDiver))//' '//TRIM(IntToText(ID))//'!',f_iFatal,ThisProcedure)
+            ELSE
+                CALL Logger%SetLastMessage('Error allocating memory for '//TRIM(cDestDescription)//' for '//TRIM(LowerCase(cBypassOrDiver))//' '//TRIM(IntToText(ID))//'!',f_iFatal,ThisProcedure)
+            END IF
             iStat = -1
             RETURN
         END IF
@@ -159,7 +180,11 @@ CONTAINS
             END IF
             CALL ConvertID_To_Index(iDestList(indxDest),iDestIDs,pDest%iDestList(indxDest))
             IF (pDest%iDestList(indxDest) .EQ. 0) THEN
-                CALL SetLastMessage('Destination '//TRIM(IntToText(iDestList(indxDest)))//' for '//TRIM(cDestDescription)//' listed for '//TRIM(LowerCase(cBypassOrDiver))//' ID '//TRIM(IntToText(ID))//' is not in the model!',f_iFatal,ThisProcedure)
+                IF (ASSOCIATED(Logger)) THEN
+                    CALL Logger%SetLastMessage('Destination '//TRIM(IntToText(iDestList(indxDest)))//' for '//TRIM(cDestDescription)//' listed for '//TRIM(LowerCase(cBypassOrDiver))//' ID '//TRIM(IntToText(ID))//' is not in the model!',f_iFatal,ThisProcedure)
+                ELSE
+                    CALL Logger%SetLastMessage('Destination '//TRIM(IntToText(iDestList(indxDest)))//' for '//TRIM(cDestDescription)//' listed for '//TRIM(LowerCase(cBypassOrDiver))//' ID '//TRIM(IntToText(ID))//' is not in the model!',f_iFatal,ThisProcedure)
+                END IF
                 iStat = -1
                 RETURN
             END IF

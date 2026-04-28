@@ -21,9 +21,9 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 MODULE Class_GWState
-  USE MessageLogger , ONLY: SetLastMessage , &
-                            MessageArray   , &
-                            f_iFatal 
+  USE MessageLogger , ONLY: MessageArray      , &
+                            MessageLoggerType , &
+                            f_iFatal
   IMPLICIT NONE
   
   
@@ -50,6 +50,7 @@ MODULE Class_GWState
   ! --- GW STATE DATA TYPE
   ! -------------------------------------------------------------
   TYPE GWStateType
+      TYPE(MessageLoggerType),POINTER :: Logger => NULL()
       REAL(8),ALLOCATABLE :: Head(:,:)               !Groundwater head at current time step at each (node,layer)
       REAL(8),ALLOCATABLE :: Head_P(:,:)             !Groundwater head at the previous time step at each (node,layer)
       REAL(8),ALLOCATABLE :: Vx(:,:)                 !Groundwater velocity in x-direction at each (node,layer)
@@ -71,9 +72,9 @@ MODULE Class_GWState
   
 CONTAINS
 
-    
-    
-    
+
+
+
 ! ******************************************************************
 ! ******************************************************************
 ! ******************************************************************
@@ -87,16 +88,19 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- INSTANTIATE GW STATE DATA
   ! -------------------------------------------------------------
-  SUBROUTINE New(GWState,NNodes,NLayers,iStat)
-    CLASS(GWStateType)  :: GWState
-    INTEGER,INTENT(IN)  :: NNodes,NLayers
-    INTEGER,INTENT(OUT) :: iStat
+  SUBROUTINE New(GWState,Logger,NNodes,NLayers,iStat)
+    CLASS(GWStateType)                        :: GWState
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
+    INTEGER,INTENT(IN)                         :: NNodes,NLayers
+    INTEGER,INTENT(OUT)                        :: iStat
     
     !Local variables
     CHARACTER(LEN=ModNameLen+3),PARAMETER :: ThisProcedure = ModName // 'New'
     INTEGER                               :: ErrorCode
     CHARACTER                             :: cErrorMsg*250
     
+    GWState%Logger => Logger
+
     ALLOCATE(GWState%Head(NNodes,NLayers)            , &
              GWState%Head_P(NNodes,NLayers)          , &
              GWState%Vx(NNodes,NLayers)              , &
@@ -108,7 +112,7 @@ CONTAINS
     IF (ErrorCode .NE. 0) THEN
         MessageArray(1) = 'Error in allocating memory for the groundwater component.'
         MessageArray(2) = cErrorMsg
-        CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+        CALL GWState%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
         iStat = -1
     ELSE
         iStat = 0

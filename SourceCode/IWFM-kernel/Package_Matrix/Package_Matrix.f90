@@ -22,9 +22,9 @@
 !***********************************************************************
 MODULE Package_Matrix
   !$ USE OMP_LIB
-  USE MessageLogger    , ONLY: SetLastMessage           , &
+  USE MessageLogger    , ONLY: MessageLoggerType        , &
                                MessageArray             , &
-                               f_iFatal                   
+                               f_iFatal
   USE GeneralUtilities , ONLY: LocateInList             , &
                                IntToText                , &
                                GetUniqueArrayComponents , &
@@ -99,17 +99,24 @@ MODULE Package_Matrix
       REAL(8),ALLOCATABLE,PUBLIC             :: HDelta(:)                          !Solution vector (represents the chnages in the state variable estimates)
       REAL(8),ALLOCATABLE,PUBLIC             :: RHSL2(:)                           !L2-norm of the RHS vector at each Newton-Raphson iteration
       TYPE(SolverType)                       :: Solver                             !Solver data to be used to invert matrix equation
+      TYPE(MessageLoggerType),POINTER                   :: Logger => NULL()                     !Logger instance
       TYPE(ConnectivityListType),ALLOCATABLE :: ConnectivityList(:)                !Linked-list of connectivity at each global node
       INTEGER,ALLOCATABLE                    :: NJD_CRS(:)                             !Pre-allocated CRS row pointers (reused across NR iterations)
       INTEGER,ALLOCATABLE                    :: JND_CRS(:)                             !Pre-allocated CRS column indices (reused across NR iterations)
       REAL(8),ALLOCATABLE                    :: COEFF_CRS(:)                           !Pre-allocated CRS coefficients (reused across NR iterations)
       INTEGER                                :: nCRS_NNZ = 0                           !Actual number of non-zeros in CRS arrays
+      !Per-thread reduction arrays for SOR_OMP (allocated once, reused across iterations)
+      REAL(8),ALLOCATABLE                    :: DIFF_L2_Thread(:)
+      REAL(8),ALLOCATABLE                    :: ADIFFMAX_Thread(:)
+      INTEGER,ALLOCATABLE                    :: NODEMAX_Thread(:)
+      INTEGER                                :: iSOR_ChunkSize = 0
   CONTAINS
       PROCEDURE,PASS         :: AddComponent
       PROCEDURE,PASS,PRIVATE :: AddConnectivity_ToOne
       PROCEDURE,PASS,PRIVATE :: AddConnectivity_ToMany_Sequential
       PROCEDURE,PASS,PRIVATE :: AddConnectivity_ToMany_Random
       PROCEDURE,PASS         :: Kill
+      PROCEDURE,PASS         :: SetLogger
       PROCEDURE,PASS         :: FlattenConnectivity
       PROCEDURE,PASS         :: GetSolver
       PROCEDURE,PASS         :: GetNUnknowns
@@ -182,9 +189,11 @@ MODULE Package_Matrix
   
   
 CONTAINS
-    
-    
-    
+
+
+
+
+
 ! ******************************************************************
 ! ******************************************************************
 ! ******************************************************************
@@ -225,9 +234,21 @@ CONTAINS
     
     
   END SUBROUTINE Kill
-  
-  
-  
+
+
+  ! -------------------------------------------------------------
+  ! --- SET LOGGER INSTANCE
+  ! -------------------------------------------------------------
+  SUBROUTINE SetLogger(Matrix,Logger)
+    CLASS(MatrixType),INTENT(INOUT)               :: Matrix
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT) :: Logger
+
+    Matrix%Logger => Logger
+
+  END SUBROUTINE SetLogger
+
+
+
 
 ! ******************************************************************
 ! ******************************************************************
@@ -469,7 +490,7 @@ CONTAINS
     
     !Make sure solver is recognized
     IF (LocateInList(iSolver,iSolverList) .EQ. 0)  THEN
-        CALL SetLastMessage('Solver ID '//TRIM(IntToText(iSolver))//' is not recognized!',f_iFatal,ThisProcedure)
+        CALL Matrix%Logger%SetLastMessage('Solver ID '//TRIM(IntToText(iSolver))//' is not recognized!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -477,7 +498,7 @@ CONTAINS
     !Make sure relaxation parameter is between 1 and 2.
     IF (iSolver .EQ. iSolver_SOR) THEN
         IF (Relax .LT. 1.0   .OR.   Relax .GT. 2.0)  THEN
-            CALL SetLastMessage('Relaxation parameter for SOR matrix solver must be between 1.0 and 2.0!',f_iFatal,ThisProcedure)
+            CALL Matrix%Logger%SetLastMessage('Relaxation parameter for SOR matrix solver must be between 1.0 and 2.0!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -639,16 +660,20 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- READ MATRIX DATA FROM BINARY FILE
   ! -------------------------------------------------------------
-  SUBROUTINE ReadPreprocessedData(Matrix,BinFile,iStat)
-    CLASS(MatrixType)     :: Matrix
-    TYPE(GenericFileType) :: BinFile
-    INTEGER,INTENT(OUT)   :: iStat
-    
+  SUBROUTINE ReadPreprocessedData(Matrix,Logger,BinFile,iStat)
+    CLASS(MatrixType)                         :: Matrix
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT) :: Logger
+    TYPE(GenericFileType)                     :: BinFile
+    INTEGER,INTENT(OUT)                       :: iStat
+
     !Local variables
     CHARACTER(LEN=ModNameLen+20) :: ThisProcedure = ModName // 'ReadPreprocessedData'
     INTEGER                      :: nComps,iDimJND,iDimNJD,ErrorCode
     CHARACTER                    :: cErrMessage*500
-    
+
+    !Set logger
+    Matrix%Logger => Logger
+
     !Initialize
     iStat = 0
     
@@ -693,7 +718,7 @@ CONTAINS
     SUBROUTINE EmitError(cErrMessage)
       CHARACTER(LEN=*),INTENT(IN) :: cErrMessage
       
-      CALL SetLastMessage('Error in allocating memory for the matrix equation!'//NEW_LINE('x')//TRIM(cErrMessage),f_iFatal,ThisProcedure)
+      CALL Matrix%Logger%SetLastMessage('Error in allocating memory for the matrix equation!'//NEW_LINE('x')//TRIM(cErrMessage),f_iFatal,ThisProcedure)
       iStat = -1
     
     END SUBROUTINE EmitError
@@ -769,7 +794,7 @@ CONTAINS
     
     !Make sure component has not been added before
     IF (LocateInList(iCompID,Matrix%iComps) .GT. 0) THEN
-        CALL SetLastMessage('Component ID '//TRIM(IntToText(iCompID))//' has already been added to matrix!',f_iFatal,ThisProcedure)
+        CALL Matrix%Logger%SetLastMessage('Component ID '//TRIM(IntToText(iCompID))//' has already been added to matrix!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -810,12 +835,12 @@ CONTAINS
     
     !Make sure both component IDs are added
     IF (LocateInList(iCompID_To,Matrix%iComps) .EQ. 0) THEN
-        CALL SetLastMessage('Component ID '//TRIM(IntToText(iCompID_To))//' to add connectivity to has not been added to the matrix!',f_iFatal,ThisProcedure)
+        CALL Matrix%Logger%SetLastMessage('Component ID '//TRIM(IntToText(iCompID_To))//' to add connectivity to has not been added to the matrix!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
     IF (LocateInList(iCompID_Connect,Matrix%iComps) .EQ. 0) THEN
-        CALL SetLastMessage('Component ID '//TRIM(IntToText(iCompID_Connect))//' to add connectivity from has not been added to the matrix!',f_iFatal,ThisProcedure)
+        CALL Matrix%Logger%SetLastMessage('Component ID '//TRIM(IntToText(iCompID_Connect))//' to add connectivity from has not been added to the matrix!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -840,7 +865,7 @@ CONTAINS
     IF (iDimConnectivityList .LT. iGlobalNodeID_To_End) THEN
         ALLOCATE (Temp_ConnectivityList(iGlobalNodeID_To_End) , STAT=ErrorCode , ERRMSG=cErrMessage)
         IF (ErrorCode .NE. 0) THEN
-            CALL SetLastMessage('Error in allocating memory for matrix connectivity list!'//NEW_LINE('x')//TRIM(cErrMessage),f_iFatal,ThisProcedure)
+            CALL Matrix%Logger%SetLastMessage('Error in allocating memory for matrix connectivity list!'//NEW_LINE('x')//TRIM(cErrMessage),f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -896,12 +921,12 @@ CONTAINS
     
     !Make sure both component IDs are added
     IF (LocateInList(iCompID_To,Matrix%iComps) .EQ. 0) THEN
-        CALL SetLastMessage('Component ID '//TRIM(IntToText(iCompID_To))//' to add connectivity to has not been added to the matrix!',f_iFatal,ThisProcedure)
+        CALL Matrix%Logger%SetLastMessage('Component ID '//TRIM(IntToText(iCompID_To))//' to add connectivity to has not been added to the matrix!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
     IF (LocateInList(iCompID_Connect,Matrix%iComps) .EQ. 0) THEN
-        CALL SetLastMessage('Component ID '//TRIM(IntToText(iCompID_Connect))//' to add connectivity from has not been added to the matrix!',f_iFatal,ThisProcedure)
+        CALL Matrix%Logger%SetLastMessage('Component ID '//TRIM(IntToText(iCompID_Connect))//' to add connectivity from has not been added to the matrix!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -926,7 +951,7 @@ CONTAINS
     IF (iDimConnectivityList .LT. iDimMax) THEN
         ALLOCATE (Temp_ConnectivityList(iDimMax) , STAT=ErrorCode , ERRMSG=cErrMessage)
         IF (ErrorCode .NE. 0) THEN
-            CALL SetLastMessage('Error in allocating memory for matrix connectivity list!'//NEW_LINE('x')//TRIM(cErrMessage),f_iFatal,ThisProcedure)
+            CALL Matrix%Logger%SetLastMessage('Error in allocating memory for matrix connectivity list!'//NEW_LINE('x')//TRIM(cErrMessage),f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -979,12 +1004,12 @@ CONTAINS
     
     !Make sure both component IDs are added
     IF (LocateInList(iCompID_To,Matrix%iComps) .EQ. 0) THEN
-        CALL SetLastMessage('Component ID '//TRIM(IntToText(iCompID_To))//' to add connectivity to has not been added to the matrix!',f_iFatal,ThisProcedure)
+        CALL Matrix%Logger%SetLastMessage('Component ID '//TRIM(IntToText(iCompID_To))//' to add connectivity to has not been added to the matrix!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
     IF (LocateInList(iCompID_Connect,Matrix%iComps) .EQ. 0) THEN
-        CALL SetLastMessage('Component ID '//TRIM(IntToText(iCompID_Connect))//' to add connectivity from has not been added to the matrix!',f_iFatal,ThisProcedure)
+        CALL Matrix%Logger%SetLastMessage('Component ID '//TRIM(IntToText(iCompID_Connect))//' to add connectivity from has not been added to the matrix!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -999,7 +1024,7 @@ CONTAINS
     IF (iDimConnectivityList .LT. iGlobalNodeID_To) THEN
         ALLOCATE (Temp_ConnectivityList(iGlobalNodeID_To) , STAT=ErrorCode , ERRMSG=cErrMessage)
         IF (ErrorCode .NE. 0) THEN
-            CALL SetLastMessage('Error in allocating memory for matrix connectivity list!'//NEW_LINE('x')//TRIM(cErrMessage),f_iFatal,ThisProcedure)
+            CALL Matrix%Logger%SetLastMessage('Error in allocating memory for matrix connectivity list!'//NEW_LINE('x')//TRIM(cErrMessage),f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -1146,7 +1171,7 @@ CONTAINS
               STAT = ErrorCode             , &
               ERRMSG = cErrMessage         )
     IF (ErrorCode .NE. 0) THEN
-        CALL SetLastMessage('Error in allocating memory for the NJD and JND arrays of the matrix!'//NEW_LINE('x')//TRIM(cErrMessage),f_iFatal,ThisProcedure)
+        CALL Matrix%Logger%SetLastMessage('Error in allocating memory for the NJD and JND arrays of the matrix!'//NEW_LINE('x')//TRIM(cErrMessage),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -1174,7 +1199,7 @@ CONTAINS
     !Allocate memory for the other array attributes
     ALLOCATE (Matrix%COEFF(iDimJND) , Matrix%RHS(iDimNJD-1)  , Matrix%HDelta(iDimNJD-1) , STAT=ErrorCode , ERRMSG=cErrMessage)
     IF (ErrorCode .NE. 0) THEN
-        CALL SetLastMessage('Error in allocating memory for COEFF, RHS or HDelta arrays of the matrix!'//NEW_LINE('x')//TRIM(cErrMessage),f_iFatal,ThisProcedure)    
+        CALL Matrix%Logger%SetLastMessage('Error in allocating memory for COEFF, RHS or HDelta arrays of the matrix!'//NEW_LINE('x')//TRIM(cErrMessage),f_iFatal,ThisProcedure)    
         iStat = -1
         RETURN
     END IF
@@ -1210,7 +1235,8 @@ CONTAINS
     ASSOCIATE (pSolver => Matrix%Solver)
         SELECT CASE (pSolver%iSolver) 
             CASE (iSolver_SOR)
-                CALL SOR(NRow                , &
+                CALL SOR(Matrix              , &
+                         NRow                , &
                          pSolver%IterMax     , &
                          pSolver%Tolerance   , &
                          pSolver%Relax       , &
@@ -1334,31 +1360,33 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- SOLVE THE MATRIX EQUATION USING SUCCESSIVE OVER-RELAXATION METHOD
   ! -------------------------------------------------------------
-  SUBROUTINE SOR(NRow,MaxIter,Toler,Relax,NJD,JND,IndexDiag,RHS,COEFF,U,iStat)
+  SUBROUTINE SOR(Matrix,NRow,MaxIter,Toler,Relax,NJD,JND,IndexDiag,RHS,COEFF,U,iStat)
+    TYPE(MatrixType)    :: Matrix
     INTEGER,INTENT(IN)  :: NRow,MaxIter
-    REAL(8),INTENT(IN)  :: Toler,Relax  
-    INTEGER,INTENT(IN)  :: NJD(:),JND(:),IndexDiag(:)      
-    REAL(8),INTENT(IN)  :: COEFF(:),RHS(:)     
+    REAL(8),INTENT(IN)  :: Toler,Relax
+    INTEGER,INTENT(IN)  :: NJD(:),JND(:),IndexDiag(:)
+    REAL(8),INTENT(IN)  :: COEFF(:),RHS(:)
     REAL(8)             :: U(:)
     INTEGER,INTENT(OUT) :: iStat
 
-!DIR$ IF (_OPENMP .NE. 0) 
-    !$ CALL SOR_OMP(NRow,MaxIter,Toler,Relax,NJD,JND,IndexDiag,RHS,COEFF,U,iStat)
+!DIR$ IF (_OPENMP .NE. 0)
+    !$ CALL SOR_OMP(Matrix%Logger,Matrix,NRow,MaxIter,Toler,Relax,NJD,JND,IndexDiag,RHS,COEFF,U,iStat)
 !DIR$ ELSE
-    CALL SOR_Sequential(NRow,MaxIter,Toler,Relax,NJD,JND,IndexDiag,RHS,COEFF,U,iStat) 
+    CALL SOR_Sequential(Matrix%Logger,NRow,MaxIter,Toler,Relax,NJD,JND,IndexDiag,RHS,COEFF,U,iStat)
 !DIR$ END IF
 
-  END SUBROUTINE SOR 
+  END SUBROUTINE SOR
   
   
   ! -------------------------------------------------------------
   ! --- SOLVE THE MATRIX EQUATION USING SUCCESSIVE OVER-RELAXATION METHOD (SEQUENTIAL)
   ! -------------------------------------------------------------
-  SUBROUTINE SOR_Sequential(NRow,MaxIter,Toler,Relax,NJD,JND,IndexDiag,RHS,COEFF,U,iStat)
+  SUBROUTINE SOR_Sequential(Logger,NRow,MaxIter,Toler,Relax,NJD,JND,IndexDiag,RHS,COEFF,U,iStat)
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
     INTEGER,INTENT(IN)  :: NRow,MaxIter
-    REAL(8),INTENT(IN)  :: Toler,Relax  
-    INTEGER,INTENT(IN)  :: NJD(:),JND(:),IndexDiag(:)      
-    REAL(8),INTENT(IN)  :: COEFF(:),RHS(:)     
+    REAL(8),INTENT(IN)  :: Toler,Relax
+    INTEGER,INTENT(IN)  :: NJD(:),JND(:),IndexDiag(:)
+    REAL(8),INTENT(IN)  :: COEFF(:),RHS(:)
     REAL(8)             :: U(:)
     INTEGER,INTENT(OUT) :: iStat
     
@@ -1415,7 +1443,7 @@ CONTAINS
             WRITE (MessageArray(3), '(A,I8)')   'Iteration =', Iter
             WRITE (MessageArray(4), '(A,I8)')   'Variable  =', NODEMAX
             WRITE (MessageArray(5),'(A,E12.3)') 'Difference=', ADIFFMAX
-            CALL SetLastMessage(MessageArray(1:5),f_iFatal,ThisProcedure)
+            CALL Logger%SetLastMessage(MessageArray(1:5),f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -1427,35 +1455,35 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- SOLVE THE MATRIX EQUATION USING SUCCESSIVE OVER-RELAXATION METHOD (PARALLELL)
   ! -------------------------------------------------------------
-  SUBROUTINE SOR_OMP(NRow,MaxIter,Toler,Relax,NJD,JND,IndexDiag,RHS,COEFF,U,iStat)
+  SUBROUTINE SOR_OMP(Logger,Matrix,NRow,MaxIter,Toler,Relax,NJD,JND,IndexDiag,RHS,COEFF,U,iStat)
+    !$ USE OMP_LIB
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
+    TYPE(MatrixType)    :: Matrix
     INTEGER,INTENT(IN)  :: NRow,MaxIter
-    REAL(8),INTENT(IN)  :: Toler,Relax  
-    INTEGER,INTENT(IN)  :: NJD(:),JND(:),IndexDiag(:)      
-    REAL(8),INTENT(IN)  :: COEFF(:),RHS(:)     
+    REAL(8),INTENT(IN)  :: Toler,Relax
+    INTEGER,INTENT(IN)  :: NJD(:),JND(:),IndexDiag(:)
+    REAL(8),INTENT(IN)  :: COEFF(:),RHS(:)
     REAL(8)             :: U(:)
     INTEGER,INTENT(OUT) :: iStat
-    
-    !Local variables    
+
+    !Local variables
     CHARACTER(LEN=ModNameLen+7) :: ThisProcedure = ModName // 'SOR_OMP'
     INTEGER                     :: IROW,INDX,INDX_S,INDX_L,NODEMAX,Iter,indxDiag,iNThreads,iThread
     REAL(8)                     :: DIFF_L2,ADIFFMAX,U_INT,ACCUM,DIFF
-    REAL(8),ALLOCATABLE,SAVE    :: DIFF_L2_Thread(:),ADIFFMAX_Thread(:)
-    INTEGER,ALLOCATABLE,SAVE    :: NODEMAX_Thread(:)
-    INTEGER,SAVE                :: iChunkSize
-    
+
     !Initialize
     iStat     = 0
     Iter      = 0
     iNThreads = 1
     !$ iNThreads = OMP_GET_NUM_THREADS()
-    IF (.NOT. ALLOCATED(DIFF_L2_Thread)) THEN
-        ALLOCATE(DIFF_L2_Thread(iNThreads) , ADIFFMAX_Thread(iNThreads) , NODEMAX_Thread(iNThreads))
-        iChunkSize = NRow / iNThreads
-        IF (iChunkSize * iNThreads .LT. NRow) THEN
+    IF (.NOT. ALLOCATED(Matrix%DIFF_L2_Thread)) THEN
+        ALLOCATE(Matrix%DIFF_L2_Thread(iNThreads) , Matrix%ADIFFMAX_Thread(iNThreads) , Matrix%NODEMAX_Thread(iNThreads))
+        Matrix%iSOR_ChunkSize = NRow / iNThreads
+        IF (Matrix%iSOR_ChunkSize * iNThreads .LT. NRow) THEN
             IF (iNThreads .GT. 1) THEN
-                iChunkSize = NRow / (iNThreads-1)
+                Matrix%iSOR_ChunkSize = NRow / (iNThreads-1)
             ELSE
-                iChunkSize = NRow
+                Matrix%iSOR_ChunkSize = NRow
             END IF
         END IF
     END IF
@@ -1463,11 +1491,11 @@ CONTAINS
 
     !Solve matrix equation using SOR iterative method
     DO
-        Iter            = Iter + 1
-        DIFF_L2_Thread  = 0.0
-        ADIFFMAX_Thread = 0.0
-        
-        !$OMP PARALLEL DO SCHEDULE(STATIC,iChunkSize) DEFAULT(SHARED) PRIVATE(IROW,indxDiag,INDX_S,INDX_L,U_INT,ACCUM,INDX,DIFF,iThread) 
+        Iter                      = Iter + 1
+        Matrix%DIFF_L2_Thread     = 0.0
+        Matrix%ADIFFMAX_Thread    = 0.0
+
+        !$OMP PARALLEL DO SCHEDULE(STATIC,Matrix%iSOR_ChunkSize) DEFAULT(SHARED) PRIVATE(IROW,indxDiag,INDX_S,INDX_L,U_INT,ACCUM,INDX,DIFF,iThread)
         DO IROW=1,NRow
             !$ iThread  = OMP_GET_THREAD_NUM() + 1
             indxDiag = IndexDiag(IROW)
@@ -1481,22 +1509,22 @@ CONTAINS
             DO INDX=indxDiag+1,INDX_L
                 ACCUM = ACCUM + COEFF(INDX) * U(JND(INDX))
             END DO
-            U(IROW)                 = (RHS(IROW)-ACCUM)/COEFF(indxDiag)
-            DIFF                    = U(IROW) - U_INT
-            DIFF_L2_Thread(iThread) = DIFF_L2_Thread(iThread) + (DIFF*DIFF)
-            U(IROW)                 = U_INT + (DIFF*Relax) 
-            IF (ABS(DIFF) .GT. ADIFFMAX_Thread(iThread)) THEN
-                ADIFFMAX_Thread(iThread) = ABS(DIFF)
-                NODEMAX_Thread(iThread)  = IROW
+            U(IROW)                        = (RHS(IROW)-ACCUM)/COEFF(indxDiag)
+            DIFF                           = U(IROW) - U_INT
+            Matrix%DIFF_L2_Thread(iThread) = Matrix%DIFF_L2_Thread(iThread) + (DIFF*DIFF)
+            U(IROW)                        = U_INT + (DIFF*Relax)
+            IF (ABS(DIFF) .GT. Matrix%ADIFFMAX_Thread(iThread)) THEN
+                Matrix%ADIFFMAX_Thread(iThread) = ABS(DIFF)
+                Matrix%NODEMAX_Thread(iThread)  = IROW
             END IF
         END DO
         !$OMP END PARALLEL DO
-        DIFF_L2  = SUM(DIFF_L2_Thread)
+        DIFF_L2  = SUM(Matrix%DIFF_L2_Thread)
         ADIFFMAX = 0.0
-        DO INDX=1,SIZE(ADIFFMAX_Thread)
-            IF (ADIFFMAX_Thread(INDX) .GT. ADIFFMAX) THEN
-                ADIFFMAX = ADIFFMAX_Thread(INDX)
-                NODEMAX  = NODEMAX_Thread(INDX)
+        DO INDX=1,SIZE(Matrix%ADIFFMAX_Thread)
+            IF (Matrix%ADIFFMAX_Thread(INDX) .GT. ADIFFMAX) THEN
+                ADIFFMAX = Matrix%ADIFFMAX_Thread(INDX)
+                NODEMAX  = Matrix%NODEMAX_Thread(INDX)
             END IF
         END DO
         
@@ -1516,7 +1544,7 @@ CONTAINS
             WRITE (MessageArray(3), '(A,I8)')   'Iteration =', Iter
             WRITE (MessageArray(4), '(A,I8)')   'Variable  =', NODEMAX
             WRITE (MessageArray(5),'(A,E12.3)') 'Difference=', ADIFFMAX
-            CALL SetLastMessage(MessageArray(1:5),f_iFatal,ThisProcedure)
+            CALL Logger%SetLastMessage(MessageArray(1:5),f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -1598,14 +1626,14 @@ CONTAINS
         CASE (-1)
             MessageArray(1) = 'Bad coefficent matrix! Execution cannot proceed.'
             MessageArray(2) = 'Please check input data.'
-            CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+            CALL Matrix%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
 
         CASE (-3:-2)
             MessageArray(1) = 'Insufficent storage for LU factorization!'
             MessageArray(2) = 'Please contact IWFM techical support.'
-            CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+            CALL Matrix%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
 
@@ -1641,7 +1669,7 @@ CONTAINS
                     END DO
             END SELECT
             MessageArray(2) = 'Check all data specified for this variable.'
-            CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+            CALL Matrix%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
     END SELECT
@@ -1667,25 +1695,25 @@ CONTAINS
                 MessageArray(1) = 'Convergence problem in the solution of equation system using PGMRES(M).'
                 WRITE(MessageArray(2),'(A,I8)')     'Iteration =', Iter
                 WRITE (MessageArray(3),'(A,E12.3)') 'Residual  =', RES
-                CALL SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+                CALL Matrix%Logger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
                 iStat = -1
                 EXIT
 
             ELSE IF (IPAR(1).EQ.-2) THEN
                 MessageArray(1)='ITERATIVE SOLVER WAS NOT GIVEN ENOUGH WORK SPACE.'
                 WRITE (MessageArray(2),'(A,I12,A)') 'THE WORK SPACE SHOULD AT LEAST HAVE ', IPAR(4),' ELEMENTS.'
-                CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                CALL Matrix%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                 iStat = -1
                 EXIT
 
             ELSE IF (IPAR(1).EQ.-3) THEN
-                CALL SetLastMessage('ITERATIVE SOLVER IS FACING A BREAK-DOWN.',f_iFatal,ThisProcedure)
+                CALL Matrix%Logger%SetLastMessage('ITERATIVE SOLVER IS FACING A BREAK-DOWN.',f_iFatal,ThisProcedure)
                 iStat = -1
                 EXIT
 
             ELSE
                 WRITE(MessageArray(1),'(A,I8)') 'ITERATIVE SOLVER TERMINATED. CODE =', IPAR(1)
-                CALL SetLastMessage(MessageArray(1),f_iFatal,ThisProcedure)
+                CALL Matrix%Logger%SetLastMessage(MessageArray(1),f_iFatal,ThisProcedure)
                 iStat = -1
                 EXIT
             ENDIF
@@ -1885,7 +1913,7 @@ CONTAINS
         !Is the component included in the matrix?
         iLoc = LocateInList(iCompID,Matrix%iComps)
         IF (iLoc .EQ. 0) THEN
-            CALL SetLastMessage('Component ID '//TRIM(IntTotext(Local_iCompID))//' is not included in the matrix!',f_iFatal,ThisProcedure)
+            CALL Matrix%Logger%SetLastMessage('Component ID '//TRIM(IntTotext(Local_iCompID))//' is not included in the matrix!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF

@@ -21,9 +21,9 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 MODULE Class_RVETFromStrm
-  USE MessageLogger           , ONLY: SetLastMessage              , &
-                                      MessageArray                , & 
-                                      f_iFatal                      
+  USE MessageLogger           , ONLY: MessageLoggerType           , &
+                                      MessageArray                , &
+                                      f_iFatal
   USE Package_Discretization  , ONLY: AppGridType                 
   IMPLICIT NONE
   
@@ -43,7 +43,7 @@ MODULE Class_RVETFromStrm
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: RVETFromStrmType                           
+  PUBLIC :: RVETFromStrmType
 
 
   ! -------------------------------------------------------------
@@ -72,6 +72,7 @@ MODULE Class_RVETFromStrm
   ! -------------------------------------------------------------
   TYPE RVETFromStrmType
       PRIVATE
+      TYPE(MessageLoggerType),POINTER  :: Logger                   => NULL() !Pointer to the message logger
       INTEGER                          :: iNStrmNodes              = 0       !Maximum stream node number from which riparian ET is taken out of (may be less than the total number of stream nodes simulated)
       TYPE(ElemToStrmType),ALLOCATABLE :: ElemToStrm(:)                     
       TYPE(StrmToElemType),ALLOCATABLE :: StrmToElem(:)
@@ -104,7 +105,6 @@ CONTAINS
 
 
 
-
 ! ******************************************************************
 ! ******************************************************************
 ! ******************************************************************
@@ -118,14 +118,18 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- INSTANTIATE ELEMENT-TO-STREAM CONNECTIVITY
   ! -------------------------------------------------------------
-  SUBROUTINE New(RVETFromStrm,iStrmNodes,iNRiparian,iStat)
-    CLASS(RVETFromStrmType) :: RVETFromStrm
-    INTEGER,INTENT(IN)      :: iStrmNodes(:),iNRiparian
-    INTEGER,INTENT(OUT)     :: iStat
-    
+  SUBROUTINE New(RVETFromStrm,Logger,iStrmNodes,iNRiparian,iStat)
+    CLASS(RVETFromStrmType)                    :: RVETFromStrm
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
+    INTEGER,INTENT(IN)                         :: iStrmNodes(:),iNRiparian
+    INTEGER,INTENT(OUT)                        :: iStat
+
     !Local variables
     CHARACTER(LEN=ModNameLen+3) :: ThisProcedure = ModName // 'New'
     INTEGER                     :: iErrorCode,indxElem,iStrmNode,iNStrmNodes,iNElements
+
+    !Set Logger
+    RVETFromStrm%Logger => Logger
 
     !Initialize
     iStat      = 0
@@ -143,7 +147,11 @@ CONTAINS
     IF (iErrorCode .NE. 0) THEN
         MessageArray(1) = 'Error allocating memory for element-to-stream node connectivity ' 
         MessageArray(2) = 'for the simulation of riparian vegetation!'
-        CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+        IF (ASSOCIATED(RVETFromStrm%Logger)) THEN
+            CALL RVETFromStrm%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+        ELSE
+            CALL RVETFromStrm%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+        END IF
         iStat = -1
         RETURN
     END IF

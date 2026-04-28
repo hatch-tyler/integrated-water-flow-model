@@ -230,7 +230,33 @@ The build is split across two CMakeLists files:
 - `IWFMFetchZlib.cmake` — zlib via FetchContent
 - `IWFMFortranModules.cmake` — Fortran `.mod` file management, compilation order helpers
 
-### Library Build Graph
+### Build Modes: monolithic (default) vs library
+
+The CMake build supports two layouts. **Monolithic is the default** as
+of the eliminate-save-globals branch, and is what `build-iwfm.ps1`
+configures unless the user passes `-Library`.
+
+- **Monolithic** (`-DIWFM_MONOLITHIC_BUILD=ON`, the default): each
+  executable target compiles its own copy of the kernel sources via
+  `iwfm_add_monolithic_executable()` in `cmake/IWFMMonolithic.cmake`.
+  The `OPENMP` keyword is applied per-target — `Simulation_Parallel`
+  gets `/Qopenmp`, plain `Simulation` does not. The serial exe is
+  truly serial: no `libiomp5md.dll` dependency, no OMP runtime, no
+  OMP worker threads. Matches the historical Visual Studio
+  `.vfproj` build layout.
+- **Library** (`-Library` opt-out): a single shared `iwfm_kernel.lib`
+  is compiled once and linked by every target. Because
+  `Simulation_Parallel` and `IWFM_C_DLL` need OpenMP, the kernel
+  library is forced to compile with `/Qopenmp` whenever any of
+  `IWFM_BUILD_PARALLEL`, `IWFM_BUILD_COARRAY`, or `IWFM_BUILD_DLL`
+  is on (see `SourceCode/IWFM-kernel/CMakeLists.txt:45-59`). The
+  serial Simulation exe then inherits the full Intel OpenMP
+  runtime, links `libiomp5md.dll`, and runs OMP worker threads
+  whenever a kernel routine contains a parallel region. Use this
+  mode only if you need to match the historical CMake build layout
+  for some specific reason — it has no functional advantage.
+
+### Library Build Graph (library mode only)
 
 ```
 iwfm_compiler_flags (INTERFACE)
@@ -251,9 +277,14 @@ All Fortran `.mod` files go to `${CMAKE_BINARY_DIR}/modules`.
 
 - `/fp:consistent` / `-fp-model=consistent` — Reproducible floating point
 - `/assume:norealloc_lhs` / `-assume norealloc_lhs` — Disable LHS automatic reallocation
-- `/heap-arrays:900` / `-heap-arrays=900` — Arrays >900KB on heap (prevents stack overflow for large models like C2VSimFG with 30K+ nodes)
+- `/heap-arrays:900` / `-heap-arrays=900` — applied **only to the DLL
+  target** (`IWFM_C_x64.dll`) via `iwfm_add_dll_flags`, matching the
+  official `IWFM_DLL/IWFM_C_DLL_Heap.vfproj` Visual Studio project.
+  EXE targets (Simulation, Budget, ZBudget, etc.) rely on the
+  256 MB linker stack reserve alone.
 - `-std=legacy` (gfortran only) — Allows obsolete features in solver code (PAUSE, ASSIGN)
-- 256MB stack configured via linker flags
+- 256MB stack configured via linker flags (`/STACK:256000000` on
+  Windows, `-z,stacksize=256000000` on Linux)
 
 ### Fortran Source Order Matters
 

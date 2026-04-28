@@ -31,7 +31,6 @@ MODULE IOInterface
   PUBLIC ::                           &
             !From IOInterface       
             GenericFileType         , &
-            GetFileDate             , &
             iGetFileType_FromName   , &
             DoesFileExist           , &
             f_iUNKNOWN              , &

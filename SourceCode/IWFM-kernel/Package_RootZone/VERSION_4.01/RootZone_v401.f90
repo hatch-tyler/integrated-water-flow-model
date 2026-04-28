@@ -22,10 +22,9 @@
 !***********************************************************************
 MODULE RootZone_v401
   USE IWFM_Kernel_Version          , ONLY: IWFMKernelVersion
-  USE MessageLogger                , ONLY: SetLastMessage                          , &
-                                           EchoProgress                            , &
+  USE MessageLogger                , ONLY: MessageLoggerType                       , &
                                            MessageArray                            , &
-                                           f_iFatal                                  
+                                           f_iFatal
   USE Package_Misc                 , ONLY: f_iFlowDest_Outside                     , &
                                            f_iFlowDest_StrmNode                    , &
                                            f_iFlowDest_Element                     , &
@@ -106,7 +105,7 @@ MODULE RootZone_v401
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: RootZone_v401_Type 
+  PUBLIC :: RootZone_v401_Type
   
   
   ! -------------------------------------------------------------
@@ -261,10 +260,10 @@ MODULE RootZone_v401
   
   
 CONTAINS
-    
-    
 
-    
+
+
+
 ! ******************************************************************
 ! ******************************************************************
 ! ******************************************************************
@@ -308,12 +307,12 @@ CONTAINS
     
     !Initailize
     iStat = 0
-    
+
     !Return if no filename is given
     IF (cFileName .EQ. '') RETURN
-    
+
     !Print progress
-    CALL EchoProgress('Instantiating root zone')
+    CALL RootZone%Logger%EchoProgress('Instantiating root zone')
 
     !Initialize
     cVersionFull           = 'v4.01-' // TRIM(IWFMKernelVersion%GetVersion())
@@ -340,7 +339,7 @@ CONTAINS
               RootZone%Flags%lLakeElems(NElements)                   , &
               STAT=ErrorCode                                         )
     IF (ErrorCode .NE. 0) THEN
-        CALL SetLastMessage('Error in allocating memory for root zone soils data!',f_iFatal,ThisProcedure)
+        CALL RootZone%Logger%SetLastMessage('Error in allocating memory for root zone soils data!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -368,31 +367,31 @@ CONTAINS
     NonPondedCropFile = StripTextUntilCharacter(NonPondedCropFile,f_cInlineCommentChar) 
     CALL CleanSpecialCharacters(NonPondedCropFile)
     CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(NonPondedCropFile)),cWorkingDirectory,cAbsPathFileName)
-    CALL RootZone%NonPondedAgRootZone%New(IsForInquiry,cProjectNameForDSS,cAbsPathFileName,cWorkingDirectory,FactCN,AppGrid,iElemIDs,TimeStep,NTIME,TRIM(cVersionFull),iStat)
+    CALL RootZone%NonPondedAgRootZone%New(RootZone%Logger,IsForInquiry,cProjectNameForDSS,cAbsPathFileName,cWorkingDirectory,FactCN,AppGrid,iElemIDs,TimeStep,NTIME,TRIM(cVersionFull),iStat)
     IF (iStat .EQ. -1) RETURN
-    
+
     !Rice/refuge data file
-    CALL RootZoneParamFile%ReadData(RiceRefugeFile,iStat)  ;  IF (iStat .EQ. -1) RETURN  
-    RiceRefugeFile = StripTextUntilCharacter(RiceRefugeFile,f_cInlineCommentChar) 
+    CALL RootZoneParamFile%ReadData(RiceRefugeFile,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    RiceRefugeFile = StripTextUntilCharacter(RiceRefugeFile,f_cInlineCommentChar)
     CALL CleanSpecialCharacters(RiceRefugeFile)
     CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(RiceRefugeFile)),cWorkingDirectory,cAbsPathFileName)
-    CALL RootZone%PondedAgRootZone%New(IsForInquiry,cProjectNameForDSS,cAbsPathFileName,cWorkingDirectory,FactCN,AppGrid,iElemIDs,TimeStep,NTIME,TRIM(cVersionFull),iStat)
+    CALL RootZone%PondedAgRootZone%New(RootZone%Logger,IsForInquiry,cProjectNameForDSS,cAbsPathFileName,cWorkingDirectory,FactCN,AppGrid,iElemIDs,TimeStep,NTIME,TRIM(cVersionFull),iStat)
     IF (iStat .EQ. -1) RETURN
-    
+
     !Urban data file
-    CALL RootZoneParamFile%ReadData(UrbanDataFile,iStat)  ;  IF (iStat .EQ. -1) RETURN  
-    UrbanDataFile = StripTextUntilCharacter(UrbanDataFile,f_cInlineCommentChar) 
+    CALL RootZoneParamFile%ReadData(UrbanDataFile,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    UrbanDataFile = StripTextUntilCharacter(UrbanDataFile,f_cInlineCommentChar)
     CALL CleanSpecialCharacters(UrbanDataFile)
     CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(UrbanDataFile)),cWorkingDirectory,cAbsPathFileName)
-    CALL RootZone%UrbanRootZone%New(cAbsPathFileName,cWorkingDirectory,FactCN,NElements,NRegion,iElemIDs,TrackTime,iStat)
+    CALL RootZone%UrbanRootZone%New(RootZone%Logger,cAbsPathFileName,cWorkingDirectory,FactCN,NElements,NRegion,iElemIDs,TrackTime,iStat)
     IF (iStat .EQ. -1) RETURN
-    
+
     !Native/riparian veg. data file
-    CALL RootZoneParamFile%ReadData(NVRVFile,iStat)  ;  IF (iStat .EQ. -1) RETURN  
-    NVRVFile = StripTextUntilCharacter(NVRVFile,f_cInlineCommentChar) 
+    CALL RootZoneParamFile%ReadData(NVRVFile,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    NVRVFile = StripTextUntilCharacter(NVRVFile,f_cInlineCommentChar)
     CALL CleanSpecialCharacters(NVRVFile)
     CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(NVRVFile)),cWorkingDirectory,cAbsPathFileName)
-    CALL RootZone%NVRVRootZone%New(cAbsPathFileName,cWorkingDirectory,FactCN,NElements,NRegion,iElemIDs,TrackTime,iStat)
+    CALL RootZone%NVRVRootZone%New(RootZone%Logger,cAbsPathFileName,cWorkingDirectory,FactCN,NElements,NRegion,iElemIDs,TrackTime,iStat)
     IF (iStat .EQ. -1) RETURN
     
     !Check if at least one type of land use is specified
@@ -402,7 +401,7 @@ CONTAINS
          NVRVFile          .EQ. ''           )  THEN
         MessageArray(1) = 'At least one type of land use and related data should '
         MessageArray(2) = 'be specified for the simulation of root zone processes!' 
-        CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+        CALL RootZone%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -428,7 +427,7 @@ CONTAINS
     CALL CleanSpecialCharacters(ALine)
     IF (ALine .EQ. '') THEN
         IF (RootZone%Flags%lNonpondedAg_Defined  .OR.  RootZone%Flags%lPondedAg_Defined  .OR.  RootZone%Flags%lUrban_Defined) THEN
-            CALL SetLastMessage('Missing return flow fractions data file!',f_iFatal,ThisProcedure)
+            CALL RootZone%Logger%SetLastMessage('Missing return flow fractions data file!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -444,7 +443,7 @@ CONTAINS
     CALL CleanSpecialCharacters(ALine)
     IF (ALine .EQ. '') THEN
         IF (RootZone%Flags%lNonpondedAg_Defined  .OR.  RootZone%Flags%lPondedAg_Defined  .OR.  RootZone%Flags%lUrban_Defined) THEN
-            CALL SetLastMessage('Missing irrigation water re-use factors data file!',f_iFatal,ThisProcedure)
+            CALL RootZone%Logger%SetLastMessage('Missing irrigation water re-use factors data file!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -460,7 +459,7 @@ CONTAINS
     CALL CleanSpecialCharacters(ALine)
     IF (ALine .EQ. '') THEN
         IF (RootZone%Flags%lNonpondedAg_Defined  .OR.  RootZone%Flags%lPondedAg_Defined) THEN
-            CALL SetLastMessage('Missing irrigation period data file!',f_iFatal,ThisProcedure)
+            CALL RootZone%Logger%SetLastMessage('Missing irrigation period data file!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -496,7 +495,7 @@ CONTAINS
     CALL CleanSpecialCharacters(ALine)
     IF (ALine .NE. '') THEN
         CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(ALine)),cWorkingDirectory,cAbsPathFileName)
-        CALL LWUseBudRawFile_New(IsForInquiry,cProjectNameForDSS,cAbsPathFileName,TimeStep,NTIME,NRegion+1,RegionArea,RegionNames,'land and water use budget',TRIM(cVersionFull),RootZone%LWUseBudRawFile,iStat)
+        CALL LWUseBudRawFile_New(IsForInquiry,cProjectNameForDSS,cAbsPathFileName,TimeStep,NTIME,NRegion+1,RegionArea,RegionNames,'land and water use budget',TRIM(cVersionFull),RootZone%LWUseBudRawFile,iStat,RootZone%Logger)
         IF (iStat .EQ. -1) RETURN
         RootZone%Flags%LWUseBudRawFile_Defined = .TRUE.      
     END IF
@@ -507,7 +506,7 @@ CONTAINS
     CALL CleanSpecialCharacters(ALine)
     IF (ALine .NE. '') THEN
         CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(ALine)),cWorkingDirectory,cAbsPathFileName)
-        CALL RootZoneBudRawFile_New(IsForInquiry,cProjectNameForDSS,cAbsPathFileName,TimeStep,NTIME,NRegion+1,RegionArea,RegionNames,'root zone budget',TRIM(cVersionFull),RootZone%RootZoneBudRawFile,iStat)
+        CALL RootZoneBudRawFile_New(IsForInquiry,cProjectNameForDSS,cAbsPathFileName,TimeStep,NTIME,NRegion+1,RegionArea,RegionNames,'root zone budget',TRIM(cVersionFull),RootZone%RootZoneBudRawFile,iStat,RootZone%Logger)
         IF (iStat .EQ. -1) RETURN
         RootZone%Flags%RootZoneBudRawFile_Defined = .TRUE.
     END IF
@@ -525,7 +524,7 @@ CONTAINS
     CALL CleanSpecialCharacters(ALine)
     IF (ALine .NE. '') THEN
         CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(ALine)),cWorkingDirectory,cAbsPathFileName)
-        CALL LWUseZoneBudRawFile_New(IsForInquiry,cAbsPathFileName,TimeStep,NTIME,TRIM(cVersionFull),lElemFlowToSubregions,RootZone%Flags,AppGrid,RootZone%LWUZoneBudRawFile,iStat)
+        CALL LWUseZoneBudRawFile_New(IsForInquiry,cAbsPathFileName,TimeStep,NTIME,TRIM(cVersionFull),lElemFlowToSubregions,RootZone%Flags,AppGrid,RootZone%LWUZoneBudRawFile,iStat,RootZone%Logger)
         IF (iStat .EQ. -1) RETURN
         RootZone%Flags%LWUseZoneBudRawFile_Defined = .TRUE.      
     END IF
@@ -536,7 +535,7 @@ CONTAINS
     CALL CleanSpecialCharacters(ALine)
     IF (ALine .NE. '') THEN
         CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(ALine)),cWorkingDirectory,cAbsPathFileName)
-        CALL RootZoneZoneBudRawFile_New(IsForInquiry,cAbsPathFileName,TimeStep,NTIME,TRIM(cVersionFull),lElemFlowToSubregions,RootZone%Flags,AppGrid,RootZone%RootZoneZoneBudRawFile,iStat)
+        CALL RootZoneZoneBudRawFile_New(IsForInquiry,cAbsPathFileName,TimeStep,NTIME,TRIM(cVersionFull),lElemFlowToSubregions,RootZone%Flags,AppGrid,RootZone%RootZoneZoneBudRawFile,iStat,RootZone%Logger)
         IF (iStat .EQ. -1) RETURN
         RootZone%Flags%RootZoneZoneBudRawFile_Defined = .TRUE.
     END IF
@@ -585,14 +584,14 @@ CONTAINS
             !Check if element is in the model
             CALL ConvertID_To_Index(iElemID,iElemIDs,iElem)
             IF (iElem .EQ. 0) THEN
-                CALL SetLastMessage('Element '//TRIM(IntToText(iElemID))//' listed for root zone parameter definitions is not in the model!',f_iFatal,ThisProcedure)
+                CALL RootZone%Logger%SetLastMessage('Element '//TRIM(IntToText(iElemID))//' listed for root zone parameter definitions is not in the model!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
             
             !Check if it was defined before
             IF (lProcessed(iElem)) THEN
-                CALL SetLastMessage('Element '//TRIM(IntToText(iElemID))//' is listed more than once for root zone parameter definitions!',f_iFatal,ThisProcedure)
+                CALL RootZone%Logger%SetLastMessage('Element '//TRIM(IntToText(iElemID))//' is listed more than once for root zone parameter definitions!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -627,7 +626,7 @@ CONTAINS
                     pDestType .NE. f_iFlowDest_StrmNode   .AND.   &
                     pDestType .NE. f_iFlowDest_Lake       .AND.   &
                     pDestType .NE. f_iFlowDest_GWElement       )  THEN
-                    CALL SetLastMessage ('Surface flow destination type for element ' // TRIM(IntToText(iElemID)) // ' is not recognized!',f_iFatal,ThisProcedure)
+                    CALL RootZone%Logger%SetLastMessage('Surface flow destination type for element ' // TRIM(IntToText(iElemID)) // ' is not recognized!',f_iFatal,ThisProcedure)
                     iStat = -1
                     RETURN
                 END IF
@@ -638,7 +637,7 @@ CONTAINS
                         IF (PRESENT(iStrmNodeIDs)) THEN
                             CALL ConvertID_To_Index(SurfaceFlowDest(iElem),iStrmNodeIDs,iFeatureIndex)
                             IF (iFeatureIndex .EQ. 0) THEN
-                                CALL SetLastMessage('Surface flow from element '//TRIM(IntToText(iElemID))//' flows into a stream node ('//TRIM(IntToText(SurfaceFlowDest(iElem)))//') that is not in the model!',f_iFatal,ThisProcedure)
+                                CALL RootZone%Logger%SetLastMessage('Surface flow from element '//TRIM(IntToText(iElemID))//' flows into a stream node ('//TRIM(IntToText(SurfaceFlowDest(iElem)))//') that is not in the model!',f_iFatal,ThisProcedure)
                                 iStat = -1
                                 RETURN
                             END IF
@@ -648,7 +647,7 @@ CONTAINS
                     CASE (f_iFlowDest_Element)
                         CALL ConvertID_To_Index(SurfaceFlowDest(iElem),iElemIDs,iFeatureIndex)
                         IF (iFeatureIndex .EQ. 0) THEN
-                            CALL SetLastMessage('Surface flow from element '//TRIM(IntToText(iElemID))//' goes to an element ('//TRIM(IntToText(SurfaceFlowDest(iElem)))//') that is not in the model!',f_iFatal,ThisProcedure)
+                            CALL RootZone%Logger%SetLastMessage('Surface flow from element '//TRIM(IntToText(iElemID))//' goes to an element ('//TRIM(IntToText(SurfaceFlowDest(iElem)))//') that is not in the model!',f_iFatal,ThisProcedure)
                             iStat = -1
                             RETURN
                         END IF
@@ -658,7 +657,7 @@ CONTAINS
                         IF (PRESENT(iLakeIDs)) THEN
                             CALL ConvertID_To_Index(SurfaceFlowDest(iElem),iLakeIDs,iFeatureIndex)
                             IF (iFeatureIndex .EQ. 0) THEN
-                                CALL SetLastMessage('Surface flow from element '//TRIM(IntToText(iElemID))//' flows into a lake ('//TRIM(IntToText(SurfaceFlowDest(iElem)))//') that is not in the model!',f_iFatal,ThisProcedure)
+                                CALL RootZone%Logger%SetLastMessage('Surface flow from element '//TRIM(IntToText(iElemID))//' flows into a lake ('//TRIM(IntToText(SurfaceFlowDest(iElem)))//') that is not in the model!',f_iFatal,ThisProcedure)
                                 iStat = -1
                                 RETURN
                             END IF
@@ -668,7 +667,7 @@ CONTAINS
                     CASE (f_iFlowDest_Subregion)
                         CALL ConvertID_To_Index(SurfaceFlowDest(iElem),iSubregionIDs,iFeatureIndex)
                         IF (iFeatureIndex .EQ. 0) THEN
-                            CALL SetLastMessage('Surface flow from element '//TRIM(IntToText(iElemID))//' goes to a subregion ('//TRIM(IntToText(SurfaceFlowDest(iElem)))//') that is not in the model!',f_iFatal,ThisProcedure)
+                            CALL RootZone%Logger%SetLastMessage('Surface flow from element '//TRIM(IntToText(iElemID))//' goes to a subregion ('//TRIM(IntToText(SurfaceFlowDest(iElem)))//') that is not in the model!',f_iFatal,ThisProcedure)
                             iStat = -1
                             RETURN
                         END IF
@@ -684,33 +683,33 @@ CONTAINS
             
             !Make sure hydraulic conductivity is greater than zero
             IF (pSoilsData(iElem)%HydCond .LT. 0.0) THEN
-                CALL SetLastMessage('Root zone hydraulic conductivity at element '//TRIM(IntToText(iElemID))//' is less than zero!',f_iFatal,ThisProcedure)
+                CALL RootZone%Logger%SetLastMessage('Root zone hydraulic conductivity at element '//TRIM(IntToText(iElemID))//' is less than zero!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
             IF (RootZone%HydCondPonded(iElem) .LT. 0.0) THEN
-                CALL SetLastMessage('Root zone hydraulic conductivity for ponded crops at element '//TRIM(IntToText(iElemID))//' is less than zero!',f_iFatal,ThisProcedure)
+                CALL RootZone%Logger%SetLastMessage('Root zone hydraulic conductivity for ponded crops at element '//TRIM(IntToText(iElemID))//' is less than zero!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
             
             !Method to compute Kunsat must be recognized
             IF (LocateInList(pSoilsData(iElem)%KunsatMethod,f_iKunsatMethodList) .LT. 1) THEN
-                CALL SetLastMessage('Method to compute unsaturated hydraulic conductivity at element '//TRIM(IntToText(iElemID))//' is not recognized!',f_iFatal,ThisProcedure)
+                CALL RootZone%Logger%SetLastMessage('Method to compute unsaturated hydraulic conductivity at element '//TRIM(IntToText(iElemID))//' is not recognized!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
             
             !Wilting point should be less than field capacity
             IF (pSoilsData(iElem)%WiltingPoint .GE. pSoilsData(iElem)%FieldCapacity) THEN
-                CALL SetLastMessage('At element ' // TRIM(IntToText(iElemID)) // ' wilting point is greater than or equal to field capacity!',f_iFatal,ThisProcedure)
+                CALL RootZone%Logger%SetLastMessage('At element ' // TRIM(IntToText(iElemID)) // ' wilting point is greater than or equal to field capacity!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
             
             !Field capacity should be less than or equal to total porosity
             IF (pSoilsData(iElem)%FieldCapacity .GT. pSoilsData(iElem)%TotalPorosity) THEN
-                CALL SetLastMessage('At element ' // TRIM(IntToText(iElemID)) // ' field capacity is greater than total porosity!',f_iFatal,ThisProcedure)
+                CALL RootZone%Logger%SetLastMessage('At element ' // TRIM(IntToText(iElemID)) // ' field capacity is greater than total porosity!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -763,7 +762,7 @@ CONTAINS
         !Are pointers defined without a defined ag water demand file?
         IF (AgWaterDemandFile .EQ. '' ) THEN
             IF (RootZone%Flags%lReadNonPondedAgWaterDemand  .OR. RootZone%Flags%lReadPondedAgWaterDemand) THEN 
-                CALL SetLastMessage('Data columns from agricultural water supply requirement file is referenced but this file is not specified!',f_iFatal,ThisProcedure)
+                CALL RootZone%Logger%SetLastMessage('Data columns from agricultural water supply requirement file is referenced but this file is not specified!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -786,17 +785,18 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- NEW HDF5 ROOT ZONE ZONE BUDGET FILE FOR POST-PROCESSING
   ! -------------------------------------------------------------
-  SUBROUTINE RootZoneZoneBudRawFile_New(IsForInquiry,cFileName,TimeStep,NTIME,cVersion,lElemFlowToSubregions,Flags,AppGrid,ZBudFile,iStat)
-    LOGICAL,INTENT(IN)            :: IsForInquiry
-    CHARACTER(LEN=*),INTENT(IN)   :: cFileName
-    TYPE(TimeStepType),INTENT(IN) :: TimeStep
-    INTEGER,INTENT(IN)            :: NTIME
-    CHARACTER(LEN=*),INTENT(IN)   :: cVersion
-    LOGICAL,INTENT(IN)            :: lElemFlowToSubregions
-    TYPE(FlagsType),INTENT(IN)    :: Flags
-    TYPE(AppGridType),INTENT(IN)  :: AppGrid
-    TYPE(ZBudgetType)             :: ZBudFile
-    INTEGER,INTENT(OUT)           :: iStat
+  SUBROUTINE RootZoneZoneBudRawFile_New(IsForInquiry,cFileName,TimeStep,NTIME,cVersion,lElemFlowToSubregions,Flags,AppGrid,ZBudFile,iStat,Logger)
+    LOGICAL,INTENT(IN)                        :: IsForInquiry
+    CHARACTER(LEN=*),INTENT(IN)               :: cFileName
+    TYPE(TimeStepType),INTENT(IN)             :: TimeStep
+    INTEGER,INTENT(IN)                        :: NTIME
+    CHARACTER(LEN=*),INTENT(IN)               :: cVersion
+    LOGICAL,INTENT(IN)                        :: lElemFlowToSubregions
+    TYPE(FlagsType),INTENT(IN)                :: Flags
+    TYPE(AppGridType),INTENT(IN)              :: AppGrid
+    TYPE(ZBudgetType)                         :: ZBudFile
+    INTEGER,INTENT(OUT)                       :: iStat
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT) :: Logger
     
     !Local variables
     CHARACTER(LEN=ModNameLen+26),PARAMETER :: ThisProcedure = ModName // 'RootZoneZoneBudRawFile_New'
@@ -811,7 +811,7 @@ CONTAINS
     
     !If this is for inquiry, open file for reading and return
     IF (IsForInquiry) THEN
-        IF (cFileName .NE. '') CALL ZBudFile%New(cFileName,iStat)
+        IF (cFileName .NE. '') CALL ZBudFile%New(Logger,cFileName,iStat)
         RETURN
     END IF
     
@@ -874,7 +874,7 @@ CONTAINS
               Header%ASCIIOutput%cColumnTitles(5)                                  , &
               STAT = ErrorCode                                                     )
     IF (ErrorCode .NE. 0) THEN
-        CALL SetLastMessage('Error allocating memory for root zone Z-Budget file!',f_iFatal,ThisProcedure)
+        CALL Logger%SetLastMessage('Error allocating memory for root zone Z-Budget file!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -1148,7 +1148,7 @@ CONTAINS
                          'NRV_DISCREPANCY'       ]
                              
     !Instantiate Z-Budget file
-    CALL ZBudFile%New(cFileName,NTIME,TimeStepLocal,Header,SystemData,iStat)
+    CALL ZBudFile%New(Logger,cFileName,NTIME,TimeStepLocal,Header,SystemData,iStat)
     
   END SUBROUTINE RootZoneZoneBudRawFile_New
   
@@ -1156,17 +1156,18 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- NEW HDF5 LAND AND WATER USE ZONE BUDGET FILE FOR POST-PROCESSING
   ! -------------------------------------------------------------
-  SUBROUTINE LWUseZoneBudRawFile_New(IsForInquiry,cFileName,TimeStep,NTIME,cVersion,lElemFlowToSubregions,Flags,AppGrid,ZBudFile,iStat)
-    LOGICAL,INTENT(IN)            :: IsForInquiry
-    CHARACTER(LEN=*),INTENT(IN)   :: cFileName
-    TYPE(TimeStepType),INTENT(IN) :: TimeStep
-    INTEGER,INTENT(IN)            :: NTIME
-    CHARACTER(LEN=*),INTENT(IN)   :: cVersion
-    LOGICAL,INTENT(IN)            :: lElemFlowToSubregions
-    TYPE(FlagsType),INTENT(IN)    :: Flags
-    TYPE(AppGridType),INTENT(IN)  :: AppGrid
-    TYPE(ZBudgetType)             :: ZBudFile
-    INTEGER,INTENT(OUT)           :: iStat
+  SUBROUTINE LWUseZoneBudRawFile_New(IsForInquiry,cFileName,TimeStep,NTIME,cVersion,lElemFlowToSubregions,Flags,AppGrid,ZBudFile,iStat,Logger)
+    LOGICAL,INTENT(IN)                        :: IsForInquiry
+    CHARACTER(LEN=*),INTENT(IN)               :: cFileName
+    TYPE(TimeStepType),INTENT(IN)             :: TimeStep
+    INTEGER,INTENT(IN)                        :: NTIME
+    CHARACTER(LEN=*),INTENT(IN)               :: cVersion
+    LOGICAL,INTENT(IN)                        :: lElemFlowToSubregions
+    TYPE(FlagsType),INTENT(IN)                :: Flags
+    TYPE(AppGridType),INTENT(IN)              :: AppGrid
+    TYPE(ZBudgetType)                         :: ZBudFile
+    INTEGER,INTENT(OUT)                       :: iStat
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT) :: Logger
     
     !Local variables
     CHARACTER(LEN=ModNameLen+23),PARAMETER :: ThisProcedure = ModName // 'LWUseZoneBudRawFile_New'
@@ -1181,7 +1182,7 @@ CONTAINS
     
     !If this is for inquiry, open file for reading and return
     IF (IsForInquiry) THEN
-        IF (cFileName .NE. '') CALL ZBudFile%New(cFileName,iStat)
+        IF (cFileName .NE. '') CALL ZBudFile%New(Logger,cFileName,iStat)
         RETURN
     END IF
     
@@ -1244,7 +1245,7 @@ CONTAINS
               Header%ASCIIOutput%cColumnTitles(5)                               , &
               STAT = ErrorCode                                                  )
     IF (ErrorCode .NE. 0) THEN
-        CALL SetLastMessage('Error allocating memory for land and water use Z-Budget file!',f_iFatal,ThisProcedure)
+        CALL Logger%SetLastMessage('Error allocating memory for land and water use Z-Budget file!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -1408,7 +1409,7 @@ CONTAINS
                          'URB_SHORTAGE'        ]
                              
     !Instantiate Z-Budget file
-    CALL ZBudFile%New(cFileName,NTIME,TimeStepLocal,Header,SystemData,iStat)
+    CALL ZBudFile%New(Logger,cFileName,NTIME,TimeStepLocal,Header,SystemData,iStat)
     
   END SUBROUTINE LWUseZoneBudRawFile_New
   
@@ -1604,32 +1605,33 @@ CONTAINS
     END IF
     
     !Generate zone list
-    CALL ZoneList%New(pZBudget%Header%iNData,pZBudget%Header%lFaceFlows_Defined,pZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)
+    CALL ZoneList%New(RootZone%Logger,pZBudget%Header%iNData,pZBudget%Header%lFaceFlows_Defined,pZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)
     IF (iStat .NE. 0) RETURN
-    
+
     !Retrieve data
-    CALL RootZone_v401_GetZBudget_AnnualFlows_GivenFile(pZBudget,iZBudgetType,ZoneList,iZoneID,iLUType,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
+    CALL RootZone_v401_GetZBudget_AnnualFlows_GivenFile(pZBudget,iZBudgetType,ZoneList,iZoneID,iLUType,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat,RootZone%Logger)
 
     !Clear memory
     CALL ZoneList%Kill()
     NULLIFY(pZBudget)
-    
+
   END SUBROUTINE RootZone_v401_GetZBudget_AnnualFlows_GivenRootZone
      
      
   ! -------------------------------------------------------------
   ! --- GET ANNUAL ZBUDGET FLOWS FROM ZBUDGET OUTPUT 
   ! -------------------------------------------------------------
-  SUBROUTINE RootZone_v401_GetZBudget_AnnualFlows_GivenFile(ZBudget,iZBudgetType,ZoneList,iZoneID,iLUType,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
-     TYPE(ZBudgetType),INTENT(IN)             :: ZBudget              
-     TYPE(ZoneListType),INTENT(IN)            :: ZoneList
-     INTEGER,INTENT(IN)                       :: iZBudgetType,iZoneID,iLUType
-     CHARACTER(LEN=*),INTENT(IN)              :: cBeginDate,cEndDate  
-     REAL(8),INTENT(IN)                       :: rFactVL
-     REAL(8),ALLOCATABLE,INTENT(OUT)          :: rFlows(:,:)          
-     CHARACTER(LEN=*),ALLOCATABLE,INTENT(OUT) :: cFlowNames(:)
-     INTEGER,INTENT(OUT)                      :: iStat
-     
+  SUBROUTINE RootZone_v401_GetZBudget_AnnualFlows_GivenFile(ZBudget,iZBudgetType,ZoneList,iZoneID,iLUType,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat,Logger)
+     TYPE(ZBudgetType),INTENT(IN)              :: ZBudget
+     TYPE(ZoneListType),INTENT(IN)             :: ZoneList
+     INTEGER,INTENT(IN)                        :: iZBudgetType,iZoneID,iLUType
+     CHARACTER(LEN=*),INTENT(IN)               :: cBeginDate,cEndDate
+     REAL(8),INTENT(IN)                          :: rFactVL
+     REAL(8),ALLOCATABLE,INTENT(OUT)             :: rFlows(:,:)
+     CHARACTER(LEN=*),ALLOCATABLE,INTENT(OUT)    :: cFlowNames(:)
+     INTEGER,INTENT(OUT)                         :: iStat
+     TYPE(MessageLoggerType),OPTIONAL,INTENT(INOUT) :: Logger
+
      !Local variables
      CHARACTER(LEN=ModNameLen+46),PARAMETER :: ThisProcedure = ModName // 'RootZone_v401_GetZBudget_AnnualFlows_GivenFile'
      INTEGER                                :: iNTimeSteps,indx,ErrorCode,iNPopulatedValues,indxTime
@@ -1658,13 +1660,13 @@ CONTAINS
                 iColList = [(indx,indx=32,36)]
                 
             CASE DEFAULT
-                CALL SetLastMessage('Land&Water Use ZBudget is not available for the selected land use type!',f_iFatal,ThisProcedure)
+                    IF (PRESENT(Logger)) CALL Logger%SetLastMessage('Land&Water Use ZBudget is not available for the selected land use type!',f_iFatal,ThisProcedure)
                 DEALLOCATE (rFlows , cFlowNames , STAT=ErrorCode)
                 ALLOCATE (rFlows(0,0) , cFlowNames(0))
                 iStat = -1
                 RETURN
         END SELECT
-        
+
         !Read data for the interval
         CALL ZBudget%ReadData(ZoneList,iZoneID,iColList,'1YEAR',cBeginDate,cEndDate,1d0,rFactVL,iDataUnitTypes,iNPopulatedValues,rValues,iStat)
         IF (iStat .NE. 0) RETURN
@@ -1786,14 +1788,14 @@ CONTAINS
                 END DO
                 
             CASE DEFAULT
-                CALL SetLastMessage('Root Zone ZBudget is not available for the selected land use type!',f_iFatal,ThisProcedure)
+                    IF (PRESENT(Logger)) CALL Logger%SetLastMessage('Root Zone ZBudget is not available for the selected land use type!',f_iFatal,ThisProcedure)
                 DEALLOCATE (rFlows , cFlowNames , STAT=ErrorCode)
                 ALLOCATE (rFlows(0,0) , cFlowNames(0))
                 iStat = -1
                 RETURN
-        END SELECT        
-    END IF  
-    
+        END SELECT
+    END IF
+
   END SUBROUTINE RootZone_v401_GetZBudget_AnnualFlows_GivenFile
   
   
@@ -1834,31 +1836,32 @@ CONTAINS
     END IF
     
     !Generate zone list
-    CALL ZoneList%New(pZBudget%Header%iNData,pZBudget%Header%lFaceFlows_Defined,pZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)
+    CALL ZoneList%New(RootZone%Logger,pZBudget%Header%iNData,pZBudget%Header%lFaceFlows_Defined,pZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)
     IF (iStat .NE. 0) RETURN
-    
+
     !Retrieve data
-    CALL RootZone_v401_GetZBudget_MonthlyFlows_GivenFile(pZBudget,iZBudgetType,ZoneList,iZoneID,iLUType,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
+    CALL RootZone_v401_GetZBudget_MonthlyFlows_GivenFile(pZBudget,iZBudgetType,ZoneList,iZoneID,iLUType,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat,RootZone%Logger)
 
     !Clear memory
     CALL ZoneList%Kill()
     NULLIFY(pZBudget)
-    
+
   END SUBROUTINE RootZone_v401_GetZBudget_MonthlyFlows_GivenRootZone
      
      
   ! -------------------------------------------------------------
   ! --- GET MONTHLY ZBUDGET FLOWS FROM ZBUDGET OUTPUT 
   ! -------------------------------------------------------------
-  SUBROUTINE RootZone_v401_GetZBudget_MonthlyFlows_GivenFile(ZBudget,iZBudgetType,ZoneList,iZoneID,iLUType,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
-     TYPE(ZBudgetType),INTENT(IN)             :: ZBudget              
-     TYPE(ZoneListType),INTENT(IN)            :: ZoneList
-     INTEGER,INTENT(IN)                       :: iZBudgetType,iZoneID,iLUType
-     CHARACTER(LEN=*),INTENT(IN)              :: cBeginDate,cEndDate  
-     REAL(8),INTENT(IN)                       :: rFactVL
-     REAL(8),ALLOCATABLE,INTENT(OUT)          :: rFlows(:,:)          
-     CHARACTER(LEN=*),ALLOCATABLE,INTENT(OUT) :: cFlowNames(:)
-     INTEGER,INTENT(OUT)                      :: iStat
+  SUBROUTINE RootZone_v401_GetZBudget_MonthlyFlows_GivenFile(ZBudget,iZBudgetType,ZoneList,iZoneID,iLUType,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat,Logger)
+     TYPE(ZBudgetType),INTENT(IN)              :: ZBudget
+     TYPE(ZoneListType),INTENT(IN)             :: ZoneList
+     INTEGER,INTENT(IN)                        :: iZBudgetType,iZoneID,iLUType
+     CHARACTER(LEN=*),INTENT(IN)               :: cBeginDate,cEndDate
+     REAL(8),INTENT(IN)                        :: rFactVL
+     REAL(8),ALLOCATABLE,INTENT(OUT)           :: rFlows(:,:)
+     CHARACTER(LEN=*),ALLOCATABLE,INTENT(OUT)  :: cFlowNames(:)
+     INTEGER,INTENT(OUT)                       :: iStat
+     TYPE(MessageLoggerType),OPTIONAL,INTENT(INOUT) :: Logger
      
      !Local variables
      CHARACTER(LEN=ModNameLen+47),PARAMETER :: ThisProcedure = ModName // 'RootZone_v401_GetZBudget_MonthlyFlows_GivenFile'
@@ -1888,13 +1891,13 @@ CONTAINS
                 iColList = [(indx,indx=32,36)]
                 
             CASE DEFAULT
-                CALL SetLastMessage('Land&Water Use ZBudget is not available for the selected land use type!',f_iFatal,ThisProcedure)
+                    IF (PRESENT(Logger)) CALL Logger%SetLastMessage('Land&Water Use ZBudget is not available for the selected land use type!',f_iFatal,ThisProcedure)
                 DEALLOCATE (rFlows , cFlowNames , STAT=ErrorCode)
                 ALLOCATE (rFlows(0,0) , cFlowNames(0))
                 iStat = -1
                 RETURN
         END SELECT
-        
+
         !Read data for the interval
         CALL ZBudget%ReadData(ZoneList,iZoneID,iColList,'1MON',cBeginDate,cEndDate,1d0,rFactVL,iDataUnitTypes,iNPopulatedValues,rValues,iStat)
         IF (iStat .NE. 0) RETURN
@@ -2016,14 +2019,14 @@ CONTAINS
                 END DO
                 
             CASE DEFAULT
-                CALL SetLastMessage('Root Zone ZBudget is not available for the selected land use type!',f_iFatal,ThisProcedure)
+                    IF (PRESENT(Logger)) CALL Logger%SetLastMessage('Root Zone ZBudget is not available for the selected land use type!',f_iFatal,ThisProcedure)
                 DEALLOCATE (rFlows , cFlowNames , STAT=ErrorCode)
                 ALLOCATE (rFlows(0,0) , cFlowNames(0))
                 iStat = -1
                 RETURN
-        END SELECT        
-    END IF  
-    
+        END SELECT
+    END IF
+
   END SUBROUTINE RootZone_v401_GetZBudget_MonthlyFlows_GivenFile
   
   
@@ -2052,15 +2055,15 @@ CONTAINS
     SELECT CASE (iZBudgetType)
         CASE (f_iZBudgetType_LWU)
             IF (.NOT. RootZone%Flags%LWUseZoneBudRawFile_Defined) THEN
-                CALL SetLastMessage('Land and Water Use zone budget is not part of the model output to retrieve data!',f_iFatal,ThisProcedure)
+                CALL RootZone%Logger%SetLastMessage('Land and Water Use zone budget is not part of the model output to retrieve data!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
             pZBudget => RootZone%LWUZoneBudRawFile
-            
+
         CASE (f_iZBudgetType_RootZone)
             IF (.NOT. RootZone%Flags%RootZoneZoneBudRawFile_Defined) THEN
-                CALL SetLastMessage('Root Zone zone budget is not part of the model output to retrieve data!',f_iFatal,ThisProcedure)
+                CALL RootZone%Logger%SetLastMessage('Root Zone zone budget is not part of the model output to retrieve data!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -2068,7 +2071,7 @@ CONTAINS
     END SELECT
             
     !Generate zone list
-    CALL ZoneList%New(pZBudget%Header%iNData,pZBudget%Header%lFaceFlows_Defined,pZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    CALL ZoneList%New(RootZone%Logger,pZBudget%Header%iNData,pZBudget%Header%lFaceFlows_Defined,pZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)  ;  IF (iStat .EQ. -1) RETURN
     
     !Read data
     CALL pZBudget%ReadData(ZoneList,iZoneID,iCols,cInterval,cBeginDate,cEndDate,rFactAR,rFactVL,iDataTypes,inActualOutput,rValues,iStat)  ;  IF (iStat .EQ. -1) RETURN

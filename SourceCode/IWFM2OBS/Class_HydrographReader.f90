@@ -9,8 +9,8 @@
 !***********************************************************************
 MODULE Class_HydrographReader
 
-  USE MessageLogger      , ONLY: SetLastMessage   , &
-                                 LogMessage        , &
+  USE MessageLogger      , ONLY: MessageLoggerType , &
+                                 DefaultLogger     , &
                                  f_iFatal          , &
                                  f_iWarn           , &
                                  f_iInfo
@@ -93,6 +93,7 @@ MODULE Class_HydrographReader
   END TYPE HydrographReaderType
 
 CONTAINS
+
 
   ! =====================================================================
   ! ReadNonComment - Read one non-comment line from a Fortran unit
@@ -214,7 +215,7 @@ CONTAINS
     CALL ParseDateFromString(cClean, iDateSpec, This%iStartDay, This%iStartMon, &
          This%iStartYr, iErr)
     IF (iErr /= 0) THEN
-      CALL SetLastMessage('Cannot parse start date from simulation file', &
+      CALL DefaultLogger%SetLastMessage('Cannot parse start date from simulation file', &
            f_iFatal, cModName)
       iStat = -1; RETURN
     END IF
@@ -238,9 +239,9 @@ CONTAINS
 
     CALL SimFile%Kill()
 
-    CALL LogMessage('  Simulation file: '//TRIM(cSimMainFile), f_iInfo, cModName)
-    CALL LogMessage('  GW main file: '//TRIM(This%cGWMainFile), f_iInfo, cModName)
-    CALL LogMessage('  Stream main file: '//TRIM(This%cStreamMainFile), f_iInfo, cModName)
+    CALL DefaultLogger%LogMessage('  Simulation file: '//TRIM(cSimMainFile), f_iInfo, cModName)
+    CALL DefaultLogger%LogMessage('  GW main file: '//TRIM(This%cGWMainFile), f_iInfo, cModName)
+    CALL DefaultLogger%LogMessage('  Stream main file: '//TRIM(This%cStreamMainFile), f_iInfo, cModName)
 
     ! ==================================================================
     ! 2. Parse GW main file
@@ -275,7 +276,7 @@ CONTAINS
     ! Report summary
     DO i = 1, iHR_NUMHYD
       IF (This%HydInfo(i)%lActive) THEN
-        CALL LogMessage('  Discovered '//TRIM(IntToText(This%HydInfo(i)%iNHyd))// &
+        CALL DefaultLogger%LogMessage('  Discovered '//TRIM(IntToText(This%HydInfo(i)%iNHyd))// &
              ' hydrographs from .out file: '//TRIM(This%HydInfo(i)%cOutFilePath), &
              f_iInfo, cModName)
       END IF
@@ -351,7 +352,7 @@ CONTAINS
     DO i = 1, 17
       CALL GWFile%ReadData(cLine, iStat)
       IF (iStat == -1) THEN
-        CALL SetLastMessage('Unexpected end of GW main file at skip line '// &
+        CALL DefaultLogger%SetLastMessage('Unexpected end of GW main file at skip line '// &
              TRIM(IntToText(i)), f_iFatal, cModName)
         CALL GWFile%Kill(); iStat = -1; RETURN
       END IF
@@ -361,7 +362,7 @@ CONTAINS
     CALL StripAndClean(cLine, cClean)
     READ(cClean, *, IOSTAT=iErr) iNOUTH
     IF (iErr /= 0 .OR. iNOUTH < 0) THEN
-      CALL SetLastMessage('Cannot read NOUTH from GW main file', f_iFatal, cModName)
+      CALL DefaultLogger%SetLastMessage('Cannot read NOUTH from GW main file', f_iFatal, cModName)
       CALL GWFile%Kill(); iStat = -1; RETURN
     END IF
 
@@ -418,7 +419,7 @@ CONTAINS
 
     CALL GWFile%Kill()
 
-    CALL LogMessage('  GW: '//TRIM(IntToText(iNOUTH))//' hydrographs, .out='// &
+    CALL DefaultLogger%LogMessage('  GW: '//TRIM(IntToText(iNOUTH))//' hydrographs, .out='// &
          TRIM(This%HydInfo(iHR_GWHEAD)%cOutFilePath), f_iInfo, cModName)
 
   END SUBROUTINE ParseGWMainFile
@@ -453,7 +454,7 @@ CONTAINS
     CALL StrFile%New(FileName=This%cStreamMainFile, InputFile=.TRUE., IsTSFile=.FALSE., &
                      Descriptor='stream main file', iStat=iStat)
     IF (iStat == -1) THEN
-      CALL LogMessage('  Stream main file not found: '// &
+      CALL DefaultLogger%LogMessage('  Stream main file not found: '// &
            TRIM(This%cStreamMainFile), f_iInfo, cModName)
       iStat = 0; RETURN
     END IF
@@ -748,7 +749,7 @@ CONTAINS
     iNHyd = This%HydInfo(iHydType)%iNHyd
     ALLOCATE(rVal(iNHyd), STAT=iErr)
     IF (iErr /= 0) THEN
-      CALL SetLastMessage('Cannot allocate array for '//TRIM(IntToText(iNHyd))// &
+      CALL DefaultLogger%SetLastMessage('Cannot allocate array for '//TRIM(IntToText(iNHyd))// &
            ' hydrographs', f_iFatal, cModName)
       iStat = -1; RETURN
     END IF
@@ -757,7 +758,7 @@ CONTAINS
     OPEN(UNIT=iInUnit, FILE=This%HydInfo(iHydType)%cOutFilePath, &
          STATUS='OLD', IOSTAT=iErr)
     IF (iErr /= 0) THEN
-      CALL SetLastMessage('Cannot open .out file: '// &
+      CALL DefaultLogger%SetLastMessage('Cannot open .out file: '// &
            TRIM(This%HydInfo(iHydType)%cOutFilePath), f_iFatal, cModName)
       DEALLOCATE(rVal)
       iStat = -1; RETURN
@@ -780,7 +781,7 @@ CONTAINS
     OPEN(UNIT=iOutUnit, FILE=cTempSMPFile, STATUS='REPLACE', IOSTAT=iErr)
     IF (iErr /= 0) THEN
       CLOSE(iInUnit); DEALLOCATE(rVal)
-      CALL SetLastMessage('Cannot create temp SMP: '//TRIM(cTempSMPFile), &
+      CALL DefaultLogger%SetLastMessage('Cannot create temp SMP: '//TRIM(cTempSMPFile), &
            f_iFatal, cModName)
       iStat = -1; RETURN
     END IF
@@ -834,7 +835,7 @@ CONTAINS
     DEALLOCATE(rVal)
 
     iTime = iTime - 1  ! Subtract failed read
-    CALL LogMessage('  Read '//TRIM(IntToText(iTime))//' timesteps from '// &
+    CALL DefaultLogger%LogMessage('  Read '//TRIM(IntToText(iTime))//' timesteps from '// &
          TRIM(This%HydInfo(iHydType)%cOutFilePath), f_iInfo, cModName)
 
   END SUBROUTINE ReadHydrographToSMP
@@ -900,7 +901,7 @@ CONTAINS
     ! Verify file exists
     INQUIRE(FILE=TRIM(cReadPath), EXIST=lFileExists)
     IF (.NOT. lFileExists) THEN
-      CALL SetLastMessage('Hydrograph file not found: '//TRIM(cReadPath), &
+      CALL DefaultLogger%SetLastMessage('Hydrograph file not found: '//TRIM(cReadPath), &
            f_iFatal, cModName)
       iStat = -1; RETURN
     END IF
@@ -912,13 +913,13 @@ CONTAINS
       CALL HydInFile%Init(cReadPath, 'hydrograph data', BlocksToSkip=0, &
            nCol=iNHyd, iStat=iStat)
       IF (iStat == -1) THEN
-        CALL SetLastMessage('Cannot open HDF5 hydrograph file: '//TRIM(cReadPath)// &
+        CALL DefaultLogger%SetLastMessage('Cannot open HDF5 hydrograph file: '//TRIM(cReadPath)// &
              '. Ensure it was created by IWFM or ResultsExtract (not pyiwfm cache).', &
              f_iFatal, cModName)
         RETURN
       END IF
       IF (HydInFile%iSize /= iNHyd) THEN
-        CALL SetLastMessage('HDF5 column count ('//TRIM(IntToText(HydInFile%iSize))// &
+        CALL DefaultLogger%SetLastMessage('HDF5 column count ('//TRIM(IntToText(HydInFile%iSize))// &
              ') does not match expected hydrograph count ('//TRIM(IntToText(iNHyd))// &
              ') in file: '//TRIM(cReadPath), f_iFatal, cModName)
         CALL HydInFile%Close()
@@ -931,7 +932,7 @@ CONTAINS
       OPEN(UNIT=iInUnit, FILE=TRIM(cReadPath), &
            STATUS='OLD', RECL=2000000, IOSTAT=iErr)
       IF (iErr /= 0) THEN
-        CALL SetLastMessage('Cannot open hydrograph file: '// &
+        CALL DefaultLogger%SetLastMessage('Cannot open hydrograph file: '// &
              TRIM(cReadPath), f_iFatal, cModName)
         iStat = -1; RETURN
       END IF
@@ -970,7 +971,7 @@ CONTAINS
     END IF
 
     IF (iOutFileNHyd > 0 .AND. iOutFileNHyd /= iNHyd) THEN
-      CALL LogMessage('  well_specs count ('// &
+      CALL DefaultLogger%LogMessage('  well_specs count ('// &
            TRIM(IntToText(iOutFileNHyd))//') differs from GW main ('// &
            TRIM(IntToText(iNHyd))//'). Building well_specs-based mapping.', &
            f_iInfo, cModName)
@@ -1020,12 +1021,12 @@ CONTAINS
             END DO
 
             lRebuildColMap = .TRUE.
-            CALL LogMessage('  Built '//TRIM(IntToText(iNHyd))// &
+            CALL DefaultLogger%LogMessage('  Built '//TRIM(IntToText(iNHyd))// &
                  ' hydrograph IDs from well_specs ('// &
                  TRIM(IntToText(iNWells))//' wells x '// &
                  TRIM(IntToText(This%iNLayers))//' layers)', f_iInfo, cModName)
           ELSE
-            CALL LogMessage('  well_specs wells ('//TRIM(IntToText(iNWells))// &
+            CALL DefaultLogger%LogMessage('  well_specs wells ('//TRIM(IntToText(iNWells))// &
                  ') x layers ('//TRIM(IntToText(This%iNLayers))// &
                  ') = '//TRIM(IntToText(iNWells*This%iNLayers))// &
                  ' does not match .out columns ('// &
@@ -1034,11 +1035,11 @@ CONTAINS
 
           CLOSE(iWSUnit)
         ELSE
-          CALL LogMessage('  Cannot open well_specs file: '// &
+          CALL DefaultLogger%LogMessage('  Cannot open well_specs file: '// &
                TRIM(This%cWellSpecFile), f_iWarn, cModName)
         END IF
       ELSE
-        CALL LogMessage('  No well_specs file available for fallback', &
+        CALL DefaultLogger%LogMessage('  No well_specs file available for fallback', &
              f_iWarn, cModName)
       END IF
     END IF
@@ -1046,7 +1047,7 @@ CONTAINS
     ! ---- Step 1: Build sorted obs ID list for binary search ----
     ALLOCATE(cObsSorted(iNObsIDs), iObsOrder(iNObsIDs), STAT=iErr)
     IF (iErr /= 0) THEN
-      CALL SetLastMessage('Cannot allocate obs ID sort arrays', f_iFatal, cModName)
+      CALL DefaultLogger%SetLastMessage('Cannot allocate obs ID sort arrays', f_iFatal, cModName)
       CLOSE(iInUnit)
       iStat = -1; RETURN
     END IF
@@ -1059,7 +1060,7 @@ CONTAINS
     ! ---- Step 2: Map model columns to filtered indices ----
     ALLOCATE(iColMap(iNHyd), STAT=iErr)
     IF (iErr /= 0) THEN
-      CALL SetLastMessage('Cannot allocate column map', f_iFatal, cModName)
+      CALL DefaultLogger%SetLastMessage('Cannot allocate column map', f_iFatal, cModName)
       DEALLOCATE(cObsSorted, iObsOrder)
       CLOSE(iInUnit)
       iStat = -1; RETURN
@@ -1079,7 +1080,7 @@ CONTAINS
     DEALLOCATE(cObsSorted, iObsOrder)
 
     IF (This%iNFiltered == 0) THEN
-      CALL LogMessage('  No matching IDs between model and obs for direct read', &
+      CALL DefaultLogger%LogMessage('  No matching IDs between model and obs for direct read', &
            f_iWarn, cModName)
       DEALLOCATE(iColMap)
       CLOSE(iInUnit)
@@ -1095,7 +1096,7 @@ CONTAINS
       END IF
     END DO
 
-    CALL LogMessage('  Matched '//TRIM(IntToText(This%iNFiltered))//' of '// &
+    CALL DefaultLogger%LogMessage('  Matched '//TRIM(IntToText(This%iNFiltered))//' of '// &
          TRIM(IntToText(iNHyd))//' model hydrographs to observation IDs', &
          f_iInfo, cModName)
 
@@ -1106,7 +1107,7 @@ CONTAINS
     IF (iErr /= 0) THEN
       IF (.NOT. lHDF) CLOSE(iInUnit)
       DEALLOCATE(iColMap)
-      CALL SetLastMessage('Cannot allocate value array for '// &
+      CALL DefaultLogger%SetLastMessage('Cannot allocate value array for '// &
            TRIM(IntToText(iNHyd))//' hydrographs', f_iFatal, cModName)
       iStat = -1; RETURN
     END IF
@@ -1137,7 +1138,7 @@ CONTAINS
         IF (iErr /= 0) THEN
           CALL HydInFile%Close()
           DEALLOCATE(iColMap, rVal)
-          CALL SetLastMessage('Cannot allocate HDF5 model data arrays', f_iFatal, cModName)
+          CALL DefaultLogger%SetLastMessage('Cannot allocate HDF5 model data arrays', f_iFatal, cModName)
           iStat = -1; RETURN
         END IF
         This%iModelSecs = 0
@@ -1189,7 +1190,7 @@ CONTAINS
                This%iModelSecs(iNTimes), STAT=iErr)
       IF (iErr /= 0) THEN
         CLOSE(iInUnit); DEALLOCATE(iColMap, rVal)
-        CALL SetLastMessage('Cannot allocate model data ('// &
+        CALL DefaultLogger%SetLastMessage('Cannot allocate model data ('// &
              TRIM(IntToText(iNTimes))//' x '// &
              TRIM(IntToText(This%iNFiltered))//')', f_iFatal, cModName)
         iStat = -1; RETURN
@@ -1256,7 +1257,7 @@ CONTAINS
 
     DEALLOCATE(rVal, iColMap)
 
-    CALL LogMessage('  Direct read: '//TRIM(IntToText(This%iNTimes))// &
+    CALL DefaultLogger%LogMessage('  Direct read: '//TRIM(IntToText(This%iNTimes))// &
          ' timesteps x '//TRIM(IntToText(This%iNFiltered))// &
          ' hydrographs loaded to memory', f_iInfo, cModName)
 
@@ -1269,7 +1270,7 @@ CONTAINS
         CALL JulianDateToDayMonthYear(This%iModelDays(This%iNTimes), iD2, iM2, iY2, iE)
         WRITE(cStart, '(I2.2,A1,I2.2,A1,I4.4)') iM1, '/', iD1, '/', iY1
         WRITE(cEnd,   '(I2.2,A1,I2.2,A1,I4.4)') iM2, '/', iD2, '/', iY2
-        CALL LogMessage('  Model period: '//cStart//' - '//cEnd, f_iInfo, cModName)
+        CALL DefaultLogger%LogMessage('  Model period: '//cStart//' - '//cEnd, f_iInfo, cModName)
       END BLOCK
     END IF
 

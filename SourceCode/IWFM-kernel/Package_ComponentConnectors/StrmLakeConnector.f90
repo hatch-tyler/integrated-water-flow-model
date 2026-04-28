@@ -21,8 +21,8 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 MODULE StrmLakeConnector
-  USE MessageLogger      , ONLY: SetLastMessage   , &
-                                 MessageArray     , &
+  USE MessageLogger      , ONLY: MessageArray     , &
+                                 MessageLoggerType, &
                                  f_iFatal
   USE GeneralUtilities   , ONLY: LocateInList     , &
                                  IntToText
@@ -46,10 +46,10 @@ MODULE StrmLakeConnector
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: StrmLakeConnectorType  , &
-            f_iStrmToLakeFlow      , &
-            f_iBypassToLakeFlow    , &
-            f_iLakeToStrmFlow   
+  PUBLIC :: StrmLakeConnectorType            , &
+            f_iStrmToLakeFlow               , &
+            f_iBypassToLakeFlow             , &
+            f_iLakeToStrmFlow
 
 
   ! -------------------------------------------------------------
@@ -67,7 +67,7 @@ MODULE StrmLakeConnector
   ! --- STREAM-LAKE CONNECTOR DATABASE TYPE
   ! -------------------------------------------------------------
   TYPE StrmLakeConnectorType
-      PRIVATE
+      TYPE(MessageLoggerType),POINTER,PUBLIC         :: Logger        => NULL()
       INTEGER                                       :: NStrmToLake   = 0
       INTEGER                                       :: NBypassToLake = 0
       INTEGER                                       :: NLakeToStrm   = 0
@@ -105,10 +105,7 @@ MODULE StrmLakeConnector
   CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'StrmLakeConnector::'
 
 
-
-
 CONTAINS
-
 
 
 
@@ -180,14 +177,17 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- INSTANTIATE STREAM-TO-LAKE CONNECTION FROM PRE-PROCESSOR BINARY FILE
   ! -------------------------------------------------------------
-  SUBROUTINE ReadFromBinFile(Connector,BinFile,iStat) 
-    CLASS(StrmLakeConnectorType),INTENT(OUT) :: Connector
-    TYPE(GenericFileType)                    :: BinFile
-    INTEGER,INTENT(OUT)                      :: iStat
-    
+  SUBROUTINE ReadFromBinFile(Connector,Logger,BinFile,iStat)
+    CLASS(StrmLakeConnectorType),INTENT(OUT)   :: Connector
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
+    TYPE(GenericFileType)                      :: BinFile
+    INTEGER,INTENT(OUT)                        :: iStat
+
     !Local variables
     INTEGER :: NStrmToLake,NBypassToLake,NLakeToStrm
-    
+
+    Connector%Logger => Logger
+
     CALL BinFile%ReadData(NStrmToLake,iStat)  ;  IF (iStat .EQ. -1) RETURN
     Connector%NStrmToLake = NStrmToLake
     IF (NStrmToLake .GT. 0) THEN
@@ -523,13 +523,13 @@ CONTAINS
             iDest   = LocateInList(iDestID,iLakeIDs)
             IF (iDest .EQ. 0) THEN
                 iSourceID = iStrmNodeIDs(iSource)
-                CALL SetLastMessage('Lake '//TRIM(IntToText(iDestID))//' that receives flow from stream node '//TRIM(IntToText(iSourceID))//' is not in the model!',f_iFatal,ThisProcedure)
+                CALL Connector%Logger%SetLastMessage('Lake '//TRIM(IntToText(iDestID))//' that receives flow from stream node '//TRIM(IntToText(iSourceID))//' is not in the model!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
-            END IF  
+            END IF
             pStrmToLake(indx)%iDestination = iDest
         END DO
-        
+
         !Bypass-lake connection
         DO indx=1,Connector%NBypassToLake
             iSource = pBypassToLake(indx)%iSource
@@ -537,10 +537,10 @@ CONTAINS
             iDest   = LocateInList(iDestID,iLakeIDs)
             IF (iDest .EQ. 0) THEN
                 iSourceID = iStrmNodeIDs(iSource)
-                CALL SetLastMessage('Lake '//TRIM(IntToText(iDestID))//' that receives flow from stream node '//TRIM(IntToText(iSourceID))//' by means of a bypass is not in the model!',f_iFatal,ThisProcedure)
+                CALL Connector%Logger%SetLastMessage('Lake '//TRIM(IntToText(iDestID))//' that receives flow from stream node '//TRIM(IntToText(iSourceID))//' by means of a bypass is not in the model!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
-            END IF    
+            END IF
             pBypassToLake(indx)%iDestination = iDest
         END DO
 
@@ -551,7 +551,7 @@ CONTAINS
             iDest   = LocateInList(iDestID,iStrmNodeIDs)
             IF (iDest .EQ. 0) THEN
                 iSourceID = iLakeIDs(iSource)
-                CALL SetLastMessage('Stream node '//TRIM(IntToText(iDestID))//' that receives flow from lake '//TRIM(IntToText(iSourceID))//' is not in the model!',f_iFatal,ThisProcedure)
+                CALL Connector%Logger%SetLastMessage('Stream node '//TRIM(IntToText(iDestID))//' that receives flow from lake '//TRIM(IntToText(iSourceID))//' is not in the model!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF    

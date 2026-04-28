@@ -21,8 +21,8 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 MODULE Class_BaseStrmGWConnector
-  USE MessageLogger          , ONLY: SetLastMessage       , &
-                                     MessageArray         , &
+  USE MessageLogger          , ONLY: MessageArray         , &
+                                     MessageLoggerType    , &
                                      f_iFatal
   USE IOInterface
   USE TimeSeriesUtilities
@@ -52,9 +52,9 @@ MODULE Class_BaseStrmGWConnector
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: BaseStrmGWConnectorType  , &
-            BaseStrmGWConnector_Kill , &
-            iDisconnectAtTopOfBed    , &
+  PUBLIC :: BaseStrmGWConnectorType           , &
+            BaseStrmGWConnector_Kill          , &
+            iDisconnectAtTopOfBed             , &
             iDisconnectAtBottomOfBed
   
   
@@ -71,6 +71,7 @@ MODULE Class_BaseStrmGWConnector
   ! --- STREAM-GW CONNECTOR TYPE
   ! -------------------------------------------------------------
   TYPE,ABSTRACT:: BaseStrmGWConnectorType
+    TYPE(MessageLoggerType),POINTER,PUBLIC :: Logger => NULL()
     INTEGER             :: iVersion            = 0                     !Version number
     INTEGER             :: iInteractionType    = iDisconnectAtTopOfBed !Flag describing how stream-gw interaction will be computed
     CHARACTER(LEN=6)    :: TimeUnitConductance = ''                    !Time unit of conductance
@@ -178,8 +179,6 @@ MODULE Class_BaseStrmGWConnector
 CONTAINS
 
 
-
-
 ! ******************************************************************
 ! ******************************************************************
 ! ******************************************************************
@@ -210,15 +209,15 @@ CONTAINS
               STAT = ErrorCode                , &
               ERRMSG = cErrMsg                )
     IF (ErrorCode .NE. 0) THEN
-        CALL SetLastMessage('Error in allocating memory for stream-gw connection data!'//NEW_LINE('x')//TRIM(cErrMsg),f_iFatal,ThisProcedure)
+        CALL Connector%Logger%SetLastMessage('Error in allocating memory for stream-gw connection data!'//NEW_LINE('x')//TRIM(cErrMsg),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
-    
+
     CALL InFile%ReadData(Connector%iGWNode,iStat)        ;  IF (iStat .EQ. -1) RETURN
-    CALL InFile%ReadData(Connector%iLayer,iStat)         ;  IF (iStat .EQ. -1) RETURN  
-    CALL InFile%ReadData(Connector%rFractionForGW,iStat)    
-    
+    CALL InFile%ReadData(Connector%iLayer,iStat)         ;  IF (iStat .EQ. -1) RETURN
+    CALL InFile%ReadData(Connector%rFractionForGW,iStat)
+
   END SUBROUTINE BaseStrmGWConnector_ReadPreprocessedData
   
   
@@ -242,7 +241,7 @@ CONTAINS
     !Allocate memory
     ALLOCATE (Connector%iGWNode(NStrmNodes) , Connector%iLayer(NStrmNodes) , Connector%rFractionForGW(NStrmNodes) , STAT=ErrorCode , ERRMSG=cErrorMsg)
     IF (ErrorCode .NE. 0) THEN
-        CALL SetLastMessage('Error allocating memory for stream-gw connection data!'//NEW_LINE('x')//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
+        CALL Connector%Logger%SetLastMessage('Error allocating memory for stream-gw connection data!'//NEW_LINE('x')//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -511,14 +510,14 @@ CONTAINS
     IF (LocateInList(iInteractionType,iDisconnectTypeArray) .EQ. 0) THEN
         MessageArray(1) = 'While reading Main Stream Parameters Data File, the flag (INTRCTYPE) used to'
         MessageArray(2) = 'describe hydraulic disconnection between stream and groundwater is not recognized!'
-        CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+        CALL Connector%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
-    
+
     !Store flag
     Connector%iInteractionType = iInteractionType
-    
+
   END SUBROUTINE BaseStrmGWConnector_SetInteractionType
   
   
@@ -577,7 +576,7 @@ CONTAINS
             IF (iStrmNodes(indx) .EQ. iStrmNodes(indx1)) THEN
                 MessageArray(1) = 'Stream node '// TRIM(IntToText(iStrmNodes(indx))) // ' is listed more than once for defining '
                 MessageArray(2) = 'fraction of the stream-aquifer interaction to be applied to the corresponding groundwater node.'
-                CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                CALL Connector%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -585,9 +584,9 @@ CONTAINS
         
         !Check that the fractions are less than or equal to 1.0
         IF (rFractions(indx).GT.1.0  .OR.  rFractions(indx).LT.0.0) THEN
-            MessageArray(1) = 'Fraction of stream-aquifer interaction at stream node ' // TRIM(IntToText(iStrmNodes(indx))) 
-            MessageArray(2) = ' to be applied to corresponding groundwater node must be between 0.0 and 1.0.' 
-            CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+            MessageArray(1) = 'Fraction of stream-aquifer interaction at stream node ' // TRIM(IntToText(iStrmNodes(indx)))
+            MessageArray(2) = ' to be applied to corresponding groundwater node must be between 0.0 and 1.0.'
+            CALL Connector%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF

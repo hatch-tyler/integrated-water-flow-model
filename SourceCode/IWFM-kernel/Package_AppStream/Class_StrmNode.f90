@@ -21,6 +21,7 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 MODULE Class_StrmNode
+  USE MessageLogger      , ONLY: MessageLoggerType
   USE Class_PairedData
   USE IOInterface
   USE Package_Matrix     , ONLY: ConnectivityListType
@@ -86,11 +87,12 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- READ PREPROCESSED DATA
   ! -------------------------------------------------------------
-  SUBROUTINE StrmNode_ReadPreprocessedData(NNodes,InFile,Nodes,iStat)
-    INTEGER,INTENT(IN)    :: NNodes
-    TYPE(GenericFileType) :: InFile
-    TYPE(StrmNodeType)    :: Nodes(NNodes)
-    INTEGER,INTENT(OUT)   :: iStat
+  SUBROUTINE StrmNode_ReadPreprocessedData(NNodes,InFile,Logger,Nodes,iStat)
+    INTEGER,INTENT(IN)                       :: NNodes
+    TYPE(GenericFileType)                    :: InFile
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT) :: Logger
+    TYPE(StrmNodeType)                       :: Nodes(NNodes)
+    INTEGER,INTENT(OUT)                      :: iStat
     
     !Local variables
     INTEGER :: indxNode,NUpstrmNodes
@@ -99,7 +101,7 @@ CONTAINS
       CALL InFile%ReadData(Nodes(indxNode)%ID,iStat)          ;  IF (iStat .EQ. -1) RETURN
       CALL InFile%ReadData(Nodes(indxNode)%rLength,iStat)     ;  IF (iStat .EQ. -1) RETURN
       CALL InFile%ReadData(Nodes(indxNode)%BottomElev,iStat)  ;  IF (iStat .EQ. -1) RETURN
-      CALL Nodes(indxNode)%RatingTable%New(InFile,iStat)      ;  IF (iStat .EQ. -1) RETURN
+      CALL Nodes(indxNode)%RatingTable%New(Logger,InFile,iStat)      ;  IF (iStat .EQ. -1) RETURN
       CALL InFile%ReadData(NUpstrmNodes,iStat)                ;  IF (iStat .EQ. -1) RETURN  ;  Nodes(indxNode)%Connectivity%nConnectedNodes = NUpstrmNodes
       ALLOCATE (Nodes(indxNode)%Connectivity%ConnectedNodes(NUpstrmNodes))
       IF (NUpstrmNodes .GT. 0) THEN

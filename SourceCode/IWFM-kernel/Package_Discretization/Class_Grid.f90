@@ -22,7 +22,7 @@
 !***********************************************************************
 MODULE Class_Grid
   !$ USE OMP_LIB
-  USE MessageLogger      , ONLY: SetLastMessage           , &
+  USE MessageLogger      , ONLY: MessageLoggerType        , &
                                  MessageArray             , &
                                  f_iFatal
   USE GeneralUtilities   , ONLY: GetUniqueArrayComponents , &
@@ -64,13 +64,29 @@ MODULE Class_Grid
 
 
   ! -------------------------------------------------------------
+  ! --- SPATIAL HASH CELL TYPE (used by GridType for point-in-element acceleration)
+  ! -------------------------------------------------------------
+  TYPE :: SpatialCellType
+      INTEGER,ALLOCATABLE :: iElems(:)
+  END TYPE SpatialCellType
+
+
+  ! -------------------------------------------------------------
   ! --- GRID DATA TYPE
   ! -------------------------------------------------------------
   TYPE GridType
+      TYPE(MessageLoggerType),POINTER :: Logger => NULL()  !Per-instance logger
       REAL(8),ALLOCATABLE           :: X(:)        !Nodal X coordinates for each (node)
       REAL(8),ALLOCATABLE           :: Y(:)        !Nodal Y coordinates for each (node)
       INTEGER,ALLOCATABLE           :: NVertex(:)  !Number of vertices for each (element)
       INTEGER,ALLOCATABLE           :: Vertex(:,:) !Vertex numbers in counter-clockwise direction given as (4,element) combination
+      !Spatial hash index for ContainedInElement acceleration (lazy-built on first query)
+      TYPE(SpatialCellType),ALLOCATABLE :: SpatialGrid(:,:)
+      LOGICAL                           :: lSpatialBuilt = .FALSE.
+      INTEGER                           :: iSpNx = 0, iSpNy = 0
+      REAL(8)                           :: rSpXmin = 0d0, rSpXmax = 0d0
+      REAL(8)                           :: rSpYmin = 0d0, rSpYmax = 0d0
+      REAL(8)                           :: rSpDx = 0d0, rSpDy = 0d0
   CONTAINS
       PROCEDURE,PASS :: Init      => New
       PROCEDURE,PASS :: KillGrid
@@ -114,7 +130,10 @@ MODULE Class_Grid
 
 
 
+
 CONTAINS
+
+
 
 
 
@@ -132,15 +151,19 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- CONSTRUCTOR
   ! -------------------------------------------------------------
-  SUBROUTINE New(Grid,X,Y,NVertex,Vertex,iStat)
-    CLASS(GridType),INTENT(OUT) :: Grid
-    REAL(8),INTENT(IN)          :: X(:),Y(:)
-    INTEGER,INTENT(IN)          :: NVertex(:),Vertex(:,:)
-    INTEGER,INTENT(OUT)         :: iStat
+  SUBROUTINE New(Grid,Logger,X,Y,NVertex,Vertex,iStat)
+    CLASS(GridType),INTENT(OUT)                :: Grid
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT)  :: Logger
+    REAL(8),INTENT(IN)                         :: X(:),Y(:)
+    INTEGER,INTENT(IN)                         :: NVertex(:),Vertex(:,:)
+    INTEGER,INTENT(OUT)                        :: iStat
 
     !Local variables
     CHARACTER(LEN=f_iModNameLen+3) :: ThisProcedure = f_cModName // 'New'
     INTEGER                        :: ErrorCode
+
+    !Set logger (first statement — safe after INTENT(OUT) reset)
+    Grid%Logger => Logger
 
     !Initialize
     iStat = 0
@@ -148,7 +171,7 @@ CONTAINS
     !Allocate memory for nodes
     ALLOCATE(Grid%X(SIZE(X)) , Grid%Y(SIZE(Y)) , STAT=ErrorCode)
     IF (ErrorCode .NE. 0) THEN
-        CALL SetLastMessage('Error in allocating memory for nodal coordinates of a grid!',f_iFatal,ThisProcedure)
+        CALL Grid%Logger%SetLastMessage('Error in allocating memory for nodal coordinates of a grid!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -156,7 +179,7 @@ CONTAINS
     !Allocate memory for elements
     ALLOCATE(Grid%NVertex(SIZE(NVertex)) , Grid%Vertex(4,SIZE(NVertex)) , STAT=ErrorCode)
     IF (ErrorCode .NE. 0) THEN
-        CALL SetLastMessage('Error in allocating memory for elements of a grid!',f_iFatal,ThisProcedure)
+        CALL Grid%Logger%SetLastMessage('Error in allocating memory for elements of a grid!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -166,6 +189,9 @@ CONTAINS
     Grid%Y       = Y
     Grid%NVertex = NVertex
     Grid%Vertex  = Vertex
+
+    !Build spatial hash index for point-in-element acceleration
+    CALL BuildSpatialIndex(Grid)
 
   END SUBROUTINE New
 
@@ -230,7 +256,7 @@ CONTAINS
         NodeNumber = NodeList(indx)
         IF (Area(indx) .LE. 0.0) THEN
             ID = iNodeIDs(NodeNumber)
-            CALL SetLastMessage('Nodal area at node '//TRIM(IntToText(ID))//' is zero!',f_iFatal,ThisProcedure)
+            CALL Grid%Logger%SetLastMessage('Nodal area at node '//TRIM(IntToText(ID))//' is zero!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -275,7 +301,7 @@ CONTAINS
         NodeNumber = iBeginIndex + indx - 1
         IF (Area(indx) .LE. 0.0) THEN
             ID = iNodeIDs(NodeNumber)
-            CALL SetLastMessage('Nodal area at node '//TRIM(IntToText(ID))//' is zero!',f_iFatal,ThisProcedure)
+            CALL Grid%Logger%SetLastMessage('Nodal area at node '//TRIM(IntToText(ID))//' is zero!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -314,7 +340,7 @@ CONTAINS
     END DO
 
     !Transfer unique connected node data to permanent data type
-    CALL NodeList%GetArray(iWorkArray,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    CALL NodeList%GetArray(Grid%Logger,iWorkArray,iStat)  ;  IF (iStat .EQ. -1) RETURN
     CALL GetUniqueArrayComponents(iWorkArray,TheList)
     CALL ShellSort(TheList)
 
@@ -349,7 +375,7 @@ CONTAINS
     END DO
 
     !Transfer data to permanent data type
-    CALL SurElemList%GetArray(TheList,iStat)
+    CALL SurElemList%GetArray(Grid%Logger,TheList,iStat)
     IF (iStat .EQ. -1) RETURN
 
     !Free memory from the linked-list
@@ -411,7 +437,7 @@ CONTAINS
           ID = iElemIDs(ElemNo)
           MessageArray(1) = 'The area for element '//TRIM(IntToText(ID))//' is less than or equal to zero!'
           MessageArray(2) = 'Check the nodal coordinates for this element.'
-          CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+          CALL Grid%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
           iStat = -1
           RETURN
       END IF
@@ -465,7 +491,7 @@ CONTAINS
           ID = iElemIDs(ElemNo)
           MessageArray(1)='The area for element '//TRIM(IntToText(ID))//' is less than or equal to zero!'
           MessageArray(2)='Check the nodal coordinates for this element.'
-          CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+          CALL Grid%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
           iStat = -1
           RETURN
       END IF
@@ -504,7 +530,7 @@ CONTAINS
       IF (Area(1) .LE. 0.0) THEN  !Problem with node coordinates
         MessageArray(1)='The area for element '//TRIM(IntToText(indxElem))//' at node '//TRIM(IntToText(Vertex(1)))//' is less than or equal to zero!'
         MessageArray(2)='Check the nodal coordinates for this element.'
-        CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+        CALL Grid%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
       END IF
@@ -516,7 +542,7 @@ CONTAINS
         IF (Area(indxVertex) .LE. 0.0) THEN  !Problem with node coordinates
           MessageArray(1)='The area for element '//TRIM(IntToText(indxElem))//' at node '//TRIM(IntToText(Vertex(indxVertex)))//' is less than or equal to zero!'
           MessageArray(2)='Check the nodal coordinates for this element.'
-          CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+          CALL Grid%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
           iStat = -1
           RETURN
         END IF
@@ -744,7 +770,7 @@ CONTAINS
       DO I=1,3
         DO J=I+1,3
           indx = indx+1
-          CALL TRI_INTGRL(I,J,XP(1:NVertex),YP(1:NVertex),LocalElemArea,Integral(indx),iStat)
+          CALL TRI_INTGRL(Grid%Logger,I,J,XP(1:NVertex),YP(1:NVertex),LocalElemArea,Integral(indx),iStat)
           IF (iStat .EQ. -1) RETURN
         END DO
       END DO
@@ -802,7 +828,7 @@ CONTAINS
       DO I=1,3
         DO J=I+1,3
           indx = indx+1
-          CALL TRI_ROT(I,J,XP(1:NVertex),YP(1:NVertex),LocalElemArea,Integral(indx),iStat)
+          CALL TRI_ROT(Grid%Logger,I,J,XP(1:NVertex),YP(1:NVertex),LocalElemArea,Integral(indx),iStat)
           IF (iStat .EQ. -1) RETURN
         END DO
       END DO
@@ -880,7 +906,8 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- INTEGRATION OF DIFFUSION TERM OVER TRIANGULAR ELEMENTS
   ! -------------------------------------------------------------
-  SUBROUTINE TRI_INTGRL(I,J,XP,YP,AREA,Integral,iStat)
+  SUBROUTINE TRI_INTGRL(Logger,I,J,XP,YP,AREA,Integral,iStat)
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
     INTEGER,INTENT(IN)  :: I,J
     REAL(8),INTENT(IN)  :: XP(3),YP(3),AREA
     REAL(8),INTENT(OUT) :: Integral
@@ -896,7 +923,7 @@ CONTAINS
 
     !Check I and J are not equal
     IF (I .EQ. J) THEN
-        CALL SetLastMessage('Node I and Node J are equal in integration of diffusion term!',f_iFatal,ThisProcedure)
+        CALL Logger%SetLastMessage('Node I and Node J are equal in integration of diffusion term!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -916,7 +943,8 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- INTEGRATION OF ROTATION TERM OVER TRIANGULAR ELEMENTS
   ! -------------------------------------------------------------
-  SUBROUTINE TRI_ROT(I,J,XP,YP,AREA,Rot,iStat)
+  SUBROUTINE TRI_ROT(Logger,I,J,XP,YP,AREA,Rot,iStat)
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
     INTEGER,INTENT(IN)  :: I,J
     REAL(8),INTENT(IN)  :: XP(3),YP(3),AREA
     REAL(8),INTENT(OUT) :: Rot
@@ -931,7 +959,7 @@ CONTAINS
 
     !Check I and J are not equal
     IF (I .EQ. J) THEN
-        CALL SetLastMessage('Node I and Node J are equal in integration of rotation term!',f_iFatal,ThisProcedure)
+        CALL Logger%SetLastMessage('Node I and Node J are equal in integration of rotation term!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -1388,7 +1416,104 @@ CONTAINS
   
   
   ! -------------------------------------------------------------
-  ! --- FIND THE FIRST ELEMENT THAT A POINT (XP,YP) LIES IN - OPENMP VERSION
+  ! --- BUILD SPATIAL HASH INDEX for ContainedInElement
+  ! --- Divides the grid bounding box into Nx x Ny cells and
+  ! --- assigns each element to every cell its bounding box overlaps.
+  ! --- Cost: O(NElements). Called once, on first ContainedInElement call.
+  ! -------------------------------------------------------------
+  SUBROUTINE BuildSpatialIndex(Grid)
+    TYPE(GridType),INTENT(INOUT) :: Grid
+
+    !Local variables
+    INTEGER :: NElems, iE, NV, ix, iy, ix1, ix2, iy1, iy2
+    INTEGER :: Vtx(4)
+    REAL(8) :: eXmin, eXmax, eYmin, eYmax
+    INTEGER,ALLOCATABLE :: iCellCount(:,:)
+    INTEGER,ALLOCATABLE :: iCellPos(:,:)
+
+    NElems = SIZE(Grid%NVertex)
+    IF (NElems .EQ. 0) RETURN
+
+    !Global bounding box from node coordinates
+    Grid%rSpXmin = MINVAL(Grid%X)
+    Grid%rSpXmax = MAXVAL(Grid%X)
+    Grid%rSpYmin = MINVAL(Grid%Y)
+    Grid%rSpYmax = MAXVAL(Grid%Y)
+
+    !Grid resolution: ~sqrt(NElems) cells per side, clamped [10,500]
+    Grid%iSpNx = MIN(500, MAX(10, INT(SQRT(DBLE(NElems)))))
+    Grid%iSpNy = Grid%iSpNx
+
+    !Cell sizes (add tiny epsilon to avoid edge-case where max coord maps to Nx+1)
+    Grid%rSpDx = (Grid%rSpXmax - Grid%rSpXmin) * 1.000001d0 / DBLE(Grid%iSpNx)
+    Grid%rSpDy = (Grid%rSpYmax - Grid%rSpYmin) * 1.000001d0 / DBLE(Grid%iSpNy)
+    IF (Grid%rSpDx .LE. 0d0) Grid%rSpDx = 1d0
+    IF (Grid%rSpDy .LE. 0d0) Grid%rSpDy = 1d0
+
+    !Pass 1: count elements per cell
+    ALLOCATE(iCellCount(Grid%iSpNx, Grid%iSpNy))
+    iCellCount = 0
+    DO iE = 1, NElems
+        NV  = Grid%NVertex(iE)
+        Vtx = Grid%Vertex(:,iE)
+        eXmin = MINVAL(Grid%X(Vtx(1:NV)))
+        eXmax = MAXVAL(Grid%X(Vtx(1:NV)))
+        eYmin = MINVAL(Grid%Y(Vtx(1:NV)))
+        eYmax = MAXVAL(Grid%Y(Vtx(1:NV)))
+        ix1 = MAX(1, INT((eXmin - Grid%rSpXmin) / Grid%rSpDx) + 1)
+        ix2 = MIN(Grid%iSpNx, INT((eXmax - Grid%rSpXmin) / Grid%rSpDx) + 1)
+        iy1 = MAX(1, INT((eYmin - Grid%rSpYmin) / Grid%rSpDy) + 1)
+        iy2 = MIN(Grid%iSpNy, INT((eYmax - Grid%rSpYmin) / Grid%rSpDy) + 1)
+        DO iy = iy1, iy2
+            DO ix = ix1, ix2
+                iCellCount(ix, iy) = iCellCount(ix, iy) + 1
+            END DO
+        END DO
+    END DO
+
+    !Allocate spatial grid cells
+    IF (ALLOCATED(Grid%SpatialGrid)) DEALLOCATE(Grid%SpatialGrid)
+    ALLOCATE(Grid%SpatialGrid(Grid%iSpNx, Grid%iSpNy))
+    ALLOCATE(iCellPos(Grid%iSpNx, Grid%iSpNy))
+    DO iy = 1, Grid%iSpNy
+        DO ix = 1, Grid%iSpNx
+            IF (iCellCount(ix,iy) .GT. 0) THEN
+                ALLOCATE(Grid%SpatialGrid(ix,iy)%iElems(iCellCount(ix,iy)))
+            END IF
+        END DO
+    END DO
+    iCellPos = 0
+
+    !Pass 2: fill element lists
+    DO iE = 1, NElems
+        NV  = Grid%NVertex(iE)
+        Vtx = Grid%Vertex(:,iE)
+        eXmin = MINVAL(Grid%X(Vtx(1:NV)))
+        eXmax = MAXVAL(Grid%X(Vtx(1:NV)))
+        eYmin = MINVAL(Grid%Y(Vtx(1:NV)))
+        eYmax = MAXVAL(Grid%Y(Vtx(1:NV)))
+        ix1 = MAX(1, INT((eXmin - Grid%rSpXmin) / Grid%rSpDx) + 1)
+        ix2 = MIN(Grid%iSpNx, INT((eXmax - Grid%rSpXmin) / Grid%rSpDx) + 1)
+        iy1 = MAX(1, INT((eYmin - Grid%rSpYmin) / Grid%rSpDy) + 1)
+        iy2 = MIN(Grid%iSpNy, INT((eYmax - Grid%rSpYmin) / Grid%rSpDy) + 1)
+        DO iy = iy1, iy2
+            DO ix = ix1, ix2
+                iCellPos(ix,iy) = iCellPos(ix,iy) + 1
+                Grid%SpatialGrid(ix,iy)%iElems(iCellPos(ix,iy)) = iE
+            END DO
+        END DO
+    END DO
+
+    DEALLOCATE(iCellCount, iCellPos)
+    Grid%lSpatialBuilt = .TRUE.
+
+  END SUBROUTINE BuildSpatialIndex
+
+
+  ! -------------------------------------------------------------
+  ! --- FIND THE FIRST ELEMENT THAT A POINT (XP,YP) LIES IN
+  ! --- Uses spatial hash index for O(1) amortized lookups instead
+  ! --- of the original O(NElements) linear scan.
   ! -------------------------------------------------------------
   FUNCTION ContainedInElement(Grid,XP,YP) RESULT(iElem)
     TYPE(GridType),INTENT(IN) :: Grid
@@ -1396,19 +1521,25 @@ CONTAINS
     INTEGER                   :: iElem
 
     !Local variables
-    INTEGER :: NVertex,indxElem,indxVertex,Vertex(4)
+    INTEGER :: NVertex,indxElem,indxVertex,Vertex(4),ix,iy,k
     REAL(8) :: DotProduct,X1,Y1,X2,Y2,XX,YX,X(4),Y(4)
     LOGICAL :: lInThisElem
 
     !Initialize
     iElem = 0
 
-    !Iterate over elements
-    !$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE(indxElem,NVertex,Vertex,X,Y,lInThisElem,indxVertex,X1,Y1,X2,Y2,XX,YX,DotProduct) 
-    DO indxElem=1,SIZE(Grid%NVertex)
-!DIR$ IF (_OPENMP .NE. 0) 
-!$      IF (iElem .GT. 0) CYCLE
-!DIR$ END IF
+    !Spatial index must have been built during Grid%Init
+    IF (.NOT. Grid%lSpatialBuilt) RETURN
+
+    !Find the cell containing (XP,YP)
+    ix = INT((XP - Grid%rSpXmin) / Grid%rSpDx) + 1
+    iy = INT((YP - Grid%rSpYmin) / Grid%rSpDy) + 1
+    IF (ix .LT. 1 .OR. ix .GT. Grid%iSpNx .OR. iy .LT. 1 .OR. iy .GT. Grid%iSpNy) RETURN
+
+    !Check only elements in this cell
+    IF (.NOT. ALLOCATED(Grid%SpatialGrid(ix,iy)%iElems)) RETURN
+    DO k = 1, SIZE(Grid%SpatialGrid(ix,iy)%iElems)
+        indxElem     = Grid%SpatialGrid(ix,iy)%iElems(k)
         NVertex      = Grid%NVertex(indxElem)
         Vertex       = Grid%Vertex(:,indxElem)
         X(1:NVertex) = Grid%X(Vertex(1:NVertex))
@@ -1425,7 +1556,7 @@ CONTAINS
                 Y2 = Y(indxVertex+1)
                 IF (XP .EQ. X2) THEN
                     IF (YP .EQ. Y2) EXIT
-                END IF        
+                END IF
             ELSE
                 X2 = X(1)
                 Y2 = Y(1)
@@ -1439,12 +1570,9 @@ CONTAINS
         END DO
         IF (lInThisElem) THEN
             iElem = indxElem
-!DIR$ IF (_OPENMP .EQ. 0) 
             RETURN
-!DIR$ END IF
         END IF
     END DO
-    !$OMP END PARALLEL DO
 
   END FUNCTION ContainedInElement
 

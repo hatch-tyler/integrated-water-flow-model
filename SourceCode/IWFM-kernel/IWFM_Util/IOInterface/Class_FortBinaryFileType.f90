@@ -21,14 +21,12 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 MODULE Class_FortBinaryFileType
-  USE MessageLogger      , ONLY: SetLastMessage          , &
-                                 LogMessage              , &
-                                 f_iWarn                 , &
+  USE MessageLogger      , ONLY: f_iWarn                 , &
                                  f_iFatal
   USE GeneralUtilities   , ONLY: GenericString           , &
                                  GenericString_To_String , &
                                  f_cLineFeed
-  USE Class_BaseFileType , ONLY: BaseFileType 
+  USE Class_BaseFileType , ONLY: BaseFileType
   IMPLICIT NONE
   
   
@@ -47,7 +45,7 @@ MODULE Class_FortBinaryFileType
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: FortBinFileType               
+  PUBLIC :: FortBinFileType
 
 
   ! -------------------------------------------------------------
@@ -130,7 +128,7 @@ CONTAINS
     END SELECT
       
     !Open file
-    OPEN (UNIT=ThisFile%UnitN,FILE=TRIM(ThisFile%Name),ACCESS='STREAM',FORM='UNFORMATTED',STATUS=StatusJargon,ACTION=ActionJargon,IOSTAT=ErrorCode,IOMSG=cErrMessage)
+    OPEN (NEWUNIT=ThisFile%UnitN,FILE=TRIM(ThisFile%Name),ACCESS='STREAM',FORM='UNFORMATTED',STATUS=StatusJargon,ACTION=ActionJargon,IOSTAT=ErrorCode,IOMSG=cErrMessage)
 
     !Implement actions based on error code
     IF (ErrorCode .NE. 0) THEN
@@ -138,7 +136,7 @@ CONTAINS
             FileOpenCode = ErrorCode
             RETURN
         ELSE
-            CALL SetLastMessage('Error in opening file '//TRIM(ThisFile%Name)//'!'//f_cLineFeed//TRIM(cErrMessage),f_iFatal,ThisProcedure)
+            CALL ThisFile%Logger%SetLastMessage('Error in opening file '//TRIM(ThisFile%Name)//'!'//f_cLineFeed//TRIM(cErrMessage),f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -259,7 +257,7 @@ CONTAINS
 
             
         CLASS DEFAULT
-            CALL SetLastMessage('Trying to read unrecognized data type from file '//ThisFile%Name//'!',f_iFatal,ThisProcedure)
+            CALL ThisFile%Logger%SetLastMessage('Trying to read unrecognized data type from file '//ThisFile%Name//'!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
             
@@ -329,7 +327,7 @@ CONTAINS
         
             
         CLASS DEFAULT
-            CALL SetLastMessage('Trying to read unrecognized data type from file '//ThisFile%Name//'!',f_iFatal,ThisProcedure)
+            CALL ThisFile%Logger%SetLastMessage('Trying to read unrecognized data type from file '//ThisFile%Name//'!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
             
@@ -410,7 +408,7 @@ CONTAINS
 
             
         CLASS DEFAULT
-            CALL SetLastMessage('Trying to read unrecognized data type from file '//ThisFile%Name//'!',f_iFatal,ThisProcedure)
+            CALL ThisFile%Logger%SetLastMessage('Trying to read unrecognized data type from file '//ThisFile%Name//'!',f_iFatal,ThisProcedure)
             iStat = -1
             
     END SELECT 
@@ -458,7 +456,7 @@ CONTAINS
             WRITE (ThisFile%UnitN) GenericString_To_String(Data)
 
         CLASS DEFAULT
-            CALL LogMessage('Trying to write unrecognized data type to file '//ThisFile%Name//'!',f_iWarn,ThisProcedure) 
+            CALL ThisFile%Logger%LogMessage('Trying to write unrecognized data type to file '//ThisFile%Name//'!',f_iWarn,ThisProcedure) 
             RETURN
 
     END SELECT
@@ -499,7 +497,7 @@ CONTAINS
             END DO
             
         CLASS DEFAULT
-            CALL LogMessage('Trying to write unrecognized data type to file '//ThisFile%Name//'!',f_iWarn,ThisProcedure)
+            CALL ThisFile%Logger%LogMessage('Trying to write unrecognized data type to file '//ThisFile%Name//'!',f_iWarn,ThisProcedure)
 
         END SELECT
 
@@ -535,7 +533,7 @@ CONTAINS
             
             
         CLASS DEFAULT
-            CALL LogMessage('Trying to write unrecognized data type to file '//ThisFile%Name//'!',f_iWarn,ThisProcedure) 
+            CALL ThisFile%Logger%LogMessage('Trying to write unrecognized data type to file '//ThisFile%Name//'!',f_iWarn,ThisProcedure) 
             RETURN
             
     END SELECT
@@ -579,6 +577,6 @@ CONTAINS
     END IF
     
   END FUNCTION GetPosition
-   
+
 
 END MODULE

@@ -12,8 +12,8 @@
 !***********************************************************************
 MODULE Class_MultiLayerTarget
 
-  USE MessageLogger    , ONLY: SetLastMessage , &
-                               LogMessage     , &
+  USE MessageLogger    , ONLY: MessageLoggerType , &
+                               DefaultLogger     , &
                                f_iFatal       , &
                                f_iInfo
   USE GeneralUtilities , ONLY: IntToText
@@ -69,6 +69,7 @@ MODULE Class_MultiLayerTarget
   END TYPE MultiLayerTargetType
 
 CONTAINS
+
 
   ! =====================================================================
   ! ExtractFirstInt - Extract the first integer from a line
@@ -132,14 +133,14 @@ CONTAINS
     CALL StripAndClean(cLine, cLine)
     CALL ExtractFirstInt(cLine, This%iNNodes, iErr)
     IF (iErr /= 0 .OR. This%iNNodes <= 0) THEN
-      CALL SetLastMessage('Cannot read node count from: '//TRIM(cNodesFile), &
+      CALL DefaultLogger%SetLastMessage('Cannot read node count from: '//TRIM(cNodesFile), &
            f_iFatal, cModName)
       CALL ConfigFile%Kill(); iStat = -1; RETURN
     END IF
 
     ALLOCATE(This%Grid%X(This%iNNodes), This%Grid%Y(This%iNNodes), STAT=iErr)
     IF (iErr /= 0) THEN
-      CALL SetLastMessage('Cannot allocate node arrays', f_iFatal, cModName)
+      CALL DefaultLogger%SetLastMessage('Cannot allocate node arrays', f_iFatal, cModName)
       CALL ConfigFile%Kill(); iStat = -1; RETURN
     END IF
 
@@ -152,7 +153,7 @@ CONTAINS
       IF (iStat == -1) THEN; CALL ConfigFile%Kill(); RETURN; END IF
       READ(cLine, *, IOSTAT=iErr) iDum, This%Grid%X(i), This%Grid%Y(i)
       IF (iErr /= 0) THEN
-        CALL SetLastMessage('Error reading node '//TRIM(IntToText(i))// &
+        CALL DefaultLogger%SetLastMessage('Error reading node '//TRIM(IntToText(i))// &
              ' from: '//TRIM(cNodesFile), f_iFatal, cModName)
         CALL ConfigFile%Kill(); iStat = -1; RETURN
       END IF
@@ -172,7 +173,7 @@ CONTAINS
     DO
       CALL ConfigFile%ReadData(cLine, iStat)
       IF (iStat == -1) THEN
-        CALL SetLastMessage('Unexpected end of elements file: '// &
+        CALL DefaultLogger%SetLastMessage('Unexpected end of elements file: '// &
              TRIM(cElemsFile), f_iFatal, cModName)
         CALL ConfigFile%Kill(); iStat = -1; RETURN
       END IF
@@ -182,7 +183,7 @@ CONTAINS
 
     CALL ExtractFirstInt(cLine, This%iNElems, iErr)
     IF (iErr /= 0 .OR. This%iNElems <= 0) THEN
-      CALL SetLastMessage('Cannot read element count from: '// &
+      CALL DefaultLogger%SetLastMessage('Cannot read element count from: '// &
            TRIM(cElemsFile), f_iFatal, cModName)
       CALL ConfigFile%Kill(); iStat = -1; RETURN
     END IF
@@ -190,7 +191,7 @@ CONTAINS
     ALLOCATE(This%Grid%Vertex(4, This%iNElems), &
              This%Grid%NVertex(This%iNElems), STAT=iErr)
     IF (iErr /= 0) THEN
-      CALL SetLastMessage('Cannot allocate element arrays', f_iFatal, cModName)
+      CALL DefaultLogger%SetLastMessage('Cannot allocate element arrays', f_iFatal, cModName)
       CALL ConfigFile%Kill(); iStat = -1; RETURN
     END IF
     This%Grid%Vertex  = 0
@@ -217,7 +218,7 @@ CONTAINS
            This%Grid%Vertex(1,iDum), This%Grid%Vertex(2,iDum), &
            This%Grid%Vertex(3,iDum), This%Grid%Vertex(4,iDum)
       IF (iErr /= 0) THEN
-        CALL SetLastMessage('Error reading element '//TRIM(IntToText(i))// &
+        CALL DefaultLogger%SetLastMessage('Error reading element '//TRIM(IntToText(i))// &
              ' from: '//TRIM(cElemsFile), f_iFatal, cModName)
         CALL ConfigFile%Kill(); iStat = -1; RETURN
       END IF
@@ -240,7 +241,7 @@ CONTAINS
     CALL StripAndClean(cLine, cLine)
     CALL ExtractFirstInt(cLine, This%iNLayers, iErr)
     IF (iErr /= 0 .OR. This%iNLayers <= 0) THEN
-      CALL SetLastMessage('Cannot read layer count from: '//TRIM(cStratFile), &
+      CALL DefaultLogger%SetLastMessage('Cannot read layer count from: '//TRIM(cStratFile), &
            f_iFatal, cModName)
       CALL ConfigFile%Kill(); iStat = -1; RETURN
     END IF
@@ -250,7 +251,7 @@ CONTAINS
              rDumArr(This%iNLayers), &
              rThick(This%iNLayers), STAT=iErr)
     IF (iErr /= 0) THEN
-      CALL SetLastMessage('Cannot allocate stratigraphy arrays', &
+      CALL DefaultLogger%SetLastMessage('Cannot allocate stratigraphy arrays', &
            f_iFatal, cModName)
       CALL ConfigFile%Kill(); iStat = -1; RETURN
     END IF
@@ -263,14 +264,14 @@ CONTAINS
     DO i = 1, This%iNNodes
       CALL ConfigFile%ReadData(cLine, iStat)
       IF (iStat == -1) THEN
-        CALL SetLastMessage('Error reading stratigraphy for node '// &
+        CALL DefaultLogger%SetLastMessage('Error reading stratigraphy for node '// &
              TRIM(IntToText(i)), f_iFatal, cModName)
         CALL ConfigFile%Kill(); RETURN
       END IF
       READ(cLine, *, IOSTAT=iErr) iDum, This%rElevation(i,1), &
            ((rDumArr(k), rThick(k)), k=1, This%iNLayers)
       IF (iErr /= 0) THEN
-        CALL SetLastMessage('Error parsing stratigraphy for node '// &
+        CALL DefaultLogger%SetLastMessage('Error parsing stratigraphy for node '// &
              TRIM(IntToText(i)), f_iFatal, cModName)
         CALL ConfigFile%Kill(); iStat = -1; RETURN
       END IF
@@ -302,7 +303,7 @@ CONTAINS
     DO i = 1, 21
       CALL ConfigFile%ReadData(cLine, iStat)
       IF (iStat == -1) THEN
-        CALL SetLastMessage('Unexpected end of GW file at line '// &
+        CALL DefaultLogger%SetLastMessage('Unexpected end of GW file at line '// &
              TRIM(IntToText(i)), f_iFatal, cModName)
         CALL ConfigFile%Kill(); RETURN
       END IF
@@ -342,7 +343,7 @@ CONTAINS
     CALL StripAndClean(cLine, cLine)
     CALL ExtractFirstInt(cLine, iNGROUP, iErr)
     IF (iNGROUP > 0) THEN
-      CALL SetLastMessage('Parametric grid (NGROUP>0) not supported', &
+      CALL DefaultLogger%SetLastMessage('Parametric grid (NGROUP>0) not supported', &
            f_iFatal, cModName)
       CALL ConfigFile%Kill(); iStat = -1; RETURN
     END IF
@@ -360,7 +361,7 @@ CONTAINS
       DO k = 1, This%iNLayers
         CALL ConfigFile%ReadData(cLine, iStat)
         IF (iStat == -1) THEN
-          CALL SetLastMessage('Error reading HK for node '// &
+          CALL DefaultLogger%SetLastMessage('Error reading HK for node '// &
                TRIM(IntToText(i))//' layer '//TRIM(IntToText(k)), &
                f_iFatal, cModName)
           CALL ConfigFile%Kill(); RETURN
@@ -371,7 +372,7 @@ CONTAINS
           READ(cLine, *, IOSTAT=iErr) This%rHK(i, k)
         END IF
         IF (iErr /= 0) THEN
-          CALL SetLastMessage('Error parsing HK for node '// &
+          CALL DefaultLogger%SetLastMessage('Error parsing HK for node '// &
                TRIM(IntToText(i))//' layer '//TRIM(IntToText(k)), &
                f_iFatal, cModName)
           CALL ConfigFile%Kill(); iStat = -1; RETURN
@@ -397,7 +398,7 @@ CONTAINS
     iNObsCount = 0
     ALLOCATE(This%ObsWells(iNObsMax), STAT=iErr)
     IF (iErr /= 0) THEN
-      CALL SetLastMessage('Cannot allocate obs well array', f_iFatal, cModName)
+      CALL DefaultLogger%SetLastMessage('Cannot allocate obs well array', f_iFatal, cModName)
       CALL ConfigFile%Kill(); iStat = -1; RETURN
     END IF
 
@@ -428,7 +429,7 @@ CONTAINS
            This%ObsWells(iNObsCount)%rTOS, &
            This%ObsWells(iNObsCount)%iOverwriteLayer
       IF (iErr /= 0) THEN
-        CALL SetLastMessage('Error reading obs well '// &
+        CALL DefaultLogger%SetLastMessage('Error reading obs well '// &
              TRIM(IntToText(iNObsCount))// &
              ' from: '//TRIM(cObsWellFile), f_iFatal, cModName)
         CALL ConfigFile%Kill(); iStat = -1; RETURN
@@ -439,7 +440,7 @@ CONTAINS
 
     This%iNObs = iNObsCount
     IF (This%iNObs == 0) THEN
-      CALL SetLastMessage('No observation wells in: '//TRIM(cObsWellFile), &
+      CALL DefaultLogger%SetLastMessage('No observation wells in: '//TRIM(cObsWellFile), &
            f_iFatal, cModName)
       iStat = -1; RETURN
     END IF
@@ -469,7 +470,7 @@ CONTAINS
              This%rScreenTOS(This%iNObs), &
              This%rScreenBOS(This%iNObs), STAT=iErr)
     IF (iErr /= 0) THEN
-      CALL SetLastMessage('Cannot allocate interpolation arrays', &
+      CALL DefaultLogger%SetLastMessage('Cannot allocate interpolation arrays', &
            f_iFatal, cModName)
       iStat = -1; RETURN
     END IF
@@ -485,7 +486,7 @@ CONTAINS
       iNVerts = This%Grid%NVertex(This%ObsWells(i)%iElem)
       ALLOCATE(rCoeff(iNVerts), STAT=iErr)
       IF (iErr /= 0) THEN
-        CALL SetLastMessage('Cannot allocate coefficient array for well '// &
+        CALL DefaultLogger%SetLastMessage('Cannot allocate coefficient array for well '// &
              TRIM(This%ObsWells(i)%cName), f_iFatal, cModName)
         iStat = -1; RETURN
       END IF
@@ -564,7 +565,7 @@ CONTAINS
     DEALLOCATE(rInterpHK, rInterpElev, rInterpT, rObsTrans)
 
     This%lActive = .TRUE.
-    CALL LogMessage(TRIM(IntToText(This%iNObs))//' observation wells processed '// &
+    CALL DefaultLogger%LogMessage(TRIM(IntToText(This%iNObs))//' observation wells processed '// &
          'for multi-layer target', f_iInfo, cModName)
 
   END SUBROUTINE New

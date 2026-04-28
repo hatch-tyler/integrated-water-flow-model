@@ -21,7 +21,7 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 MODULE Package_Supply
-  USE MessageLogger               , ONLY: EchoProgress
+  USE MessageLogger               , ONLY: MessageLoggerType
   USE Package_Misc                , ONLY: f_iFlowDest_Element               , &
                                           f_iSupply_Diversion               , &
                                           f_iSupply_Pumping                 , &
@@ -43,10 +43,10 @@ MODULE Package_Supply
                                           f_iAdjustForAgUrb                            
   USE Package_ComponentConnectors , ONLY: SupplyDestinationConnectorType
   IMPLICIT NONE
-  
+
   PRIVATE
   PUBLIC :: Supply                                     ,  &
-                                                       
+
             IrigFracFileType                           ,  &
             
             SupplyAdjustmentType                       ,  &
@@ -69,12 +69,13 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- DEFINE WATER SUPPLY TO EACH DEMAND LOCATION
   ! -------------------------------------------------------------
-  SUBROUTINE Supply(AppGrid,AppGW,AppStream,DiverDestConnector,WellDestConnector,ElemPumpDestConnector,RootZone)
+  SUBROUTINE Supply(AppGrid,AppGW,AppStream,DiverDestConnector,WellDestConnector,ElemPumpDestConnector,RootZone,Logger)
     TYPE(AppGridType),INTENT(IN)                    :: AppGrid
     TYPE(AppGWType),INTENT(IN)                      :: AppGW
     TYPE(AppStreamType),INTENT(IN)                  :: AppStream
     TYPE(SupplyDestinationConnectorType),INTENT(IN) :: DiverDestConnector,WellDestConnector,ElemPumpDestConnector
     TYPE(RootZoneType)                              :: RootZone
+    TYPE(MessageLoggerType),POINTER,INTENT(IN)      :: Logger
   
     !Local variables
     INTEGER                                       :: iDemandCalcLocation
@@ -85,7 +86,7 @@ CONTAINS
     REAL(8),POINTER                               :: pDiver_Ag(:),pDiver_Urb(:),pPump_Ag(:),pPump_Urb(:)
     
     !Inform user
-    CALL EchoProgress('Compiling water supply')
+    CALL Logger%EchoProgress('Compiling water supply')
 
     !Initialize 
     iDemandCalcLocation = RootZone%GetDemandCalcLocation()
@@ -119,6 +120,6 @@ CONTAINS
     END IF
   
   END SUBROUTINE Supply
-  
+
 
 END MODULE

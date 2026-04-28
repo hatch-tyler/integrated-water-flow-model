@@ -7,8 +7,8 @@
 !***********************************************************************
 MODULE Class_SMP2SMP
 
-  USE MessageLogger    , ONLY: SetLastMessage , &
-                               LogMessage     , &
+  USE MessageLogger    , ONLY: MessageLoggerType , &
+                               DefaultLogger     , &
                                f_iFatal       , &
                                f_iWarn        , &
                                f_iInfo
@@ -53,6 +53,7 @@ MODULE Class_SMP2SMP
   ! SMP2SMPType - processor for SMP-to-SMP time interpolation
   ! =====================================================================
   TYPE SMP2SMPType
+    TYPE(MessageLoggerType),POINTER :: Logger => NULL()
     INTEGER :: iDateSpec = 2   ! 1=dd/mm/yyyy, 2=mm/dd/yyyy
   CONTAINS
     PROCEDURE, PASS :: Init
@@ -111,10 +112,12 @@ CONTAINS
   ! =====================================================================
   ! Init - Initialize the SMP2SMP processor
   ! =====================================================================
-  SUBROUTINE Init(This, iDateSpec)
+  SUBROUTINE Init(This, Logger, iDateSpec)
     CLASS(SMP2SMPType), INTENT(INOUT) :: This
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT) :: Logger
     INTEGER,            INTENT(IN)    :: iDateSpec  ! 1=dd/mm, 2=mm/dd
 
+    This%Logger => Logger
     This%iDateSpec = iDateSpec
 
   END SUBROUTINE Init
@@ -304,7 +307,7 @@ CONTAINS
     ! Allocate temporary array (generous initial size)
     ALLOCATE(cTempIDs(100000), STAT=iErr)
     IF (iErr /= 0) THEN
-      CALL SetLastMessage('Cannot allocate memory for SMP IDs', f_iFatal, cModName)
+      CALL This%Logger%SetLastMessage('Cannot allocate memory for SMP IDs', f_iFatal, cModName)
       iStat = -1
       RETURN
     END IF
@@ -330,7 +333,7 @@ CONTAINS
         ! Check for duplicates (non-contiguous)
         DO i = 1, iNIDs
           IF (cTemp == cTempIDs(i)) THEN
-            CALL SetLastMessage('Identifier '//TRIM(cTemp)//' used non-contiguously at line '// &
+            CALL This%Logger%SetLastMessage('Identifier '//TRIM(cTemp)//' used non-contiguously at line '// &
                  TRIM(IntToText(iLine))//' of file '//TRIM(cFile), f_iFatal, cModName)
             iStat = -1
             DEALLOCATE(cTempIDs)
@@ -347,7 +350,7 @@ CONTAINS
     IF (iNIDs > 0) THEN
       ALLOCATE(cIDs(iNIDs), STAT=iErr)
       IF (iErr /= 0) THEN
-        CALL SetLastMessage('Cannot allocate ID array', f_iFatal, cModName)
+        CALL This%Logger%SetLastMessage('Cannot allocate ID array', f_iFatal, cModName)
         iStat = -1
         DEALLOCATE(cTempIDs)
         RETURN
@@ -396,7 +399,7 @@ CONTAINS
     ! Initialize group count arrays
     ALLOCATE(Groups(iNIDs), iNMod(iNIDs), iLoc(iNIDs), STAT=iErr)
     IF (iErr /= 0) THEN
-      CALL SetLastMessage('Cannot allocate group arrays', f_iFatal, cModName)
+      CALL This%Logger%SetLastMessage('Cannot allocate group arrays', f_iFatal, cModName)
       iStat = -1
       RETURN
     END IF
@@ -449,7 +452,7 @@ CONTAINS
     END DO
 
     IF (iTotalRec == 0) THEN
-      CALL SetLastMessage('No matching identifiers between model and observation files for '// &
+      CALL This%Logger%SetLastMessage('No matching identifiers between model and observation files for '// &
            TRIM(cFile), f_iWarn, cModName)
       DEALLOCATE(iNMod, iLoc)
       iStat = -1
@@ -459,7 +462,7 @@ CONTAINS
     ! Allocate data arrays
     ALLOCATE(iDays(iTotalRec), iSecs(iTotalRec), rValues(iTotalRec), STAT=iErr)
     IF (iErr /= 0) THEN
-      CALL SetLastMessage('Cannot allocate data arrays', f_iFatal, cModName)
+      CALL This%Logger%SetLastMessage('Cannot allocate data arrays', f_iFatal, cModName)
       iStat = -1
       DEALLOCATE(iNMod, iLoc)
       RETURN
@@ -513,14 +516,14 @@ CONTAINS
       ! Parse date
       CALL This%ParseDateStr(cDateStr, iDay, iMon, iYear, iStat)
       IF (iStat /= 0) THEN
-        CALL SetLastMessage('Illegal date at line '//TRIM(IntToText(iLine))//' of file '// &
+        CALL This%Logger%SetLastMessage('Illegal date at line '//TRIM(IntToText(iLine))//' of file '// &
              TRIM(cFile), f_iFatal, cModName)
         DEALLOCATE(iNMod, iLoc)
         RETURN
       END IF
       CALL DayMonthYearToJulianDate(iDay, iMon, iYear, iJulian, iStat)
       IF (iStat /= 0) THEN
-        CALL SetLastMessage('Invalid date at line '//TRIM(IntToText(iLine))//' of file '// &
+        CALL This%Logger%SetLastMessage('Invalid date at line '//TRIM(IntToText(iLine))//' of file '// &
              TRIM(cFile), f_iFatal, cModName)
         DEALLOCATE(iNMod, iLoc)
         RETURN
@@ -529,7 +532,7 @@ CONTAINS
       ! Parse time
       CALL This%ParseTimeStr(cTimeStr, iHH, iMM, iSS, iStat)
       IF (iStat /= 0) THEN
-        CALL SetLastMessage('Illegal time at line '//TRIM(IntToText(iLine))//' of file '// &
+        CALL This%Logger%SetLastMessage('Illegal time at line '//TRIM(IntToText(iLine))//' of file '// &
              TRIM(cFile), f_iFatal, cModName)
         DEALLOCATE(iNMod, iLoc)
         RETURN
@@ -538,7 +541,7 @@ CONTAINS
       ! Parse value
       READ(cValStr, *, IOSTAT=iErr) rVal
       IF (iErr /= 0) THEN
-        CALL SetLastMessage('Cannot read value at line '//TRIM(IntToText(iLine))//' of file '// &
+        CALL This%Logger%SetLastMessage('Cannot read value at line '//TRIM(IntToText(iLine))//' of file '// &
              TRIM(cFile), f_iFatal, cModName)
         iStat = -1
         DEALLOCATE(iNMod, iLoc)
@@ -726,7 +729,7 @@ CONTAINS
     ! Open files
     OPEN(UNIT=iObsUnit, FILE=cObsFile, STATUS='OLD', IOSTAT=iErr)
     IF (iErr /= 0) THEN
-      CALL SetLastMessage('Cannot open observation file: '//TRIM(cObsFile), f_iFatal, cModName)
+      CALL This%Logger%SetLastMessage('Cannot open observation file: '//TRIM(cObsFile), f_iFatal, cModName)
       iStat = -1
       RETURN
     END IF
@@ -741,7 +744,7 @@ CONTAINS
     ! Open and read model SMP data
     OPEN(UNIT=iModUnit, FILE=cModFile, STATUS='OLD', IOSTAT=iErr)
     IF (iErr /= 0) THEN
-      CALL SetLastMessage('Cannot open model file: '//TRIM(cModFile), f_iFatal, cModName)
+      CALL This%Logger%SetLastMessage('Cannot open model file: '//TRIM(cModFile), f_iFatal, cModName)
       iStat = -1
       CLOSE(iObsUnit)
       RETURN
@@ -758,7 +761,7 @@ CONTAINS
     ! Open output file
     OPEN(UNIT=iOutUnit, FILE=cOutFile, STATUS='REPLACE', IOSTAT=iErr)
     IF (iErr /= 0) THEN
-      CALL SetLastMessage('Cannot open output file: '//TRIM(cOutFile), f_iFatal, cModName)
+      CALL This%Logger%SetLastMessage('Cannot open output file: '//TRIM(cOutFile), f_iFatal, cModName)
       iStat = -1
       CLOSE(iObsUnit)
       RETURN
@@ -826,7 +829,7 @@ CONTAINS
                                iIntDays, iIntSecs, 1.0D30, rThreshold, &
                                rIntValue, iStat)
       IF (iStat /= 0) THEN
-        CALL SetLastMessage('Problem interpolating for '//TRIM(cTemp)//' in file '// &
+        CALL This%Logger%SetLastMessage('Problem interpolating for '//TRIM(cTemp)//' in file '// &
              TRIM(cModFile), f_iFatal, cModName)
         EXIT
       END IF
@@ -840,16 +843,16 @@ CONTAINS
     END DO
 
     ! Report results
-    CALL LogMessage(TRIM(IntToText(iOut))//' lines written to '//TRIM(cOutFile), &
+    CALL This%Logger%LogMessage(TRIM(IntToText(iOut))//' lines written to '//TRIM(cOutFile), &
                     f_iInfo, cModName)
 
     ! Report unmatched IDs
     DO i = 1, iNObsIDs
       IF (ModGroups(i)%iNRec == 0) THEN
-        CALL LogMessage('  Warning: ID '//TRIM(cObsIDs(i))//' not found in model file', &
+        CALL This%Logger%LogMessage('  Warning: ID '//TRIM(cObsIDs(i))//' not found in model file', &
                         f_iWarn, cModName)
       ELSE IF (ModGroups(i)%iNOut == 0) THEN
-        CALL LogMessage('  Warning: ID '//TRIM(cObsIDs(i))//' has no times within model range', &
+        CALL This%Logger%LogMessage('  Warning: ID '//TRIM(cObsIDs(i))//' has no times within model range', &
                         f_iWarn, cModName)
       END IF
     END DO
@@ -928,7 +931,7 @@ CONTAINS
     END IF
 
     IF (iNFiltered == 0 .OR. iNTimes == 0) THEN
-      CALL SetLastMessage('No model data available for direct interpolation', &
+      CALL This%Logger%SetLastMessage('No model data available for direct interpolation', &
            f_iWarn, cModName)
       iStat = -1; RETURN
     END IF
@@ -936,7 +939,7 @@ CONTAINS
     ! ---- Build sorted index of filtered IDs for O(log N) lookup ----
     ALLOCATE(cSorted(iNFiltered), iSortIdx(iNFiltered), STAT=iErr)
     IF (iErr /= 0) THEN
-      CALL SetLastMessage('Cannot allocate sort arrays', f_iFatal, cModName)
+      CALL This%Logger%SetLastMessage('Cannot allocate sort arrays', f_iFatal, cModName)
       iStat = -1; RETURN
     END IF
     DO k = 1, iNFiltered
@@ -948,7 +951,7 @@ CONTAINS
     ! ---- Open files ----
     OPEN(UNIT=iObsUnit, FILE=cObsFile, STATUS='OLD', IOSTAT=iErr)
     IF (iErr /= 0) THEN
-      CALL SetLastMessage('Cannot open observation file: '//TRIM(cObsFile), &
+      CALL This%Logger%SetLastMessage('Cannot open observation file: '//TRIM(cObsFile), &
            f_iFatal, cModName)
       DEALLOCATE(cSorted, iSortIdx)
       iStat = -1; RETURN
@@ -956,7 +959,7 @@ CONTAINS
 
     OPEN(UNIT=iOutUnit, FILE=cOutFile, STATUS='REPLACE', IOSTAT=iErr)
     IF (iErr /= 0) THEN
-      CALL SetLastMessage('Cannot open output file: '//TRIM(cOutFile), &
+      CALL This%Logger%SetLastMessage('Cannot open output file: '//TRIM(cOutFile), &
            f_iFatal, cModName)
       CLOSE(iObsUnit); DEALLOCATE(cSorted, iSortIdx)
       iStat = -1; RETURN
@@ -1084,7 +1087,7 @@ CONTAINS
                                      iIntDays, iIntSecs, 1.0D30, rThreshold, &
                                      rIntValue, iStat)
             IF (iStat /= 0) THEN
-              CALL SetLastMessage('Problem interpolating for '//TRIM(cExpIDs(iLyr)), &
+              CALL This%Logger%SetLastMessage('Problem interpolating for '//TRIM(cExpIDs(iLyr)), &
                    f_iFatal, cModName)
               EXIT
             END IF
@@ -1099,7 +1102,7 @@ CONTAINS
                                  iIntDays, iIntSecs, 1.0D30, rThreshold, &
                                  rIntValue, iStat)
         IF (iStat /= 0) THEN
-          CALL SetLastMessage('Problem interpolating for '//TRIM(cTemp), &
+          CALL This%Logger%SetLastMessage('Problem interpolating for '//TRIM(cTemp), &
                f_iFatal, cModName)
           EXIT
         END IF
@@ -1124,10 +1127,10 @@ CONTAINS
     END IF
 
     ! Report results
-    CALL LogMessage(TRIM(IntToText(iOut))//' lines written to '//TRIM(cOutFile), &
+    CALL This%Logger%LogMessage(TRIM(IntToText(iOut))//' lines written to '//TRIM(cOutFile), &
                     f_iInfo, cModName)
     IF (iNUnmatched > 0) THEN
-      CALL LogMessage('  '//TRIM(IntToText(iNUnmatched))// &
+      CALL This%Logger%LogMessage('  '//TRIM(IntToText(iNUnmatched))// &
            ' observation IDs not found in model data', f_iWarn, cModName)
     END IF
 
@@ -1214,7 +1217,7 @@ CONTAINS
     iMaxNew = iNBase * iNLayers + iNSuffixed
     ALLOCATE(cNewIDs(iMaxNew), STAT=iErr)
     IF (iErr /= 0) THEN
-      CALL SetLastMessage('Cannot allocate expanded ID array', f_iFatal, cModName)
+      CALL DefaultLogger%SetLastMessage('Cannot allocate expanded ID array', f_iFatal, cModName)
       iStat = -1
       RETURN
     END IF
@@ -1246,14 +1249,14 @@ CONTAINS
     DEALLOCATE(cIDs)
     ALLOCATE(cIDs(iNewCount), STAT=iErr)
     IF (iErr /= 0) THEN
-      CALL SetLastMessage('Cannot allocate replacement ID array', f_iFatal, cModName)
+      CALL DefaultLogger%SetLastMessage('Cannot allocate replacement ID array', f_iFatal, cModName)
       iStat = -1
       DEALLOCATE(cNewIDs)
       RETURN
     END IF
     cIDs(1:iNewCount) = cNewIDs(1:iNewCount)
 
-    CALL LogMessage('Expanded '//TRIM(IntToText(iNBase))//' base obs IDs to '// &
+    CALL DefaultLogger%LogMessage('Expanded '//TRIM(IntToText(iNBase))//' base obs IDs to '// &
          TRIM(IntToText(iNewCount))//' per-layer IDs ('// &
          TRIM(IntToText(iNLayers))//' layers)', f_iInfo, cModName)
 

@@ -10,13 +10,12 @@
 !***********************************************************************
 PROGRAM CalcTypeHyd_Main
 
-  USE ProgramTimer    , ONLY: StartTimer  , &
-                               StopTimer
-  USE MessageLogger   , ONLY: PrintRunTime , &
-                               SetLogFileName, &
+  USE ProgramTimer    , ONLY: DefaultTimer  , &
+                               ProgramTimerType
+  USE MessageLogger   , ONLY: SetLogFileName, &
                                KillLogFile   , &
                                LogLastMessage, &
-                               LogMessage    , &
+                               DefaultLogger , &
                                f_iInfo
   USE Class_CalcTypeHyd, ONLY: CalcTypeHydType
 
@@ -27,7 +26,7 @@ PROGRAM CalcTypeHyd_Main
   INTEGER            :: iStat, iNArgs
 
   ! Start timer
-  CALL StartTimer()
+  CALL DefaultTimer%Start()
 
   DO  ! Single-pass block for structured error exit
 
@@ -39,10 +38,10 @@ PROGRAM CalcTypeHyd_Main
     END IF
 
     ! Banner
-    CALL LogMessage(' ', f_iInfo, 'CalcTypeHyd')
-    CALL LogMessage('Program CalcTypeHyd - Cluster type hydrograph computation', &
+    CALL DefaultLogger%LogMessage(' ', f_iInfo, 'CalcTypeHyd')
+    CALL DefaultLogger%LogMessage('Program CalcTypeHyd - Cluster type hydrograph computation', &
                     f_iInfo, 'CalcTypeHyd')
-    CALL LogMessage(' ', f_iInfo, 'CalcTypeHyd')
+    CALL DefaultLogger%LogMessage(' ', f_iInfo, 'CalcTypeHyd')
 
     ! Get input file from command line or use default
     iNArgs = COMMAND_ARGUMENT_COUNT()
@@ -69,14 +68,14 @@ PROGRAM CalcTypeHyd_Main
     ! Clean up
     CALL App%Kill()
 
-    CALL LogMessage(' ', f_iInfo, 'CalcTypeHyd')
-    CALL LogMessage('NORMAL TERMINATION - CalcTypeHyd', f_iInfo, 'CalcTypeHyd')
+    CALL DefaultLogger%LogMessage(' ', f_iInfo, 'CalcTypeHyd')
+    CALL DefaultLogger%LogMessage('NORMAL TERMINATION - CalcTypeHyd', f_iInfo, 'CalcTypeHyd')
 
     EXIT  ! Normal exit from single-pass block
   END DO
 
-  CALL StopTimer()
-  CALL PrintRunTime()
+  CALL DefaultTimer%Stop()
+  CALL DefaultLogger%PrintRunTime()
   CALL KillLogFile()
 
 END PROGRAM CalcTypeHyd_Main

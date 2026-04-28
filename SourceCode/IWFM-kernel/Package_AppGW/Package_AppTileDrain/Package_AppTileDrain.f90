@@ -22,10 +22,9 @@
 !***********************************************************************
 MODULE Package_AppTileDrain
   USE Class_Version           , ONLY: ReadVersion 
-  USE MessageLogger           , ONLY: SetLastMessage            , &
-                                      EchoProgress              , &
-                                      MessageArray              , &
-                                      f_iFatal                    
+  USE MessageLogger           , ONLY: MessageArray              , &
+                                      MessageLoggerType         , &
+                                      f_iFatal
   USE GeneralUtilities        , ONLY: ConvertID_To_Index        , &
                                       StripTextUntilCharacter   , &
                                       CleanSpecialCharacters    , &
@@ -65,9 +64,9 @@ MODULE Package_AppTileDrain
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: AppTileDrainType         , &
-            f_iTileDrain             , &
-            f_iSubIrig               , &
+  PUBLIC :: AppTileDrainType              , &
+            f_iTileDrain                 , &
+            f_iSubIrig                   , &
             f_cDescription_TDHyd
   
 
@@ -85,6 +84,7 @@ MODULE Package_AppTileDrain
   ! -------------------------------------------------------------
   TYPE AppTileDrainType
     PRIVATE
+    TYPE(MessageLoggerType),POINTER     :: Logger => NULL()
     INTEGER                             :: NDrain              = 0
     INTEGER                             :: NSubIrig            = 0
     CHARACTER(LEN=6)                    :: TimeUnitConductance = ''
@@ -126,12 +126,13 @@ MODULE Package_AppTileDrain
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
   INTEGER,PARAMETER                   :: ModNameLen = 22
-  CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'Package_AppTileDrain::' 
+  CHARACTER(LEN=ModNameLen),PARAMETER :: ModName    = 'Package_AppTileDrain::'
 
 
   
   
-CONTAINS  
+CONTAINS
+
 
 
 
@@ -149,9 +150,10 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- NEW AppTileDrain DATA
   ! -------------------------------------------------------------
-  SUBROUTINE New(AppTileDrain,IsForInquiry,cFileName,cWorkingDirectory,iStrmNodeIDs,TimeStep,AppGrid,Stratigraphy,iStat) 
-    CLASS(AppTileDrainType),INTENT(OUT) :: AppTileDrain
-    LOGICAL,INTENT(IN)                  :: IsForInquiry
+  SUBROUTINE New(AppTileDrain,Logger,IsForInquiry,cFileName,cWorkingDirectory,iStrmNodeIDs,TimeStep,AppGrid,Stratigraphy,iStat)
+    CLASS(AppTileDrainType),INTENT(OUT)        :: AppTileDrain
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
+    LOGICAL,INTENT(IN)                         :: IsForInquiry
     CHARACTER(LEN=*),INTENT(IN)         :: cFileName,cWorkingDirectory
     INTEGER,INTENT(IN)                  :: iStrmNodeIDs(:)
     TYPE(TimeStepType),INTENT(IN)       :: TimeStep
@@ -167,6 +169,7 @@ CONTAINS
     CHARACTER(:),ALLOCATABLE :: cVersion
     
     !Initailize
+    AppTileDrain%Logger => Logger
     iStat = 0
 
     !If no FileName, return
@@ -177,17 +180,17 @@ CONTAINS
     IF (iStat .EQ. -1) RETURN
     
     !Read first line that stores version number
-    CALL ReadVersion(TDFile,'TILE DRAINS',cVersion,iStat)
+    CALL ReadVersion(TDFile,'TILE DRAINS',cVersion,iStat,AppTileDrain%Logger)
     IF (iStat .EQ. -1) RETURN
 
     !Read tile drain data
-    CALL TileDrain_New(TDFile,AppGrid,Stratigraphy,iStrmNodeIDs,TimeUnitConductance_TD,AppTileDrain%TileDrains,iStat)
+    CALL TileDrain_New(AppTileDrain%Logger,TDFile,AppGrid,Stratigraphy,iStrmNodeIDs,TimeUnitConductance_TD,AppTileDrain%TileDrains,iStat)
     IF (iStat .EQ. -1) RETURN
     NDrain              = SIZE(AppTileDrain%TileDrains)
     AppTileDrain%NDrain = NDrain
     
     !Read subsurface irrigation data
-    CALL SubIrig_New(TDFile,AppGrid,Stratigraphy,TimeUnitConductance_SI,AppTileDrain%SubIrigs,iStat) 
+    CALL SubIrig_New(AppTileDrain%Logger,TDFile,AppGrid,Stratigraphy,TimeUnitConductance_SI,AppTileDrain%SubIrigs,iStat) 
     IF (iStat .EQ. -1) RETURN
     NSubIrig              = SIZE(AppTileDrain%SubIrigs)
     AppTileDrain%NSubIrig = NSubIrig
@@ -211,7 +214,7 @@ CONTAINS
     END IF
        
     !Hydrograph print control data
-    CALL AppTileDrain%TileDrainHyd%New(IsForInquiry,cWorkingDirectory,AppGrid%AppNode%ID,AppTileDrain%SubIrigs%ID,AppTileDrain%TileDrains%ID,AppTileDrain%SubIrigs%iGWNode,AppTileDrain%TileDrains%iGWNode,TimeStep,TDFile,iStat)
+    CALL AppTileDrain%TileDrainHyd%New(AppTileDrain%Logger,IsForInquiry,cWorkingDirectory,AppGrid%AppNode%ID,AppTileDrain%SubIrigs%ID,AppTileDrain%TileDrains%ID,AppTileDrain%SubIrigs%iGWNode,AppTileDrain%TileDrains%iGWNode,TimeStep,TDFile,iStat)
     IF (iStat .EQ. -1) RETURN
   
     !Close file
@@ -223,7 +226,8 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- NEW TileDrain DATA
   ! -------------------------------------------------------------
-  SUBROUTINE TileDrain_New(InFile,AppGrid,Stratigraphy,iStrmNodeIDs,TimeUnitConductance,TileDrains,iStat)
+  SUBROUTINE TileDrain_New(Logger,InFile,AppGrid,Stratigraphy,iStrmNodeIDs,TimeUnitConductance,TileDrains,iStat)
+    TYPE(MessageLoggerType),POINTER,INTENT(IN)  :: Logger
     TYPE(GenericFileType)                       :: InFile
     TYPE(AppGridType),INTENT(IN)                :: AppGrid
     TYPE(StratigraphyType),INTENT(IN)           :: Stratigraphy
@@ -267,7 +271,7 @@ CONTAINS
         iGWNodeID = INT(DummyArray(2))
         CALL ConvertID_To_Index(iGWNodeID,NodeIDs,iGWNode)
         IF (iGWNode .EQ. 0) THEN
-            CALL SetLastMessage('Groundwater node '//TRIM(IntTotext(iGWNodeID))//' listed for tile drain ID '//TRIM(IntToText(ID))//' is not in the model!',f_iFatal,ThisProcedure)
+            CALL Logger%SetLastMessage('Groundwater node '//TRIM(IntTotext(iGWNodeID))//' listed for tile drain ID '//TRIM(IntToText(ID))//' is not in the model!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -283,14 +287,14 @@ CONTAINS
         IF (TileDrains(indx)%iGWNodeLayer.LT.1  .OR.  TileDrains(indx)%iGWNodeLayer.GT.iNLayers) THEN
             MessageArray(1) = 'Tile drain '//TRIM(IntToText(ID))//' cannot be assigned a valid aquifer layer!'
             MessageArray(2) = 'Check its elevation.'
-            CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+            CALL Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
-        
+
         !Make sure that destination type is exceptible
         IF (TileDrains(indx)%iDestType.NE.f_iFlowDest_Outside .AND. TileDrains(indx)%iDestType.NE.f_iFlowDest_StrmNode) THEN
-            CALL SetLastMessage('Flow destination type for tile drain '//TRIM(IntToText(ID))//' is not recognized!',f_iFatal,ThisProcedure)
+            CALL Logger%SetLastMessage('Flow destination type for tile drain '//TRIM(IntToText(ID))//' is not recognized!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -299,7 +303,7 @@ CONTAINS
         IF (TileDrains(indx)%iDestType .EQ. f_iFlowDest_StrmNode) THEN
             iStrmNode = LocateInList(TileDrains(indx)%iDest , iStrmNodeIDs)
             IF (iStrmNode .LT. 1) THEN
-                CALL SetLastMessage('Stream node '//TRIM(IntToText(TileDrains(indx)%iDest))//' for tile drain '//TRIM(IntToText(ID))//' is not modeled!',f_iFatal,ThisProcedure)
+                CALL Logger%SetLastMessage('Stream node '//TRIM(IntToText(TileDrains(indx)%iDest))//' for tile drain '//TRIM(IntToText(ID))//' is not modeled!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -309,7 +313,7 @@ CONTAINS
         !Make sure tile drain IDs are not repeated
         DO indx1=1,indx-1
             IF (TileDrains(indx)%ID .EQ. TileDrains(indx1)%ID) THEN
-                CALL SetLastMessage('Tile drain ID number '//TRIM(IntToText(ID))//' is used more than once!',f_iFatal,ThisProcedure)
+                CALL Logger%SetLastMessage('Tile drain ID number '//TRIM(IntToText(ID))//' is used more than once!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -322,7 +326,8 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- NEW SubIrig DATA
   ! -------------------------------------------------------------
-  SUBROUTINE SubIrig_New(InFile,AppGrid,Stratigraphy,TimeUnitConductance,SubIrigs,iStat)
+  SUBROUTINE SubIrig_New(Logger,InFile,AppGrid,Stratigraphy,TimeUnitConductance,SubIrigs,iStat)
+    TYPE(MessageLoggerType),POINTER,INTENT(IN)      :: Logger
     TYPE(GenericFileType)                           :: InFile
     TYPE(AppGridType),INTENT(IN)                    :: AppGrid
     TYPE(StratigraphyType),INTENT(IN)               :: Stratigraphy
@@ -364,7 +369,7 @@ CONTAINS
         iGWNodeID = INT(DummyArray(2))
         CALL ConvertID_To_Index(iGWNodeID,NodeIDS,iGWNode)
         IF (iGWNode .EQ. 0) THEN
-            CALL SetLastMessage('Groundwater node '//TRIM(IntTotext(iGWNodeID))//' listed for subsurface irrigation ID '//TRIM(IntToText(ID))//' is not in the model!',f_iFatal,ThisProcedure)
+            CALL Logger%SetLastMessage('Groundwater node '//TRIM(IntTotext(iGWNodeID))//' listed for subsurface irrigation ID '//TRIM(IntToText(ID))//' is not in the model!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -376,7 +381,7 @@ CONTAINS
         !Make sure subsurface irrigation IDs are not repeated
         DO indx1=1,indx-1
             IF (SubIrigs(indx)%ID .EQ. SubIrigs(indx1)%ID) THEN
-                CALL SetLastMessage('Subsurface irrigation ID number '//TRIM(IntToText(ID))//' is used more than once!',f_iFatal,ThisProcedure)
+                CALL Logger%SetLastMessage('Subsurface irrigation ID number '//TRIM(IntToText(ID))//' is used more than once!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -832,7 +837,7 @@ CONTAINS
     INTEGER,PARAMETER :: iCompIDs(1) = [f_iGWComp]
 
     !Inform user
-    CALL EchoProgress('Simulating tile drain/subsurface irrigation flows')
+    CALL AppTileDrain%Logger%EchoProgress('Simulating tile drain/subsurface irrigation flows')
 
     !Tile drains
     ASSOCIATE (pTileDrains => AppTileDrain%TileDrains)

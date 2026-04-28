@@ -22,10 +22,10 @@
 !***********************************************************************
 MODULE Class_GWZBudget
   USE IWFM_Kernel_Version         , ONLY: IWFMKernelVersion
-  USE MessageLogger               , ONLY: SetLastMessage            , &
-                                          EchoProgress              , &
+  USE MessageLogger               , ONLY: MessageLoggerType         , &
                                           MessageArray              , &
-                                          f_iFatal                    
+                                          DefaultLogger             , &
+                                          f_iFatal
   USE GeneralUtilities            , ONLY: IntToText                 , &
                                           AllocArray                , &
                                           LocateInList              , &
@@ -72,9 +72,9 @@ MODULE Class_GWZBudget
                                           LakeGWConnectorType       
   USE Package_AppSmallWatershed   , ONLY: AppSmallWatershedType     , &
                                           f_iSWShedBaseFlowBCID     , &
-                                          f_iSWShedPercFlowBCID 
+                                          f_iSWShedPercFlowBCID
   IMPLICIT NONE
-  
+
   
   
 ! ******************************************************************
@@ -129,7 +129,7 @@ MODULE Class_GWZBudget
   ! -------------------------------------------------------------
   PRIVATE
   PUBLIC :: GWZBudgetType     , &
-            f_iZBudgetType_GW 
+            f_iZBudgetType_GW
             
   
 
@@ -285,9 +285,10 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- CREATE NEW GW Z-BUDGET DATA FILE FOR POPULATING
   ! -------------------------------------------------------------
-  SUBROUTINE Create(GWZBudget,IsForInquiry,cZBudgetOutFileName,AppGrid,Stratigraphy,AppGW,AppStream,AppLake,AppSWShed,StrmGWConnector,TimeStep,NTIME,lDeepPerc,lRootZone_Defined,iStat)
-    CLASS(GWZBudgetType)                   :: GWZBudget
-    LOGICAL,INTENT(IN)                     :: IsForInquiry
+  SUBROUTINE Create(GWZBudget,Logger,IsForInquiry,cZBudgetOutFileName,AppGrid,Stratigraphy,AppGW,AppStream,AppLake,AppSWShed,StrmGWConnector,TimeStep,NTIME,lDeepPerc,lRootZone_Defined,iStat)
+    CLASS(GWZBudgetType)                       :: GWZBudget
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT)  :: Logger
+    LOGICAL,INTENT(IN)                         :: IsForInquiry
     CHARACTER(LEN=*),INTENT(IN)            :: cZBudgetOutFileName
     TYPE(AppGridType),INTENT(IN)           :: AppGrid
     TYPE(StratigraphyType),INTENT(IN)      :: Stratigraphy
@@ -308,6 +309,9 @@ CONTAINS
     INTEGER,ALLOCATABLE     :: IDRLayers(:)
     TYPE(TimeStepType)      :: TimeStepLocal
     
+    !Set logger
+    GWZBudget%Logger => Logger
+
     !Initialize
     iStat = 0
     IF (AppGW%IsGWBudgetGenerated()) GWZBudget%lComputeFaceFlows    = .TRUE.
@@ -324,7 +328,7 @@ CONTAINS
     
     !If opened for inquiry, open file and return
     IF (IsForInquiry) THEN
-        IF (cZBudgetOutFileName .NE. '') CALL GWZBudget%New(cZBudgetOutFileName,iStat)
+        IF (cZBudgetOutFileName .NE. '') CALL GWZBudget%New(Logger,cZBudgetOutFileName,iStat)
         RETURN
     END IF
     
@@ -350,7 +354,7 @@ CONTAINS
     !Compile header for Z-Budget and instantiate Z-Budget for output 
     CALL CompileHeaderSystemData(TimeStep,lDeepPerc,lRootZone_Defined,AppGW,AppStream,AppLake,AppSWShed,StrmGWConnector,AppGrid,Stratigraphy,Header,SystemData,GWZBudget%NModelFlowTypes,GWZBudget%ModelFlowTypes,iStat)
     IF (iStat .EQ. -1) RETURN
-    CALL GWZBudget%ZBudgetType%New(cZBudgetOutFileName,NTIME,TimeStepLocal,Header,SystemData,iStat)
+    CALL GWZBudget%ZBudgetType%New(Logger,cZBudgetOutFileName,NTIME,TimeStepLocal,Header,SystemData,iStat)
     
   END SUBROUTINE Create
   
@@ -449,7 +453,7 @@ CONTAINS
     CHARACTER(LEN=1)                              :: cZoneNames(0)
     
     !Compile zone information
-    CALL ZoneList%New(ZBudget%Header%iNData,ZBudget%Header%lFaceFlows_Defined,ZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)
+    CALL ZoneList%New(DefaultLogger,ZBudget%Header%iNData,ZBudget%Header%lFaceFlows_Defined,ZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)
     IF (iStat .NE. 0) RETURN
     
     !Get the sub-data; first column will be Time so that will be eliminated later
@@ -487,7 +491,7 @@ CONTAINS
     CHARACTER(LEN=f_iColumnHeaderLen),ALLOCATABLE :: cColTitles_Local(:)
     
     !Compile zone information
-    CALL ZoneList%New(ZBudget%Header%iNData,ZBudget%Header%lFaceFlows_Defined,ZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)
+    CALL ZoneList%New(DefaultLogger,ZBudget%Header%iNData,ZBudget%Header%lFaceFlows_Defined,ZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)
     IF (iStat .NE. 0) RETURN
     
     !Get the undiversified column titles; first column will be Time so that will be eliminated later
@@ -528,7 +532,7 @@ CONTAINS
     
     IF (GWZBudget%IsOutfileDefined()) THEN
         !Generate zone list
-        CALL ZoneList%New(GWZBudget%Header%iNData,GWZBudget%Header%lFaceFlows_Defined,GWZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)
+        CALL ZoneList%New(DefaultLogger,GWZBudget%Header%iNData,GWZBudget%Header%lFaceFlows_Defined,GWZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)
         IF (iStat .NE. 0) RETURN
         
         !Retrieve data
@@ -631,13 +635,13 @@ CONTAINS
     
     IF (GWZBudget%IsOutfileDefined()) THEN
         !Generate zone list
-        CALL ZoneList%New(GWZBudget%Header%iNData,GWZBudget%Header%lFaceFlows_Defined,GWZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)
+        CALL ZoneList%New(DefaultLogger,GWZBudget%Header%iNData,GWZBudget%Header%lFaceFlows_Defined,GWZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)
         IF (iStat .NE. 0) RETURN
         
         !Retrieve data
         CALL GetCumGWStorChange_GivenFile(GWZBudget%ZBudgetType,ZoneList,iZoneID,cBeginDate,cEndDate,cOutputInterval,rFactVL,rOutDates,rCumStorChange,iStat)
     ELSE
-        CALL SetLastMessage('Groundwater ZBudget is not part of model output to retrieve zonal cumulative storage change!',f_iFatal,ThisProcedure)
+        CALL GWZBudget%Logger%SetLastMessage('Groundwater ZBudget is not part of model output to retrieve zonal cumulative storage change!',f_iFatal,ThisProcedure)
         iStat = -1
     END IF
     
@@ -711,13 +715,13 @@ CONTAINS
     TYPE(ZoneListType)          :: ZoneList
 
     IF (.NOT. GWZBudget%IsOutfileDefined()) THEN
-        CALL SetLastMessage('Groundwater zone budget is not part of the model output to retrieve data!',f_iFatal,ThisProcedure)
+        CALL GWZBudget%Logger%SetLastMessage('Groundwater zone budget is not part of the model output to retrieve data!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
             
     !Generate zone list
-    CALL ZoneList%New(GWZBudget%Header%iNData,GWZBudget%Header%lFaceFlows_Defined,GWZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    CALL ZoneList%New(DefaultLogger,GWZBudget%Header%iNData,GWZBudget%Header%lFaceFlows_Defined,GWZBudget%SystemData,iZExtent,iElems,iLayers,iZoneIDs,iZonesWithNames,cZoneNames,iStat)  ;  IF (iStat .EQ. -1) RETURN
     
     !Read data
     CALL GWZBudget%ReadData(ZoneList,iZoneID,iCols,cInterval,cBeginDate,cEndDate,rFactAR,rFactVL,iDataTypes,inActualOutput,rValues,iStat)  ;  IF (iStat .EQ. -1) RETURN
@@ -789,7 +793,8 @@ CONTAINS
     
     !Close ZBudget file and regenerate
     CALL ZBudget%Kill()
-    CALL ZBudget%Create(lForInquiry       , &
+    CALL ZBudget%Create(ZBudget%Logger     , &
+                        lForInquiry       , &
                         cFileName         , &
                         AppGrid           , &
                         Stratigraphy      , &
@@ -884,7 +889,7 @@ CONTAINS
     Header%lComputeError = .TRUE.
     
     !Compile the flow types
-    CALL ProcessFlowTypes(TimeStep%DeltaT,lDeepPerc,lRootZone_Defined,AppGW,AppStream,AppLake,AppSWShed,StrmGWConnector,AppGrid,Stratigraphy,Header,ModelFlowTypes,iStat)
+    CALL ProcessFlowTypes(TimeStep%DeltaT,lDeepPerc,lRootZone_Defined,AppGW,AppStream,AppLake,AppSWShed,StrmGWConnector,AppGrid,Stratigraphy,Header,ModelFlowTypes,iStat,DefaultLogger)
     IF (iStat .EQ. -1) RETURN
         
     !Number of all flow types and flow names
@@ -937,7 +942,7 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- FIGURE OUT WHICH FLOW PROCESSES (W.R.T. GW) ARE BEING MODELED 
   ! -------------------------------------------------------------
-  SUBROUTINE ProcessFlowTypes(DeltaT,lDeepPerc,lRootZone_Defined,AppGW,AppStream,AppLake,AppSWShed,StrmGWConnector,AppGrid,Stratigraphy,Header,ModelFlowTypes,iStat)
+  SUBROUTINE ProcessFlowTypes(DeltaT,lDeepPerc,lRootZone_Defined,AppGW,AppStream,AppLake,AppSWShed,StrmGWConnector,AppGrid,Stratigraphy,Header,ModelFlowTypes,iStat,Logger)
     REAL(8),INTENT(IN)                     :: DeltaT
     LOGICAL,INTENT(IN)                     :: lDeepPerc,lRootZone_Defined
     TYPE(AppGWType),INTENT(IN)             :: AppGW
@@ -950,6 +955,7 @@ CONTAINS
     TYPE(ZBudgetHeaderType)                :: Header
     INTEGER,ALLOCATABLE                    :: ModelFlowTypes(:)
     INTEGER,INTENT(OUT)                    :: iStat
+    TYPE(MessageLoggerType),TARGET,INTENT(INOUT) :: Logger
     
     !Local variables
     CHARACTER(LEN=ModNameLen+16) :: ThisProcedure = ModName // 'ProcessFlowTypes'
@@ -1050,7 +1056,7 @@ CONTAINS
     !Compile flow id numbers simulated in the model
     ALLOCATE (ModelFlowTypes(NFlowTypes) , STAT=ErrorCode)
     IF (ErrorCode.NE.0) THEN
-        CALL SetLastMessage('Error in allocating memory for groundwater Z-Budget flow types',f_iFatal,ThisProcedure)
+        CALL Logger%SetLastMessage('Error in allocating memory for groundwater Z-Budget flow types',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -1417,7 +1423,7 @@ CONTAINS
     TYPE(RHSVectorType) :: NodeRHS(AppGrid%NNodes,Stratigraphy%NLayers)
     
     !Report progress
-    CALL EchoProgress('Computing element face flows')
+    CALL GWZBudget%Logger%EchoProgress('Computing element face flows')
     
     !Initialize
     FlowCollect_IN          = 0.0

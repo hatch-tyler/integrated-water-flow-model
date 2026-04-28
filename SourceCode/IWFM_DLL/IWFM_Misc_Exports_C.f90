@@ -24,9 +24,9 @@ MODULE IWFM_Misc_Exports
   USE,INTRINSIC :: ISO_C_BINDING  , ONLY: C_INT                                    , &
                                           C_CHAR                                   , &
                                           C_DOUBLE
-  USE MessageLogger               , ONLY: SetLogFileName                           , &
+  USE MessageLogger               , ONLY: DefaultLogger                            , &
+                                          SetLogFileName                           , &
                                           KillLogFile                              , &
-                                          SetLastMessage                           , &
                                           GetLastMessage                           , &
                                           LogLastMessage                           , &
                                           f_iFatal
@@ -107,7 +107,9 @@ MODULE IWFM_Misc_Exports
   ! -------------------------------------------------------------
   PUBLIC
 
-  
+
+
+
 CONTAINS
 
 
@@ -159,7 +161,7 @@ CONTAINS
     INTEGER(C_INT),INTENT(OUT)         :: iStat
     
     !Local variables
-    TYPE(ModelType)          :: DummyModel
+    TYPE(ModelType),TARGET   :: DummyModel
     CHARACTER                :: cVer_F*iLen
     CHARACTER(:),ALLOCATABLE :: cVersion
     
@@ -1107,7 +1109,7 @@ CONTAINS
     
     !Make sure interval is recognized
     IF (IsTimeIntervalValid(cInterval_F) .EQ. 0) THEN
-        CALL SetLastMessage(cInterval_F // ' is not a recognized time interval!',f_iFatal,'IWFM_DLL')
+        CALL DefaultLogger%SetLastMessage_ThreadSafe(cInterval_F // ' is not a recognized time interval!',f_iFatal,'IWFM_DLL')
         iStat = -1
         RETURN
     END IF

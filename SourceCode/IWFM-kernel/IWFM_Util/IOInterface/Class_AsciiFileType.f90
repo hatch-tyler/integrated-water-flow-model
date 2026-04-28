@@ -21,9 +21,7 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov
 !***********************************************************************
 MODULE Class_AsciiFileType
-  USE MessageLogger        , ONLY: SetLastMessage                  , &
-                                   LogMessage                      , &
-                                   f_iWarn                         , &
+  USE MessageLogger        , ONLY: f_iWarn                         , &
                                    f_iFatal
   USE GeneralUtilities     , ONLY: GenericString                   , &
                                    GenericString_To_String         , &
@@ -226,7 +224,7 @@ CONTAINS
             FileOpenCode = -1
             RETURN
         ELSE
-            CALL SetLastMessage('Error in opening file! File '//TRIM(ThisFile%Name)//' is already open!',f_iFatal,ThisProcedure)
+            CALL ThisFile%Logger%SetLastMessage('Error in opening file! File '//TRIM(ThisFile%Name)//' is already open!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -243,7 +241,7 @@ CONTAINS
         ActionJargon = 'READWRITE'
         AccessJargon = AccessType
     END SELECT
-    OPEN (UNIT=ThisFile%UnitN,FILE=TRIM(ThisFile%Name),FORM='FORMATTED',STATUS=StatusJargon,ACTION=ActionJargon,ACCESS=TRIM(AccessJargon),IOSTAT=ErrorCode,IOMSG=cErrMessage)
+    OPEN (NEWUNIT=ThisFile%UnitN,FILE=TRIM(ThisFile%Name),FORM='FORMATTED',STATUS=StatusJargon,ACTION=ActionJargon,ACCESS=TRIM(AccessJargon),IOSTAT=ErrorCode,IOMSG=cErrMessage)
 
     !Implement actions based on error code
     IF (ErrorCode .NE. 0) THEN
@@ -251,7 +249,7 @@ CONTAINS
             FileOpenCode = ErrorCode
             RETURN
         ELSE
-            CALL SetLastMessage('Error in opening file '//TRIM(ThisFile%Name)//'!'//f_cLineFeed//TRIM(cErrMessage),f_iFatal,ThisProcedure)
+            CALL ThisFile%Logger%SetLastMessage('Error in opening file '//TRIM(ThisFile%Name)//'!'//f_cLineFeed//TRIM(cErrMessage),f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -529,7 +527,7 @@ CONTAINS
     !Set the flag
     ALLOCATE(ThisFile%RateTypeData(SIZE(RateTypeData)),STAT=ErrorCode)
     IF (ErrorCode .NE. 0) THEN
-        CALL LogMessage('Error in allocating memory for the rate-type-data array for file '//TRIM(ThisFile%Name)//'!',f_iWarn,ThisProcedure)
+        CALL ThisFile%Logger%LogMessage('Error in allocating memory for the rate-type-data array for file '//TRIM(ThisFile%Name)//'!',f_iWarn,ThisProcedure)
         RETURN
     END IF
     ThisFile%RateTypeData = RateTypeData
@@ -621,7 +619,7 @@ CONTAINS
 
     !Make sure that FormatSpec is not longer than the size of FormatStatement field
     IF (LEN(FormatSpec) .GT. LEN(ThisFile%FormatStatement)) THEN
-        CALL SetLastMessage('The format statement specified for file '//TRIM(ThisFile%Name)//' is too long!',f_iFatal,ThisProcedure)
+        CALL ThisFile%Logger%SetLastMessage('The format statement specified for file '//TRIM(ThisFile%Name)//' is too long!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -692,7 +690,7 @@ CONTAINS
 
 
         CLASS DEFAULT
-            CALL SetLastMessage('Trying to read unrecognized data type from file '//ThisFile%Name//'!',f_iFatal,ThisProcedure)
+            CALL ThisFile%Logger%SetLastMessage('Trying to read unrecognized data type from file '//ThisFile%Name//'!',f_iFatal,ThisProcedure)
             iStat = -1
 
     END SELECT
@@ -749,7 +747,7 @@ CONTAINS
 
 
         CLASS DEFAULT
-            CALL SetLastMessage('Trying to read unrecognized data type from file '//ThisFile%Name//'!',f_iFatal,ThisProcedure)
+            CALL ThisFile%Logger%SetLastMessage('Trying to read unrecognized data type from file '//ThisFile%Name//'!',f_iFatal,ThisProcedure)
             cDataType = ''
             iStat     = -1
 
@@ -866,7 +864,7 @@ CONTAINS
 
 
         CLASS DEFAULT
-            CALL SetLastMessage('Trying to read unrecognized data type from file '//ThisFile%Name//'!',f_iFatal,ThisProcedure)
+            CALL ThisFile%Logger%SetLastMessage('Trying to read unrecognized data type from file '//ThisFile%Name//'!',f_iFatal,ThisProcedure)
             iStat = -1
 
     END SELECT
@@ -924,7 +922,7 @@ CONTAINS
     IF (NumberOfLinesToRead .EQ. 0) RETURN
     ALLOCATE (CharacterData(NumberOfLinesToRead),STAT=ErrorCode)
     IF (ErrorCode .NE. 0) THEN
-        CALL SetLastMessage('Error in allocating memory for a set of character data',f_iFatal,ThisProcedure)
+        CALL ThisFile%Logger%SetLastMessage('Error in allocating memory for a set of character data',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -1026,7 +1024,7 @@ CONTAINS
             IF (FileReadCode .EQ. 0) Data = cData(1,1) !If any value is read, transfer that value to tyhe return variable
 
         CLASS DEFAULT
-            CALL SetLastMessage('Trying to read unrecognized data type from file '//ThisFile%Name//'!',f_iFatal,ThisProcedure)
+            CALL ThisFile%Logger%SetLastMessage('Trying to read unrecognized data type from file '//ThisFile%Name//'!',f_iFatal,ThisProcedure)
             iStat = -1
 
     END SELECT
@@ -1063,7 +1061,7 @@ CONTAINS
             IF (FileReadCode .EQ. 0) Data = rData(1,:) !If any value is read, transfer that value to tyhe return variable
 
         CLASS DEFAULT
-            CALL SetLastMessage('Trying to read unrecognized data type from file '//ThisFile%Name//'!',f_iFatal,ThisProcedure)
+            CALL ThisFile%Logger%SetLastMessage('Trying to read unrecognized data type from file '//ThisFile%Name//'!',f_iFatal,ThisProcedure)
             iStat = -1
 
     END SELECT
@@ -1178,7 +1176,7 @@ CONTAINS
           
           !Check that we read as many as NDataLines, not more or less
           IF (iDataLineEnd-iDataLineStart .NE. NDataLines) THEN
-              CALL SetLastMessage('It appears there is not enough number of data columns in file '//TRIM(ThisFile%Name)//'!',f_iFatal,ThisProcedure)
+              CALL ThisFile%Logger%SetLastMessage('It appears there is not enough number of data columns in file '//TRIM(ThisFile%Name)//'!',f_iFatal,ThisProcedure)
               iStat = -1
               RETURN
           END IF
@@ -1326,7 +1324,7 @@ CONTAINS
             WRITE (ThisFile%UnitN,'(A)') GenericString_To_String(Data)
 
         CLASS DEFAULT
-            CALL LogMessage('Trying to write unrecognized data type to file '//ThisFile%Name//'!',f_iWarn,ThisProcedure)
+            CALL ThisFile%Logger%LogMessage('Trying to write unrecognized data type to file '//ThisFile%Name//'!',f_iWarn,ThisProcedure)
 
     END SELECT
 
@@ -1362,7 +1360,7 @@ CONTAINS
             END DO
 
         CLASS DEFAULT
-            CALL LogMessage('Trying to write unrecognized data type to file '//ThisFile%Name//'!',f_iWarn,ThisProcedure)
+            CALL ThisFile%Logger%LogMessage('Trying to write unrecognized data type to file '//ThisFile%Name//'!',f_iWarn,ThisProcedure)
 
     END SELECT
 
@@ -1388,7 +1386,7 @@ CONTAINS
             CALL ThisFile%WriteMatrixData_AsciiTSDOutFile(SimulationTime,rData,FinalPrint)
 
         CLASS DEFAULT
-            CALL LogMessage ('Array of data type cannot be written to file '//ThisFile%Name//'!',f_iWarn,ThisProcedure)
+            CALL ThisFile%Logger%LogMessage('Array of data type cannot be written to file '//ThisFile%Name//'!',f_iWarn,ThisProcedure)
 
     END SELECT
 
@@ -1421,7 +1419,7 @@ CONTAINS
         TYPE IS (REAL(8))
             ThisFile%ValuesForOutput(:,:,DataPointer) = Data
         CLASS DEFAULT
-            CALL LogMessage('Array of data type cannot be written to file '//ThisFile%Name//'!',f_iWarn,ThisProcedure)
+            CALL ThisFile%Logger%LogMessage('Array of data type cannot be written to file '//ThisFile%Name//'!',f_iWarn,ThisProcedure)
             RETURN
     END SELECT
 
@@ -1806,7 +1804,7 @@ CONTAINS
         SELECT CASE (FirstReading)
           !If this is a reading for the first time stamp, generate an error
           CASE (.TRUE.)
-            CALL SetLastMessage('End-of-file is reached in file ' //TRIM(ThisFile%Name)//'.',f_iFatal,ThisProcedure)
+            CALL ThisFile%Logger%SetLastMessage('End-of-file is reached in file ' //TRIM(ThisFile%Name)//'.',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
 
@@ -1815,7 +1813,7 @@ CONTAINS
             IF (Year4000Flag) THEN
               !If the data is recycled using Year 4000 flag, rewind file and continue reading data from top
               IF (ThisFile%FileRewound) THEN
-                  CALL SetLastMessage('Simulation date cannot be located in file '//TRIM(ThisFile%Name),f_iFatal,ThisProcedure)
+                  CALL ThisFile%Logger%SetLastMessage('Simulation date cannot be located in file '//TRIM(ThisFile%Name),f_iFatal,ThisProcedure)
                   iStat = -1
                   RETURN
               END IF
@@ -1827,7 +1825,7 @@ CONTAINS
                   !Reposition the pointer at the last time stamp entry
                   CALL ThisFile%Backspace(NLinesInBatch)
               ELSE
-                  CALL SetLastMessage('End-of-file is reached in file ' //TRIM(ThisFile%Name)//'.',f_iFatal,ThisProcedure)
+                  CALL ThisFile%Logger%SetLastMessage('End-of-file is reached in file ' //TRIM(ThisFile%Name)//'.',f_iFatal,ThisProcedure)
                   iStat = -1
                   RETURN
               END IF
@@ -1846,7 +1844,7 @@ CONTAINS
       !Extract the TimeStamp from data line and check if extraction was succesful
       TimeStamp = StripTimeStamp(ALine,Location)
       IF (Location.EQ.0)  THEN  !Extraction was not succesful; generate error
-          CALL SetLastMessage('Error in time stamp in file '                                     //  &
+          CALL ThisFile%Logger%SetLastMessage('Error in time stamp in file '                                     //  &
                               TRIM(ThisFile%Name) //  &
                               ' at or around line '                                              //  &
                               IntToText(ThisFile%AtLine),f_iFatal,ThisProcedure)
@@ -1949,7 +1947,7 @@ CONTAINS
           !Special treatment for yearly interval
           IF (Interval_InMinutes .GE. 525600) Interval_InMinutes = 525600
           IF (LocateInList(Interval_InMinutes,f_iRecognizedIntervals_InMinutes) .LT. 1) THEN
-              CALL SetLastMessage('Error in computing data interval for file '//TRIM(ThisFile%Name)//'!',f_iFatal,ThisProcedure)
+              CALL ThisFile%Logger%SetLastMessage('Error in computing data interval for file '//TRIM(ThisFile%Name)//'!',f_iFatal,ThisProcedure)
               iStat = -1
               RETURN
           END IF

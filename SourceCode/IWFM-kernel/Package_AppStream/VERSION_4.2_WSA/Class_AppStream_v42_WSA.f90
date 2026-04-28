@@ -22,9 +22,8 @@
 !***********************************************************************
 MODULE Class_AppStream_v42_WSA
   USE IWFM_Kernel_Version           , ONLY: ReadVersion
-  USE MessageLogger                 , ONLY: SetLastMessage                  , & 
-                                            EchoProgress                    , &
-                                            MessageArray                    , &
+  USE MessageLogger                 , ONLY: MessageArray                    , &
+                                            MessageLoggerType               , &
                                             f_iFatal
   USE GeneralUtilities              , ONLY: LocateInList                    , &
                                             ShellSort                       , &
@@ -74,9 +73,9 @@ MODULE Class_AppStream_v42_WSA
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: AppStream_v42_WSA_Type   , &
-            ReadFractionsForGW       , &
-            CompileUpstrmNodes 
+  PUBLIC :: AppStream_v42_WSA_Type       , &
+            ReadFractionsForGW          , &
+            CompileUpstrmNodes
  
   
   ! -------------------------------------------------------------
@@ -132,7 +131,7 @@ MODULE Class_AppStream_v42_WSA
   
 CONTAINS
 
-    
+
 
 ! ******************************************************************
 ! ******************************************************************
@@ -148,7 +147,7 @@ CONTAINS
   ! --- INSTANTIATE COMPLETE STREAM DATA
   ! -------------------------------------------------------------
   SUBROUTINE SetAllComponents(AppStream,IsForInquiry,cFileName,cSimWorkingDirectory,cPackageVersion,TimeStep,NTIME,iLakeIDs,AppGrid,Stratigraphy,ETData,BinFile,StrmLakeConnector,StrmGWConnector,iStat)
-    CLASS(AppStream_v42_WSA_Type),INTENT(OUT) :: AppStream
+    CLASS(AppStream_v42_WSA_Type),INTENT(INOUT) :: AppStream
     LOGICAL,INTENT(IN)                        :: IsForInquiry
     CHARACTER(LEN=*),INTENT(IN)               :: cFileName,cSimWorkingDirectory,cPackageVersion
     TYPE(TimeStepType),INTENT(IN)             :: TimeStep
@@ -163,12 +162,12 @@ CONTAINS
     
     !Local variables
     CHARACTER(LEN=ModNameLen+16) :: ThisProcedure = ModName // 'SetAllComponents'
-    
+
     !Initialize
     iStat = 0
-    
+
     !Echo progress
-    CALL EchoProgress('Instantiating streams')
+    CALL AppStream%Logger%EchoProgress('Instantiating streams')
     
     !Read the preprocessed data for streams
     CALL AppStream%SetStaticComponentFromBinFile(BinFile,iStat)
@@ -184,13 +183,13 @@ CONTAINS
             IF (SIZE(AppStream%State) .EQ. 0) THEN
                 MessageArray(1) = 'For proper simulation of streams, relevant stream data files must'
                 MessageArray(2) = 'be specified when stream nodes are defined in Pre-Processor.'
-                CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                CALL AppStream%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
         END IF
     END IF
-    
+
   END SUBROUTINE SetAllComponents
   
   
@@ -232,12 +231,12 @@ CONTAINS
     IF (iStat .EQ. -1) RETURN
     
     !Make sure that version numbers from Pre-processor and Simulation match
-    CALL ReadVersion(MainFile,'STREAM',cVersionSim,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    CALL ReadVersion(MainFile,'STREAM',cVersionSim,iStat,AppStream%Logger)  ;  IF (iStat .EQ. -1) RETURN
     IF (TRIM(cVersionSim) .NE. '4.2') THEN
         MessageArray(1) = 'Stream Component versions used in Pre-Processor and Simulation must match!'
         MessageArray(2) = 'Version number in Pre-Processor = 4.2' 
         MessageArray(3) = 'Version number in Simulation    = ' // TRIM(cVersionSim)
-        CALL SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+        CALL AppStream%Logger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -254,7 +253,7 @@ CONTAINS
         ALine = StripTextUntilCharacter(ALine,f_cInlineCommentChar) 
         CALL CleanSpecialCharacters(ALine)
         CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(ALine)),cWorkingDirectory,cAbsPathFileName)
-        CALL AppStream%StrmInflowData%New(cAbsPathFileName,cWorkingDirectory,TimeStep,iNStrmNodes,iStrmNodeIDs,iStat)
+        CALL AppStream%StrmInflowData%New(AppStream%Logger,cAbsPathFileName,cWorkingDirectory,TimeStep,iNStrmNodes,iStrmNodeIDs,iStat)
         IF (iStat .EQ. -1) RETURN
     END IF
     
@@ -307,7 +306,7 @@ CONTAINS
     
     !Diversions and bypasses
     IF (lRoutedStreams) THEN
-        CALL AppStream%AppDiverBypass%New(IsForInquiry,DiverSpecFileName,BypassSpecFileName,DiverFileName,DiverDetailBudFileName,cWorkingDirectory,TRIM(cVersionFull),NTIME,TimeStep,AppStream%NStrmNodes,iStrmNodeIDs,iLakeIDs,AppStream%Reaches,AppGrid,StrmLakeConnector,iStat)
+        CALL AppStream%AppDiverBypass%New(AppStream%Logger,IsForInquiry,DiverSpecFileName,BypassSpecFileName,DiverFileName,DiverDetailBudFileName,cWorkingDirectory,TRIM(cVersionFull),NTIME,TimeStep,AppStream%NStrmNodes,iStrmNodeIDs,iLakeIDs,AppStream%Reaches,AppGrid,StrmLakeConnector,iStat)
         IF (iStat .EQ. -1) RETURN
     END IF
     
@@ -318,7 +317,7 @@ CONTAINS
     IF (lRoutedStreams) THEN
         IF (ReachBudRawFileName .NE. '') THEN
             IF (IsForInquiry) THEN
-                CALL AppStream%StrmReachBudRawFile%New(ReachBudRawFileName,iStat)
+                CALL AppStream%StrmReachBudRawFile%New(AppStream%Logger,ReachBudRawFileName,iStat)
                 IF (iStat .EQ. -1) RETURN
             ELSE
                 !Sort reach IDs for budget printing in order
@@ -329,7 +328,7 @@ CONTAINS
                 iReachIDs = AppStream%Reaches%ID
                 !Prepare budget header
                 BudHeader = PrepareStreamBudgetHeader(AppStream%NReaches,AppStream%iPrintReachBudgetOrder,iReachIDs,iStrmNodeIDs,NTIME,TimeStep,TRIM(cVersionFull),cReachNames=AppStream%Reaches%cName)
-                CALL AppStream%StrmReachBudRawFile%New(ReachBudRawFileName,BudHeader,iStat)
+                CALL AppStream%StrmReachBudRawFile%New(AppStream%Logger,ReachBudRawFileName,BudHeader,iStat)
                 IF (iStat .EQ. -1) RETURN
                 CALL BudHeader%Kill()
             END IF
@@ -338,11 +337,11 @@ CONTAINS
     END IF
     
     !Hydrograph printing
-    CALL AppStream%StrmHyd%New(lRoutedStreams,IsForInquiry,cWorkingDirectory,iNStrmNodes,iStrmNodeIDs,TimeStep,MainFile,iStat)
+    CALL AppStream%StrmHyd%New(AppStream%Logger,lRoutedStreams,IsForInquiry,cWorkingDirectory,iNStrmNodes,iStrmNodeIDs,TimeStep,MainFile,iStat)
     IF (iStat .EQ. -1) RETURN
     
     !Stream budget at selected nodes
-    CALL AppStream%StrmNodeBudget%New(lRoutedStreams,IsForInquiry,cWorkingDirectory,iReachIDs,iStrmNodeIDs,NTIME,TimeStep,TRIM(cVersionFull),PrepareStreamBudgetHeader,MainFile,iStat)
+    CALL AppStream%StrmNodeBudget%New(AppStream%Logger,lRoutedStreams,IsForInquiry,cWorkingDirectory,iReachIDs,iStrmNodeIDs,NTIME,TimeStep,TRIM(cVersionFull),PrepareStreamBudgetHeader,MainFile,iStat)
     IF (iStat .EQ. -1) RETURN
     
     !Stream bed parameters for stream-gw connectivity, wetted perimeter and stream length for each node
@@ -357,7 +356,7 @@ CONTAINS
     END IF
     
     !Stream evaporation data
-    CALL AppStream%StrmEvap%New(MainFile,TimeStep,ETData,cWorkingDirectory,iNStrmNodes,iStrmNodeIDs,iStat)
+    CALL AppStream%StrmEvap%New(AppStream%Logger,MainFile,TimeStep,ETData,cWorkingDirectory,iNStrmNodes,iStrmNodeIDs,iStat)
     IF (iStat .EQ. -1) RETURN
     
     !Set the heads to the bottom elevation
@@ -455,7 +454,7 @@ CONTAINS
     TYPE(StrmLakeConnectorType),INTENT(IN) :: StrmLakeConnector
      
     !Echo progress
-    CALL EchoProgress('Printing results of stream simulation')
+    CALL AppStream%Logger%EchoProgress('Printing results of stream simulation')
     
     !Print stream flow hydrographs
     IF (AppStream%StrmHyd%IsOutFileDefined()) &
@@ -778,7 +777,7 @@ CONTAINS
     INTEGER,PARAMETER                       :: iCompIDs_Connect(1) = [f_iStrmComp]
     
     !Inform user about simulation progress
-    CALL EchoProgress('Simulating stream flows')
+    CALL AppStream%Logger%EchoProgress('Simulating stream flows')
     
     !Initialize
     NNodes  = SIZE(GWHeads , DIM=1)
@@ -1110,7 +1109,7 @@ CONTAINS
     INTEGER,PARAMETER                       :: iCompIDs_Connect(1) = [f_iStrmComp]
     
     !Inform user about simulation progress
-    CALL EchoProgress('Simulating stream flows')
+    CALL AppStream%Logger%EchoProgress('Simulating stream flows')
     
     !Initialize
     NNodes  = SIZE(GWHeads , DIM=1)
@@ -1287,7 +1286,7 @@ CONTAINS
     INTEGER,ALLOCATABLE                     :: iStrmIDs(:),iLakeIDs(:)
     
     !Inform user about simulation progress
-    CALL EchoProgress('Simulating stream flows')
+    CALL AppStream%Logger%EchoProgress('Simulating stream flows')
     
     !Initialize
     NNodes  = SIZE(GWHeads , DIM=1)

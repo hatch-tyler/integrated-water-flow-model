@@ -21,9 +21,9 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 MODULE Opening_screen
-  USE MessageLogger     , ONLY: LogMessage             , &
+  USE MessageLogger     , ONLY: DefaultLogger          , &
                                 f_iSCREEN              , &
-                                f_iMessage               
+                                f_iMessage
   USE Class_Version     , ONLY: VersionType            
   USE GeneralUtilities  , ONLY: ArrangeText            , &
                                 LowerCase              , &
@@ -33,7 +33,7 @@ MODULE Opening_screen
 
   
   PRIVATE
-  PUBLIC :: PRINT_SCREEN  ,&
+  PUBLIC :: PRINT_SCREEN           , &
             GET_MAIN_FILE
 
 
@@ -44,14 +44,11 @@ MODULE Opening_screen
   INTEGER,PARAMETER :: f_ProgramNameLineNumber=4             !The line number of openning screen which will be replaced by the program name
   INTEGER,PARAMETER :: f_VersionLineNumber=6                 !The line number where the IWFM version number is displayed
   INTEGER,PARAMETER :: f_CopyrightLineNumber=7               !Line number where copyright date is displayed
-         
 
 
 CONTAINS
 
 
-    
-    
   ! -------------------------------------------------------------
   ! --- SUBROUTINE THAT PRINTS OUT THE OPENING SCREEN IN LINUX
   ! -------------------------------------------------------------
@@ -120,7 +117,7 @@ CONTAINS
     f_L(f_CopyrightLineNumber)(f_OPEN_SCREEN_LINE_LENGTH:f_OPEN_SCREEN_LINE_LENGTH) = '|'
     
     !Display opening screen
-    CALL LogMessage(f_L,f_iMessage,'',Destination=f_iSCREEN,Fmt='(8X,A)')
+    CALL DefaultLogger%LogMessage(f_L,f_iMessage,'',Destination=f_iSCREEN,Fmt='(8X,A)')
 
   END SUBROUTINE PRINT_SCREEN
 
@@ -141,8 +138,8 @@ CONTAINS
     SELECT CASE (NArguments)
       !No extra arguments are specified; ask for file name
       CASE (0)
-        CALL LogMessage(' ',f_iMessage,'',Destination=f_iSCREEN)
-        CALL LogMessage(cPrompt,f_iMessage,'',Destination=f_iSCREEN,Advance='NO')
+        CALL DefaultLogger%LogMessage(' ',f_iMessage,'',Destination=f_iSCREEN)
+        CALL DefaultLogger%LogMessage(cPrompt,f_iMessage,'',Destination=f_iSCREEN,Advance='NO')
         READ (*,*) MFILE
         CALL CleanSpecialCharacters(MFILE)
         MFILE = ADJUSTL(MFILE)

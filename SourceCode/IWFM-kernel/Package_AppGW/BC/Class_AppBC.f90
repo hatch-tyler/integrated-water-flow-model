@@ -37,10 +37,9 @@ MODULE Class_AppBC
                                       PrepareTSDOutputFile          , &
                                       f_iDSS                        , &
                                       f_iUNKNOWN                    
-  USE MessageLogger           , ONLY: SetLastMessage                , &
-                                      EchoProgress                  , &
-                                      MessageArray                  , &
-                                      f_iFatal                      
+  USE MessageLogger           , ONLY: MessageArray                  , &
+                                      MessageLoggerType             , &
+                                      f_iFatal
   USE Package_Discretization  , ONLY: AppGridType                   , &
                                       StratigraphyType              , &
                                       ConvertID_To_Index            
@@ -65,7 +64,7 @@ MODULE Class_AppBC
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: AppBCType                              
+  PUBLIC :: AppBCType
   
   
   ! -------------------------------------------------------------
@@ -84,6 +83,7 @@ MODULE Class_AppBC
   ! -------------------------------------------------------------
   TYPE AppBCType
       PRIVATE
+      TYPE(MessageLoggerType),POINTER    :: Logger => NULL()
       TYPE(LayerBCType),ALLOCATABLE      :: LayerBC(:)                          !Boundary conditions for each aquifer layers
       CHARACTER(LEN=6)                   :: TimeUnit_SpecifiedFlowBC = ''       !Time unit for the specified flow b.c.
       CHARACTER(LEN=6)                   :: TimeUnit_GHBC            = ''       !Time unit for the conductance term of general head b.c.
@@ -125,10 +125,12 @@ MODULE Class_AppBC
   
   
 CONTAINS
-    
-    
 
-    
+
+
+
+
+
 ! ******************************************************************
 ! ******************************************************************
 ! ******************************************************************
@@ -142,17 +144,18 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- INSTANTIATE APPLICATION BOUNDARY CONDITIONS
   ! -------------------------------------------------------------
-  SUBROUTINE New(AppBC,IsForInquiry,cFileName,cWorkingDirectory,AppGrid,Stratigraphy,iGWNodeIDs,UNITVLOU,TimeStep,GWHeads,iStat)
-    CLASS(AppBCType),INTENT(OUT)      :: AppBC
-    LOGICAL,INTENT(IN)                :: IsForInquiry
-    CHARACTER(LEN=*),INTENT(IN)       :: cFileName,cWorkingDirectory,UNITVLOU
-    TYPE(AppGridType),INTENT(IN)      :: AppGrid
-    TYPE(StratigraphyType),INTENT(IN) :: Stratigraphy
-    INTEGER,INTENT(IN)                :: iGWNodeIDs(:)
-    TYPE(TimeStepType),INTENT(IN)     :: TimeStep
-    REAL(8)                           :: GWHeads(:,:)
-    INTEGER,INTENT(OUT)               :: iStat
-    
+  SUBROUTINE New(AppBC,Logger,IsForInquiry,cFileName,cWorkingDirectory,AppGrid,Stratigraphy,iGWNodeIDs,UNITVLOU,TimeStep,GWHeads,iStat)
+    CLASS(AppBCType),INTENT(OUT)               :: AppBC
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
+    LOGICAL,INTENT(IN)                         :: IsForInquiry
+    CHARACTER(LEN=*),INTENT(IN)                :: cFileName,cWorkingDirectory,UNITVLOU
+    TYPE(AppGridType),INTENT(IN)               :: AppGrid
+    TYPE(StratigraphyType),INTENT(IN)          :: Stratigraphy
+    INTEGER,INTENT(IN)                         :: iGWNodeIDs(:)
+    TYPE(TimeStepType),INTENT(IN)              :: TimeStep
+    REAL(8)                                    :: GWHeads(:,:)
+    INTEGER,INTENT(OUT)                        :: iStat
+
     !Local variables
     CHARACTER(LEN=ModNameLen+3) :: ThisProcedure = ModName // 'New'
     INTEGER                     :: NNodes,NLayers,ErrorCode,NFlowBCCols,NHeadBCCols
@@ -160,8 +163,9 @@ CONTAINS
     CHARACTER                   :: cErrorMsg*500,ALine*1500
     TYPE(GenericFileType)       :: BCFile
     CHARACTER(:),ALLOCATABLE    :: cAbsPathFileName
-    
+
     !Initialize
+    AppBC%Logger => Logger
     iStat   = 0
     
     !Initialize
@@ -171,7 +175,7 @@ CONTAINS
     !Allocate memory
     ALLOCATE (AppBC%LayerBC(NLayers) ,STAT=ErrorCode , ERRMSG=cErrorMsg)
     IF (ErrorCode .NE. 0) THEN
-        CALL SetLastMessage('Error in allocating memory for groundwater boundary conditions for each layer.'//NEW_LINE('')//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
+        CALL AppBC%Logger%SetLastMessage('Error in allocating memory for groundwater boundary conditions for each layer.'//NEW_LINE('')//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -180,7 +184,7 @@ CONTAINS
     IF (cFileName .EQ. '') RETURN
     
     !Inform user
-    CALL EchoProgress('   Instantiating groundwater boundary conditions...')
+    CALL AppBC%Logger%EchoProgress('   Instantiating groundwater boundary conditions...')
     
     !Open file
     CALL BCFile%New(FileName=TRIM(cFileName),InputFile=.TRUE.,IsTSFile=.FALSE.,Descriptor='main groundwater boundary conditions data',iStat=iStat)
@@ -192,7 +196,7 @@ CONTAINS
     CALL CleanSpecialCharacters(ALine)
     IF (ALine .NE. '') THEN
         CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(ALine)),cWorkingDirectory,cAbsPathFileName)
-        CALL LayerBC_InitSpecifiedFlowBC(cAbsPathFileName,NNodes,iGWNodeIDs,Stratigraphy,AppBC%TimeUnit_SpecifiedFlowBC,AppBC%LayerBC,iStat)
+        CALL LayerBC_InitSpecifiedFlowBC(cAbsPathFileName,NNodes,iGWNodeIDs,Stratigraphy,AppBC%TimeUnit_SpecifiedFlowBC,AppBC%LayerBC,Logger,iStat)
         IF (iStat .EQ. -1) RETURN
     END IF
 
@@ -202,7 +206,7 @@ CONTAINS
     CALL CleanSpecialCharacters(ALine)
     IF (ALine .NE. '') THEN
         CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(ALine)),cWorkingDirectory,cAbsPathFileName)
-        CALL LayerBC_InitSpecifiedHeadBC(cAbsPathFileName,NNodes,iGWNodeIDs,Stratigraphy,GWHeads,AppBC%LayerBC,iStat)
+        CALL LayerBC_InitSpecifiedHeadBC(cAbsPathFileName,NNodes,iGWNodeIDs,Stratigraphy,GWHeads,AppBC%LayerBC,Logger,iStat)
         IF (iStat .EQ. -1) RETURN
     END IF
     
@@ -212,7 +216,7 @@ CONTAINS
     CALL CleanSpecialCharacters(ALine)
     IF (ALine .NE. '') THEN
         CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(ALine)),cWorkingDirectory,cAbsPathFileName)
-        CALL LayerBC_InitGeneralHeadBC(cAbsPathFileName,NNodes,iGWNodeIDs,Stratigraphy,AppBC%TimeUnit_GHBC,AppBC%LayerBC,iStat)
+        CALL LayerBC_InitGeneralHeadBC(cAbsPathFileName,NNodes,iGWNodeIDs,Stratigraphy,AppBC%TimeUnit_GHBC,AppBC%LayerBC,Logger,iStat)
         IF (iStat .EQ. -1) RETURN
     END IF
     
@@ -222,7 +226,7 @@ CONTAINS
     CALL CleanSpecialCharacters(ALine)
     IF (ALine .NE. '') THEN
         CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(ALine)),cWorkingDirectory,cAbsPathFileName)
-        CALL LayerBC_InitConstrainedGeneralHeadBC(cAbsPathFileName,NNodes,iGWNodeIDs,Stratigraphy,AppBC%TimeUnit_ConstrainedGHBC,AppBC%LayerBC,iStat)
+        CALL LayerBC_InitConstrainedGeneralHeadBC(cAbsPathFileName,NNodes,iGWNodeIDs,Stratigraphy,AppBC%TimeUnit_ConstrainedGHBC,AppBC%LayerBC,Logger,iStat)
         IF (iStat .EQ. -1) RETURN
     END IF
     
@@ -239,33 +243,33 @@ CONTAINS
     IF (NFlowBCCols .GT. 0   .OR.   NHeadBCCols .GT. 0) THEN
         IF (ALine .NE. '') THEN
             CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(ALine)),cWorkingDirectory,cAbsPathFileName)
-            CALL AppBC%TSBCDataFile%New(cAbsPathFileName,cWorkingDirectory,iTSFlowBCColumns,TimeStep,iStat)
+            CALL AppBC%TSBCDataFile%New(Logger,cAbsPathFileName,cWorkingDirectory,iTSFlowBCColumns,TimeStep,iStat)
             IF (iStat .EQ. -1) RETURN
         ELSE
             MessageArray(1) = 'Time Series Boundary Conditions Data File must be specified when'
             MessageArray(2) = 'one or more time series boundary condition data columns are referred!'
-            CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+            CALL AppBC%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
     END IF
     
     !Make sure there are no errors in b.c. data
-    CALL LayerBC_CheckConsistency(AppBC%LayerBC,iGWNodeIDs,iStat)
+    CALL LayerBC_CheckConsistency(AppBC%LayerBC,iGWNodeIDs,AppBC%Logger,iStat)
     IF (iStat .EQ. -1) RETURN
-    
+
     !Apply time series b.c. that is initially read
     IF (AppBC%TSBCDataFile%lUpdated)  &
-        CALL LayerBC_SetTSBoundaryConditions(iGWNodeIDs,Stratigraphy%BottomElev,AppBC%TSBCDataFile%rValues,GWHeads,AppBC%LayerBC)
+        CALL LayerBC_SetTSBoundaryConditions(iGWNodeIDs,Stratigraphy%BottomElev,AppBC%TSBCDataFile%rValues,GWHeads,AppBC%LayerBC,AppBC%Logger)
     
     !Instantiate boundary node flow hydrograph output data
     ALLOCATE (AppBC%BCFlowOutput , STAT=ErrorCode ,ERRMSG=cErrorMsg)
     IF (ErrorCode .NE. 0) THEN
-        CALL SetLastMessage('Error in allocating memory for boundary node flow hydrograph printing!'//NEW_LINE('')//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
+        CALL AppBC%Logger%SetLastMessage('Error in allocating memory for boundary node flow hydrograph printing!'//NEW_LINE('')//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
-    CALL BCFlowOutput_New(IsForInquiry,BCFile,cWorkingDirectory,iGWNodeIDs,NLayers,AppBC%LayerBC,UNITVLOU,TimeStep,AppBC%BCFlowOutput,iStat)
+    CALL BCFlowOutput_New(AppBC%Logger,IsForInquiry,BCFile,cWorkingDirectory,iGWNodeIDs,NLayers,AppBC%LayerBC,UNITVLOU,TimeStep,AppBC%BCFlowOutput,iStat)
     IF (iStat .EQ. -1) RETURN
     IF (AppBC%BCFlowOutput%OutFile%iGetFileType() .EQ. f_iUNKNOWN) THEN
         DEALLOCATE (AppBC%BCFlowOutput , STAT=ErrorCode)
@@ -283,7 +287,8 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- NEW BOUNDARY NODE FLOW OUTPUT DATASET
   ! -------------------------------------------------------------
-  SUBROUTINE BCFlowOutput_New(IsForInquiry,InFile,cWorkingDirectory,NodeIDs,NLayers,LayerBC,UNITVLOU,TimeStep,BCFlowOutput,iStat)
+  SUBROUTINE BCFlowOutput_New(Logger,IsForInquiry,InFile,cWorkingDirectory,NodeIDs,NLayers,LayerBC,UNITVLOU,TimeStep,BCFlowOutput,iStat)
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
     LOGICAL,INTENT(IN)            :: IsForInquiry
     TYPE(GenericFileType)         :: InFile
     INTEGER,INTENT(IN)            :: NodeIDs(:),NLayers
@@ -326,7 +331,7 @@ CONTAINS
     !Allocate memory
     ALLOCATE (BCFlowOutput%iBCNodes(NOUTB) , BCFlowOutput%iLayers(NOUTB) , STAT=ErrorCode , ERRMSG=cErrorMsg)
     IF (ErrorCode .NE. 0) THEN
-        CALL SetLastMessage('Error in allocating memory for boundary node flow hydrograph list!'//NEW_LINE(' ')//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
+        CALL Logger%SetLastMessage('Error in allocating memory for boundary node flow hydrograph list!'//NEW_LINE(' ')//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
@@ -339,7 +344,7 @@ CONTAINS
             READ (ALine,*) iDummyArray(indx1)
             iLoc = FirstLocation(' ',ALine)
             IF (iLoc .EQ. 0) THEN
-                CALL SetLastMessage('Error in data entry for boundary node flow hydrograph specification '//TRIM(IntToText(indx))//'!',f_iFatal,ThisProcedure)
+                CALL Logger%SetLastMessage('Error in data entry for boundary node flow hydrograph specification '//TRIM(IntToText(indx))//'!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
@@ -350,14 +355,14 @@ CONTAINS
         IDNode    = iDummyArray(3)
         CALL ConvertID_To_Index(IDNode,NodeIDs,iHydNode)
         IF (iHydNode .EQ. 0) THEN
-            CALL SetLastMessage('Node '//TRIM(IntToText(IDNode))//' listed for boundary node hydrograph printing is not in the model!',f_iFatal,ThisProcedure)
+            CALL Logger%SetLastMessage('Node '//TRIM(IntToText(IDNode))//' listed for boundary node hydrograph printing is not in the model!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
 
         !Make sure layer is modeled
         IF (iHydLayer .LT. 1   .OR.   iHydLayer .GT. NLayers) THEN
-            CALL SetLastMessage('Boundary node flow hydrograph layer listed for hydrograph ID '//TRIM(IntToText(ID))//' is outside model bounds!',f_iFatal,ThisProcedure)
+            CALL Logger%SetLastMessage('Boundary node flow hydrograph layer listed for hydrograph ID '//TRIM(IntToText(ID))//' is outside model bounds!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
@@ -369,16 +374,16 @@ CONTAINS
         ELSE
             MessageArray(1) = 'Node '//TRIM(IntToText(IDNode))//' in layer '//TRIM(IntToText(iHydLayer))//' for boundary flow printing'
             MessageArray(2) = 'is not specified as a boundary node.'
-            CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure) 
+            CALL Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
-        END IF           
+        END IF
 
     END DO
-    
-    !Instantiate the output file 
+
+    !Instantiate the output file
     CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(cFileName)),cWorkingDirectory,cAbsPathFileName)
-    CALL PrepBCFlowOutFile(IsForInquiry,cAbsPathFileName,UNITVLOU,NOUTB,NodeIDs(BCFlowOutput%iBCNodes),BCFlowOutput%iLayers,TimeStep,BCFlowOutput%OutFile,iStat)
+    CALL PrepBCFlowOutFile(Logger,IsForInquiry,cAbsPathFileName,UNITVLOU,NOUTB,NodeIDs(BCFlowOutput%iBCNodes),BCFlowOutput%iLayers,TimeStep,BCFlowOutput%OutFile,iStat)
 
   END SUBROUTINE BCFlowOutput_New
 
@@ -854,7 +859,7 @@ CONTAINS
     IF (iStat .NE. 0) RETURN
     
     !Check for inconsistencies
-    CALL LayerBC_CheckConsistency(AppBC%LayerBC,iNodeIDs,iStat)   
+    CALL LayerBC_CheckConsistency(AppBC%LayerBC,iNodeIDs,AppBC%Logger,iStat)
     
   END SUBROUTINE SetBC
   
@@ -887,7 +892,7 @@ CONTAINS
     
     !Use the newly read time series b.c. data to set the layer b.c. data
     IF (AppBC%TSBCDataFile%lUpdated)   &
-        CALL LayerBC_SetTSBoundaryConditions(NodeIDs,BottomElev,AppBC%TSBCDataFile%rValues,Heads,AppBC%LayerBC)
+        CALL LayerBC_SetTSBoundaryConditions(NodeIDs,BottomElev,AppBC%TSBCDataFile%rValues,Heads,AppBC%LayerBC,AppBC%Logger)
     
   END SUBROUTINE ReadTSData
   
@@ -1031,7 +1036,8 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- PREPARE BOUNDARY NODE FLOW OUTPUT FILE
   ! -------------------------------------------------------------
-  SUBROUTINE PrepBCFlowOutFile(IsForInquiry,cFileName,UNITVLOU,NHyd,iBCNodes,iLayers,TimeStep,OutFile,iStat)
+  SUBROUTINE PrepBCFlowOutFile(Logger,IsForInquiry,cFileName,UNITVLOU,NHyd,iBCNodes,iLayers,TimeStep,OutFile,iStat)
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
     LOGICAL,INTENT(IN)            :: IsForInquiry
     CHARACTER(LEN=*),INTENT(IN)   :: cFileName,UNITVLOU
     INTEGER,INTENT(IN)            :: NHyd,iBCNodes(NHyd),iLayers(NHyd)
@@ -1061,7 +1067,7 @@ CONTAINS
     !Make sure that DSS file is used only if it is a time tracking simulation
     IF (OutFile%iGetFileType() .EQ. f_iDSS) THEN
         IF (.NOT. TimeStep%TrackTime) THEN
-            CALL SetLastMessage('DSS files for boundary node flow hydrograph printing can only be used for time-tracking simulations.',f_iFatal,ThisProcedure)
+            CALL Logger%SetLastMessage('DSS files for boundary node flow hydrograph printing can only be used for time-tracking simulations.',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF

@@ -24,7 +24,7 @@ MODULE Class_TSBCDataFile
   USE GeneralUtilities    , ONLY: AllocArray
   USE TimeSeriesUtilities , ONLY: TimeStepType          , &
                                   IncrementTimeStamp
-  USE MessageLogger       , ONLY: SetLastMessage        , &
+  USE MessageLogger       , ONLY: MessageLoggerType     , &
                                   f_iFatal
   USE IOInterface         , ONLY: RealTSDataInFileType 
   IMPLICIT NONE
@@ -45,7 +45,7 @@ MODULE Class_TSBCDataFile
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: TSBCDataFileType        
+  PUBLIC :: TSBCDataFileType
   
   
   ! -------------------------------------------------------------
@@ -75,10 +75,10 @@ MODULE Class_TSBCDataFile
 
 
 CONTAINS
-    
-    
 
-    
+
+
+
 ! ******************************************************************
 ! ******************************************************************
 ! ******************************************************************
@@ -92,13 +92,14 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- INSTANTIATE TIME SERIES BOUNDARY CONDITIONS DATA FILE
   ! -------------------------------------------------------------
-  SUBROUTINE New(TSBCDataFile,cFileName,cWorkingDirectory,iTSFlowBCColumns,TimeStep,iStat)
-    CLASS(TSBCDataFileType)       :: TSBCDataFile
-    CHARACTER(LEN=*),INTENT(IN)   :: cFileName,cWorkingDirectory
-    INTEGER,INTENT(IN)            :: iTSFlowBCColumns(:)
-    TYPE(TimeStepType),INTENT(IN) :: TimeStep
-    INTEGER,INTENT(OUT)           :: iStat
-    
+  SUBROUTINE New(TSBCDataFile,Logger,cFileName,cWorkingDirectory,iTSFlowBCColumns,TimeStep,iStat)
+    CLASS(TSBCDataFileType)                    :: TSBCDataFile
+    TYPE(MessageLoggerType),POINTER,INTENT(IN) :: Logger
+    CHARACTER(LEN=*),INTENT(IN)                :: cFileName,cWorkingDirectory
+    INTEGER,INTENT(IN)                         :: iTSFlowBCColumns(:)
+    TYPE(TimeStepType),INTENT(IN)              :: TimeStep
+    INTEGER,INTENT(OUT)                        :: iStat
+
     !Local variables
     CHARACTER(LEN=ModNameLen+3) :: ThisProcedure = ModName // 'New'
     CHARACTER                   :: cErrorMsg*200
@@ -106,8 +107,9 @@ CONTAINS
     REAL(8)                     :: rFactor(2)
     TYPE(TimeStepType)          :: TimeStepWork
     LOGICAL,ALLOCATABLE         :: RateTypeDataArray(:)
-    
+
     !Initialize
+    TSBCDataFile%Logger => Logger
     iStat = 0
 
     !If no filename return
@@ -119,7 +121,7 @@ CONTAINS
         TSBCDataFile%NTSFlowBCColumns = SIZE(iTSFlowBCColumns)
         ALLOCATE (TSBCDataFile%iTSFlowBCColumns(SIZE(iTSFlowBCColumns)) , STAT=ErrorCode , ERRMSG=cErrorMsg)
         IF (ErrorCode .NE. 0) THEN
-            CALL SetLastMessage('Error in allocating memory for the time series flow boundary conditions.'//NEW_LINE('')//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
+            CALL TSBCDataFile%Logger%SetLastMessage('Error in allocating memory for the time series flow boundary conditions.'//NEW_LINE('')//TRIM(cErrorMsg),f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
