@@ -6,7 +6,22 @@ A finite-element hydrological simulation model for conjunctive management of gro
 
 IWFM simulates the flow of water through an integrated hydrologic system -- groundwater, streams, lakes, root zone, and unsaturated zone -- under historical or projected conditions. Developed by the California Department of Water Resources (DWR), it is used for water resources planning, groundwater sustainability analysis, and regulatory compliance across California.
 
-Version **2025.0.1747** (kernel 2025.0.107). Written in modern Fortran (F90/F2003).
+This repository is a fork of the official IWFM release (upstream source: <https://data.cnra.ca.gov/dataset/iwfm>). Active development happens on the `2025.0.1747.rev` branch; the `2025.0.1747` branch tracks the unmodified upstream import. Relative to upstream, this fork adds a cross-platform CMake build, additional post-processors, a multi-instance C-callable DLL, modern Fortran cleanup, and pre-built binary [releases](https://github.com/hatch-tyler/integrated-water-flow-model/releases). See [What's in this fork](#whats-in-this-fork) below.
+
+Version **2025.0.1747** (kernel 2025.0.107), latest binary release [`v2025.0.1747-rev2`](https://github.com/hatch-tyler/integrated-water-flow-model/releases/tag/v2025.0.1747-rev2). Written in modern Fortran (F90/F2003).
+
+## What's in this fork
+
+Changes relative to the upstream IWFM 2025.0.1747 release, in descending user impact:
+
+- **Multi-instance DLL with handle-based API** — up to 64 concurrent model instances per process; every `IW_Model_*` export takes `iModelID` as its first argument. **Breaking change** for callers of the upstream DLL — see [Using IWFM as a library](#using-iwfm-as-a-library).
+- **Cross-platform CMake build** — Windows PowerShell driver (`build-iwfm.ps1`), Linux Docker images, and automatic dependency fetch (HDF5, HEC-DSS 7, zlib). See [BUILD.md](BUILD.md).
+- **Additional post-processors** in the standard release: `IWFM2OBS` (PEST hydrograph converter), `CalcTypeHyd` (cluster type hydrograph), and `ResultsExtract` (generalized hydrograph extractor with native HDF5 input support).
+- **Faster inquiry-mode loads** for pywfm / DLL consumers — C2VSimFG cold load reduced from 30 s to 13 s. See [Fast inquiry-mode loads](#fast-inquiry-mode-loads-pywfm--c-dll-users).
+- **Modern Fortran cleanup** — SAVE-global state eliminated from the kernel and DLL layers; `Logger` threaded through every derived type; thread-safe DLL exports under shared CRITICAL / per-thread `THREADPRIVATE` regions; `GOTO` removed from utility programs. See [CLAUDE.md](CLAUDE.md).
+- **Pre-built binary releases** for Windows and Linux on [GitHub Releases](https://github.com/hatch-tyler/integrated-water-flow-model/releases).
+- **pywfm companion** — Python wrapper with multi-instance support on the [`track7-handle-based-api` branch](https://github.com/SGMOModeling/PyWFM/tree/track7-handle-based-api).
+- **Fork-only docs** — `BUILD.md`, `BENCHMARKS.md`, and `CLAUDE.md` (architecture and developer guide).
 
 ## Quick Start
 
@@ -28,6 +43,8 @@ cmake --build .
 
 Dependencies (HDF5, HEC-DSS 7, zlib) are fetched and built automatically on first configure. Output binaries go to `Bin/`.
 
+Or skip the build entirely: pre-built Windows and Linux binaries for each release are available on [GitHub Releases](https://github.com/hatch-tyler/integrated-water-flow-model/releases). Latest: **v2025.0.1747-rev2**.
+
 ## Build Targets
 
 | Target | CMake Option | Description |
@@ -42,6 +59,26 @@ Dependencies (HDF5, HEC-DSS 7, zlib) are fetched and built automatically on firs
 | IWFM2OBS | `IWFM_BUILD_IWFM2OBS` | PEST hydrograph converter |
 | CalcTypeHyd | `IWFM_BUILD_CALCTYPHYD` | Cluster type hydrograph tool |
 | ResultsExtract | `IWFM_BUILD_RESULTSEXTRACT` | Generalized hydrograph extractor |
+
+## Using IWFM as a library
+
+IWFM ships a C-callable shared library — `IWFM_C_x64.dll` on Windows, `libiwfm_c.so` on Linux — exporting the same `BIND(C)` symbols on both platforms. Any language with a C foreign-function interface can drive a model end-to-end: instantiate inputs, simulate (or load post-run results in inquiry mode), query state, and tear down.
+
+Up to **64 concurrent model instances** coexist in one process. `IW_Model_New` returns an `iModelID`; every other `IW_Model_*` export takes that ID as its first argument. There is no shared "current model" / `IW_Model_Switch` indirection.
+
+| Language | Binding mechanism | Example |
+|----------|-------------------|---------|
+| Python | `ctypes` (or via [pywfm](https://github.com/SGMOModeling/PyWFM)) | [`verify-dll-regression.py`](verify-dll-regression.py), [pywfm `IWFMModel`](https://github.com/SGMOModeling/PyWFM/blob/track7-handle-based-api/src/pywfm/model.py) |
+| C# | P/Invoke (`[DllImport]`, `ref int` / `out int`) | — |
+| MATLAB | `loadlibrary` / `calllib` | — |
+| C / C++ | direct linkage against the import library | `SourceCode/IWFM_DLL/IWFM_Model_Exports_C.f90` (BIND(C) declarations) |
+| R | `.C` / `.Call` via the shared library | — |
+| Julia | `ccall` | — |
+| Java | JNA or JNI | — |
+
+Two repo-root scripts exercise the DLL ABI from Python and double as templates for downstream consumers: [`verify-dll-regression.py`](verify-dll-regression.py) (DLL-layer byte-identical regression vs. the sample model) and [`time-c2vsim-inquiry.py`](time-c2vsim-inquiry.py) (inquiry-mode cold/warm load timing).
+
+**Breaking change in `v2025.0.1747-rev2`.** Bindings written against earlier IWFM C DLLs that called `IW_Model_Switch` or `IW_Model_GetCurrentModelID` will not link against this release — both exports were removed. Update bindings to (a) capture the `iModelID` returned by `IW_Model_New` and (b) pass it as the first argument to every subsequent `IW_Model_*` call. The pywfm [`track7-handle-based-api` branch](https://github.com/SGMOModeling/PyWFM/tree/track7-handle-based-api) is the reference implementation of the migration.
 
 ## Requirements
 
