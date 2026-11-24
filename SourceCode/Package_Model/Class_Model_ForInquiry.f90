@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2025  
+!  Copyright (C) 2005-2026  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -1812,7 +1812,8 @@ CONTAINS
     CALL ModelDataFile%WriteData(AppGW%GetNDrain()) 
     
     !Write stream node IDs with budget and their names
-    DEALLOCATE (iIDs , cNames, STAT=iErrorCode)
+    DEALLOCATE (iIDs , STAT=iErrorCode)   !Deallocate each of the arrays seperately to be on the safe side
+    DEALLOCATE (cNames, STAT=iErrorCode)  ! so that compiler attempts to deallocate both of the arrays
     CALL AppStream%GetStrmNodeIDs_WithBudget(iIDs)
     ALLOCATE (cNames(SIZE(iIDs)))
     cNames = ''
@@ -1823,7 +1824,8 @@ CONTAINS
     
     !Write stream reach IDs and names
     iNData = AppStream%GetNReaches()
-    DEALLOCATE (iIDs , cNames , STAT=iErrorCode)
+    DEALLOCATE (iIDs , STAT=iErrorCode)   !Deallocate each of the arrays seperately to be on the safe side
+    DEALLOCATE (cNames, STAT=iErrorCode)  ! so that compiler attempts to deallocate both of the arrays
     ALLOCATE (iIDs(iNData) , cNames(iNData))
     cNames = ''
     CALL AppStream%GetReachIDs(iIDs)
@@ -1833,7 +1835,8 @@ CONTAINS
     CALL ModelDataFile%WriteData(cNames)
     
     !Write diversion IDs and names
-    DEALLOCATE (iIDs , cNames , STAT=iErrorCode)
+    DEALLOCATE (iIDs , STAT=iErrorCode)   !Deallocate each of the arrays seperately to be on the safe side
+    DEALLOCATE (cNames, STAT=iErrorCode)  ! so that compiler attempts to deallocate both of the arrays
     iNData = AppStream%GetNDiver()
     ALLOCATE(iIDs(iNData) , cNames(iNData))
     cNames = ''
@@ -1844,7 +1847,8 @@ CONTAINS
     CALL ModelDataFile%WriteData(cNames)
     
     !Write stream hydrograph IDs and names
-    DEALLOCATE (iIDs , cNames , STAT=iErrorCode)
+    DEALLOCATE (iIDs , STAT=iErrorCode)   !Deallocate each of the arrays seperately to be on the safe side
+    DEALLOCATE (cNames, STAT=iErrorCode)  ! so that compiler attempts to deallocate both of the arrays
     iNData = AppStream%GetNHydrographs()
     ALLOCATE(iIDs(iNData) , cNames(iNData))
     cNames = ''
@@ -1863,7 +1867,8 @@ CONTAINS
     CALL ModelDataFile%WriteData(iIDs)
     
     !Write gw hydrograph IDs and names
-    DEALLOCATE (iIDs , cNames , STAT=iErrorCode)
+    DEALLOCATE (iIDs , STAT=iErrorCode)   !Deallocate each of the arrays seperately to be on the safe side
+    DEALLOCATE (cNames, STAT=iErrorCode)  ! so that compiler attempts to deallocate both of the arrays
     iNData = AppGW%GetNHydrographs(f_iLocationType_GWHeadObs)
     ALLOCATE(iIDs(iNData) , cNames(iNData))
     cNames = ''
@@ -1874,7 +1879,8 @@ CONTAINS
     CALL ModelDataFile%WriteData(cNames)
     
     !Write subsidence hydrograph IDs and names
-    DEALLOCATE (iIDs , cNames , STAT=iErrorCode)
+    DEALLOCATE (iIDs , STAT=iErrorCode)   !Deallocate each of the arrays seperately to be on the safe side
+    DEALLOCATE (cNames, STAT=iErrorCode)  ! so that compiler attempts to deallocate both of the arrays
     iNData = AppGW%GetNHydrographs(f_iLocationType_SubsidenceObs)
     ALLOCATE(iIDs(iNData) , cNames(iNData))
     cNames = ''
@@ -1885,7 +1891,8 @@ CONTAINS
     CALL ModelDataFile%WriteData(cNames)
     
     !Write tile drain hydrograph IDs and names
-    DEALLOCATE (iIDs , cNames , STAT=iErrorCode)
+    DEALLOCATE (iIDs , STAT=iErrorCode)   !Deallocate each of the arrays seperately to be on the safe side
+    DEALLOCATE (cNames, STAT=iErrorCode)  ! so that compiler attempts to deallocate both of the arrays
     iNData = AppGW%GetNHydrographs(f_iLocationType_TileDrainObs)
     ALLOCATE(iIDs(iNData) , cNames(iNData))
     cNames = ''

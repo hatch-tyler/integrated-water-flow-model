@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2025  
+!  Copyright (C) 2005-2026  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -74,6 +74,7 @@ MODULE Class_LayerBC
             LayerBC_GetTSFlowBCColumns             , &
             LayerBC_GetTSHeadBCColumns             , &
             LayerBC_GetNetBCFlow                   , &
+            LayerBC_GetBCFlowWithBCTypeNodeIndex   , &
             LayerBC_GetNetBCFlowWithBCType         , &
             LayerBC_GetNetBCFlowWithBCType_AllNodes, &
             LayerBC_SetTSBoundaryConditions        , &
@@ -243,7 +244,7 @@ CONTAINS
     cTimeUnit = ADJUSTL(StripTextUntilCharacter(ALine,'/'))
     
     !Make sure time unit is recognized
-    IF (IsTimeIntervalValid(cTimeUnit) .EQ. 0) THEN
+    IF (.NOT. IsTimeIntervalValid(cTimeUnit)) THEN
         CALL SetLastMessage(TRIM(cTimeUnit) // ' in Specified Flow Boundary Conditions File is not a recognized time unit!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
@@ -527,7 +528,7 @@ CONTAINS
     cTimeUnit = ADJUSTL(StripTextUntilCharacter(ALine,'/'))
     
     !Make sure time unit is recognized
-    IF (IsTimeIntervalValid(cTimeUnit) .EQ. 0) THEN
+    IF (.NOT. IsTimeIntervalValid(cTimeUnit)) THEN
         CALL SetLastMessage(TRIM(cTimeUnit) // ' in General Head Boundary Conditions File is not a recognized time unit!',f_iFatal,ThisProcedure)
           iStat = -1
           RETURN
@@ -664,12 +665,12 @@ CONTAINS
     cTimeUnitConductance = ADJUSTL(StripTextUntilCharacter(ALine,'/'))
         
     !Make sure that time units are recognized
-    IF (IsTimeIntervalValid(cTimeUnit) .EQ. 0) THEN
+    IF (.NOT. IsTimeIntervalValid(cTimeUnit)) THEN
         CALL SetLastMessage(TRIM(cTimeUnit) // ' in Constrained General Head Boundary Conditions File is not a recognized time unit!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
-    IF (IsTimeIntervalValid(cTimeUnitConductance) .EQ. 0) THEN
+    IF (.NOT. IsTimeIntervalValid(cTimeUnitConductance)) THEN
         CALL SetLastMessage(TRIM(cTimeUnitConductance) // ' in Constrained General Head Boundary Conditions File is not a recognized time unit!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
@@ -1033,6 +1034,69 @@ CONTAINS
   
   
   ! -------------------------------------------------------------
+  ! --- GET THE FLOW AT A BOUNDARY NODE WITH A SPECIFIC B.C. TYPE AT A LAYER GIVEN THE INDEX OF THE BC.
+  ! --- Note: This procedure is used by Simulation_MM in multi-model simulations
+  ! -------------------------------------------------------------
+  PURE FUNCTION LayerBC_GetBCFlowWithBCTypeNodeIndex(iNode,iIndex,iBCType,LayerBC) RESULT(rFlow)
+    INTEGER,INTENT(IN)           :: iNode,iIndex,iBCType
+    TYPE(LayerBCType),INTENT(IN) :: LayerBC
+    REAL(8)                      :: rFlow
+
+    !Local variables
+    INTEGER :: indx,iListOfBCIndices(200),iCount
+    
+    !Initialize
+    rFlow = 0.0
+    
+    SELECT CASE (iBCType)
+        CASE (f_iSpFlowBCID)
+            !There can only be one Specified Flow BC for a given node so ignore iIndex
+            DO indx=1,LayerBC%NSpecFlowBC
+                IF (LayerBC%SpecFlowBC(indx)%iNode .EQ. iNode) THEN
+                    rFlow = LayerBC%SpecFlowBC(indx)%rFlow
+                    EXIT
+                END IF
+            END DO
+        
+        CASE (f_iSpHeadBCID)
+            !There can only be one Specified Flow BC for a given node so ignore iIndex
+            DO indx=1,LayerBC%NSpecHeadBC
+                IF (LayerBC%SpecHeadBC(indx)%iNode .EQ. iNode) THEN
+                    rFlow = LayerBC%SpecHeadBC(indx)%rFlow
+                    EXIT
+                END IF
+            END DO
+            
+        CASE (f_iGHBCID)
+            !First make a list of GHBCs that has the node iNode
+            iCount = 0
+            DO indx=1,LayerBC%NGHBC
+                IF (LayerBC%GHBC(indx)%iNode .EQ. iNode) THEN
+                    iCount                   = iCount + 1
+                    iListOfBCIndices(iCount) = indx
+                END IF
+            END DO
+            !Now extract the flow based on iIndex
+            rFlow = LayerBC%GHBC(iListOfBCIndices(iIndex))%rFlow
+            
+        CASE (f_iConstrainedGHBCID)
+            !First make a list of Constrained GHBCs that has the node iNode
+            iCount = 0
+            DO indx=1,LayerBC%NConstrainedGHBC
+                IF (LayerBC%ConstrainedGHBC(indx)%iNode .EQ. iNode) THEN
+                    iCount                   = iCount + 1
+                    iListOfBCIndices(iCount) = indx
+                END IF
+            END DO
+            !Now extract the flow based on iIndex
+            rFlow = LayerBC%ConstrainedGHBC(iListOfBCIndices(iIndex))%rFlow
+            
+    END SELECT
+
+  END FUNCTION LayerBC_GetBCFlowWithBCTypeNodeIndex
+
+    
+  ! -------------------------------------------------------------
   ! --- GET THE NET FLOW AT A BOUNDARY NODE WITH A SPECIFIC B.C. TYPE AT LAYER
   ! -------------------------------------------------------------
   PURE FUNCTION LayerBC_GetNetBCFlowWithBCType(iNode,iBCType,LayerBC) RESULT(Flow)
@@ -1209,31 +1273,18 @@ CONTAINS
                 LayerBC%GHBC(1)%iTSColumn    = iTSColLocal
                 LayerBC%GHBC(1)%rConductance = rConductance
                 LayerBC%NGHBC                = 1
-            !There are general head b.c.s
+            !There are general head b.c.s (allow definining more than one GHB for the same node)
             ELSE
-                iLoc = LocateInList(iNode,LayerBC%GHBC%iNode)
-                !Add the b.c. as new b.c.
-                IF (iLoc .EQ. 0) THEN
-                    iNBC          = LayerBC%NGHBC
-                    LayerBC%NGHBC = iNBC + 1
-                    ALLOCATE (TempGHBC(iNBC+1))
-                    TempGHBC(1:iNBC)              = LayerBC%GHBC
-                    TempGHBC(iNBC+1)%iNode        = iNode
-                    TempGHBC(iNBC+1)%iTSColumn    = iTSColLocal
-                    TempGHBC(iNBC+1)%rConductance = rConductance
-                    CALL MOVE_ALLOC(TempGHBC , LayerBC%GHBC)
-                    !Order nodes
-                    iNBC = iNBC + 1
-                    ALLOCATE (iNodes(iNBC) , iRanks(iNBC) , TempGHBC(iNBC))
-                    TempGHBC     = LayerBC%GHBC
-                    iNodes       = LayerBC%GHBC%iNode
-                    iRanks       = OrderBCNodes(iNodes)
-                    LayerBC%GHBC = TempGHBC(iRanks)
-                !Replace previous b.c.
-                ELSE
-                    LayerBC%GHBC(iLoc)%rConductance = rConductance
-                    LayerBC%GHBC(iLoc)%iTSColumn    = iTSColLocal
-                END IF
+                iNBC          = LayerBC%NGHBC
+                LayerBC%NGHBC = iNBC + 1
+                ALLOCATE (TempGHBC(iNBC+1))
+                TempGHBC(1:iNBC)              = LayerBC%GHBC
+                TempGHBC(iNBC+1)%iNode        = iNode
+                TempGHBC(iNBC+1)%iTSColumn    = iTSColLocal
+                TempGHBC(iNBC+1)%rConductance = rConductance
+                CALL MOVE_ALLOC(TempGHBC , LayerBC%GHBC)
+                !DO NOT order nodes; there can be more than one GHB defined for the same node 
+                !  and Simulation_MM relies on the original (un-ordered) list to find the correct BC info
             END IF      
             
             
@@ -1247,35 +1298,20 @@ CONTAINS
                 LayerBC%ConstrainedGHBC(1)%rConductance        = rConductance
                 LayerBC%ConstrainedGHBC(1)%iMaxFlowTSColumn    = iTSColMaxBCFlowLocal
                 LayerBC%NConstrainedGHBC                       = 1
-            !There are general head b.c.s
+            !There are constrained general head b.c.s (allow more than one constrained GHB at a node)
             ELSE
-                iLoc = LocateInList(iNode,LayerBC%ConstrainedGHBC%iNode)
-                !Add the b.c. as new b.c.
-                IF (iLoc .EQ. 0) THEN
-                    iNBC                     = LayerBC%NConstrainedGHBC
-                    LayerBC%NConstrainedGHBC = iNBC + 1
-                    ALLOCATE (TempConstrainedGHBC(iNBC+1))
-                    TempConstrainedGHBC(1:iNBC)                     = LayerBC%ConstrainedGHBC
-                    TempConstrainedGHBC(iNBC+1)%iNode               = iNode
-                    TempConstrainedGHBC(iNBC+1)%iTSColumn           = iTSColLocal
-                    TempConstrainedGHBC(iNBC+1)%rConstrainingBCHead = rConstrainingBCHead
-                    TempConstrainedGHBC(iNBC+1)%rConductance        = rConductance
-                    TempConstrainedGHBC(iNBC+1)%iMaxFlowTSColumn    = iTSColMaxBCFlowLocal
-                    CALL MOVE_ALLOC(TempConstrainedGHBC , LayerBC%ConstrainedGHBC)
-                    !Order nodes
-                    iNBC = iNBC + 1
-                    ALLOCATE (iNodes(iNBC) , iRanks(iNBC) , TempConstrainedGHBC(iNBC))
-                    TempGHBC                = LayerBC%GHBC
-                    iNodes                  = LayerBC%ConstrainedGHBC%iNode
-                    iRanks                  = OrderBCNodes(iNodes)
-                    LayerBC%ConstrainedGHBC = TempConstrainedGHBC(iRanks)
-                !Replace previous b.c.
-                ELSE
-                    LayerBC%ConstrainedGHBC(iLoc)%rConstrainingBCHead = rConstrainingBCHead
-                    LayerBC%ConstrainedGHBC(iLoc)%rConductance        = rConductance
-                    LayerBC%ConstrainedGHBC(iLoc)%iTSColumn           = iTSColLocal
-                    LayerBC%ConstrainedGHBC(iLoc)%iMaxFlowTSColumn    = iTSColMaxBCFlowLocal
-                END IF
+                iNBC                     = LayerBC%NConstrainedGHBC
+                LayerBC%NConstrainedGHBC = iNBC + 1
+                ALLOCATE (TempConstrainedGHBC(iNBC+1))
+                TempConstrainedGHBC(1:iNBC)                     = LayerBC%ConstrainedGHBC
+                TempConstrainedGHBC(iNBC+1)%iNode               = iNode
+                TempConstrainedGHBC(iNBC+1)%iTSColumn           = iTSColLocal
+                TempConstrainedGHBC(iNBC+1)%rConstrainingBCHead = rConstrainingBCHead
+                TempConstrainedGHBC(iNBC+1)%rConductance        = rConductance
+                TempConstrainedGHBC(iNBC+1)%iMaxFlowTSColumn    = iTSColMaxBCFlowLocal
+                CALL MOVE_ALLOC(TempConstrainedGHBC , LayerBC%ConstrainedGHBC)
+                !DO NOT order nodes; there can be more than one Constrained GHB defined for the same node 
+                !  and Simulation_MM relies on the original (un-ordered) list to find the correct BC info
             END IF      
 
     END SELECT
@@ -1286,15 +1322,16 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- SET BOUNDARY CONDITION AT A NODE 
   ! -------------------------------------------------------------
-  SUBROUTINE SetBC(LayerBC,iNode,iBCType,iStat,rFlow,rHead,rMaxBCFlow,rConductance,rConstrainingBCHead)
+  SUBROUTINE SetBC(LayerBC,iNode,iBCType,iStat,iBCIndex,rFlow,rHead,rMaxBCFlow,rConductance,rConstrainingBCHead)
     CLASS(LayerBCType)          :: LayerBC
     INTEGER,INTENT(IN)          :: iNode,iBCType
     INTEGER,INTENT(OUT)         :: iStat
+    INTEGER,OPTIONAL,INTENT(IN) :: iBCIndex !If this is provided, find the list of the BCs specified for the node and apply the BC to iBCIndex item within this list
     REAL(8),OPTIONAL,INTENT(IN) :: rFlow,rHead,rMaxBCFlow,rConductance,rConstrainingBCHead
     
     !Local variables
     CHARACTER(LEN=ModNameLen+5) :: ThisProcedure = ModName // 'SetBC'
-    INTEGER                     :: iLoc
+    INTEGER                     :: iLoc,iBCList(200),iCount,indx
     
     !Initialize
     iStat = 0
@@ -1302,7 +1339,11 @@ CONTAINS
     !Set b.c.
     SELECT CASE (iBCType)
         CASE (f_iSpFlowBCID)
-            iLoc = LocateInList(iNode,LayerBC%SpecFlowBC%iNode)
+            IF (PRESENT(iBCIndex)) THEN
+                iLoc = iBCIndex
+            ELSE
+                iLoc = LocateInList(iNode,LayerBC%SpecFlowBC%iNode)
+            END IF
             !Add BC node if it is not defined before
             IF (iLoc .LT. 1) THEN
                 CALL SetBCNode(LayerBC,iNode,iBCType,iStat)
@@ -1323,7 +1364,19 @@ CONTAINS
             
             
         CASE (f_iGHBCID)
-            iLoc = LocateInList(iNode,LayerBC%GHBC%iNode)
+            IF (PRESENT(iBCIndex)) THEN
+                !Find all the GHBCs listed for the node, then convert iBCIndex to the item within the global list
+                iCount = 0
+                DO indx=1,LayerBC%NGHBC
+                    IF (LayerBC%GHBC(indx)%iNode .EQ. iNode) THEN
+                        iCount          = iCount + 1
+                        iBCList(iCount) = indx
+                    END IF
+                END DO
+                iLoc = iBCList(iBCIndex)
+            ELSE
+                iLoc = LocateInList(iNode,LayerBC%GHBC%iNode)
+            END IF
             !Add BC node if it is not defined before
             IF (iLoc .LT. 1) THEN
                 CALL SetBCNode(LayerBC,iNode,iBCType,iStat,rConductance=rConductance)
@@ -1334,7 +1387,19 @@ CONTAINS
             
             
         CASE (f_iConstrainedGHBCID)
-            iLoc = LocateInList(iNode,LayerBC%ConstrainedGHBC%iNode)
+            IF (PRESENT(iBCIndex)) THEN
+                !Find all the GHBCs listed for the node, then convert iBCIndex to the item within the global list
+                iCount = 0
+                DO indx=1,LayerBC%NConstrainedGHBC
+                    IF (LayerBC%ConstrainedGHBC(indx)%iNode .EQ. iNode) THEN
+                        iCount          = iCount + 1
+                        iBCList(iCount) = indx
+                    END IF
+                END DO
+                iLoc = iBCList(iBCIndex)
+            ELSE
+                iLoc = LocateInList(iNode,LayerBC%ConstrainedGHBC%iNode)
+            END IF
             !Add BC node if it is not defined before
             IF (iLoc .LT. 1) THEN
                 CALL SetBCNode(LayerBC,iNode,iBCType,iStat,rConductance=rConductance,rConstrainingBCHead=rConstrainingBCHead)
@@ -1631,6 +1696,7 @@ CONTAINS
     CHARACTER(LEN=ModNameLen+24) :: ThisProcedure = ModName // 'LayerBC_CheckConsistency'
     CHARACTER                    :: cMessage*200
     INTEGER                      :: indxLayer,NBCNode,ErrorCode,iNode,iNode1,indxNode,indxNode1,indx,indx1,iColFlow
+    LOGICAL                      :: lError
     INTEGER,ALLOCATABLE          :: iNodes(:),iBCTypes(:),iTSFlowBCColumns(:),iTSHeadBCColumns(:)
     
     !Initialize
@@ -1646,16 +1712,40 @@ CONTAINS
         iNodes   = LayerBC_GetNodesWithBC(NBCNode,LayerBC(indxLayer))
         iBCTypes = GetBCTypes(NBCNode,LayerBC(indxLayer))
         
-        !Check if more than one b.c. is specified for a given node
+        !Check if more than one b.c. is specified for a given node, but allow multiple GHBs to be defined for the same node
+        lError = .FALSE.
         DO indxNode=1,NBCNode
            iNode = iNodes(indxNode)
            DO indxNode1=indxNode+1,NBCNode
                iNode1 = iNodes(indxNode1)
                IF (iNode .EQ. iNode1) THEN
-                   cMessage = 'Multiple boundary conditions are specified for node '//TRIM(IntToText(NodeIDs(iNode)))//' at layer '//TRIM(IntToText(indxLayer))//' ('
-                   cMessage = TRIM(cMessage) // TRIM(f_cBCDescriptor(iBCTypes(indxNode))) // ' ,'
-                   cMessage = TRIM(cMessage) //' ' // TRIM(f_cBCDescriptor(iBCTypes(indxNode1)))// ').'
-                   CALL SetLastMessage(TRIM(cMessage),f_iFatal,ThisProcedure)
+                   !Allow multiple GHBs and constrained GHBs at a given node
+                   IF (iBCTypes(indxNode1).EQ.f_iGHBCID) THEN
+                       IF (iBCTypes(indxNode).EQ.f_iGHBCID) CYCLE   
+                   END IF 
+                   IF (iBCTypes(indxNode1).EQ.f_iConstrainedGHBCID) THEN
+                       IF (iBCTypes(indxNode).EQ.f_iConstrainedGHBCID) CYCLE   
+                   END IF 
+                   !But don't allow mixing GHBs and Constrained GHBs
+                   IF (iBCTypes(indxNode1) .EQ. f_iGHBCID) THEN
+                       IF (iBCTypes(indxNode) .EQ. f_iConstrainedGHBCID) lError = .TRUE.
+                   ELSEIF (iBCTypes(indxNode1) .EQ. f_iConstrainedGHBCID) THEN 
+                       IF (iBCTypes(indxNode) .EQ. f_iGHBCID) lError = .TRUE.
+                   END IF 
+                   IF (lError) THEN
+                       MessageArray(1) = 'Error in groundwater boundary conditions!'
+                       MessageArray(2) = 'A combination of General Head and Constrained General Head boundary conditions'
+                       MessageArray(3) = 'are specified at node '//TRIM(IntToText(iNode))//' and layer '//TRIM(IntToText(indxLayer))//'.'
+                       CALL SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+                       iStat = -1
+                       RETURN
+                   END IF 
+                   !This is for other types of BC errors
+                   MessageArray(1) = 'Multiple boundary conditions are specified for node '//TRIM(IntToText(NodeIDs(iNode)))//' at layer '//TRIM(IntToText(indxLayer))//' ('
+                   MessageArray(1) = TRIM(MessageArray(1)) // TRIM(f_cBCDescriptor(iBCTypes(indxNode))) // ' ,'
+                   MessageArray(1) = TRIM(MessageArray(1)) //' ' // TRIM(f_cBCDescriptor(iBCTypes(indxNode1)))// ').'
+                   MessageArray(2) = '-- Note that multiple General Head and Constrained General Head BCs at a node are allowed.'
+                   CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
                    iStat = -1
                    RETURN
                 END IF

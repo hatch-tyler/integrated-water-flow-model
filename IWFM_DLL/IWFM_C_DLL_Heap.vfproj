@@ -80,6 +80,24 @@
 						<File RelativePath="..\SourceCode\IWFM-kernel\IWFM_Util\Utilities\TimeSeriesUtilities.f90"/>
 					</Filter>
 				</Filter>
+				<Filter Name="Package_Transport">
+					<Filter Name="LagrangianTransport">
+						<Filter Name="Package_SoluteTransport">
+							<File RelativePath="..\SourceCode\IWFM-kernel\Package_Transport\LagrangianTransport\Package_ParticleTracking\Package_ParticleTracking.f90"/>
+						</Filter>
+						<Filter Name="Package_ParticleTracking">
+							<File RelativePath="..\SourceCode\IWFM-kernel\Package_Transport\LagrangianTransport\Package_SoluteTransport\Package_LagrangianSoluteTransport.f90"/>
+							<File RelativePath="..\SourceCode\IWFM-kernel\Package_Transport\LagrangianTransport\Package_SoluteTransport\RandomNumberGeneratorZig.f90"/>
+						</Filter>
+						<File RelativePath="..\SourceCode\IWFM-kernel\Package_Transport\LagrangianTransport\Class_LagrangianTransport.f90"/>
+						<File RelativePath="..\SourceCode\IWFM-kernel\Package_Transport\LagrangianTransport\LagrangianParcel_LinkedList.f90"/>
+					</Filter>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_Transport\Class_TransportBase.f90">
+					</File>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_Transport\TransportDataReader.f90"/>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_Transport\TransportManager.f90">
+					</File>
+				</Filter>
 				<Filter Name="Package_AppGW">
 					<Filter Name="BC">
 						<File RelativePath="..\SourceCode\IWFM-kernel\Package_AppGW\BC\Class_AppBC.f90"/>
@@ -129,17 +147,13 @@
 				</Filter>
 				<Filter Name="Package_AppSmallWatershed">
 					<Filter Name="Version_4.0">
-						<File RelativePath="..\SourceCode\IWFM-kernel\Package_AppSmallWatershed\Version_4.0\Class_AppSmallWatershed_v40.f90">
-						</File>
+						<File RelativePath="..\SourceCode\IWFM-kernel\Package_AppSmallWatershed\Version_4.0\Class_AppSmallWatershed_v40.f90"/>
 					</Filter>
 					<Filter Name="Version_4.1">
-						<File RelativePath="..\SourceCode\IWFM-kernel\Package_AppSmallWatershed\Version_4.1\Class_AppSmallWatershed_v41.f90">
-						</File>
+						<File RelativePath="..\SourceCode\IWFM-kernel\Package_AppSmallWatershed\Version_4.1\Class_AppSmallWatershed_v41.f90"/>
 					</Filter>
-					<File RelativePath="..\SourceCode\IWFM-kernel\Package_AppSmallWatershed\Class_BaseAppSmallWatershed.f90">
-					</File>
-					<File RelativePath="..\SourceCode\IWFM-kernel\Package_AppSmallWatershed\Package_AppSmallWatershed.f90">
-					</File>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_AppSmallWatershed\Class_BaseAppSmallWatershed.f90"/>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_AppSmallWatershed\Package_AppSmallWatershed.f90"/>
 				</Filter>
 				<Filter Name="Package_AppStream">
 					<Filter Name="Version_4.0">

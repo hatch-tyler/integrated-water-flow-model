@@ -1,6 +1,6 @@
 !***********************************************************************                     
 !  Integrated Water Flow Model (IWFM)                                                        
-!  Copyright (C) 2005-2025                                                                   
+!  Copyright (C) 2005-2026                                                                   
 !  State of California, Department of Water Resources                                        
 !                                                                                            
 !  This program is free software; you can redistribute it and/or                             
@@ -22,37 +22,44 @@
 !***********************************************************************                     
 MODULE RootZone_v413                                                                         
   !$ USE OMP_LIB  
-  USE IWFM_Kernel_Version     , ONLY: IWFMKernelVersion
-  USE MessageLogger           , ONLY: SetLastMessage                                          , &
-                                      EchoProgress                                            , &
-                                      MessageArray                                            , &
-                                      f_iFatal                                                                               
-  USE GeneralUtilities        , ONLY: StripTextUntilCharacter                                 , &
-                                      CleanSpecialCharacters                                  , &
-                                      EstablishAbsolutePathFileName                           , &
-                                      ConvertID_To_Index                                      , &
-                                      LocateInList                                            , &
-                                      IntToText                                                                                
-  USE TimeSeriesUtilities     , ONLY: TimeStepType                                            , &                             
-                                      IncrementTimeStamp                                      , &
-                                      NPeriods                                                , &
-                                      OPERATOR(.TSGE.)
-  USE IOInterface             , ONLY: GenericFileType                                         , &
-                                      RealTSDataInFileType                                    
-  USE Package_Misc            , ONLY: f_iLandUse_Ag                                           , &
-                                      f_iLandUse_Urb                                          , &
-                                      f_iSupply_Diversion                           
-  USE Package_Discretization  , ONLY: AppGridType                                             
-  USE Package_PrecipitationET , ONLY: PrecipitationType                                       , &
-                                      ETType                                                 
-  USE Package_UnsatZone       , ONLY: f_iKUnsatMethodList                                    
-  USE Package_Budget          , ONLY: f_iMaxLocationNameLen_Budget  => f_iMaxLocationNameLen     
-  USE Util_RootZone_v41       , ONLY: AgRootZoneBudRawFile_New                                , &
-                                      LUAreaScaleFactorOutFile_New
-  USE RootZone_v412           , ONLY: RootZone_v412_Type                                      , &
-                                      AgLWUseBudRawFile_New                                   , &                               
-                                      NonPondedAgRootZoneBudRawFile_New                       , &         
-                                      PondedAgRootZoneBudRawFile_New                                
+  USE IWFM_Kernel_Version             , ONLY: IWFMKernelVersion
+  USE MessageLogger                   , ONLY: SetLastMessage                                          , &
+                                              EchoProgress                                            , &
+                                              MessageArray                                            , &
+                                              f_iFatal                                                                               
+  USE GeneralUtilities                , ONLY: StripTextUntilCharacter                                 , &
+                                              CleanSpecialCharacters                                  , &
+                                              EstablishAbsolutePathFileName                           , &
+                                              ConvertID_To_Index                                      , &
+                                              LocateInList                                            , &
+                                              IntToText                                                                                
+  USE TimeSeriesUtilities             , ONLY: TimeStepType                                            , &                             
+                                              IncrementTimeStamp                                      , &
+                                              NPeriods                                                , &
+                                              OPERATOR(.TSGE.)
+  USE IOInterface                     , ONLY: GenericFileType                                         , &
+                                              RealTSDataInFileType                                    
+  USE Package_Misc                    , ONLY: f_iLandUse_NonPondedAg                                  , &
+                                              f_iLandUse_PondedAg                                     , &
+                                              f_iLandUse_NVRV                                         , &
+                                              f_iLandUse_Ag                                           , &
+                                              f_iLandUse_Urb                                          , &
+                                              f_iSupply_Diversion                           
+  USE Package_Discretization          , ONLY: AppGridType                                             
+  USE Package_PrecipitationET         , ONLY: PrecipitationType                                       , &
+                                              ETType                                                 
+  USE Package_UnsatZone               , ONLY: f_iKUnsatMethodList                                    
+  USE Package_Budget                  , ONLY: f_iMaxLocationNameLen_Budget  => f_iMaxLocationNameLen     
+  USE Class_NonPondedAgLandUse_v41    , ONLY: NonPondedAgLandUse_v41_Type                       
+  USE Class_PondedAgLandUse_v41       , ONLY: PondedAgLandUse_v41_Type                     
+  USE Class_UrbanLandUse_v41          , ONLY: UrbanLandUse_v41_Type                             
+  USE Class_NativeRiparianLandUse_v41 , ONLY: NativeRiparianLandUse_v41_Type                    
+  USE Util_RootZone_v41               , ONLY: AgRootZoneBudRawFile_New                                , &
+                                              LUAreaScaleFactorOutFile_New
+  USE RootZone_v412                   , ONLY: RootZone_v412_Type                                      , &
+                                              AgLWUseBudRawFile_New                                   , &                               
+                                              NonPondedAgRootZoneBudRawFile_New                       , &         
+                                              PondedAgRootZoneBudRawFile_New                                
   IMPLICIT NONE
   
     
@@ -80,18 +87,20 @@ MODULE RootZone_v413
   ! -------------------------------------------------------------
   TYPE,EXTENDS(RootZone_v412_Type) :: RootZone_v413_Type
       PRIVATE
-      INTEGER,ALLOCATABLE        :: iColCropCoeff_NonPondedAg(:,:)            !Column number for non-ponded ag crop coefficient for each (non-ponded crop,element)  
-      INTEGER,ALLOCATABLE        :: iColCropCoeff_PondedAg(:,:)               !Column number for ponded ag crop coefficient for each (non-ponded crop,element) 
-      INTEGER,ALLOCATABLE        :: iColCropCoeff_Urb(:)                      !Column number for urban ET coefficient for each (element)  
-      INTEGER,ALLOCATABLE        :: iColCropCoeff_NVRV(:,:)                   !Column number for native and riparian veg habitat coefficient for each (element)  
+      INTEGER,ALLOCATABLE :: iColCropCoeff_NonPondedAg(:,:)            !Column number for non-ponded ag crop coefficient for each (non-ponded crop,element)  
+      INTEGER,ALLOCATABLE :: iColCropCoeff_PondedAg(:,:)               !Column number for ponded ag crop coefficient for each (non-ponded crop,element) 
+      INTEGER,ALLOCATABLE :: iColCropCoeff_Urb(:)                      !Column number for urban ET coefficient for each (element)  
+      INTEGER,ALLOCATABLE :: iColCropCoeff_NVRV(:,:)                   !Column number for native and riparian veg habitat coefficient for each (element)  
   CONTAINS
-      PROCEDURE,PASS :: New                      => RootZone_v413_New
-      PROCEDURE,PASS :: KillRZImplementation     => RootZone_v413_Kill
-      PROCEDURE,PASS :: ComputeWaterDemand       => RootZone_v413_ComputeWaterDemand
-      PROCEDURE,PASS :: ComputeFutureWaterDemand => RootZone_v413_ComputeFutureWaterDemand
-      PROCEDURE,PASS :: ReadTSData               => RootZone_v413_ReadTSData
-      PROCEDURE,PASS :: PrintResults             => RootZone_v413_PrintResults
-      PROCEDURE,PASS :: Simulate                 => RootZone_v413_Simulate
+      PROCEDURE,PASS   :: New                                          => RootZone_v413_New
+      PROCEDURE,PASS   :: KillRZImplementation                         => RootZone_v413_Kill
+      PROCEDURE,NOPASS :: GetLandUseAreasForTimePeriod_FileNotOpen     => RootZone_v413_GetLandUseAreasForTimePeriod_FileNotOpen
+      PROCEDURE,NOPASS :: GetLandUseAreasForTimePeriod_All_FileNotOpen => RootZone_v413_GetLandUseAreasForTimePeriod_All_FileNotOpen
+      PROCEDURE,PASS   :: ComputeWaterDemand                           => RootZone_v413_ComputeWaterDemand
+      PROCEDURE,PASS   :: ComputeFutureWaterDemand                     => RootZone_v413_ComputeFutureWaterDemand
+      PROCEDURE,PASS   :: ReadTSData                                   => RootZone_v413_ReadTSData
+      PROCEDURE,PASS   :: PrintResults                                 => RootZone_v413_PrintResults
+      PROCEDURE,PASS   :: Simulate                                     => RootZone_v413_Simulate
   END TYPE RootZone_v413_Type
 
   
@@ -183,25 +192,25 @@ CONTAINS
     END IF
 
     !Allocate memory
-    ALLOCATE (RootZone%ElemSoilsData(iNElements)                          , &
-              RootZone%HydCondPonded(iNElements)                          , &
-              RootZone%ElemPrecipData(iNElements)                         , &
-              RootZone%ElemSupply(iNElements)                             , &
-              RootZone%ElemDevelopedArea(iNElements)                      , &
-              RootZone%Ratio_ElemSupplyToRegionSupply_Ag(iNElements)      , &
-              RootZone%Ratio_ElemSupplyToRegionSupply_Urb(iNElements)     , &
-              RootZone%RSoilM_P(iNRegion+1,3)                             , &  !Includes pond storage; 2nd Dim: 1 = Ag; 2 = Urban; 3 = Native & Riparain Veg
-              RootZone%RSoilM(iNRegion+1,3)                               , &  !Includes pond storage; 2nd Dim: 1 = Ag; 2 = Urban; 3 = Native & Riparain Veg
-              RootZone%Flags%lLakeElems(iNElements)                       , &
-              !RootZone%iColCropCoeff_NonPondedAg(iNCrops,iNElements)     , &  !This array will be allocated in NonPondedAg class since we don't yet know iNCrops value
-              !RootZone%iColCropCoeff_PondedAg(iNPondedCrops,iNElements)  , &  !This array will be allocated in PondedAg class since we don't yet know iNPondedCrops value 
-              !RootZone%iColCropCoeff_Urb(iNElements)                     , &  !This array will be allocated in UrbanAg class
-              !RootZone%iColCropCoeff_NVRV(iNNVRViNElements)              , &  !This array will be allocated in NVRV class
-              RootZone%iColSurfaceFlowDestination_Ag(iNElements)          , &
-              RootZone%iColSurfaceFlowDestination_UrbIndoors(iNElements)  , &
-              RootZone%iColSurfaceFlowDestination_UrbOutdoors(iNElements) , &
-              RootZone%iColSurfaceFlowDestination_NVRV(iNElements)        , &
-              STAT=iErrorCode                                             )
+    ALLOCATE (RootZone%ElemSoilsData(iNElements)                                , &
+              RootZone%HydCondPonded(iNElements)                                , &
+              RootZone%ElemPrecipData(iNElements)                               , &
+              RootZone%ElemSupply(iNElements)                                   , &
+              RootZone%ElemDevelopedArea(iNElements)                            , &
+              RootZone%Ratio_ElemSupplyToRegionSupply_Ag(iNElements)            , &
+              RootZone%Ratio_ElemSupplyToRegionSupply_Urb(iNElements)           , &
+              RootZone%RSoilM_P(iNRegion+1,3)                                   , &  !Includes pond storage; 2nd Dim: 1 = Ag; 2 = Urban; 3 = Native & Riparain Veg
+              RootZone%RSoilM(iNRegion+1,3)                                     , &  !Includes pond storage; 2nd Dim: 1 = Ag; 2 = Urban; 3 = Native & Riparain Veg
+              RootZone%Flags%lLakeElems(iNElements)                             , &
+              !RootZone%iColCropCoeff_NonPondedAg(iNCrops,iNElements)           , &  !This array will be allocated in NonPondedAg class since we don't yet know iNCrops value
+              !RootZone%iColCropCoeff_PondedAg(iNPondedCrops,iNElements)        , &  !This array will be allocated in PondedAg class since we don't yet know iNPondedCrops value 
+              !RootZone%iColCropCoeff_Urb(iNElements)                           , &  !This array will be allocated in UrbanAg class
+              !RootZone%iColCropCoeff_NVRV(iNNVRViNElements)                    , &  !This array will be allocated in NVRV class
+              RootZone%iColSurfaceFlowDestination_Ag(iNElements)                , &
+              RootZone%iColSurfaceFlowDestination_UrbIndoors(iNElements)        , &
+              RootZone%iColSurfaceFlowDestination_UrbOutdoors(iNElements)       , &
+              RootZone%iColSurfaceFlowDestination_NVRV(iNElements)              , &
+              STAT=iErrorCode                                                   )
     IF (iErrorCode .NE. 0) THEN
         CALL SetLastMessage('Error in allocating memory for root zone soils data!',f_iFatal,ThisProcedure)
         iStat = -1
@@ -276,6 +285,7 @@ CONTAINS
                                           cProjectNameForDSS                                             , &
                                           cAbsPathFileName                                               , &
                                           cWorkingDirectory                                              , &
+                                          .TRUE.                                                         , &
                                           rFactCN                                                        , &
                                           AppGrid                                                        , &
                                           iElemIDs                                                       , &
@@ -298,6 +308,7 @@ CONTAINS
                                        cProjectNameForDSS                                          , &
                                        cAbsPathFileName                                            , &
                                        cWorkingDirectory                                           , &
+                                       .TRUE.                                                      , &
                                        rFactCN                                                     , &
                                        AppGrid                                                     , &
                                        iElemIDs                                                    , &
@@ -670,6 +681,191 @@ CONTAINS
 
   END SUBROUTINE RootZone_v413_Kill
 
+  
+  
+  
+! ******************************************************************
+! ******************************************************************
+! ******************************************************************
+! ***
+! *** GETTERS
+! ***
+! ******************************************************************
+! ******************************************************************
+! ******************************************************************
+
+  ! -------------------------------------------------------------
+  ! --- GET AREAS OF A LAND USE FOR AT ALL ELEMENTS FOR A TIME PERIOD WHEN FILE IS NOT OPEN
+  ! --- Note: This method is not meant to be called during a Simulation
+  ! -------------------------------------------------------------
+  SUBROUTINE RootZone_v413_GetLandUseAreasForTimePeriod_FileNotOpen(cRootZoneMainFileName,cWorkingDirectory,cBeginDate,cEndDate,TimeStep,AppGrid,iLUType,iLU,rLUAreas,iStat)
+    CHARACTER(LEN=*),INTENT(IN)   :: cRootZoneMainFileName,cWorkingDirectory,cBeginDate,cEndDate
+    TYPE(TimeStepType),INTENT(IN) :: TimeStep 
+    TYPE(AppGridType),INTENT(IN)  :: AppGrid
+    INTEGER,INTENT(IN)            :: iLUType,iLU
+    REAL(8),INTENT(OUT)           :: rLUAreas(:,:)  !For each (element,time); the array must be pre-dimensioned properly
+    INTEGER,INTENT(OUT)           :: iStat
+    
+    !Local variables
+    CHARACTER(LEN=ModNameLen+54)         :: ThisProcedure = ModName // 'RootZone_v413_GetLandUseAreasForTimePeriod_FileNotOpen'
+    TYPE(GenericFileType)                :: RootZoneMainFile
+    INTEGER                              :: indx
+    CHARACTER                            :: cALine*500
+    CHARACTER(:),ALLOCATABLE             :: cNPCropFileName,cPondedCropFileName,cUrbanFileName,cNVRVFileName
+    TYPE(NonPondedAgLandUse_v41_Type)    :: DummyNonPondedAg
+    TYPE(PondedAgLandUse_v41_Type)       :: DummyPondedAg
+    TYPE(UrbanLandUse_v41_Type)          :: DummyUrban
+    TYPE(NativeRiparianLandUse_v41_Type) :: DummyNVRV
+    
+    !Open main root zone file
+    CALL RootZoneMainFile%New(FileName=cRootZoneMainFileName,InputFile=.TRUE.,IsTSFile=.FALSE.,iStat=iStat)  ;  IF (iStat .NE. 0) RETURN
+    
+    !Read the version number and skip 4 lines of input data (total of 5 lines)
+    DO indx=1,5
+        CALL RootZoneMainFile%ReadData(cALine,iStat)  
+        IF (iStat .NE. 0) GOTO 10
+    END DO
+    
+    !Read the non-ponded ag main file name
+    CALL RootZoneMainFile%ReadData(cALine,iStat)  ;  IF (iStat .NE. 0) GOTO 10 
+    cALine = StripTextUntilCharacter(cALine,'/') 
+    CALL CleanSpecialCharacters(cALine)
+    CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(cALine)),cWorkingDirectory,cNPCropFileName)
+    
+    !Read the ponded ag main file name
+    CALL RootZoneMainFile%ReadData(cALine,iStat)  ;  IF (iStat .NE. 0) GOTO 10 
+    cALine = StripTextUntilCharacter(cALine,'/') 
+    CALL CleanSpecialCharacters(cALine)
+    CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(cALine)),cWorkingDirectory,cPondedCropFileName)
+
+    !Read the urban main file name
+    CALL RootZoneMainFile%ReadData(cALine,iStat)  ;  IF (iStat .NE. 0) GOTO 10 
+    cALine = StripTextUntilCharacter(cALine,'/') 
+    CALL CleanSpecialCharacters(cALine)
+    CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(cALine)),cWorkingDirectory,cUrbanFileName)
+    
+    !Read the NVRV main file name
+    CALL RootZoneMainFile%ReadData(cALine,iStat)  ;  IF (iStat .NE. 0) GOTO 10 
+    cALine = StripTextUntilCharacter(cALine,'/') 
+    CALL CleanSpecialCharacters(cALine)
+    CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(cALine)),cWorkingDirectory,cNVRVFileName)
+
+    !Based on desired land use type, call the appropriate function
+    SELECT CASE (iLUType)
+        CASE (f_iLandUse_NonPondedAg)
+            CALL DummyNonPondedAg%GetAreasForTimePeriod(cNPCropFileName,cWorkingDirectory,cBeginDate,cEndDate,TimeStep,AppGrid,iLU,rLUAreas,iStat)
+            
+        CASE (f_iLandUse_PondedAg)
+            CALL DummyPondedAg%GetAreasForTimePeriod(cPondedCropFileName,cWorkingDirectory,cBeginDate,cEndDate,TimeStep,AppGrid,iLU,.TRUE.,rLUAreas,iStat)
+            
+        CASE (f_iLandUse_Urb)
+            CALL DummyUrban%GetAreasForTimePeriod(cUrbanFileName,cWorkingDirectory,cBeginDate,cEndDate,TimeStep,AppGrid,rLUAreas,iStat) 
+            
+        CASE (f_iLandUse_NVRV)
+            CALL DummyNVRV%GetAreasForTimePeriod(cNVRVFileName,cWorkingDirectory,cBeginDate,cEndDate,TimeStep,AppGrid,.TRUE.,iLU,rLUAreas,iStat)            
+            
+        CASE DEFAULT
+            MessageArray(1) = 'Land use type for which element areas are being retrieved is not recognized!'
+            MessageArray(2) = 'Land use type identifier must be one of the flags that describe non-ponded ag, ponded ag, urban or native&riparian vegetation.'
+            CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+            iStat = -1
+    END SELECT
+
+    !Close main file
+10  CALL RootZoneMainFile%Kill() 
+
+  END SUBROUTINE RootZone_v413_GetLandUseAreasForTimePeriod_FileNotOpen
+  
+  
+  ! -------------------------------------------------------------
+  ! --- GET AREAS OF ALL LANDUSES FOR A LANDUSE CATEGORY AT ALL ELEMENTS FOR A TIME PERIOD WHEN FILE IS NOT OPEN
+  ! --- Note: This method is not meant to be called during a Simulation
+  ! -------------------------------------------------------------
+  SUBROUTINE RootZone_v413_GetLandUseAreasForTimePeriod_All_FileNotOpen(cRootZoneMainFileName,cWorkingDirectory,cBeginDate,cEndDate,TimeStep,AppGrid,iLUType,rLUAreas,iStat)
+    CHARACTER(LEN=*),INTENT(IN)       :: cRootZoneMainFileName,cWorkingDirectory,cBeginDate,cEndDate
+    TYPE(TimeStepType),INTENT(IN)     :: TimeStep 
+    TYPE(AppGridType),INTENT(IN)      :: AppGrid
+    INTEGER,INTENT(IN)                :: iLUType
+    REAL(8),ALLOCATABLE,INTENT(INOUT) :: rLUAreas(:,:,:)  !For each (element,landuse,time)
+    INTEGER,INTENT(OUT)               :: iStat
+    
+    !Local variables
+    CHARACTER(LEN=ModNameLen+58)         :: ThisProcedure = ModName // 'RootZone_v413_GetLandUseAreasForTimePeriod_All_FileNotOpen'
+    TYPE(GenericFileType)                :: RootZoneMainFile
+    INTEGER                              :: indx,iNTimes,iErrorCode
+    CHARACTER                            :: cALine*500
+    CHARACTER(:),ALLOCATABLE             :: cNPCropFileName,cPondedCropFileName,cUrbanFileName,cNVRVFileName
+    TYPE(NonPondedAgLandUse_v41_Type)    :: DummyNonPondedAg
+    TYPE(PondedAgLandUse_v41_Type)       :: DummyPondedAg
+    TYPE(UrbanLandUse_v41_Type)          :: DummyUrban
+    TYPE(NativeRiparianLandUse_v41_Type) :: DummyNVRV
+    
+    !Open main root zone file
+    CALL RootZoneMainFile%New(FileName=cRootZoneMainFileName,InputFile=.TRUE.,IsTSFile=.FALSE.,iStat=iStat)  ;  IF (iStat .NE. 0) RETURN
+    
+    !Read the version number and skip 4 lines of input data (total of 5 lines)
+    DO indx=1,5
+        CALL RootZoneMainFile%ReadData(cALine,iStat)  
+        IF (iStat .NE. 0) GOTO 10
+    END DO
+    
+    !Read the non-ponded ag main file name
+    CALL RootZoneMainFile%ReadData(cALine,iStat)  ;  IF (iStat .NE. 0) GOTO 10 
+    cALine = StripTextUntilCharacter(cALine,'/') 
+    CALL CleanSpecialCharacters(cALine)
+    CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(cALine)),cWorkingDirectory,cNPCropFileName)
+    
+    !Read the ponded ag main file name
+    CALL RootZoneMainFile%ReadData(cALine,iStat)  ;  IF (iStat .NE. 0) GOTO 10 
+    cALine = StripTextUntilCharacter(cALine,'/') 
+    CALL CleanSpecialCharacters(cALine)
+    CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(cALine)),cWorkingDirectory,cPondedCropFileName)
+
+    !Read the urban main file name
+    CALL RootZoneMainFile%ReadData(cALine,iStat)  ;  IF (iStat .NE. 0) GOTO 10 
+    cALine = StripTextUntilCharacter(cALine,'/') 
+    CALL CleanSpecialCharacters(cALine)
+    CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(cALine)),cWorkingDirectory,cUrbanFileName)
+    
+    !Read the NVRV main file name
+    CALL RootZoneMainFile%ReadData(cALine,iStat)  ;  IF (iStat .NE. 0) GOTO 10 
+    cALine = StripTextUntilCharacter(cALine,'/') 
+    CALL CleanSpecialCharacters(cALine)
+    CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(cALine)),cWorkingDirectory,cNVRVFileName)
+
+    !How many timesteps between the begin and end times?
+    iNTimes = NPeriods(TimeStep%DeltaT_InMinutes,cBeginDate,cEndDate) + 1
+    
+    !Deallocate array
+    DEALLOCATE (rLUAreas , STAT=iErrorCode)
+    
+    !Based on desired land use type, call the appropriate function
+    SELECT CASE (iLUType)
+        CASE (f_iLandUse_NonPondedAg)
+            CALL DummyNonPondedAg%GetAreasForTimePeriod_All(cNPCropFileName,cWorkingDirectory,cBeginDate,cEndDate,TimeStep,iNTimes,AppGrid,rLUAreas,iStat)
+            
+        CASE (f_iLandUse_PondedAg)
+            CALL DummyPondedAg%GetAreasForTimePeriod_All(cPondedCropFileName,cWorkingDirectory,cBeginDate,cEndDate,TimeStep,iNTimes,AppGrid,.TRUE.,rLUAreas,iStat)
+            
+        CASE (f_iLandUse_Urb)
+            ALLOCATE(rLUAreas(AppGrid%NElements,1,iNTimes))
+            CALL DummyUrban%GetAreasForTimePeriod(cUrbanFileName,cWorkingDirectory,cBeginDate,cEndDate,TimeStep,AppGrid,rLUAreas(:,1,:),iStat) 
+            
+        CASE (f_iLandUse_NVRV)
+            CALL DummyNVRV%GetAreasForTimePeriod_All(cNVRVFileName,cWorkingDirectory,cBeginDate,cEndDate,TimeStep,iNTimes,AppGrid,.TRUE.,rLUAreas,iStat)            
+            
+        CASE DEFAULT
+            MessageArray(1) = 'Land use type for which element areas are being retrieved is not recognized!'
+            MessageArray(2) = 'Land use type identifier must be one of the flags that describe non-ponded ag, ponded ag, urban or native&riparian vegetation.'
+            CALL SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+            iStat = -1
+    END SELECT
+
+    !Close main file
+10  CALL RootZoneMainFile%Kill() 
+
+  END SUBROUTINE RootZone_v413_GetLandUseAreasForTimePeriod_All_FileNotOpen
+  
   
   
   

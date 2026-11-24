@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2025  
+!  Copyright (C) 2005-2026  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -401,7 +401,7 @@ CONTAINS
     NonPondedCropFile = StripTextUntilCharacter(NonPondedCropFile,'/') 
     CALL CleanSpecialCharacters(NonPondedCropFile)
     CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(NonPondedCropFile)),cWorkingDirectory,cAbsPathFileName)
-    CALL RootZone%NonPondedAgRootZone%New(IsForInquiry,cProjectNameForDSS,cAbsPathFileName,cWorkingDirectory,FactCN,AppGrid,iElemIDs,TimeStep,NTIME,TRIM(cVersionFull),iStat)
+    CALL RootZone%NonPondedAgRootZone%New(IsForInquiry,cProjectNameForDSS,cAbsPathFileName,cWorkingDirectory,.FALSE.,FactCN,AppGrid,iElemIDs,TimeStep,NTIME,TRIM(cVersionFull),iStat)
     IF (iStat .EQ. -1) RETURN
        
     !Rice/refuge data file
@@ -409,7 +409,7 @@ CONTAINS
     RiceRefugeFile = StripTextUntilCharacter(RiceRefugeFile,'/') 
     CALL CleanSpecialCharacters(RiceRefugeFile)
     CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(RiceRefugeFile)),cWorkingDirectory,cAbsPathFileName)
-    CALL RootZone%PondedAgRootZone%New(IsForInquiry,.FALSE.,cProjectNameForDSS,cAbsPathFileName,cWorkingDirectory,FactCN,AppGrid,iElemIDs,TimeStep,NTIME,TRIM(cVersionFull),iStat)
+    CALL RootZone%PondedAgRootZone%New(IsForInquiry,.FALSE.,cProjectNameForDSS,cAbsPathFileName,cWorkingDirectory,.FALSE.,FactCN,AppGrid,iElemIDs,TimeStep,NTIME,TRIM(cVersionFull),iStat)
     IF (iStat .EQ. -1) RETURN
     
     !Urban data file
@@ -2480,7 +2480,7 @@ CONTAINS
             DO indxElem=1,AppGrid%NElements
                 rAgOthIn_NP(indxElem,1) = 0.0
                 DO indxCrop=1,RootZone%NonPondedAgRootZone%NCrops
-                     rAgOthIn_NP(indxElem,1) = rAgOthIn_NP(indxElem,1) + (RootZone%GenericMoistureData%rGenericMoisture(1,indxElem) * RootZone%NonPondedAgRootZone%RootDepth(indxCrop) - RootZone%NonPondedAgRootZone%Crops%GMExcess(indxCrop,indxElem)) * RootZone%NonPondedAgRootZone%Crops%Area(indxCrop,indxElem)
+                     rAgOthIn_NP(indxElem,1) = rAgOthIn_NP(indxElem,1) + (RootZone%GenericMoistureData%rGenericMoisture(1,indxElem) * RootZone%NonPondedAgRootZone%RootDepth(indxCrop) * RootZone%NonPondedAgRootZone%rSpatialRootDepthFractions(indxCrop,indxElem) - RootZone%NonPondedAgRootZone%Crops%GMExcess(indxCrop,indxElem)) * RootZone%NonPondedAgRootZone%Crops%Area(indxCrop,indxElem)
                 END DO
             END DO
         END IF
@@ -2516,7 +2516,7 @@ CONTAINS
             DO indxElem=1,AppGrid%NElements
                 rAgOthIn_Rice(indxElem,1) = 0.0
                 DO indxCrop=indxB,indxE
-                     rAgOthIn_Rice(indxElem,1) = rAgOthIn_Rice(indxElem,1) + (RootZone%GenericMoistureData%rGenericMoisture(1,indxElem) * RootZone%PondedAgRootZone%rRootDepth(indxCrop) - RootZone%PondedAgRootZone%Crops%GMExcess(indxCrop,indxElem)) * RootZone%PondedAgRootZone%Crops%Area(indxCrop,indxElem)
+                     rAgOthIn_Rice(indxElem,1) = rAgOthIn_Rice(indxElem,1) + (RootZone%GenericMoistureData%rGenericMoisture(1,indxElem) * RootZone%PondedAgRootZone%rRootDepth(indxCrop,indxElem) - RootZone%PondedAgRootZone%Crops%GMExcess(indxCrop,indxElem)) * RootZone%PondedAgRootZone%Crops%Area(indxCrop,indxElem)
                 END DO
             END DO
         END IF
@@ -2550,7 +2550,7 @@ CONTAINS
             DO indxElem=1,AppGrid%NElements
                 rAgOthIn_Refuge(indxElem,1) = 0.0
                 DO indxCrop=indxB,indxE
-                     rAgOthIn_Refuge(indxElem,1) = rAgOthIn_Refuge(indxElem,1) + (RootZone%GenericMoistureData%rGenericMoisture(1,indxElem) * RootZone%PondedAgRootZone%rRootDepth(indxCrop) - RootZone%PondedAgRootZone%Crops%GMExcess(indxCrop,indxElem)) * RootZone%PondedAgRootZone%Crops%Area(indxCrop,indxElem)
+                     rAgOthIn_Refuge(indxElem,1) = rAgOthIn_Refuge(indxElem,1) + (RootZone%GenericMoistureData%rGenericMoisture(1,indxElem) * RootZone%PondedAgRootZone%rRootDepth(indxCrop,indxElem) - RootZone%PondedAgRootZone%Crops%GMExcess(indxCrop,indxElem)) * RootZone%PondedAgRootZone%Crops%Area(indxCrop,indxElem)
                 END DO
             END DO
         END IF
@@ -2618,7 +2618,7 @@ CONTAINS
             DO indxElem=1,AppGrid%NElements
                 rNVRVOthIn(indxElem,1) = 0.0
                 DO indxVeg=1,RootZone%NVRVRootZone%iNNVRV
-                    rNVRVOthIn(indxElem,1) = rNVRVOthIn(indxElem,1) + (RootZone%GenericMoistureData%rGenericMoisture(1,indxElem) * RootZone%NVRVRootZone%rRootDepth(indxVeg) - RootZone%NVRVRootZone%NVRV%GMExcess(indxVeg,indxElem)) * RootZone%NVRVRootZone%NVRV%Area(indxVeg,indxElem)     
+                    rNVRVOthIn(indxElem,1) = rNVRVOthIn(indxElem,1) + (RootZone%GenericMoistureData%rGenericMoisture(1,indxElem) * RootZone%NVRVRootZone%rRootDepth(indxVeg,indxElem) - RootZone%NVRVRootZone%NVRV%GMExcess(indxVeg,indxElem)) * RootZone%NVRVRootZone%NVRV%Area(indxVeg,indxElem)     
                 END DO
             END DO
             rNVRVError = rNVRVError + rNVRVOthIn 

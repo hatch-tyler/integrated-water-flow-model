@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2025  
+!  Copyright (C) 2005-2026  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -28,7 +28,9 @@ MODULE Class_LandUseDataFile
                                      LowerCase               , &
                                      IntToText
   USE TimeSeriesUtilities    , ONLY: TimeStepType
-  USE IOInterface            , ONLY: Real2DTSDataInFileType  
+  USE IOInterface            , ONLY: Real2DTSDataInFileType  , &
+                                     f_iTXT                  , &
+                                     f_IO_SuccessfulRead
   IMPLICIT NONE
   
   
@@ -60,7 +62,9 @@ MODULE Class_LandUseDataFile
     PROCEDURE,PASS :: New        
     PROCEDURE,PASS :: Kill         
     PROCEDURE,PASS :: LandUseDataFile_ReadTSData 
+    PROCEDURE,PASS :: LandUseDataFile_GetAreas   
     GENERIC        :: ReadTSData                 => LandUseDataFile_ReadTSData
+    GENERIC        :: GetAreas                   => LandUseDataFile_GetAreas
   END TYPE LandUseDataFileType
   
   
@@ -98,8 +102,8 @@ CONTAINS
     IF (cFileName .EQ. '') RETURN
     
     !Instantiate
-    !** Note: 1 column is added to NLands to allow reading of element numbers.
-    CALL LandUseDataFile%Init(cFileName,cWorkingDirectory,cDescriptor,TrackTime,BlocksToSkip=1,lFactorDefined=.TRUE.,lReadDims=.FALSE.,nRow=NLocations,nCol=NLands+1,Factor=Factor,iStat=iStat)
+    !** Note: 1 column is added to NLands to allow reading of element numbers from ASCII file
+    CALL LandUseDataFile%Init(cFileName,cWorkingDirectory,cDescriptor,TrackTime,BlocksToSkip=1,lFactorDefined=.TRUE.,lReadDims=.FALSE.,nRow=NLocations,nCol_ASCII=NLands+1,nCol_DSS=NLands,Factor=Factor,iStat=iStat)
     LandUseDataFile%Fact = Factor(1)
 
   END SUBROUTINE New
@@ -149,46 +153,75 @@ CONTAINS
     IF (iStat .EQ. -1) RETURN
     
     !Return if new data is not read
-    IF (FileReadCode .NE. 0) RETURN
+    IF (FileReadCode .NE. f_IO_SuccessfulRead) RETURN
         
-    !Check for errors and process data
-    lProcessed = .FALSE.
-    DO indxLocation=1,NLocations
-        iLocationID = INT(LandUseDataFile%rValues(indxLocation,1))
-        
-        !Check that listed element/subregion is modeled
-        CALL ConvertID_To_Index(iLocationID,iLocationIDs,iLocation)
-        IF (iLocation .EQ. 0) THEN
-            CALL SetLastMessage('Element or subregion number '//TRIM(IntToText(iLocationID))//' listed for '//TRIM(LowerCase(cDescriptor))//' is not in the model!',f_iFatal,ThisProcedure)
-            iStat = -1
-            RETURN
-        END IF
-        
-        !Make sure location number is not listed more than once
-        IF (lProcessed(iLocation)) THEN
-            CALL SetLastMessage('Element or subregion number '//TRIM(IntToText(iLocationID))//' listed for '//TRIM(LowerCase(cDescriptor))//' is listed more than once!',f_iFatal,ThisProcedure)
-            iStat = -1
-            RETURN
-        END IF
-        
-        !Process data
-        lProcessed(iLocation)       = .TRUE.
-        rLandUse_Work(iLocation,1)  = iLocation
-        rLandUse_Work(iLocation,2:) = LandUseDataFile%rValues(indxLocation,2:)
-        
-    END DO
-        
-    !Store data in return argument and perform unit conversions
-    IF (LandUseDataFile%Fact .EQ. 0.0) THEN
+    !Check for errors and process data based on input file type
+    !----------------------------------------------------------
+    !ASCII input file type
+    IF (LandUseDataFile%File%iGetFileType() .EQ. f_iTXT) THEN
+        lProcessed = .FALSE.
         DO indxLocation=1,NLocations
-            LandUseDataFile%rValues(indxLocation,1)  = rLandUse_Work(indxLocation,1)
-            LandUseDataFile%rValues(indxLocation,2:) = rLandUse_Work(indxLocation,2:) * Area(indxLocation)
+            iLocationID = INT(LandUseDataFile%rValues(indxLocation,1))
+            
+            !Check that listed element/subregion is modeled
+            CALL ConvertID_To_Index(iLocationID,iLocationIDs,iLocation)
+            IF (iLocation .EQ. 0) THEN
+                CALL SetLastMessage('Element or subregion number '//TRIM(IntToText(iLocationID))//' listed for '//TRIM(LowerCase(cDescriptor))//' is not in the model!',f_iFatal,ThisProcedure)
+                iStat = -1
+                RETURN
+            END IF
+            
+            !Make sure location number is not listed more than once
+            IF (lProcessed(iLocation)) THEN
+                CALL SetLastMessage('Element or subregion number '//TRIM(IntToText(iLocationID))//' listed for '//TRIM(LowerCase(cDescriptor))//' is listed more than once!',f_iFatal,ThisProcedure)
+                iStat = -1
+                RETURN
+            END IF
+            
+            !Process data
+            lProcessed(iLocation)       = .TRUE.
+            rLandUse_Work(iLocation,1)  = iLocation
+            rLandUse_Work(iLocation,2:) = LandUseDataFile%rValues(indxLocation,2:)            
         END DO
+        
+        !Store data in return argument and perform unit conversions
+        IF (LandUseDataFile%Fact .EQ. 0.0) THEN
+            DO indxLocation=1,NLocations
+                LandUseDataFile%rValues(indxLocation,1)  = rLandUse_Work(indxLocation,1)
+                LandUseDataFile%rValues(indxLocation,2:) = rLandUse_Work(indxLocation,2:) * Area(indxLocation)
+            END DO
+        ELSE
+            LandUseDataFile%rValues(:,1)  = rLandUse_Work(:,1)
+            LandUseDataFile%rValues(:,2:) = rLandUse_Work(:,2:) * LandUseDataFile%Fact
+        END IF
+    !DSS input file type
     ELSE
-        LandUseDataFile%rValues(:,1)  = rLandUse_Work(:,1)
-        LandUseDataFile%rValues(:,2:) = rLandUse_Work(:,2:) * LandUseDataFile%Fact
+        IF (LandUseDataFile%Fact .EQ. 0.0) THEN
+            DO indxLocation=1,NLocations
+                LandUseDataFile%rValues(indxLocation,:) = LandUseDataFile%rValues(indxLocation,:) * Area(indxLocation)
+            END DO
+        ELSE
+            LandUseDataFile%rValues = LandUseDataFile%rValues * LandUseDataFile%Fact
+        END IF
     END IF
      
   END SUBROUTINE LandUseDataFile_ReadTSData
+  
+  
+  ! -------------------------------------------------------------
+  ! --- GET LANDUSE AREAS
+  ! -------------------------------------------------------------
+  FUNCTION LandUseDataFile_GetAreas(LandUseDataFile,iNElements,iNLandUse) RESULT(rAreas)
+    CLASS(LandUseDataFileType),INTENT(IN) :: LandUseDataFile
+    INTEGER,INTENT(IN)                    :: iNElements,iNLandUse
+    REAL(8)                               :: rAreas(iNLandUse,iNElements)
+    
+    IF (LandUseDataFile%File%iGetFileType() .EQ. f_iTXT) THEN
+        rAreas = TRANSPOSE(LandUseDataFile%rValues(:,2:))
+    ELSE
+        rAreas = TRANSPOSE(LandUseDataFile%rValues)
+    END IF
+    
+  END FUNCTION LandUseDataFile_GetAreas
   
 END MODULE

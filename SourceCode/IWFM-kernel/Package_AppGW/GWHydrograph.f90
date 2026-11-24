@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2025  
+!  Copyright (C) 2005-2026  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -125,6 +125,7 @@ MODULE GWHydrograph
       PROCEDURE,PASS :: ReadGWHead_AtNodeLayer
       PROCEDURE,PASS :: ReadGWHead_AtWell
       PROCEDURE,PASS :: PrintInitialValues
+      PROCEDURE,PASS :: ReprintInitialValues
       PROCEDURE,PASS :: PrintResults
       PROCEDURE,PASS :: IsCellVelocityOutputDefined
       PROCEDURE,PASS :: IsVelocityTecplotDefined
@@ -1000,6 +1001,100 @@ CONTAINS
 ! ******************************************************************
 ! ******************************************************************
 
+  ! -------------------------------------------------------------
+  ! --- REPRINT INITIAL VALUES (USED WITH RESTART OPTION)
+  ! -------------------------------------------------------------
+  SUBROUTINE ReprintInitialValues(GWHydData,AppGrid,Stratigraphy,cAppGWParamFileName,rFACTLTOU,rFACTVROU,cUNITLTOU,cUNITVLOU,cUNITVROU,StrmConnectivity,TimeStep,rHeads,iStat)
+    CLASS(GWHydrographType),INTENT(INOUT) :: GWHydData
+    TYPE(AppGridType),INTENT(IN)          :: AppGrid
+    TYPE(StratigraphyType),INTENT(IN)     :: Stratigraphy
+    CHARACTER(LEN=*),INTENT(IN)           :: cAppGWParamFileName,cUNITLTOU,cUNITVLOU,cUNITVROU
+    REAL(8),INTENT(IN)                    :: rFACTLTOU,rFACTVROU,rHeads(:,:)
+    COMPLEX,INTENT(IN)                    :: StrmConnectivity(:)
+    TYPE(TimeStepType),INTENT(IN)         :: TimeStep
+    INTEGER,INTENT(OUT)                   :: iStat
+    
+    !Local variables
+    INTEGER                        :: iGWNodeIDs(AppGrid%NNodes),iTecPlotFlag
+    CHARACTER(LEN=200)             :: cALine
+    CHARACTER(LEN=200),ALLOCATABLE :: cArray(:)
+    CHARACTER(:),ALLOCATABLE       :: cAllHeadOutFileName,cCellVelocityOutFileName,cHeadTecplotFileName,cVelTecplotFileName
+    TYPE(GenericFileType)          :: AppGWParamFile
+    
+    !Initialize
+    iGWNodeIDs = AppGrid%AppNode%ID
+    
+    !Filename for all heads file
+    IF (GWHydData%lAllHeadOutFile_Defined) THEN
+        CALL GWHydData%AllHeadOutFile%GetName(cAllHeadOutFileName)
+    ELSE
+        ALLOCATE(CHARACTER(0) :: cAllHeadOutFileName)
+    END IF
+    
+    !Cell velocity filename
+    IF (GWHydData%lCellVelocityOutFile_Defined) THEN
+        CALL GWHydData%CellVelocityOutFile%GetName(cCellVelocityOutFileName)
+    ELSE
+        ALLOCATE(CHARACTER(0) :: cCellVelocityOutFileName)
+    END IF
+            
+    !Head Tecplot file name and flag for output type (head or depth-to-groundwater)
+    IF (GWHydData%lHeadTecplotFile_Defined) THEN
+        CALL GWHydData%HeadTecplotFile%OutFile%GetName(cHeadTecplotFileName)
+    ELSE
+        ALLOCATE(CHARACTER(0) :: cHeadTecplotFileName)
+    END IF
+    IF (GWHydData%lTecPlot_PrintGWHeads) THEN
+        iTecPlotFlag = f_iTecPlot_PrintGWHeads
+    ELSE
+        iTecPlotFlag = f_iTecPlot_PrintDepThToGW
+    END IF
+    
+    !Velocity Tecplot filename
+    IF (GWHydData%lVelocityTecplotFile_Defined) THEN
+        CALL GWHydData%VelocityTecplotFile%OutFile%GetName(cVelTecplotFileName)
+    ELSE
+        ALLOCATE(CHARACTER(0) :: cVelTecplotFileName)
+    END IF
+    
+    !Open GW parameter file and burn unnecessary lines to get to hydrograph print data
+    CALL AppGWParamFile%New(FileName=cAppGWParamFileName,InputFile=.TRUE.,IsTSFile=.FALSE.,Descriptor='groundwater data main input',iStat=iStat)  ;  IF (iStat .NE. 0) RETURN
+    CALL AppGWParamFile%ReadData(cALine,iStat)  ;  IF (iStat .NE. 0) RETURN  !Burn version line
+    CALL AppGWParamFile%ReadData(cArray,iStat)  ;  IF (iStat .NE. 0) RETURN  !Burn the first group of data listing file names, conversion factors, etc.
+    CALL AppGWParamFile%ReadData(cALine,iStat)  ;  IF (iStat .NE. 0) RETURN  !Burn KDEB line
+    
+    !First kill the existing data and close files
+    CALL GWHydData%Kill()
+    
+    !Recreate hydrograph data
+    CALL GWHydData%New(.FALSE.                        , &
+                       AppGrid                        , &
+                       Stratigraphy                   , &
+                       ''                             , &
+                       iGWNodeIDs                     , &
+                       iTecPlotFlag                   , &
+                       rFACTLTOU                      , &
+                       cUNITLTOU                      , &
+                       cUNITVLOU                      , &
+                       cUNITVROU                      , &
+                       TRIM(cAllHeadOutFileName)      , &
+                       TRIM(cCellVelocityOutFileName) , &
+                       TRIM(cHeadTecplotFileName)     , &
+                       TRIM(cVelTecplotFileName)      , &
+                       TimeStep                       , &
+                       AppGWParamFile                 , &
+                       iStat                          )
+    IF (iStat .NE. 0) RETURN
+    
+    !Print initial values
+    CALL GWHydData%PrintInitialValues(AppGrid,Stratigraphy,rHeads,rFACTLTOU,rFACTVROU,StrmConnectivity,TimeStep)
+    
+    !Close GW parameter file
+    CALL AppGWParamFile%Kill()
+    
+  END SUBROUTINE ReprintInitialValues
+  
+  
   ! -------------------------------------------------------------
   ! --- GATEWAY TO PRINTING INITIAL VALUES
   ! -------------------------------------------------------------

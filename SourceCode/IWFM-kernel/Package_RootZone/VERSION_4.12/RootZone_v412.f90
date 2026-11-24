@@ -1,6 +1,6 @@
 !***********************************************************************                     
 !  Integrated Water Flow Model (IWFM)                                                        
-!  Copyright (C) 2005-2025                                                                   
+!  Copyright (C) 2005-2026                                                                   
 !  State of California, Department of Water Resources                                        
 !                                                                                            
 !  This program is free software; you can redistribute it and/or                             
@@ -574,7 +574,7 @@ CONTAINS
     NonPondedCropFile = StripTextUntilCharacter(NonPondedCropFile,'/') 
     CALL CleanSpecialCharacters(NonPondedCropFile)
     CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(NonPondedCropFile)),cWorkingDirectory,cAbsPathFileName)
-    CALL RootZone%NonPondedAgRootZone%New(IsForInquiry,cProjectNameForDSS,cAbsPathFileName,cWorkingDirectory,FactCN,AppGrid,iElemIDs,TimeStep,NTIME,TRIM(cVersionFull),iStat,pAgLWUseBudRawFile_New,pNonPondedAgRootZoneBudRawFile_New)
+    CALL RootZone%NonPondedAgRootZone%New(IsForInquiry,cProjectNameForDSS,cAbsPathFileName,cWorkingDirectory,.FALSE.,FactCN,AppGrid,iElemIDs,TimeStep,NTIME,TRIM(cVersionFull),iStat,pAgLWUseBudRawFile_New,pNonPondedAgRootZoneBudRawFile_New)
     IF (iStat .EQ. -1) RETURN
        
     !Rice/refuge data file
@@ -582,7 +582,7 @@ CONTAINS
     RiceRefugeFile = StripTextUntilCharacter(RiceRefugeFile,'/') 
     CALL CleanSpecialCharacters(RiceRefugeFile)
     CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(RiceRefugeFile)),cWorkingDirectory,cAbsPathFileName)
-    CALL RootZone%PondedAgRootZone%New(IsForInquiry,.FALSE.,cProjectNameForDSS,cAbsPathFileName,cWorkingDirectory,FactCN,AppGrid,iElemIDs,TimeStep,NTIME,TRIM(cVersionFull),iStat,pAgLWUseBudRawFile_New,pPondedAgRootZoneBudRawFile_New)
+    CALL RootZone%PondedAgRootZone%New(IsForInquiry,.FALSE.,cProjectNameForDSS,cAbsPathFileName,cWorkingDirectory,.FALSE.,FactCN,AppGrid,iElemIDs,TimeStep,NTIME,TRIM(cVersionFull),iStat,pAgLWUseBudRawFile_New,pPondedAgRootZoneBudRawFile_New)
     IF (iStat .EQ. -1) RETURN
     
     !Urban data file
@@ -2723,12 +2723,12 @@ CONTAINS
     
     !Local variables
     CHARACTER(LEN=ModNameLen+45) :: ThisProcedure = ModName // 'RootZone_v412_GetBudget_AnnualFlows_GivenFile'
-    INTEGER,TARGET               :: iDimActual,iNTimeSteps,                             &
-                                    iReadCols_LWU_Ag(4) = [3,4,5,6],                    &
-                                    iReadCols_LWU_Urb(4) = [12,13,14,15],               &
-                                    iReadCols_RZ_Ag(9) = [12,13,14,15,16,17,18,19,20],  &
-                                    iReadCols_RZ_Urb(8) = [33,34,35,36,37,38,39,40],    &
-                                    iReadCols_RZ_NVRV(9) = [50,51,52,53,54,55,56,57,58]
+    INTEGER,TARGET               :: iDimActual,iNTimeSteps,                                    &
+                                    iReadCols_LWU_Ag(4) = [3,4,5,6],                           &
+                                    iReadCols_LWU_Urb(4) = [12,13,14,15],                      &
+                                    iReadCols_RZ_Ag(11) = [12,13,14,15,16,17,18,19,20,21,22],  &
+                                    iReadCols_RZ_Urb(8) = [35,36,37,38,39,40,41,42],           &
+                                    iReadCols_RZ_NVRV(9) = [52,53,54,55,56,57,58,59,60]
     REAL(8),ALLOCATABLE          :: rValues(:,:)
     INTEGER,POINTER              :: piReadCols(:)
     
@@ -2789,7 +2789,7 @@ CONTAINS
             CASE (f_iLandUse_Ag)
                 piReadCols => iReadCols_RZ_Ag
                 !Allocate arrays
-                ALLOCATE (rValues(10,iNTimeSteps) , cFlowNames(8))  !Adding 1 to the first dimension for Time column; it will be removed later
+                ALLOCATE (rValues(12,iNTimeSteps) , cFlowNames(8))  !Adding 1 to the first dimension for Time column; it will be removed later
                 !Flow names
                 cFlowNames     = ''
                 cFlowNames(1)  = 'Change in Storage'              
@@ -2805,14 +2805,15 @@ CONTAINS
                 IF (iStat .NE. 0) RETURN
                 !Store values in return argument
                 ALLOCATE (rFlows(8,iDimActual))
-                rFlows(1,:)  = rValues(2,1:iDimActual) - rValues(10,1:iDimActual)      !Change in Storage              
-                rFlows(2,:)  = rValues(3,1:iDimActual)                                 !Net Gain from Land Expansion          
-                rFlows(3,:)  = rValues(4,1:iDimActual)                                 !Infiltration 
-                rFlows(4,:)  = rValues(5,1:iDimActual)                                 !GW Inflow                          
-                rFlows(5,:)  = rValues(6,1:iDimActual)                                 !Other Inflow                          
-                rFlows(6,:)  = -rValues(7,1:iDimActual)                                !Pond Drain                    
-                rFlows(7,:)  = -rValues(8,1:iDimActual)                                !Actual ET                     
-                rFlows(8,:)  = -rValues(9,1:iDimActual)                                !Percolation                   
+                rFlows(1,:)  = rValues(2,1:iDimActual) + rValues(3,1:iDimActual)   &
+                             - rValues(11,1:iDimActual) - rValues(12,1:iDimActual)     !Change in Storage              
+                rFlows(2,:)  = rValues(4,1:iDimActual)                                 !Net Gain from Land Expansion          
+                rFlows(3,:)  = rValues(5,1:iDimActual)                                 !Infiltration 
+                rFlows(4,:)  = rValues(6,1:iDimActual)                                 !GW Inflow                          
+                rFlows(5,:)  = rValues(7,1:iDimActual)                                 !Other Inflow                          
+                rFlows(6,:)  = -rValues(8,1:iDimActual)                                !Pond Drain                    
+                rFlows(7,:)  = -rValues(9,1:iDimActual)                                !Actual ET                     
+                rFlows(8,:)  = -rValues(10,1:iDimActual)                                !Percolation                   
 
             CASE (f_iLandUse_Urb)      
                 piReadCols => iReadCols_RZ_Urb
@@ -2942,12 +2943,12 @@ CONTAINS
     
     !Local variables
     CHARACTER(LEN=ModNameLen+46) :: ThisProcedure = ModName // 'RootZone_v412_GetBudget_MonthlyFlows_GivenFile'
-    INTEGER,TARGET               :: iDimActual,iNTimeSteps,                             &
-                                    iReadCols_LWU_Ag(4) = [3,4,5,6],                    &
-                                    iReadCols_LWU_Urb(4) = [12,13,14,15],               &
-                                    iReadCols_RZ_Ag(9) = [12,13,14,15,16,17,18,19,20],  &
-                                    iReadCols_RZ_Urb(8) = [33,34,35,36,37,38,39,40],    &
-                                    iReadCols_RZ_NVRV(9) = [50,51,52,53,54,55,56,57,58]
+    INTEGER,TARGET               :: iDimActual,iNTimeSteps,                                    &
+                                    iReadCols_LWU_Ag(4) = [3,4,5,6],                           &
+                                    iReadCols_LWU_Urb(4) = [12,13,14,15],                      &
+                                    iReadCols_RZ_Ag(11) = [12,13,14,15,16,17,18,19,20,21,22],  &
+                                    iReadCols_RZ_Urb(8) = [35,36,37,38,39,40,41,42],           &
+                                    iReadCols_RZ_NVRV(9) = [52,53,54,55,56,57,58,59,60]
     REAL(8),ALLOCATABLE          :: rValues(:,:)
     INTEGER,POINTER              :: piReadCols(:)
     
@@ -3008,7 +3009,7 @@ CONTAINS
             CASE (f_iLandUse_Ag)
                 piReadCols => iReadCols_RZ_Ag
                 !Allocate arrays
-                ALLOCATE (rValues(10,iNTimeSteps) , cFlowNames(8))  !Adding 1 to the first dimension for Time column; it will be removed later
+                ALLOCATE (rValues(12,iNTimeSteps) , cFlowNames(8))  !Adding 1 to the first dimension for Time column; it will be removed later
                 !Flow names
                 cFlowNames     = ''
                 cFlowNames(1)  = 'Change in Storage'              
@@ -3024,14 +3025,15 @@ CONTAINS
                 IF (iStat .NE. 0) RETURN
                 !Store values in return argument
                 ALLOCATE (rFlows(8,iDimActual))
-                rFlows(1,:)  = rValues(2,1:iDimActual) - rValues(10,1:iDimActual)      !Change in Storage              
-                rFlows(2,:)  = rValues(3,1:iDimActual)                                 !Net Gain from Land Expansion          
-                rFlows(3,:)  = rValues(4,1:iDimActual)                                 !Infiltration 
-                rFlows(4,:)  = rValues(5,1:iDimActual)                                 !GW Inflow                          
-                rFlows(5,:)  = rValues(6,1:iDimActual)                                 !Other Inflow                          
-                rFlows(6,:)  = -rValues(7,1:iDimActual)                                !Pond Drain                    
-                rFlows(7,:)  = -rValues(8,1:iDimActual)                                !Actual ET                     
-                rFlows(8,:)  = -rValues(9,1:iDimActual)                                !Percolation                   
+                rFlows(1,:)  = rValues(2,1:iDimActual) + rValues(3,1:iDimActual)   &
+                             - rValues(11,1:iDimActual) - rValues(12,1:iDimActual)     !Change in Storage              
+                rFlows(2,:)  = rValues(4,1:iDimActual)                                 !Net Gain from Land Expansion          
+                rFlows(3,:)  = rValues(5,1:iDimActual)                                 !Infiltration 
+                rFlows(4,:)  = rValues(6,1:iDimActual)                                 !GW Inflow                          
+                rFlows(5,:)  = rValues(7,1:iDimActual)                                 !Other Inflow                          
+                rFlows(6,:)  = -rValues(8,1:iDimActual)                                !Pond Drain                    
+                rFlows(7,:)  = -rValues(9,1:iDimActual)                                !Actual ET                     
+                rFlows(8,:)  = -rValues(10,1:iDimActual)                               !Percolation                   
 
             CASE (f_iLandUse_Urb)      
                 piReadCols => iReadCols_RZ_Urb
@@ -3262,7 +3264,7 @@ CONTAINS
             CASE (f_iLandUse_Rice)
                 ALLOCATE (iColList(9) , iDataUnitTypes(9) , cFlowNames(8) , rValues(10,iNTimeSteps))
                 cFlowNames = ['Change in Storage' , 'Gain from Land Expansion' , 'Infiltration' , 'GW Inflow' , 'Other Inflow' , 'Pond Drain' , 'ET' , 'Percolation']
-                iColList   = [(indx,indx=32,40)]
+                iColList   = [(indx,indx=32,42)]
                 
                 !Read data for the interval
                 CALL ZBudget%ReadData(ZoneList,iZoneID,iColList,'1MON',cBeginDate,cEndDate,1d0,rFactVL,iDataUnitTypes,iNPopulatedValues,rValues,iStat)
@@ -3271,20 +3273,21 @@ CONTAINS
                 !Store values in return argument
                 ALLOCATE (rFlows(8,iNPopulatedValues))
                 DO indxTime=1,iNPopulatedValues
-                    rFlows(1,indxTime) =  rValues(2,indxTime) - rValues(10,indxTime) !Change in storage
-                    rFlows(2,indxTime) =  rValues(3,indxTime)                        !Gain from land expansion
-                    rFlows(3,indxTime) =  rValues(4,indxTime)                        !Infiltration
-                    rFlows(4,indxTime) =  rValues(5,indxTime)                        !GW Inflow
-                    rFlows(5,indxTime) =  rValues(6,indxTime)                        !Other Inflow
-                    rFlows(6,indxTime) = -rValues(7,indxTime)                        !Pond drain
-                    rFlows(7,indxTime) = -rValues(8,indxTime)                        !ET
-                    rFlows(8,indxTime) = -rValues(9,indxTime)                        !Percolation
+                    rFlows(1,indxTime) =  rValues(2,indxTime) + rValues(3,indxTime)   &
+                                        - rValues(11,indxTime) - rValues(12,indxTime)   !Change in storage
+                    rFlows(2,indxTime) =  rValues(4,indxTime)                           !Gain from land expansion
+                    rFlows(3,indxTime) =  rValues(5,indxTime)                           !Infiltration
+                    rFlows(4,indxTime) =  rValues(6,indxTime)                           !GW Inflow
+                    rFlows(5,indxTime) =  rValues(7,indxTime)                           !Other Inflow
+                    rFlows(6,indxTime) = -rValues(8,indxTime)                           !Pond drain
+                    rFlows(7,indxTime) = -rValues(9,indxTime)                           !ET
+                    rFlows(8,indxTime) = -rValues(10,indxTime)                          !Percolation
                 END DO
                 
             CASE (f_iLandUse_Refuge)
                 ALLOCATE (iColList(9) , iDataUnitTypes(9) , cFlowNames(8) , rValues(10,iNTimeSteps))
                 cFlowNames = ['Change in Storage' , 'Gain from Land Expansion' , 'Infiltration' , 'GW Inflow' , 'Other Inflow' , 'Pond Drain' , 'ET' , 'Percolation']
-                iColList   = [(indx,indx=53,61)]
+                iColList   = [(indx,indx=55,65)]
                 
                 !Read data for the interval
                 CALL ZBudget%ReadData(ZoneList,iZoneID,iColList,'1MON',cBeginDate,cEndDate,1d0,rFactVL,iDataUnitTypes,iNPopulatedValues,rValues,iStat)
@@ -3293,20 +3296,21 @@ CONTAINS
                 !Store values in return argument
                 ALLOCATE (rFlows(8,iNPopulatedValues))
                 DO indxTime=1,iNPopulatedValues
-                    rFlows(1,indxTime) =   rValues(2,indxTime) - rValues(10,indxTime) !Change in storage
-                    rFlows(2,indxTime) =   rValues(3,indxTime)                        !Gain from land expansion
-                    rFlows(3,indxTime) =   rValues(4,indxTime)                        !Infiltration
-                    rFlows(4,indxTime) =   rValues(5,indxTime)                        !GW Inflow
-                    rFlows(5,indxTime) =   rValues(6,indxTime)                        !Other Inflow
-                    rFlows(6,indxTime) =  -rValues(7,indxTime)                        !Pond drain
-                    rFlows(7,indxTime) =  -rValues(8,indxTime)                        !ET
-                    rFlows(8,indxTime) =  -rValues(9,indxTime)                        !Percolation
+                    rFlows(1,indxTime) =   rValues(2,indxTime) + rValues(3,indxTime)   &
+                                         - rValues(11,indxTime) - rValues(12,indxTime)   !Change in storage
+                    rFlows(2,indxTime) =   rValues(4,indxTime)                           !Gain from land expansion
+                    rFlows(3,indxTime) =   rValues(5,indxTime)                           !Infiltration
+                    rFlows(4,indxTime) =   rValues(6,indxTime)                           !GW Inflow
+                    rFlows(5,indxTime) =   rValues(7,indxTime)                           !Other Inflow
+                    rFlows(6,indxTime) =  -rValues(8,indxTime)                           !Pond drain
+                    rFlows(7,indxTime) =  -rValues(9,indxTime)                           !ET
+                    rFlows(8,indxTime) =  -rValues(10,indxTime)                          !Percolation
                 END DO
                 
             CASE (f_iLandUse_Urb)
                 ALLOCATE (iColList(8) , iDataUnitTypes(8) , cFlowNames(7) , rValues(9,iNTimeSteps))
                 cFlowNames = ['Change in Storage' , 'Gain from Land Expansion' , 'Infiltration' , 'GW Inflow' , 'Other Inflow' , 'ET' , 'Percolation']
-                iColList   = [(indx,indx=74,81)]
+                iColList   = [(indx,indx=78,85)]
                 
                 !Read data for the interval
                 CALL ZBudget%ReadData(ZoneList,iZoneID,iColList,'1MON',cBeginDate,cEndDate,1d0,rFactVL,iDataUnitTypes,iNPopulatedValues,rValues,iStat)
@@ -3327,7 +3331,7 @@ CONTAINS
             CASE (f_iLandUse_NVRV)
                 ALLOCATE (iColList(9) , iDataUnitTypes(9) , cFlowNames(8) , rValues(10,iNTimeSteps))
                 cFlowNames = ['Change in Storage' , 'Gain from Land Expansion' , 'Infiltration' , 'GW Inflow' , 'Other Inflow' , 'Stream Inflow for ET' , 'ET' , 'Percolation']
-                iColList   = [(indx,indx=91,99)]
+                iColList   = [(indx,indx=95,103)]
                 
                 !Read data for the interval
                 CALL ZBudget%ReadData(ZoneList,iZoneID,iColList,'1MON',cBeginDate,cEndDate,1d0,rFactVL,iDataUnitTypes,iNPopulatedValues,rValues,iStat)
@@ -3461,7 +3465,7 @@ CONTAINS
         IF (iStat .NE. 0) RETURN
         
         !Store values in return argument
-        ALLOCATE (rFlows(5,iNPopulatedValues))
+        ALLOCATE (rFlows(4,iNPopulatedValues))
         DO indxTime=1,iNPopulatedValues
             rFlows(1,indxTime) = -rValues(2,indxTime)
             rFlows(2,indxTime) =  rValues(3,indxTime) 
@@ -3497,7 +3501,7 @@ CONTAINS
             CASE (f_iLandUse_Rice)
                 ALLOCATE (iColList(9) , iDataUnitTypes(9) , cFlowNames(8) , rValues(10,iNTimeSteps))
                 cFlowNames = ['Change in Storage' , 'Gain from Land Expansion' , 'Infiltration' , 'GW Inflow' , 'Other Inflow' , 'Pond Drain' , 'ET' , 'Percolation']
-                iColList   = [(indx,indx=32,40)]
+                iColList   = [(indx,indx=32,42)]
                 
                 !Read data for the interval
                 CALL ZBudget%ReadData(ZoneList,iZoneID,iColList,'1YEAR',cBeginDate,cEndDate,1d0,rFactVL,iDataUnitTypes,iNPopulatedValues,rValues,iStat)
@@ -3506,20 +3510,21 @@ CONTAINS
                 !Store values in return argument
                 ALLOCATE (rFlows(8,iNPopulatedValues))
                 DO indxTime=1,iNPopulatedValues
-                    rFlows(1,indxTime) =  rValues(2,indxTime) - rValues(10,indxTime) !Change in storage
-                    rFlows(2,indxTime) =  rValues(3,indxTime)                        !Gain from land expansion
-                    rFlows(3,indxTime) =  rValues(4,indxTime)                        !Infiltration
-                    rFlows(4,indxTime) =  rValues(5,indxTime)                        !GW Inflow
-                    rFlows(5,indxTime) =  rValues(6,indxTime)                        !Other Inflow
-                    rFlows(6,indxTime) = -rValues(7,indxTime)                        !Pond drain
-                    rFlows(7,indxTime) = -rValues(8,indxTime)                        !ET
-                    rFlows(8,indxTime) = -rValues(9,indxTime)                        !Percolation
+                    rFlows(1,indxTime) =  rValues(2,indxTime) + rValues(3,indxTime)   &
+                                        - rValues(11,indxTime) - rValues(12,indxTime)   !Change in storage
+                    rFlows(2,indxTime) =  rValues(4,indxTime)                           !Gain from land expansion
+                    rFlows(3,indxTime) =  rValues(5,indxTime)                           !Infiltration
+                    rFlows(4,indxTime) =  rValues(6,indxTime)                           !GW Inflow
+                    rFlows(5,indxTime) =  rValues(7,indxTime)                           !Other Inflow
+                    rFlows(6,indxTime) = -rValues(8,indxTime)                           !Pond drain
+                    rFlows(7,indxTime) = -rValues(9,indxTime)                           !ET
+                    rFlows(8,indxTime) = -rValues(10,indxTime)                          !Percolation
                 END DO
                 
             CASE (f_iLandUse_Refuge)
                 ALLOCATE (iColList(9) , iDataUnitTypes(9) , cFlowNames(8) , rValues(10,iNTimeSteps))
                 cFlowNames = ['Change in Storage' , 'Gain from Land Expansion' , 'Infiltration' , 'GW Inflow' , 'Other Inflow' , 'Pond Drain' , 'ET' , 'Percolation']
-                iColList   = [(indx,indx=53,61)]
+                iColList   = [(indx,indx=55,65)]
                 
                 !Read data for the interval
                 CALL ZBudget%ReadData(ZoneList,iZoneID,iColList,'1YEAR',cBeginDate,cEndDate,1d0,rFactVL,iDataUnitTypes,iNPopulatedValues,rValues,iStat)
@@ -3528,20 +3533,21 @@ CONTAINS
                 !Store values in return argument
                 ALLOCATE (rFlows(8,iNPopulatedValues))
                 DO indxTime=1,iNPopulatedValues
-                    rFlows(1,indxTime) =   rValues(2,indxTime) - rValues(10,indxTime) !Change in storage
-                    rFlows(2,indxTime) =   rValues(3,indxTime)                        !Gain from land expansion
-                    rFlows(3,indxTime) =   rValues(4,indxTime)                        !Infiltration
-                    rFlows(4,indxTime) =   rValues(5,indxTime)                        !GW Inflow
-                    rFlows(5,indxTime) =   rValues(6,indxTime)                        !Other Inflow
-                    rFlows(6,indxTime) =  -rValues(7,indxTime)                        !Pond drain
-                    rFlows(7,indxTime) =  -rValues(8,indxTime)                        !ET
-                    rFlows(8,indxTime) =  -rValues(9,indxTime)                        !Percolation
+                    rFlows(1,indxTime) =   rValues(2,indxTime) + rValues(3,indxTime)   &
+                                         - rValues(11,indxTime) - rValues(12,indxTime)   !Change in storage
+                    rFlows(2,indxTime) =   rValues(4,indxTime)                           !Gain from land expansion
+                    rFlows(3,indxTime) =   rValues(5,indxTime)                           !Infiltration
+                    rFlows(4,indxTime) =   rValues(6,indxTime)                           !GW Inflow
+                    rFlows(5,indxTime) =   rValues(7,indxTime)                           !Other Inflow
+                    rFlows(6,indxTime) =  -rValues(8,indxTime)                           !Pond drain
+                    rFlows(7,indxTime) =  -rValues(9,indxTime)                           !ET
+                    rFlows(8,indxTime) =  -rValues(10,indxTime)                          !Percolation
                 END DO
                 
             CASE (f_iLandUse_Urb)
                 ALLOCATE (iColList(8) , iDataUnitTypes(8) , cFlowNames(7) , rValues(9,iNTimeSteps))
                 cFlowNames = ['Change in Storage' , 'Gain from Land Expansion' , 'Infiltration' , 'GW Inflow' , 'Other Inflow' , 'ET' , 'Percolation']
-                iColList   = [(indx,indx=74,81)]
+                iColList   = [(indx,indx=78,85)]
                 
                 !Read data for the interval
                 CALL ZBudget%ReadData(ZoneList,iZoneID,iColList,'1YEAR',cBeginDate,cEndDate,1d0,rFactVL,iDataUnitTypes,iNPopulatedValues,rValues,iStat)
@@ -3562,7 +3568,7 @@ CONTAINS
             CASE (f_iLandUse_NVRV)
                 ALLOCATE (iColList(9) , iDataUnitTypes(9) , cFlowNames(8) , rValues(10,iNTimeSteps))
                 cFlowNames = ['Change in Storage' , 'Gain from Land Expansion' , 'Infiltration' , 'GW Inflow' , 'Other Inflow' , 'Stream Inflow for ET' , 'ET' , 'Percolation']
-                iColList   = [(indx,indx=91,99)]
+                iColList   = [(indx,indx=95,103)]
                 
                 !Read data for the interval
                 CALL ZBudget%ReadData(ZoneList,iZoneID,iColList,'1YEAR',cBeginDate,cEndDate,1d0,rFactVL,iDataUnitTypes,iNPopulatedValues,rValues,iStat)
@@ -4549,7 +4555,7 @@ CONTAINS
                 rElemValues                                      = RootZone%ElemSupply%Diversion_Ag * rDemandFrac(:,indxCrop)
                 RDeli(indxCrop:indxLast:iNBudgetCrops)           = AppGrid%AccumElemValuesToSubregions(rElemValues)
                 RDeli(indxLast+indxCrop)                         = SUM(RDeli(indxCrop:indxLast:iNBudgetCrops))
-                rElemValues                                      = (RootZone%GenericMoistureData%rGenericMoisture(1,:) * pNonPondedAg%RootDepth(iCrop) - pNonPondedAg%Crops%GMExcess(indxCrop,:)) * rArea(:,indxCrop)
+                rElemValues                                      = (RootZone%GenericMoistureData%rGenericMoisture(1,:) * pNonPondedAg%RootDepth(iCrop) * pNonPondedAg%rSpatialRootDepthFractions(iCrop,:) - pNonPondedAg%Crops%GMExcess(indxCrop,:)) * rArea(:,indxCrop)
                 RGenMoistInflow(indxCrop:indxLast:iNBudgetCrops) = AppGrid%AccumElemValuesToSubregions(rElemValues)
                 RGenMoistInflow(indxLast+indxCrop)               = SUM(RGenMoistInflow(indxCrop:indxLast:iNBudgetCrops))
                 RLUArea(indxCrop:indxLast:iNBudgetCrops)         = AppGrid%AccumElemValuesToSubregions(rArea(:,indxCrop))
@@ -4657,7 +4663,7 @@ CONTAINS
                 rElemValues                                      = RootZone%ElemSupply%Diversion_Ag * rDemandFrac(:,indxCrop)
                 RDeli(indxCrop:indxLast:iNBudgetCrops)           = AppGrid%AccumElemValuesToSubregions(rElemValues)
                 RDeli(indxLast+indxCrop)                         = SUM(RDeli(indxCrop:indxLast:iNBudgetCrops))
-                rElemValues                                      = (RootZone%GenericMoistureData%rGenericMoisture(1,:) * pPondedAg%rRootDepth(iCrop) - pPondedAg%Crops%GMExcess(indxCrop,:)) * rArea(:,indxCrop)
+                rElemValues                                      = (RootZone%GenericMoistureData%rGenericMoisture(1,:) * pPondedAg%rRootDepth(iCrop,:) - pPondedAg%Crops%GMExcess(indxCrop,:)) * rArea(:,indxCrop)
                 RGenMoistInflow(indxCrop:indxLast:iNBudgetCrops) = AppGrid%AccumElemValuesToSubregions(rElemValues)
                 RGenMoistInflow(indxLast+indxCrop)               = SUM(RGenMoistInflow(indxCrop:indxLast:iNBudgetCrops))
                 RLUArea(indxCrop:indxLast:iNBudgetCrops)         = AppGrid%AccumElemValuesToSubregions(rArea(:,indxCrop))
@@ -4849,8 +4855,8 @@ CONTAINS
     
     !Pond storage
     IF (RootZone%Flags%lPondedAg_Defined) THEN
-        rPondStor_P = RootZone%PondedAgRootZone%rPondStor_P
-        rPondStor   = RootZone%PondedAgRootZone%rPondStor
+        RPondStor_P = RootZone%PondedAgRootZone%RegionalPondStor_P
+        RPondStor   = RootZone%PondedAgRootZone%RegionalPondStor
     ELSE
         RPondStor_P = 0.0
         RPondStor   = 0.0
@@ -5405,7 +5411,7 @@ CONTAINS
             DO indxElem=1,AppGrid%NElements
                 rAgOthIn_NP(indxElem,1) = 0.0
                 DO indxCrop=1,RootZone%NonPondedAgRootZone%NCrops
-                     rAgOthIn_NP(indxElem,1) = rAgOthIn_NP(indxElem,1) + (RootZone%GenericMoistureData%rGenericMoisture(1,indxElem) * RootZone%NonPondedAgRootZone%RootDepth(indxCrop) - RootZone%NonPondedAgRootZone%Crops%GMExcess(indxCrop,indxElem)) * RootZone%NonPondedAgRootZone%Crops%Area(indxCrop,indxElem)
+                     rAgOthIn_NP(indxElem,1) = rAgOthIn_NP(indxElem,1) + (RootZone%GenericMoistureData%rGenericMoisture(1,indxElem) * RootZone%NonPondedAgRootZone%RootDepth(indxCrop) * RootZone%NonPondedAgRootZone%rSpatialRootDepthFractions(indxCrop,indxElem)- RootZone%NonPondedAgRootZone%Crops%GMExcess(indxCrop,indxElem)) * RootZone%NonPondedAgRootZone%Crops%Area(indxCrop,indxElem)
                 END DO
             END DO
         END IF
@@ -5461,7 +5467,7 @@ CONTAINS
             DO indxElem=1,AppGrid%NElements
                 rAgOthIn_Rice(indxElem,1) = 0.0
                 DO indxCrop=indxB,indxE
-                     rAgOthIn_Rice(indxElem,1) = rAgOthIn_Rice(indxElem,1) + (RootZone%GenericMoistureData%rGenericMoisture(1,indxElem) * RootZone%PondedAgRootZone%rRootDepth(indxCrop) - RootZone%PondedAgRootZone%Crops%GMExcess(indxCrop,indxElem)) * RootZone%PondedAgRootZone%Crops%Area(indxCrop,indxElem)
+                     rAgOthIn_Rice(indxElem,1) = rAgOthIn_Rice(indxElem,1) + (RootZone%GenericMoistureData%rGenericMoisture(1,indxElem) * RootZone%PondedAgRootZone%rRootDepth(indxCrop,indxElem) - RootZone%PondedAgRootZone%Crops%GMExcess(indxCrop,indxElem)) * RootZone%PondedAgRootZone%Crops%Area(indxCrop,indxElem)
                 END DO
             END DO
         END IF
@@ -5475,8 +5481,7 @@ CONTAINS
         IF (RootZone%Flags%lGenericMoistureFile_Defined) rAgError_Rice = rAgError_Rice + rAgOthIn_Rice
         
         !Rice pond storage at each (rice crop,element); also serves as advancing state of the pond storage in time
-        RootZone%PondedAgRootZone%Crops%rPondStor_P(indxB:indxE,:) = RootZone%PondedAgRootZone%Crops%PondDepth(indxB:indxE,:) * RootZone%PondedAgRootZone%Crops%Area(indxB:indxE,:)
-        rAgEndPondStor_Rice(:,1)                                   = SUM(RootZone%PondedAgRootZone%Crops%rPondStor_P(indxB:indxE,:) , DIM=1)                
+        rAgEndPondStor_Rice(:,1) = SUM(RootZone%PondedAgRootZone%Crops%PondDepth(indxB:indxE,:) * RootZone%PondedAgRootZone%Crops%Area(indxB:indxE,:) , DIM=1)                
         
         !Correct beginning end ending moisture storage
         rAgBeginStor_Rice = rAgBeginStor_Rice- rAgBeginPondStor_Rice
@@ -5523,7 +5528,7 @@ CONTAINS
             DO indxElem=1,AppGrid%NElements
                 rAgOthIn_Refuge(indxElem,1) = 0.0
                 DO indxCrop=indxB,indxE
-                     rAgOthIn_Refuge(indxElem,1) = rAgOthIn_Refuge(indxElem,1) + (RootZone%GenericMoistureData%rGenericMoisture(1,indxElem) * RootZone%PondedAgRootZone%rRootDepth(indxCrop) - RootZone%PondedAgRootZone%Crops%GMExcess(indxCrop,indxElem)) * RootZone%PondedAgRootZone%Crops%Area(indxCrop,indxElem)
+                     rAgOthIn_Refuge(indxElem,1) = rAgOthIn_Refuge(indxElem,1) + (RootZone%GenericMoistureData%rGenericMoisture(1,indxElem) * RootZone%PondedAgRootZone%rRootDepth(indxCrop,indxElem) - RootZone%PondedAgRootZone%Crops%GMExcess(indxCrop,indxElem)) * RootZone%PondedAgRootZone%Crops%Area(indxCrop,indxElem)
                 END DO
             END DO
         END IF
@@ -5537,8 +5542,7 @@ CONTAINS
         IF (RootZone%Flags%lGenericMoistureFile_Defined) rAgError_Refuge = rAgError_Refuge + rAgOthIn_Refuge    
 
         !Refuge pond storage at each (refuge,element); also serves as advancing state of the pond storage in time
-        RootZone%PondedAgRootZone%Crops%rPondStor_P(indxB:indxE,:) = RootZone%PondedAgRootZone%Crops%PondDepth(indxB:indxE,:) * RootZone%PondedAgRootZone%Crops%Area(indxB:indxE,:)
-        rAgEndPondStor_Refuge(:,1)                                 = SUM(RootZone%PondedAgRootZone%Crops%rPondStor_P(indxB:indxE,:) , DIM=1)                
+        rAgEndPondStor_Refuge(:,1) = SUM(RootZone%PondedAgRootZone%Crops%PondDepth(indxB:indxE,:) * RootZone%PondedAgRootZone%Crops%Area(indxB:indxE,:) , DIM=1)                
         
         !Correct beginning end ending moisture storage
         rAgBeginStor_Refuge = rAgBeginStor_Refuge - rAgBeginPondStor_Refuge
@@ -5602,7 +5606,7 @@ CONTAINS
             DO indxElem=1,AppGrid%NElements
                 rNVRVOthIn(indxElem,1) = 0.0
                 DO indxCrop=1,RootZone%NVRVRootZone%iNNVRV
-                    rNVRVOthIn(indxElem,1) = rNVRVOthIn(indxElem,1) + (RootZone%GenericMoistureData%rGenericMoisture(1,indxElem) * RootZone%NVRVRootZone%rRootDepth(indxCrop) - RootZone%NVRVRootZone%NVRV%GMExcess(indxCrop,indxElem)) * RootZone%NVRVRootZone%NVRV%Area(indxCrop,indxElem)     
+                    rNVRVOthIn(indxElem,1) = rNVRVOthIn(indxElem,1) + (RootZone%GenericMoistureData%rGenericMoisture(1,indxElem) * RootZone%NVRVRootZone%rRootDepth(indxCrop,indxElem) - RootZone%NVRVRootZone%NVRV%GMExcess(indxCrop,indxElem)) * RootZone%NVRVRootZone%NVRV%Area(indxCrop,indxElem)     
                 END DO
             END DO
             rNVRVError = rNVRVError + rNVRVOthIn 

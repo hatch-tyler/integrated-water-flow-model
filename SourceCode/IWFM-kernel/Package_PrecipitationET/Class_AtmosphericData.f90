@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2025  
+!  Copyright (C) 2005-2026  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -21,7 +21,8 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 MODULE Class_AtmosphericData
-  USE IOInterface          , ONLY: RealTSDataInFileType
+  USE IOInterface          , ONLY: RealTSDataInFileType , &
+                                   f_IO_SuccessfulRead
   USE TimeSeriesUtilities  , ONLY: TimeStepType
   USE MessageLogger        , ONLY: EchoProgress         , &
                                    SetLastMessage       , &
@@ -252,7 +253,7 @@ CONTAINS
     IF (iStat .EQ. -1) RETURN
 
     !If error code returned was zero (data read successfully), scale atmospheric data
-    IF (FileReadCode .EQ. 0) THEN
+    IF (FileReadCode .EQ. f_IO_SuccessfulRead) THEN
         AtmosphericData%rValues = AtmosphericData%rValues * AtmosphericData%Fact
         !Check for negativity if desired
         IF (lCheckForNegativity) THEN

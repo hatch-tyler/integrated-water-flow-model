@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2025  
+!  Copyright (C) 2005-2026  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -811,7 +811,7 @@ CONTAINS
     
     !Make sure time units are valid if time tracking simulation
     IF (TimeStep%TrackTime) THEN
-        IF (IsTimeIntervalValid(VarTimeUnit) .EQ. 0) THEN
+        IF (.NOT. IsTimeIntervalValid(VarTimeUnit)) THEN
             CALL SetLastMessage('Time unit for unsaturated zone hydraulic conductivity is not valid!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN

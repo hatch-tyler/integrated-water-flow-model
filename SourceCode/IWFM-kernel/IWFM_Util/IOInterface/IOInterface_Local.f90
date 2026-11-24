@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2025  
+!  Copyright (C) 2005-2026  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -21,26 +21,32 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 MODULE IOInterface_Local
-  USE GeneralUtilities          , ONLY: UpperCase              , &
-                                        LowerCase              , &
-                                        FirstLocation          
-  USE TimeSeriesUtilities       , ONLY: TimeStepType           
-  USE MessageLogger             , ONLY: SetLastMessage         , &
-                                        LogMessage             , &
-                                        f_iWarn                , &
-                                        f_iFatal               
-  USE Class_BaseFileType        , ONLY: BaseFileType           
-  USE Class_AsciiFileType       , ONLY: AsciiInFileType        , &
-                                        AsciiTSDInFileType     , &
-                                        AsciiOutFileType       , &
-                                        AsciiTSDOutFileType    
-  USE Class_FortBinaryFileType  , ONLY: FortBinFileType        
-  USE Class_DssFileType         , ONLY: DSSInFileType          , &
-                                        DSSOutFileType         
-  USE Class_HDF5FileType        , ONLY: HDF5FileType           , &
-                                        f_iGroup               , &
-                                        f_iDataSet             , &
-                                        f_iAttribute           , &
+  USE GeneralUtilities          , ONLY: UpperCase                    , &
+                                        LowerCase                    , &
+                                        FirstLocation                
+  USE TimeSeriesUtilities       , ONLY: TimeStepType                 
+  USE MessageLogger             , ONLY: SetLastMessage               , &
+                                        LogMessage                   , &
+                                        f_iWarn                      , &
+                                        f_iFatal                     
+  USE Class_BaseFileType        , ONLY: BaseFileType                 , &
+                                        f_IO_TSData_NotYetTimeToRead , &
+                                        f_IO_TSData_BadTimeStamp     , &
+                                        f_IO_TSData_DssReadError     , &
+                                        f_IO_SuccessfulRead          , &
+                                        f_IO_UnsuccessfulRead        , &   
+                                        f_IO_FileNotFound            
+  USE Class_AsciiFileType       , ONLY: AsciiInFileType              , &
+                                        AsciiTSDInFileType           , &
+                                        AsciiOutFileType             , &
+                                        AsciiTSDOutFileType          
+  USE Class_FortBinaryFileType  , ONLY: FortBinFileType              
+  USE Class_DssFileType         , ONLY: DSSInFileType                , &
+                                        DSSOutFileType               
+  USE Class_HDF5FileType        , ONLY: HDF5FileType                 , &
+                                        f_iGroup                     , &
+                                        f_iDataSet                   , &
+                                        f_iAttribute                 , &
                                         f_iMaxDatasetNameLen 
   IMPLICIT NONE
 
@@ -59,19 +65,25 @@ MODULE IOInterface_Local
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------
   PRIVATE
-  PUBLIC :: GenericFileType        , &
-            GetFileDate            , &
-            iGetFileType_FromName  , &
-            DoesFileExist          , &
-            f_iUNKNOWN             , &
-            f_iTXT                 , &
-            f_iBIN                 , &
-            f_iDSS                 , &
-            f_iHDF                 , &
-            f_iGroup               , &
-            f_iDataSet             , &
-            f_iAttribute           , &
-            f_iMaxDatasetNameLen     
+  PUBLIC :: GenericFileType              , &
+            GetFileDate                  , &
+            iGetFileType_FromName        , &
+            DoesFileExist                , &
+            f_iUNKNOWN                   , &
+            f_iTXT                       , &
+            f_iBIN                       , &
+            f_iDSS                       , &
+            f_iHDF                       , &
+            f_iGroup                     , &
+            f_iDataSet                   , &
+            f_iAttribute                 , &
+            f_iMaxDatasetNameLen         , &
+            f_IO_TSData_NotYetTimeToRead , &
+            f_IO_TSData_DssReadError     , &
+            f_IO_TSData_BadTimeStamp     , &
+            f_IO_SuccessfulRead          , &
+            f_IO_UnsuccessfulRead        , &
+            f_IO_FileNotFound          
 
   
   ! -------------------------------------------------------------
@@ -91,7 +103,7 @@ MODULE IOInterface_Local
                        f_iDSSOutFile      = 41     , &
                        f_iHDFFile         = 5
 
-
+  
   ! -------------------------------------------------------------
   ! --- GENERIC FILE DATA TYPE
   ! -------------------------------------------------------------
@@ -780,11 +792,7 @@ CONTAINS
     
     SELECT TYPE (p => ThisFile%Me)
       TYPE IS (DSSInFileType)  !DSS input file
-          IF (PRESENT(NRowsOfData)) THEN
-              CALL p%SetParameters_DssInFile(PathNames,NColumnsOfData,NRowsOfData,iStat=iStat)
-          ELSE
-              CALL p%SetParameters_DssInFile(PathNames,NColumnsOfData,iStat=iStat)
-          END IF
+          CALL p%SetParameters_DssInFile(PathNames,NColumnsOfData,iStat,NRowsOfData)
 
       TYPE IS (DSSOutFileType) !DSS output file
           IF (PRESENT(NRowsOfData)) THEN

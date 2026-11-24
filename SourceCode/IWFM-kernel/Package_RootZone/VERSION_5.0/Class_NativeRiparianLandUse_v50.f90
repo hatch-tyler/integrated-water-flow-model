@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2025  
+!  Copyright (C) 2005-2026  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -92,7 +92,8 @@ MODULE Class_NativeRiparianLandUse_v50
   CONTAINS
       PROCEDURE,PASS   :: New
       PROCEDURE,PASS   :: Kill
-      PROCEDURE,NOPASS :: GetAreasForTimePeriod
+      PROCEDURE,NOPASS :: GetAreasForTimePeriod_FileNotOpen
+      PROCEDURE,PASS   :: GetAreasForTimePeriod_FileOpen
       PROCEDURE,PASS   :: ReadTSData 
       PROCEDURE,PASS   :: ReadRestartData
       PROCEDURE,PASS   :: PrintRestartData
@@ -101,6 +102,8 @@ MODULE Class_NativeRiparianLandUse_v50
       PROCEDURE,PASS   :: SoilMContent_To_Depth 
       PROCEDURE,PASS   :: Simulate  
       PROCEDURE,PASS   :: RewindTSInputFilesToTimeStamp 
+      GENERIC          :: GetAreasForTimePeriod           => GetAreasForTimePeriod_FileNotOpen , &
+                                                             GetAreasForTimePeriod_FileOpen
   END TYPE NativeRiparianDatabase_v50_Type
   
 
@@ -342,10 +345,10 @@ CONTAINS
 ! ******************************************************************
 
   ! -------------------------------------------------------------
-  ! --- GET NATIVE OR RIPARIAN VEG AREAS FOR AT ALL ELEMENTS FOR A TIME PERIOD
+  ! --- GET NATIVE OR RIPARIAN VEG AREAS FOR AT ALL ELEMENTS FOR A TIME PERIOD WHEN FILE IS NOT OPEN
   ! --- Note: This method is not meant to be called during a Simulation
   ! -------------------------------------------------------------
-  SUBROUTINE GetAreasForTimePeriod(cMainFileName,cWorkingDirectory,cBeginDate,cEndDate,TimeStep,AppGrid,iNVorRV,rAreas,iStat)
+  SUBROUTINE GetAreasForTimePeriod_FileNotOpen(cMainFileName,cWorkingDirectory,cBeginDate,cEndDate,TimeStep,AppGrid,iNVorRV,rAreas,iStat)
     CHARACTER(LEN=*),INTENT(IN)   :: cMainFileName,cWorkingDirectory,cBeginDate,cEndDate
     TYPE(TimeStepType),INTENT(IN) :: TimeStep
     TYPE(AppGridType),INTENT(IN)  :: AppGrid
@@ -376,11 +379,30 @@ CONTAINS
     CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(cALine)),cWorkingDirectory,cAreaFileName)
     
     !Retrieve areas
-    CALL ReadLandUseAreasForTimePeriod(cAreaFileName,cWorkingDirectory,cBeginDate,cEndDate,TimeStep,AppGrid,2,iNVorRV,rAreas,iStat)
+    CALL ReadLandUseAreasForTimePeriod(cAreaFileName,cWorkingDirectory,'NAtive and riparian vegetation area file',cBeginDate,cEndDate,TimeStep,AppGrid,2,iNVorRV,rAreas,iStat)
 
 10  CALL MainFile%Kill()
     
-  END SUBROUTINE GetAreasForTimePeriod
+  END SUBROUTINE GetAreasForTimePeriod_FileNotOpen
+
+  
+    ! -------------------------------------------------------------
+  ! --- GET NATIVE OR RIPARIAN VEG AREAS FOR AT ALL ELEMENTS FOR A TIME PERIOD WHEN FILE IS OPEN
+  ! --- Note: This method is not meant to be called during a Simulation
+  ! -------------------------------------------------------------
+  SUBROUTINE GetAreasForTimePeriod_FileOpen(NVRVLand,cBeginDate,cEndDate,TimeStep,AppGrid,iNVorRV,rAreas,iStat)
+    CLASS(NativeRiparianDatabase_v50_Type),INTENT(INOUT) :: NVRVLand
+    CHARACTER(LEN=*),INTENT(IN)                          :: cBeginDate,cEndDate
+    TYPE(TimeStepType),INTENT(IN)                        :: TimeStep
+    TYPE(AppGridType),INTENT(IN)                         :: AppGrid
+    INTEGER,INTENT(IN)                                   :: iNVorRV  !1 = NV; 2 = RV
+    REAL(8),INTENT(OUT)                                  :: rAreas(:,:)  !For each (element,time)
+    INTEGER,INTENT(OUT)                                  :: iStat
+    
+    !Retrieve areas
+    CALL ReadLandUseAreasForTimePeriod(NVRVLand%LandUseDataFile,'Native and riparian vegetation area file',cBeginDate,cEndDate,TimeStep,AppGrid,iNVorRV,rAreas,iStat)
+
+  END SUBROUTINE GetAreasForTimePeriod_FileOpen
 
 
 
@@ -671,6 +693,7 @@ CONTAINS
                   
                   !Simulate
                   CALL NonPondedLUMoistureRouter(PrecipD                                ,  &
+                                                0.2d0                                   ,  &
                                                  pNV%SMax(indxSoil,indxRegion)          ,  &
                                                  SoilM_P                                ,  &
                                                  ETc(1)*DeltaT                          ,  & 
@@ -754,6 +777,7 @@ CONTAINS
                   
                   !Simulate
                   CALL NonPondedLUMoistureRouter(PrecipD                                ,  &
+                                                 0.2d0                                  ,  &
                                                  pRV%SMax(indxSoil,indxRegion)          ,  &
                                                  SoilM_P                                ,  &
                                                  ETc(2)*DeltaT                          ,  & 

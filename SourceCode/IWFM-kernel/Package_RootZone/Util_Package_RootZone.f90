@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2025  
+!  Copyright (C) 2005-2026  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -33,7 +33,8 @@ MODULE Util_Package_RootZone
   USE TimeSeriesUtilities    , ONLY: TimeStepType                  , &
                                      IncrementTimeStamp            , &
                                      OPERATOR(.TSGT.)
-  USE IOInterface            , ONLY: GenericFileType
+  USE IOInterface            , ONLY: GenericFileType               , &
+                                     f_iTXT
   USE Package_Misc           , ONLY: f_iRootZoneComp
   USE Package_Discretization , ONLY: AppGridType
   USE Class_LandUseDataFile  , ONLY: LandUseDataFileType
@@ -48,6 +49,7 @@ MODULE Util_Package_RootZone
             ReadRealData                         , & 
             ReadPointerData                      , &
             ReadLandUseAreasForTimePeriod        , &
+            ReadLandUseAreasForTimePeriod_All    , &
             InitColumnPointerData_ForElements    , &
             AddStringToStringList                , &
             f_iNoIrigPeriod                      , &
@@ -128,6 +130,20 @@ MODULE Util_Package_RootZone
   CHARACTER(LEN=30),PARAMETER :: f_cDescription_LWUZBudget      = 'Land and water use zone budget'  
 
                                            
+  ! -------------------------------------------------------------
+  ! --- OVERLOADED METHODS
+  ! -------------------------------------------------------------
+  INTERFACE ReadLandUseAreasForTimePeriod
+      MODULE PROCEDURE ReadLandUseAreasForTimePeriod_FileNotOpen
+      MODULE PROCEDURE ReadLandUseAreasForTimePeriod_FileOpen
+  END INTERFACE 
+  
+  INTERFACE ReadLandUseAreasForTimePeriod_All
+      MODULE PROCEDURE ReadLandUseAreasForTimePeriod_All_FileNotOpen
+      MODULE PROCEDURE ReadLandUseAreasForTimePeriod_All_FileOpen
+  END INTERFACE 
+
+  
   ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
@@ -213,7 +229,7 @@ CONTAINS
     CALL File%ReadData(FirstLine,iStat)  
     IF (iStat .EQ. -1) RETURN
     
-    !If Element number in first line is zero, apply the data to all DummyIntArray
+    !If Element number in first line is zero, apply the data to all DummyRealArray
     IF (FirstLine(1) .EQ. 0) THEN
         DO indxElem=1,iRow
             DummyRealArray(indxElem,1)  = indxElem
@@ -304,25 +320,25 @@ CONTAINS
   
 
   ! -------------------------------------------------------------
-  ! --- READ AREAS OF A SPECIFIED LAND USE FOR ALL ELEMENTS FOR A RANGE OF TIME
+  ! --- READ AREAS OF ALL LAND USES (FOR A LANDUSE CATEGORY) AT ALL ELEMENTS FOR A RANGE OF TIME WHEN INPUT FILE IS NOT YET OPENED
   ! --- Note: This method is intended to be called outside of a Simulation run
   ! -------------------------------------------------------------
-  SUBROUTINE ReadLandUseAreasForTimePeriod(cAreaFileName,cWorkingDirectory,cBeginDate,cEndDate,TimeStep,AppGrid,iNLU,iLU,rLUAreas,iStat)
-    CHARACTER(LEN=*),INTENT(IN)   :: cAreaFileName,cWorkingDirectory,cBeginDate,cEndDate
+  SUBROUTINE ReadLandUseAreasForTimePeriod_All_FileNotOpen(cAreaFileName,cWorkingDirectory,cFileDescription,cBeginDate,cEndDate,TimeStep,AppGrid,rLUAreas,iStat)
+    CHARACTER(LEN=*),INTENT(IN)   :: cAreaFileName,cWorkingDirectory,cFileDescription,cBeginDate,cEndDate
     TYPE(TimeStepType),INTENT(IN) :: TimeStep
     TYPE(AppGridType),INTENT(IN)  :: AppGrid
-    INTEGER,INTENT(IN)            :: iNLU,iLU
-    REAL(8),INTENT(OUT)           :: rLUAreas(:,:)  !For each (element,time)
+    REAL(8),INTENT(OUT)           :: rLUAreas(:,:,:)  !For each (element,landuse,time)
     INTEGER,INTENT(OUT)           :: iStat
     
     !Local variables
-    INTEGER                   :: indxTime,iElemIDs(AppGrid%NElements)
+    INTEGER                   :: indxTime,iElemIDs(AppGrid%NElements),iNLU
     REAL(8)                   :: rElemAreas(AppGrid%NElements)
     TYPE(LandUseDataFileType) :: AreaFile
     TYPE(TimeStepType)        :: TimeStepWork
    
     !Open area file
-    CALL AreaFile%New(cAreaFileName,cWorkingDirectory,'Non-ponded ag. area file',AppGrid%NElements,iNLU,.TRUE.,iStat)
+    iNLU = SIZE(rLUAreas,DIM=2)
+    CALL AreaFile%New(cAreaFileName,cWorkingDirectory,TRIM(cFileDescription),AppGrid%NElements,iNLU,.TRUE.,iStat)
     IF (iStat .NE. 0) GOTO 10
     
     !Element IDs and areas
@@ -338,98 +354,134 @@ CONTAINS
         IF (TimeStepWork%CurrentDateAndTime .TSGT. cEndDate) EXIT
         
         !Read data
-        CALL AreaFile%ReadTSData('Non-ponded crop areas',TimeStepWork,rElemAreas,iElemIDs,iStat)  ;  IF (iStat .NE. 0) GOTO 10
+        CALL AreaFile%ReadTSData(TRIM(cFileDescription),TimeStepWork,rElemAreas,iElemIDs,iStat)  ;  IF (iStat .NE. 0) GOTO 10
         
         !Store in return array
-        rLUAreas(:,indxTime) = AreaFile%rValues(:,iLU+1)
+        IF (AreaFile%File%iGetFileType() .EQ. f_iTXT) THEN
+            rLUAreas(:,:,indxTime) = AreaFile%rValues(:,2:)
+        ELSE
+            rLUAreas(:,:,indxTime) = AreaFile%rValues
+        END IF
         
         !Advance time and index
         indxTime                        = indxTime + 1
         TimeStepWork%CurrentDateAndTime = IncrementTimeStamp(TimeStepWork%CurrentDateAndTime,TimeStep%DELTAT_InMinutes)
-
     END DO
         
     !Close area file
 10  CALL AreaFile%Kill()
     
-  END SUBROUTINE ReadLandUseAreasForTimePeriod
+  END SUBROUTINE ReadLandUseAreasForTimePeriod_All_FileNotOpen
 
   
   ! -------------------------------------------------------------
-  ! --- GET AREAS OF A SPECIFIED PONDED CROP FOR ALL ELEMENTS FOR A RANGE OF TIME
+  ! --- READ AREAS OF ALL LAND USES (FOR A LANDUSE CATEGORY) AT ALL ELEMENTS FOR A RANGE OF TIME WHEN INPUT FILE IS ALREADY OPENED
   ! --- Note: This method is intended to be called outside of a Simulation run
   ! -------------------------------------------------------------
-  !SUBROUTINE GetPondedCropAreasForTimePeriod(cPondedCropsFileName,cWorkingDirectory,cBeginDate,cEndDate,TimeStep,AppGrid,iCrop,rCropAreas,iStat)
-  !  CHARACTER(LEN=*),INTENT(IN)   :: cPondedCropsFileName,cWorkingDirectory,cBeginDate,cEndDate
-  !  TYPE(TimeStepType),INTENT(IN) :: TimeStep
-  !  TYPE(AppGridType),INTENT(IN)  :: AppGrid
-  !  INTEGER,INTENT(IN)            :: iCrop
-  !  REAL(8),INTENT(OUT)           :: rCropAreas(:,:)  !For each (element,time)
-  !  INTEGER,INTENT(OUT)           :: iStat
-  !  
-  !  !Local variables
-  !  INTEGER                   :: iNCrops,indx,indxTime,iElemIDs(AppGrid%NElements)
-  !  REAL(8)                   :: rElemAreas(AppGrid%NElements)
-  !  CHARACTER                 :: ALine*500
-  !  TYPE(GenericFileType)     :: PondedCropMainFile
-  !  TYPE(LandUseDataFileType) :: AreaFile
-  !  TYPE(TimeStepType)        :: TimeStepWork
-  !  CHARACTER(:),ALLOCATABLE  :: cAreaFileName
-  ! 
-  !  !Return if no file name is specified
-  !  IF (cPondedCropsFileName .EQ. '') THEN
-  !      rCropAreas = 0.0
-  !      iStat      = 0
-  !      GOTO 10
-  !  END IF
-  !  
-  !  !Open main file
-  !  CALL PondedCropMainFile%New(FileName=TRIM(cPondedCropsFileName),InputFile=.TRUE.,IsTSFile=.FALSE.,iStat=iStat)
-  !  IF (iStat .NE. 0) GOTO 10
-  !  
-  !  !Skip unnecssary data
-  !  CALL PondedCropMainFile%ReadData(iNCrops,iStat)  ;  IF (iStat .NE. 0) GOTO 10
-  !  DO indx=1,iNCrops+1
-  !      CALL NPCropMainFile%ReadData(ALine,iStat)  
-  !      IF (iStat .NE. 0) GOTO 10
-  !  END DO
-  !  
-  !  !Read area filename and open file
-  !  CALL NPCropMainFile%ReadData(ALine,iStat)  
-  !  ALine = StripTextUntilCharacter(ALine,'/') 
-  !  CALL CleanSpecialCharacters(ALine)
-  !  CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(ALine)),cWorkingDirectory,cAreaFileName)
-  !  CALL AreaFile%New(cAreaFileName,cWorkingDirectory,'Non-ponded ag. area file',AppGrid%NElements,iNCrops,.TRUE.,iStat)
-  !  IF (iStat .NE. 0) GOTO 10
-  !  
-  !  !Element IDs and areas
-  !  CALL AppGrid%GetElementIDs(iElemIDs)
-  !  rElemAreas = AppGrid%AppElement%Area
-  !  
-  !  !Read data
-  !  TimeStepWork                    = TimeStep
-  !  TimeStepWork%CurrentDateAndTime = cBeginDate
-  !  indxTime                        = 1
-  !  DO 
-  !      !Exit loop if reached end of period
-  !      IF (TimeStepWork%CurrentDateAndTime .TSGT. cEndDate) EXIT
-  !      
-  !      !Read data
-  !      CALL AreaFile%ReadTSData('Non-ponded crop areas',TimeStepWork,rElemAreas,iElemIDs,iStat)  ;  IF (iStat .NE. 0) GOTO 10
-  !      
-  !      !Store in return array
-  !      rCropAreas(:,indxTime) = AreaFile%rValues(:,iCrop+1)
-  !      
-  !      !Advance time and index
-  !      indxTime                        = indxTime + 1
-  !      TimeStepWork%CurrentDateAndTime = IncrementTimeStamp(TimeStepWork%CurrentDateAndTime,TimeStep%DELTAT_InMinutes)
-  !
-  !  END DO
-  !      
-  !  !Close main files
-!10  CALL NPCropMainFile%Kill()
-  !  CALL AreaFile%Kill()
-  !  
-  !END SUBROUTINE GetNPCropAreasForTimePeriod
+  SUBROUTINE ReadLandUseAreasForTimePeriod_All_FileOpen(AreaFile,cFileDescription,cBeginDate,cEndDate,TimeStep,AppGrid,rLUAreas,iStat)
+    TYPE(LandUseDataFileType),INTENT(INOUT) :: AreaFile
+    CHARACTER(LEN=*),INTENT(IN)             :: cFileDescription,cBeginDate,cEndDate
+    TYPE(TimeStepType),INTENT(IN)           :: TimeStep
+    TYPE(AppGridType),INTENT(IN)            :: AppGrid
+    REAL(8),INTENT(OUT)                     :: rLUAreas(:,:,:)  !For each (element,landuse,time)
+    INTEGER,INTENT(OUT)                     :: iStat
+    
+    !Local variables
+    INTEGER            :: indxTime,iElemIDs(AppGrid%NElements)
+    REAL(8)            :: rElemAreas(AppGrid%NElements)
+    TYPE(TimeStepType) :: TimeStepWork
+   
+    !Element IDs and areas
+    CALL AppGrid%GetElementIDs(iElemIDs)
+    rElemAreas = AppGrid%AppElement%Area
+    
+    !Read data
+    TimeStepWork                    = TimeStep
+    TimeStepWork%CurrentDateAndTime = cBeginDate
+    indxTime                        = 1
+    DO 
+        !Exit loop if reached end of period
+        IF (TimeStepWork%CurrentDateAndTime .TSGT. cEndDate) EXIT
+        
+        !Read data
+        CALL AreaFile%ReadTSData(TRIM(cFileDescription),TimeStepWork,rElemAreas,iElemIDs,iStat)  ;  IF (iStat .NE. 0) GOTO 10
+        
+        !Store in return array
+        IF (AreaFile%File%iGetFileType() .EQ. f_iTXT) THEN
+            rLUAreas(:,:,indxTime) = AreaFile%rValues(:,2:)
+        ELSE
+            rLUAreas(:,:,indxTime) = AreaFile%rValues
+        END IF
+        
+        !Advance time and index
+        indxTime                        = indxTime + 1
+        TimeStepWork%CurrentDateAndTime = IncrementTimeStamp(TimeStepWork%CurrentDateAndTime,TimeStep%DELTAT_InMinutes)
+    END DO
+        
+    !Rewind area file
+10  CALL AreaFile%File%RewindFile_To_BeginningOfTSData(iStat)
+    
+  END SUBROUTINE ReadLandUseAreasForTimePeriod_All_FileOpen
+
+  
+  ! -------------------------------------------------------------
+  ! --- READ AREAS OF A SPECIFIED LAND USE FOR ALL ELEMENTS FOR A RANGE OF TIME WHEN INPUT FILE IS NOT YET OPENED
+  ! --- Note: This method is intended to be called outside of a Simulation run
+  ! -------------------------------------------------------------
+  SUBROUTINE ReadLandUseAreasForTimePeriod_FileNotOpen(cAreaFileName,cWorkingDirectory,cFileDescription,cBeginDate,cEndDate,TimeStep,AppGrid,iNLU,iLU,rLUAreas,iStat)
+    CHARACTER(LEN=*),INTENT(IN)   :: cAreaFileName,cWorkingDirectory,cFileDescription,cBeginDate,cEndDate
+    TYPE(TimeStepType),INTENT(IN) :: TimeStep
+    TYPE(AppGridType),INTENT(IN)  :: AppGrid
+    INTEGER,INTENT(IN)            :: iNLU,iLU
+    REAL(8),INTENT(OUT)           :: rLUAreas(:,:)  !For each (element,time)
+    INTEGER,INTENT(OUT)           :: iStat
+    
+    !Local variables
+    REAL(8) :: rLUAreasAll(SIZE(rLUAreas,DIM=1),iNLU,SIZE(rLUAreas,DIM=2))
+   
+    !First get all land use areas
+    CALL ReadLandUseAreasForTimePeriod_All_FileNotOpen(cAreaFileName,cWorkingDirectory,cFileDescription,cBeginDate,cEndDate,TimeStep,AppGrid,rLUAreasAll,iStat)
+    IF (iStat .NE. 0) RETURN
+    
+    !Then, pick the land use we are interested in
+    rLUAreas = rLUAreasAll(:,iLU,:)
+    
+  END SUBROUTINE ReadLandUseAreasForTimePeriod_FileNotOpen
+
+  
+  ! -------------------------------------------------------------
+  ! --- READ AREAS OF A SPECIFIED LAND USE FOR ALL ELEMENTS FOR A RANGE OF TIME WHEN INPUT FILE IS ALREADY OPENED
+  ! --- Note: This method is intended to be called outside of a Simulation run
+  ! -------------------------------------------------------------
+  SUBROUTINE ReadLandUseAreasForTimePeriod_FileOpen(AreaFile,cFileDescription,cBeginDate,cEndDate,TimeStep,AppGrid,iLU,rLUAreas,iStat)
+    TYPE(LandUseDataFileType),INTENT(INOUT) :: AreaFile
+    CHARACTER(LEN=*),INTENT(IN)             :: cFileDescription,cBeginDate,cEndDate
+    TYPE(TimeStepType),INTENT(IN)           :: TimeStep
+    TYPE(AppGridType),INTENT(IN)            :: AppGrid
+    INTEGER,INTENT(IN)                      :: iLU
+    REAL(8),INTENT(OUT)                     :: rLUAreas(:,:)  !For each (element,time)
+    INTEGER,INTENT(OUT)                     :: iStat
+    
+    !Local variables
+    INTEGER             :: iNLU
+    REAL(8),ALLOCATABLE :: rLUAreasAll(:,:,:)  !For each (element,landuse,time)
+   
+    !Allocate array
+    IF (AreaFile%File%iGetFileType() .EQ. f_iTXT) THEN
+        iNLU = SIZE(AreaFile%rValues,DIM=2) - 1 !Subtract the time column
+    ELSE
+        iNLU = SIZE(AreaFile%rValues,DIM=2)
+    END IF
+    ALLOCATE (rLUAreasAll(SIZE(rLUAreas,DIM=1),iNLU,SIZE(rLUAreas,DIM=2)))
+    
+    !First get all landuse areas
+    CALL ReadLandUseAreasForTimePeriod_All_FileOpen(AreaFile,cFileDescription,cBeginDate,cEndDate,TimeStep,AppGrid,rLUAreasAll,iStat)
+    IF (iStat .NE. 0) RETURN
+    
+    !Then, pick the specific landuse
+    rLUAreas = rLUAreasAll(:,iLU,:)
+        
+  END SUBROUTINE ReadLandUseAreasForTimePeriod_FileOpen
+
   
 END MODULE

@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2025  
+!  Copyright (C) 2005-2026  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -127,9 +127,6 @@ CONTAINS
     
     !Return if no filename is specified
     IF (cFileName .EQ. '') RETURN
-    
-    !Inform user
-    CALL EchoProgress('Instantiating small watershed component...')
     
     !Open main input file
     CALL MainFile%New(FileName=cFileName,InputFile=.TRUE.,IsTSFile=.FALSE.,Descriptor='small watershed parameters',iStat=iStat) 
@@ -271,7 +268,7 @@ CONTAINS
     
     !Make sure time unit is recognized
     IF (TimeStep%TrackTime) THEN
-        IF (IsTimeIntervalValid(cTimeUnitK) .EQ. 0) THEN
+        IF (.NOT. IsTimeIntervalValid(cTimeUnitK)) THEN
             CALL SetLastMessage('Time unit for small watershed root zone hydraulic conductivity is not valid!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN

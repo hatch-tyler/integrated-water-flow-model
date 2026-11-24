@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2025  
+!  Copyright (C) 2005-2026  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -40,12 +40,12 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- SCS METHOD WITH HELP MODEL MODIFICATION (Schroeder, et. al, 1994)
   ! -------------------------------------------------------------
-  SUBROUTINE SCSMethod_HELP(RAIN,SMI,SMAX,FC,TN,ROFF,FILTRN)
-    REAL(8),INTENT(IN) ::RAIN ,SMI ,SMAX ,FC ,TN
-    REAL(8),INTENT(OUT)::ROFF ,FILTRN
+  SUBROUTINE SCSMethod_HELP(RAIN,rInitialAbstraction,SMI,SMAX,FC,TN,ROFF,FILTRN)
+    REAL(8),INTENT(IN)  :: RAIN , rInitialAbstraction ,SMI ,SMAX ,FC ,TN  
+    REAL(8),INTENT(OUT) :: ROFF ,FILTRN
 
     !Local variables
-    REAL(8)::S ,SI ,SP, SMI_Work 
+    REAL(8) :: S ,SI ,SP, SMI_Work
 
     !Initialize variables
     ROFF   = 0.0
@@ -59,8 +59,8 @@ CONTAINS
       ELSE
         S = SMAX
       END IF
-      SI = 0.2*S
-      SP = 0.8*S
+      SI = rInitialAbstraction * S
+      SP = (1.0-rInitialAbstraction) * S
       IF (RAIN.GT.SI) THEN
         ROFF   = RAIN-SI
         ROFF   = MIN(ROFF*ROFF/(RAIN+SP) , RAIN)

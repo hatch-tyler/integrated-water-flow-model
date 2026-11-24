@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2025  
+!  Copyright (C) 2005-2026  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -22,28 +22,30 @@
 !***********************************************************************
 MODULE Class_NativeRiparianLandUse_v40
   !$ USE OMP_LIB
-  USE MessageLogger           , ONLY: SetLastMessage                , &
-                                      EchoProgress                  , &
-                                      MessageArray                  , &
-                                      f_iFatal                        
-  USE IOInterface             , ONLY: GenericFileType               
-  USE TimeSeriesUtilities     , ONLY: TimeStepType                  
-  USE GeneralUtilities        , ONLY: StripTextUntilCharacter       , &
-                                      IntToText                     , &
-                                      CleanSpecialCharacters        , &
-                                      EstablishAbsolutePathFilename , &
-                                      LocateInList                  , &
+  USE MessageLogger           , ONLY: SetLastMessage                    , &
+                                      EchoProgress                      , &
+                                      MessageArray                      , &
+                                      f_iFatal                            
+  USE IOInterface             , ONLY: GenericFileType                   
+  USE TimeSeriesUtilities     , ONLY: TimeStepType                      , &
+                                      NPeriods
+  USE GeneralUtilities        , ONLY: StripTextUntilCharacter           , &
+                                      IntToText                         , &
+                                      CleanSpecialCharacters            , &
+                                      EstablishAbsolutePathFilename     , &
+                                      LocateInList                      , &
                                       NormalizeArray
   USE Class_BaseRootZone      , ONLY: TrackMoistureDueToSource
   USE Class_GenericLandUse    , ONLY: GenericLandUseType
   USE Class_LandUseDataFile   , ONLY: LandUseDataFileType
-  USE Util_Package_RootZone   , ONLY: ReadRealData                  , &
-                                      ReadLandUseAreasForTimePeriod    
+  USE Util_Package_RootZone   , ONLY: ReadRealData                      , &
+                                      ReadLandUseAreasForTimePeriod     , &    
+                                      ReadLandUseAreasForTimePeriod_All    
   USE Class_AppGrid           , ONLY: AppGridType
   USE Package_PrecipitationET , ONLY: ETType
-  USE Package_UnsatZone       , ONLY: RootZoneSoilType              , &
-                                      NonPondedLUMoistureRouter     
-  USE Package_Misc            , ONLY: SolverDataType                , &
+  USE Package_UnsatZone       , ONLY: RootZoneSoilType                  , &
+                                      NonPondedLUMoistureRouter         
+  USE Package_Misc            , ONLY: SolverDataType                    , &
                                       f_iFlowDest_GWElement         
   IMPLICIT NONE
   
@@ -88,7 +90,10 @@ MODULE Class_NativeRiparianLandUse_v40
   CONTAINS
       PROCEDURE,PASS   :: New                   
       PROCEDURE,PASS   :: Kill                  
-      PROCEDURE,NOPASS :: GetAreasForTimePeriod
+      PROCEDURE,NOPASS :: GetAreasForTimePeriod_FileNotOpen
+      PROCEDURE,PASS   :: GetAreasForTimePeriod_FileOpen
+      PROCEDURE,NOPASS :: GetAreasForTimePeriod_All_FileNotOpen
+      PROCEDURE,PASS   :: GetAreasForTimePeriod_All_FileOpen
       PROCEDURE,PASS   :: SetAreas              
       PROCEDURE,PASS   :: PrintRestartData
       PROCEDURE,PASS   :: ReadRestartData
@@ -99,6 +104,10 @@ MODULE Class_NativeRiparianLandUse_v40
       PROCEDURE,PASS   :: AdvanceAreas          
       PROCEDURE,PASS   :: SoilMContent_To_Depth 
       PROCEDURE,PASS   :: RewindTSInputFilesToTimeStamp 
+      GENERIC          :: GetAreasForTimePeriod           => GetAreasForTimePeriod_FileNotOpen     , &
+                                                             GetAreasForTimePeriod_FileOpen
+      GENERIC          :: GetAreasForTimePeriod_All       => GetAreasForTimePeriod_All_FileNotOpen , &
+                                                             GetAreasForTimePeriod_All_FileOpen
   END TYPE NativeRiparianLandUse_v40_Type
   
 
@@ -188,17 +197,25 @@ CONTAINS
     CALL NVRVFile%ReadData(NVRVLand%RootDepth_Riparian,iStat)  ;  IF (iStat .EQ. -1) RETURN  ;  NVRVLand%RootDepth_Riparian = NVRVLand%RootDepth_Riparian * FACT
  
     !Read CN and ETc column pointers
-    CALL ReadRealData(NVRVFile,'curve numbers and evapotranspiration column pointers for native and riparian vegetation','elements',NElements,5,iElemIDs,DummyArray,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    CALL ReadRealData(NVRVFile,'Curve numbers and evapotranspiration column pointers for native and riparian vegetation','elements',NElements,5,iElemIDs,DummyArray,iStat)  ;  IF (iStat .EQ. -1) RETURN
     lProcessed = .FALSE.
     DO indxElem=1,NElements
         iElem = INT(DummyArray(indxElem,1))
+        !Make sure data for element is not entered more than once
         IF (lProcessed(iElem)) THEN
             ID = iElemIDs(iElem)
-            CALL SetLastMessage('curve numbers and evapotranspiration column pointers for native and riparian vegetation at element '//TRIM(IntToText(ID))//' are defined more than once!',f_iFatal,ThisProcedure)
+            CALL SetLastMessage('Curve numbers and evapotranspiration column pointers for native and riparian vegetation at element '//TRIM(IntToText(ID))//' are defined more than once!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
-        lProcessed(iElem)                     = .TRUE.
+        lProcessed(iElem) = .TRUE.
+        !Make sure curve numbers are between 0 and 100
+        IF (ANY(DummyArray(indxElem,2:3) .LT. 0.0) .OR. ANY(DummyArray(indxElem,2:3) .GT. 100.0)) THEN
+            ID = iElemIDs(iElem)
+            CALL SetLastMessage('One or both curve numbers for native and riparian vegetation at element '//TRIM(IntToText(ID))//' are less than 0.0 or greater 100.0!',f_iFatal,ThisProcedure)
+            iStat = -1
+            RETURN
+        END IF       
         NVRVLand%NativeVeg%SMax(iElem,1)      = (1000.0/DummyArray(indxElem,2)-10.0) * FACTCN
         NVRVLand%RiparianVeg%SMax(iElem,1)    = (1000.0/DummyArray(indxElem,3)-10.0) * FACTCN
         NVRVLand%NativeVeg%iColETc(iElem,1)   = INT(DummyArray(indxElem,4))
@@ -302,10 +319,10 @@ CONTAINS
 ! ******************************************************************
 
   ! -------------------------------------------------------------
-  ! --- GET NATIVE OR RIPARIAN VEG AREAS FOR AT ALL ELEMENTS FOR A TIME PERIOD
+  ! --- GET NATIVE OR RIPARIAN VEG AREAS AT ALL ELEMENTS FOR A TIME PERIOD WHEN FILE IS NOT OPEN
   ! --- Note: This method is not meant to be called during a Simulation
   ! -------------------------------------------------------------
-  SUBROUTINE GetAreasForTimePeriod(cMainFileName,cWorkingDirectory,cBeginDate,cEndDate,TimeStep,AppGrid,iNVorRV,rAreas,iStat)
+  SUBROUTINE GetAreasForTimePeriod_FileNotOpen(cMainFileName,cWorkingDirectory,cBeginDate,cEndDate,TimeStep,AppGrid,iNVorRV,rAreas,iStat)
     CHARACTER(LEN=*),INTENT(IN)   :: cMainFileName,cWorkingDirectory,cBeginDate,cEndDate
     TYPE(TimeStepType),INTENT(IN) :: TimeStep
     TYPE(AppGridType),INTENT(IN)  :: AppGrid
@@ -336,12 +353,90 @@ CONTAINS
     CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(cALine)),cWorkingDirectory,cAreaFileName)
     
     !Retrieve areas
-    CALL ReadLandUseAreasForTimePeriod(cAreaFileName,cWorkingDirectory,cBeginDate,cEndDate,TimeStep,AppGrid,2,iNVorRV,rAreas,iStat)
+    CALL ReadLandUseAreasForTimePeriod(cAreaFileName,cWorkingDirectory,'Native and riparian vegetation area file',cBeginDate,cEndDate,TimeStep,AppGrid,2,iNVorRV,rAreas,iStat)
 
 10  CALL MainFile%Kill()
     
-  END SUBROUTINE GetAreasForTimePeriod
+  END SUBROUTINE GetAreasForTimePeriod_FileNotOpen
+  
+  
+  ! -------------------------------------------------------------
+  ! --- GET AREAS OF NATIVE OR RIPARIAN VEGITATION AT ALL ELEMENTS FOR A TIME PERIOD WHEN THE AREA FILE IS ALREADY OPEN
+  ! --- Note: This method is not meant to be called during a Simulation
+  ! -------------------------------------------------------------
+  SUBROUTINE GetAreasForTimePeriod_FileOpen(NVRVLand,cBeginDate,cEndDate,TimeStep,AppGrid,iNVorRV,rAreas,iStat)
+    CLASS(NativeRiparianLandUse_v40_Type),INTENT(INOUT) :: NVRVLand
+    CHARACTER(LEN=*),INTENT(IN)                         :: cBeginDate,cEndDate
+    TYPE(TimeStepType),INTENT(IN)                       :: TimeStep
+    TYPE(AppGridType),INTENT(IN)                        :: AppGrid
+    INTEGER,INTENT(IN)                                  :: iNVorRV  !1 = NV; 2 = RV
+    REAL(8),INTENT(OUT)                                 :: rAreas(:,:)  !For each (element,time)
+    INTEGER,INTENT(OUT)                                 :: iStat
     
+    !Retrieve areas
+    CALL ReadLandUseAreasForTimePeriod(NVRVLand%LandUseDataFile,'Native and riparian vegetation area file',cBeginDate,cEndDate,TimeStep,AppGrid,iNVorRV,rAreas,iStat)
+    
+  END SUBROUTINE GetAreasForTimePeriod_FileOpen
+    
+  
+  ! -------------------------------------------------------------
+  ! --- GET NATIVE OR RIPARIAN VEG AREAS AT ALL ELEMENTS FOR A TIME PERIOD WHEN FILE IS NOT OPEN
+  ! --- Note: This method is not meant to be called during a Simulation
+  ! -------------------------------------------------------------
+  SUBROUTINE GetAreasForTimePeriod_All_FileNotOpen(cMainFileName,cWorkingDirectory,cBeginDate,cEndDate,TimeStep,AppGrid,rAreas,iStat)
+    CHARACTER(LEN=*),INTENT(IN)   :: cMainFileName,cWorkingDirectory,cBeginDate,cEndDate
+    TYPE(TimeStepType),INTENT(IN) :: TimeStep
+    TYPE(AppGridType),INTENT(IN)  :: AppGrid
+    REAL(8),INTENT(OUT)           :: rAreas(:,:,:)  !For each (element,landuse,time)
+    INTEGER,INTENT(OUT)           :: iStat
+    
+    !Local variables
+    CHARACTER                :: cALine*500
+    TYPE(GenericFileType)    :: MainFile
+    CHARACTER(:),ALLOCATABLE :: cAreaFileName
+    
+    !Return if no file name is specified
+    IF (cMainFileName .EQ. '') THEN
+        rAreas = 0.0
+        iStat  = 0
+        GOTO 10
+    END IF
+    
+    !Open main file
+    CALL MainFile%New(FileName=TRIM(cMainFileName),InputFile=.TRUE.,IsTSFile=.FALSE.,iStat=iStat)
+    IF (iStat .NE. 0) GOTO 10
+    
+    !Read area filename
+    CALL MainFile%ReadData(cALine,iStat)  
+    cALine = StripTextUntilCharacter(cALine,'/') 
+    CALL CleanSpecialCharacters(cALine)
+    CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(cALine)),cWorkingDirectory,cAreaFileName)
+    
+    !Retrieve areas
+    CALL ReadLandUseAreasForTimePeriod_All(cAreaFileName,cWorkingDirectory,'Native and riparian vegetation area file',cBeginDate,cEndDate,TimeStep,AppGrid,rAreas,iStat)
+
+10  CALL MainFile%Kill()
+    
+  END SUBROUTINE GetAreasForTimePeriod_All_FileNotOpen
+  
+  
+  ! -------------------------------------------------------------
+  ! --- GET AREAS OF NATIVE AND RIPARIAN VEGITATION AT ALL ELEMENTS FOR A TIME PERIOD WHEN THE AREA FILE IS ALREADY OPEN
+  ! --- Note: This method is not meant to be called during a Simulation
+  ! -------------------------------------------------------------
+  SUBROUTINE GetAreasForTimePeriod_All_FileOpen(NVRVLand,cBeginDate,cEndDate,TimeStep,AppGrid,rAreas,iStat)
+    CLASS(NativeRiparianLandUse_v40_Type),INTENT(INOUT) :: NVRVLand
+    CHARACTER(LEN=*),INTENT(IN)                         :: cBeginDate,cEndDate
+    TYPE(TimeStepType),INTENT(IN)                       :: TimeStep
+    TYPE(AppGridType),INTENT(IN)                        :: AppGrid
+    REAL(8),INTENT(OUT)                                 :: rAreas(:,:,:)  !For each (element,landuse,time)
+    INTEGER,INTENT(OUT)                                 :: iStat
+    
+    !Retrieve areas
+    CALL ReadLandUseAreasForTimePeriod_All(NVRVLand%LandUseDataFile,'Native and riparian vegetation area file',cBeginDate,cEndDate,TimeStep,AppGrid,rAreas,iStat)
+    
+  END SUBROUTINE GetAreasForTimePeriod_All_FileOpen
+  
   
   
     
@@ -383,11 +478,13 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- READ RESTART DATA
   ! -------------------------------------------------------------
-  SUBROUTINE ReadRestartData(NVRVLand,InFile,iStat)
+  SUBROUTINE ReadRestartData(NVRVLand,InFile,lConvertMoistToDepth,iStat)
     CLASS(NativeRiparianLandUse_v40_Type) :: NVRVLand
     TYPE(GenericFileType)                 :: InFile
+    LOGICAL,INTENT(IN)                    :: lConvertMoistToDepth
     INTEGER,INTENT(OUT)                   :: iStat
     
+    !Read native veg data
     CALL InFile%ReadData(NVRVLand%NativeVeg%Runoff,iStat)            ;  IF (iStat .EQ. -1) RETURN
     CALL InFile%ReadData(NVRVLand%NativeVeg%Area_P,iStat)            ;  IF (iStat .EQ. -1) RETURN
     CALL InFile%ReadData(NVRVLand%NativeVeg%Area,iStat)              ;  IF (iStat .EQ. -1) RETURN
@@ -398,6 +495,7 @@ CONTAINS
     CALL InFile%ReadData(NVRVLand%NativeVeg%SoilM_Oth_P,iStat)       ;  IF (iStat .EQ. -1) RETURN
     CALL InFile%ReadData(NVRVLand%NativeVeg%SoilM_Oth,iStat)         ;  IF (iStat .EQ. -1) RETURN
                                                                      
+    !Read riparian veg data
     CALL InFile%ReadData(NVRVLand%RiparianVeg%Runoff,iStat)          ;  IF (iStat .EQ. -1) RETURN
     CALL InFile%ReadData(NVRVLand%RiparianVeg%Area_P,iStat)          ;  IF (iStat .EQ. -1) RETURN
     CALL InFile%ReadData(NVRVLand%RiparianVeg%Area,iStat)            ;  IF (iStat .EQ. -1) RETURN
@@ -407,6 +505,24 @@ CONTAINS
     CALL InFile%ReadData(NVRVLand%RiparianVeg%SoilM_AW,iStat)        ;  IF (iStat .EQ. -1) RETURN
     CALL InFile%ReadData(NVRVLand%RiparianVeg%SoilM_Oth_P,iStat)     ;  IF (iStat .EQ. -1) RETURN
     CALL InFile%ReadData(NVRVLand%RiparianVeg%SoilM_Oth,iStat)       ;  IF (iStat .EQ. -1) RETURN
+
+    !Convert moisture contents to depths, if requested
+    IF (lConvertMoistToDepth) THEN
+        !Native veg
+        NVRVLand%NativeVeg%SoilM_Precip_P = NVRVLand%NativeVeg%SoilM_Precip_P * NVRVLand%RootDepth_Native
+        NVRVLand%NativeVeg%SoilM_AW_P     = NVRVLand%NativeVeg%SoilM_AW_P     * NVRVLand%RootDepth_Native    
+        NVRVLand%NativeVeg%SoilM_Oth_P    = NVRVLand%NativeVeg%SoilM_Oth_P    * NVRVLand%RootDepth_Native   
+        NVRVLand%NativeVeg%SoilM_Precip   = NVRVLand%NativeVeg%SoilM_Precip   * NVRVLand%RootDepth_Native  
+        NVRVLand%NativeVeg%SoilM_AW       = NVRVLand%NativeVeg%SoilM_AW       * NVRVLand%RootDepth_Native      
+        NVRVLand%NativeVeg%SoilM_Oth      = NVRVLand%NativeVeg%SoilM_Oth      * NVRVLand%RootDepth_Native 
+        !Riparian veg
+        NVRVLand%RiparianVeg%SoilM_Precip_P = NVRVLand%RiparianVeg%SoilM_Precip_P * NVRVLand%RootDepth_Riparian
+        NVRVLand%RiparianVeg%SoilM_AW_P     = NVRVLand%RiparianVeg%SoilM_AW_P     * NVRVLand%RootDepth_Riparian    
+        NVRVLand%RiparianVeg%SoilM_Oth_P    = NVRVLand%RiparianVeg%SoilM_Oth_P    * NVRVLand%RootDepth_Riparian   
+        NVRVLand%RiparianVeg%SoilM_Precip   = NVRVLand%RiparianVeg%SoilM_Precip   * NVRVLand%RootDepth_Riparian  
+        NVRVLand%RiparianVeg%SoilM_AW       = NVRVLand%RiparianVeg%SoilM_AW       * NVRVLand%RootDepth_Riparian      
+        NVRVLand%RiparianVeg%SoilM_Oth      = NVRVLand%RiparianVeg%SoilM_Oth      * NVRVLand%RootDepth_Riparian  
+    END IF
 
   END SUBROUTINE ReadRestartData
   
@@ -422,6 +538,9 @@ CONTAINS
     REAL(8),INTENT(IN)                    :: rElemAreas(AppGrid%NElements)
     INTEGER,INTENT(OUT)                   :: iStat
     
+    !Local varaibles
+    REAL(8) :: rAreas(AppGrid%NElements,2)
+    
     !Initialize
     iStat = 0
     
@@ -432,8 +551,9 @@ CONTAINS
     CALL NVRVLand%LandUseDataFile%ReadTSData('Native and riparian veg. areas',TimeStep,rElemAreas,iElemIDs,iStat)
     IF (iStat .EQ. -1) RETURN
     IF (NVRVLAnd%LandUseDataFile%lUpdated) THEN
-        NVRVLand%NativeVeg%Area(:,1)   = NVRVLand%LandUseDataFile%rValues(:,2)
-        NVRVLand%RiparianVeg%Area(:,1) = NVRVLand%LandUseDataFile%rValues(:,3)
+        rAreas                         = TRANSPOSE(NVRVLand%LandUseDataFile%GetAreas(AppGrid%NElements,2))
+        NVRVLand%NativeVeg%Area(:,1)   = rAreas(:,1)
+        NVRVLand%RiparianVeg%Area(:,1) = rAreas(:,2)
     END IF
     
   END SUBROUTINE ReadTSData
@@ -517,25 +637,26 @@ CONTAINS
     CLASS(NativeRiparianLandUse_v40_Type),INTENT(IN) :: NVRVLand
     TYPE(GenericFileType)                            :: OutFile
     
+    !Print; print moisture as moisture content
     CALL OutFile%WriteData(NVRVLand%NativeVeg%Runoff)
     CALL OutFile%WriteData(NVRVLand%NativeVeg%Area_P)
     CALL OutFile%WriteData(NVRVLand%NativeVeg%Area)
-    CALL OutFile%WriteData(NVRVLand%NativeVeg%SoilM_Precip_P)
-    CALL OutFile%WriteData(NVRVLand%NativeVeg%SoilM_Precip)
-    CALL OutFile%WriteData(NVRVLand%NativeVeg%SoilM_AW_P)
-    CALL OutFile%WriteData(NVRVLand%NativeVeg%SoilM_AW)
-    CALL OutFile%WriteData(NVRVLand%NativeVeg%SoilM_Oth_P)
-    CALL OutFile%WriteData(NVRVLand%NativeVeg%SoilM_Oth)
+    CALL OutFile%WriteData(NVRVLand%NativeVeg%SoilM_Precip_P/NVRVLand%RootDepth_Native)
+    CALL OutFile%WriteData(NVRVLand%NativeVeg%SoilM_Precip/NVRVLand%RootDepth_Native)
+    CALL OutFile%WriteData(NVRVLand%NativeVeg%SoilM_AW_P/NVRVLand%RootDepth_Native)
+    CALL OutFile%WriteData(NVRVLand%NativeVeg%SoilM_AW/NVRVLand%RootDepth_Native)
+    CALL OutFile%WriteData(NVRVLand%NativeVeg%SoilM_Oth_P/NVRVLand%RootDepth_Native)
+    CALL OutFile%WriteData(NVRVLand%NativeVeg%SoilM_Oth/NVRVLand%RootDepth_Native)
     
     CALL OutFile%WriteData(NVRVLand%RiparianVeg%Runoff)
     CALL OutFile%WriteData(NVRVLand%RiparianVeg%Area_P)
     CALL OutFile%WriteData(NVRVLand%RiparianVeg%Area)
-    CALL OutFile%WriteData(NVRVLand%RiparianVeg%SoilM_Precip_P)
-    CALL OutFile%WriteData(NVRVLand%RiparianVeg%SoilM_Precip)
-    CALL OutFile%WriteData(NVRVLand%RiparianVeg%SoilM_AW_P)
-    CALL OutFile%WriteData(NVRVLand%RiparianVeg%SoilM_AW)
-    CALL OutFile%WriteData(NVRVLand%RiparianVeg%SoilM_Oth_P)
-    CALL OutFile%WriteData(NVRVLand%RiparianVeg%SoilM_Oth)
+    CALL OutFile%WriteData(NVRVLand%RiparianVeg%SoilM_Precip_P/NVRVLand%RootDepth_Riparian)
+    CALL OutFile%WriteData(NVRVLand%RiparianVeg%SoilM_Precip/NVRVLand%RootDepth_Riparian)
+    CALL OutFile%WriteData(NVRVLand%RiparianVeg%SoilM_AW_P/NVRVLand%RootDepth_Riparian)
+    CALL OutFile%WriteData(NVRVLand%RiparianVeg%SoilM_AW/NVRVLand%RootDepth_Riparian)
+    CALL OutFile%WriteData(NVRVLand%RiparianVeg%SoilM_Oth_P/NVRVLand%RootDepth_Riparian)
+    CALL OutFile%WriteData(NVRVLand%RiparianVeg%SoilM_Oth/NVRVLand%RootDepth_Riparian)
 
   END SUBROUTINE PrintRestartData
   
@@ -644,6 +765,7 @@ CONTAINS
                 
                 !Simulate
                 CALL NonPondedLUMoistureRouter(PrecipD                                ,  &
+                                               0.2d0                                  ,  &
                                                pNV%SMax(indxElem,1)                   ,  &
                                                SoilM_P                                ,  &
                                                ETc(1)*DeltaT                          ,  & 
@@ -742,6 +864,7 @@ CONTAINS
                 
                 !Simulate
                 CALL NonPondedLUMoistureRouter(PrecipD                                ,  &
+                                               0.2d0                                  ,  &
                                                pRV%SMax(indxElem,1)                   ,  &
                                                SoilM_P                                ,  &
                                                ETc(2)*DeltaT                          ,  & 
@@ -860,7 +983,7 @@ CONTAINS
     !Local variables
     CHARACTER(LEN=ModNameLen+21) :: ThisProcedure = ModName // 'SoilMContent_To_Depth'
     INTEGER                      :: indxElem
-    REAL(8)                      :: RootDepth_NV,RootDepth_RV
+    REAL(8)                      :: RootDepth_NV,RootDepth_RV,rDiff
     
     !Initialize
     iStat = 0
@@ -876,13 +999,14 @@ CONTAINS
     ASSOCIATE (pNV => NVRVLand%NativeVeg   , &
                pRV => NVRVLand%RiparianVeg ) 
         DO indxElem=1,NElements
-                     
-            IF ((pNV%SoilM_Precip(indxElem,1) + pNV%SoilM_AW(indxElem,1) + pNV%SoilM_Oth(indxElem,1)) .GT. TotalPorosity(indxElem)) THEN
+            rDiff = pNV%SoilM_Precip(indxElem,1) + pNV%SoilM_AW(indxElem,1) + pNV%SoilM_Oth(indxElem,1) - TotalPorosity(indxElem)         
+            IF (rDiff .GT. 1D-12) THEN  !Secure against roundoff errors
                 CALL SetLastMessage('Initial moisture content for native vegetation at element ' // TRIM(IntToText(iElemIDs(indxElem))) // ' is greater than total porosity!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
-            IF ((pRV%SoilM_Precip(indxElem,1) + pRV%SoilM_AW(indxElem,1) + pRV%SoilM_Oth(indxElem,1)) .GT. TotalPorosity(indxElem)) THEN
+            rDiff = pRV%SoilM_Precip(indxElem,1) + pRV%SoilM_AW(indxElem,1) + pRV%SoilM_Oth(indxElem,1) - TotalPorosity(indxElem)
+            IF (rDiff .GT. 1D-12) THEN  !Secure against roundoff errors
                 CALL SetLastMessage('Initial moisture content for riparian vegetation at element ' // TRIM(IntToText(iElemIDs(indxElem))) // ' is greater than total porosity!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN

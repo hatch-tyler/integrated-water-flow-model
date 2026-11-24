@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2025  
+!  Copyright (C) 2005-2026  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -25,7 +25,8 @@ MODULE Class_GenericMoistureData
                                   EchoProgress          , &
                                   f_iFatal
   USE TimeSeriesUtilities , ONLY: TimeStepType
-  USE IOInterface         , ONLY: RealTSDataInFileType  
+  USE IOInterface         , ONLY: RealTSDataInFileType  , &
+                                  f_IO_SuccessfulRead
   IMPLICIT NONE
   
   
@@ -190,7 +191,7 @@ CONTAINS
     IF (iStat .EQ. -1) RETURN
     
     !Compile rGenericMoisture
-    IF (FileReadCode .EQ. 0) THEN
+    IF (FileReadCode .EQ. f_IO_SuccessfulRead) THEN
       DO indxLocation=1,SIZE(GenericMoistureData%iColGenericMoisture,DIM=2)
           GenericMoistureData%rGenericMoisture(:,indxLocation) = GenericMoistureData%rValues(GenericMoistureData%iColGenericMoisture(:,indxLocation)) * GenericMoistureData%Fact
       END DO

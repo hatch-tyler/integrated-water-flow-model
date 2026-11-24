@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2025  
+!  Copyright (C) 2005-2026  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -4472,19 +4472,6 @@ CONTAINS
     CHARACTER(LEN=iLenSimFileName) :: cSimFileName_F
     CHARACTER(:),ALLOCATABLE       :: cSimWorkingDirectory
     
-    !Return if there are no models instantaited
-    IF (iNActiveModels .EQ. 0) THEN
-        iStat = 0
-        RETURN
-    END IF
-    
-    !Make sure we have an active model
-    IF (iCurrentModelIndex .EQ. 0) THEN
-        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
-        iStat = -1
-        RETURN
-    END IF
-    
     !Initialize
     iStat = 0
     
@@ -4520,7 +4507,7 @@ CONTAINS
   
     
   ! -------------------------------------------------------------
-  ! --- SIMULATE MODEL FOR A SINGLE TIME STEP
+  ! --- SIMULATE FLOW MODEL FOR A SINGLE TIME STEP
   ! -------------------------------------------------------------
   SUBROUTINE IW_Model_SimulateForOneTimeStep(iStat) BIND(C,NAME='IW_Model_SimulateForOneTimeStep')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_SimulateForOneTimeStep
@@ -4536,6 +4523,25 @@ CONTAINS
     CALL pModel%Simulate(iStat)
                                              
   END SUBROUTINE IW_Model_SimulateForOneTimeStep
+  
+    
+  ! -------------------------------------------------------------
+  ! --- SIMULATE TRANSPORT MODEL FOR A SINGLE TIME STEP
+  ! -------------------------------------------------------------
+  SUBROUTINE IW_Model_SimulateTransportForOneTimeStep(iStat) BIND(C,NAME='IW_Model_SimulateTransportForOneTimeStep')
+    !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_SimulateTransportForOneTimeStep
+    INTEGER(C_INT),INTENT(OUT) :: iStat
+
+    !Make sure we have an active model
+    IF (iCurrentModelIndex .EQ. 0) THEN
+        CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+        iStat = -1
+        RETURN
+    END IF
+    
+    CALL pModel%SimulateTransportOneTimeStep(iStat)
+                                             
+  END SUBROUTINE IW_Model_SimulateTransportForOneTimeStep
   
     
   ! -------------------------------------------------------------
@@ -4853,5 +4859,48 @@ CONTAINS
 
   END SUBROUTINE StringArray_To_StringScalar
   
+
+! -------------------------------------------------------------
+! --- INTERPOLATION COEFFICIENTS AT A GIVEN LOCATION
+! -------------------------------------------------------------
+SUBROUTINE IW_Model_FEInterpolate(XP,YP,iElemIndex,NVertex,Nodes,Coeff,iStat) BIND(C,NAME='IW_Model_FEInterpolate')
+  !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_FEInterpolate
+  REAL(C_DOUBLE),INTENT(IN)  :: XP,YP
+  INTEGER(C_INT),INTENT(OUT) :: iElemIndex,NVertex,Nodes(4),iStat
+  REAL(C_DOUBLE),INTENT(OUT) :: Coeff(4)
+ 
+  !Local variables
+  INTEGER             :: iElem
+  INTEGER,ALLOCATABLE :: iNodesLocal(:)
+  REAL(8),ALLOCATABLE :: rCoeffLocal(:)
+
+  !Initialize outputs
+  iElemIndex = 0
+  NVertex    = 0
+  Nodes      = 0
+  Coeff      = 0.0
+
+  !Make sure we have an active model
+  IF (iCurrentModelIndex .EQ. 0) THEN
+      CALL SetLastMessage('Please switch to an active model!',f_iWarn,cModName)
+      iStat = -1
+      RETURN
+  END IF
+
+  iStat = 0
+
+  !Find the element the point belongs to and the interpolation coefficients
+  CALL pModel%AppGrid%FEInterpolate(XP,YP,iElem,iNodesLocal,rCoeffLocal)
+  iElemIndex = iElem
+
+  !Return if point was not located within the grid
+  IF (iElem .EQ. 0) RETURN
+
+  !Copy nodes and interpolation coefficients
+  NVertex          = SIZE(iNodesLocal)
+  Nodes(1:NVertex) = iNodesLocal
+  Coeff(1:NVertex) = rCoeffLocal
+
+  END SUBROUTINE IW_Model_FEInterpolate
   
 END MODULE

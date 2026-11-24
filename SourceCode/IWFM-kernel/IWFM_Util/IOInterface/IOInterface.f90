@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2025  
+!  Copyright (C) 2005-2026  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -28,27 +28,30 @@ MODULE IOInterface
   ! -------------------------------------------------------------
   ! --- PUBLIC ENTITIES
   ! -------------------------------------------------------------  
-  PUBLIC ::                           &
-            !From IOInterface       
-            GenericFileType         , &
-            GetFileDate             , &
-            iGetFileType_FromName   , &
-            DoesFileExist           , &
-            f_iUNKNOWN              , &
-            f_iTXT                  , &
-            f_iBIN                  , &
-            f_iDSS                  , &
-            f_iHDF                  , &
-            f_iGroup                , &
-            f_iDataSet              , &
-            f_iAttribute            , &
-            f_iMaxDatasetNameLen    , &
+  PUBLIC ::                                &
+            !From IOInterface            
+            GenericFileType              , &
+            GetFileDate                  , &
+            iGetFileType_FromName        , &
+            DoesFileExist                , &
+            f_iUNKNOWN                   , &
+            f_iTXT                       , &
+            f_iBIN                       , &
+            f_iDSS                       , &
+            f_iHDF                       , &
+            f_iGroup                     , &
+            f_iDataSet                   , &
+            f_iAttribute                 , &
+            f_iMaxDatasetNameLen         , &
+            f_IO_TSData_NotYetTimeToRead , &
+            f_IO_SuccessfulRead          , &
+            f_IO_UnsuccessfulRead        , &
       
             !From TSDFileHandler
-            IntTSDataInFileType     , &
-            IntPairTSDataInFileType , &
-            RealTSDataInFileType    , &
-            Real2DTSDataInFileType  , &
+            IntTSDataInFileType          , &
+            IntPairTSDataInFileType      , &
+            RealTSDataInFileType         , &
+            Real2DTSDataInFileType       , &
             PrepareTSDOutputFile
   
 END MODULE

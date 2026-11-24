@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2025  
+!  Copyright (C) 2005-2026  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -48,8 +48,9 @@ MODULE Class_GenericLandUse_v41
   ! --- ROOT ZONE CORE DATA TYPE
   ! -------------------------------------------------------------
   TYPE,EXTENDS(GenericLandUseType) :: GenericLandUse_v41_Type
-      REAL(8),ALLOCATABLE :: ETFromGW_Max(:,:)     !Potential maximum inflow from groundwater (unit rate)
-      REAL(8),ALLOCATABLE :: ETFromGW_Actual(:,:)  !Actual inflow of groundwater into the root zone (volumetric rate)
+      REAL(8),ALLOCATABLE :: ETFromGW_Max(:,:)          !Potential maximum inflow from groundwater (unit rate)
+      REAL(8),ALLOCATABLE :: ETFromGW_Actual(:,:)       !Actual inflow of groundwater into the root zone (volumetric rate)
+      REAL(8),ALLOCATABLE :: rInitialAbstraction(:,:)   !Initial abstraction parameter to be used in rainfall runoff calculations at each (landuse,element) combination; 0.2 by default
   CONTAINS
       PROCEDURE,PASS :: New
       PROCEDURE,PASS :: Kill
@@ -81,14 +82,16 @@ CONTAINS
     INTEGER,INTENT(IN)                         :: iDim1,iDim2
     INTEGER,INTENT(OUT)                        :: iStat
     
-    ALLOCATE (GenericLandUse%ETFromGW_Max(iDim1,iDim2)    , &
-              GenericLandUse%ETFromGW_Actual(iDim1,iDim2) , &
-              STAT=iStat                                  )
+    ALLOCATE (GenericLandUse%ETFromGW_Max(iDim1,iDim2)        , &
+              GenericLandUse%ETFromGW_Actual(iDim1,iDim2)     , &
+              GenericLandUse%rInitialAbstraction(iDim1,iDim2) , &
+              STAT=iStat                                      )
     IF (iStat .NE. 0) RETURN
     
     !Initialize
-    GenericLandUse%ETFromGW_Max    = 0.0
-    GenericLandUse%ETFromGW_Actual = 0.0
+    GenericLandUse%ETFromGW_Max        = 0.0
+    GenericLandUse%ETFromGW_Actual     = 0.0
+    GenericLandUse%rInitialAbstraction = 0.2d0
     
     !Also instantiate the parent class
     CALL GenericLandUse%GenericLandUseType%New(iDim1,iDim2,iStat)
@@ -117,9 +120,10 @@ CONTAINS
     !Local variables
     INTEGER :: iErrorCode
     
-    DEALLOCATE (GenericLandUse%ETFromGW_Max    , &
-                GenericLandUse%ETFromGW_Actual , &
-                STAT=iErrorCode                )
+    DEALLOCATE (GenericLandUse%ETFromGW_Max        , &
+                GenericLandUse%ETFromGW_Actual     , &
+                GenericLandUse%rInitialAbstraction , &
+                STAT=iErrorCode                    )
     
     
     !Also delete the parent class
@@ -143,7 +147,7 @@ CONTAINS
   ! --- COMPUTE MAXIMUM POSSIBLE ET FROM GW 
   ! -------------------------------------------------------------
   SUBROUTINE ComputeETFromGW_Max(DepthToGW,Sy,RootDepth,CapillaryRise,Area,ETFromGW_Max)
-    REAL(8),INTENT(IN)  :: DepthToGW(:),Sy(:),RootDepth(:),CapillaryRise(:),Area(:,:)
+    REAL(8),INTENT(IN)  :: DepthToGW(:),Sy(:),RootDepth(:,:),CapillaryRise(:),Area(:,:)
     REAL(8),INTENT(OUT) :: ETFromGW_Max(:,:)
     
     !Local variables
@@ -151,7 +155,7 @@ CONTAINS
     REAL(8) :: rDGW,rSy,rRZ,rRise,rIntersect
     
     !Initialize
-    NLandUse = SIZE(RootDepth)
+    NLandUse = SIZE(RootDepth,DIM=1)
     
     !Compute
     DO indxElem=1,SIZE(DepthToGW)
@@ -166,7 +170,7 @@ CONTAINS
             END IF
             
             !Root depth
-            rRZ = RootDepth(indxLU)
+            rRZ = RootDepth(indxLU,indxElem)
             
             !GW is below root zone
             IF (rDGW .GT. rRZ) THEN

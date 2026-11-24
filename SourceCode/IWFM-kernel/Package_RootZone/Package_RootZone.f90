@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2025  
+!  Copyright (C) 2005-2026  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -129,28 +129,40 @@ MODULE Package_RootZone
       PROCEDURE,PASS   :: GetNAgCrops
       PROCEDURE,PASS   :: GetNDemandLocations
       PROCEDURE,PASS   :: GetDemandCalcLocation
+      PROCEDURE,PASS   :: GetLandUseCodes
       PROCEDURE,PASS   :: GetElementPrecip
+      PROCEDURE,PASS   :: GetElementPrecip_ForLUType_AtEachLU
       PROCEDURE,PASS   :: GetElementRunoff
+      PROCEDURE,PASS   :: GetElementRunoff_ForLUType_AtEachLU
       PROCEDURE,PASS   :: GetElementAppliedWater
       PROCEDURE,PASS   :: GetElementAppliedWater_ForLUType
+      PROCEDURE,PASS   :: GetElementAppliedWater_ForLUType_AtEachLU
       PROCEDURE,PASS   :: GetElementReturnFlow
       PROCEDURE,PASS   :: GetElementReturnFlow_ForLUType
+      PROCEDURE,PASS   :: GetElementReturnFlow_ForLUType_AtEachLU
       PROCEDURE,PASS   :: GetElementPrecipInfilt
       PROCEDURE,PASS   :: GetElementInfilt
       PROCEDURE,PASS   :: GetElementPondDrain
       PROCEDURE,PASS   :: GetElementPondDrain_ForLUType
+      PROCEDURE,PASS   :: GetElementPondDrain_ForLUType_AtEachLU
       PROCEDURE,PASS   :: GetElementActualET
+      PROCEDURE,PASS   :: GetElementActualET_ForLUType_AtEachLU
       PROCEDURE,PASS   :: GetElementAgAreas                            
       PROCEDURE,PASS   :: GetElementUrbanAreas 
       PROCEDURE,PASS   :: GetElementNativeVegAreas 
       PROCEDURE,PASS   :: GetElementRiparianVegAreas 
       PROCEDURE,PASS   :: GetElementSoilMVolume
+      PROCEDURE,PASS   :: GetElementSoilMVolume_ForLUType_AtEachLU
+      PROCEDURE,PASS   :: GetElementPondStorage_AtEachLU
       PROCEDURE,PASS   :: GetElementGWInflows                      
       PROCEDURE,PASS   :: GetWaterDemandAll                     
       PROCEDURE,PASS   :: GetWaterDemandAtLocations                     
       PROCEDURE,PASS   :: GetWaterSupply                      
       PROCEDURE,PASS   :: GetSupplyShortAtDestination_ForSomeSupplies
-      PROCEDURE,NOPASS :: GetLandUseAreasForTimePeriod
+      PROCEDURE,NOPASS :: GetLandUseAreasForTimePeriod_FileNotOpen
+      PROCEDURE,PASS   :: GetLandUseAreasForTimePeriod_FileOpen
+      PROCEDURE,NOPASS :: GetLandUseAreasForTimePeriod_All_FileNotOpen
+      PROCEDURE,PASS   :: GetLandUseAreasForTimePeriod_All_FileOpen
       PROCEDURE,PASS   :: GetSubregionAgAreas                            
       PROCEDURE,PASS   :: GetSubregionUrbanAreas 
       PROCEDURE,PASS   :: GetSubregionNativeVegAreas 
@@ -162,6 +174,7 @@ MODULE Package_RootZone
       PROCEDURE,PASS   :: GetSurfaceFlowDestinations            
       PROCEDURE,PASS   :: GetSurfaceFlowDestinationTypes        
       PROCEDURE,PASS   :: GetElementPerc                        
+      PROCEDURE,PASS   :: GetElementPerc_ForLUType_AtEachLU                        
       PROCEDURE,PASS   :: GetPercElement                    
       PROCEDURE,PASS   :: GetFlowsToStreams                     
       PROCEDURE,PASS   :: GetFlowsToLakes                       
@@ -188,16 +201,20 @@ MODULE Package_RootZone
       PROCEDURE,PASS   :: PrintResults
       PROCEDURE,PASS   :: PrintRestartData
       PROCEDURE,PASS   :: ComputeGWInflow
-      GENERIC          :: GetWaterDemand          => GetWaterDemandAll                      , &
-                                                     GetWaterDemandAtLocations 
-      GENERIC          :: GetBudget_MonthlyFlows  => GetBudget_MonthlyFlows_GivenFile       , &
-                                                     GetBudget_MonthlyFlows_GivenRootZone 
-      GENERIC          :: GetZBudget_MonthlyFlows => GetZBudget_MonthlyFlows_GivenFile      , &
-                                                     GetZBudget_MonthlyFlows_GivenRootZone 
-      GENERIC          :: GetBudget_AnnualFlows   => GetBudget_AnnualFlows_GivenFile        , &
-                                                     GetBudget_AnnualFlows_GivenRootZone 
-      GENERIC          :: GetZBudget_AnnualFlows  => GetZBudget_AnnualFlows_GivenFile       , &
-                                                     GetZBudget_AnnualFlows_GivenRootZone 
+      GENERIC          :: GetLandUseAreasForTimePeriod     => GetLandUseAreasForTimePeriod_FileNotOpen     , &
+                                                              GetLandUseAreasForTimePeriod_FileOpen
+      GENERIC          :: GetLandUseAreasForTimePeriod_All => GetLandUseAreasForTimePeriod_All_FileNotOpen , &
+                                                              GetLandUseAreasForTimePeriod_All_FileOpen
+      GENERIC          :: GetWaterDemand                   => GetWaterDemandAll                            , &
+                                                              GetWaterDemandAtLocations                    
+      GENERIC          :: GetBudget_MonthlyFlows           => GetBudget_MonthlyFlows_GivenFile             , &
+                                                              GetBudget_MonthlyFlows_GivenRootZone         
+      GENERIC          :: GetZBudget_MonthlyFlows          => GetZBudget_MonthlyFlows_GivenFile            , &
+                                                              GetZBudget_MonthlyFlows_GivenRootZone        
+      GENERIC          :: GetBudget_AnnualFlows            => GetBudget_AnnualFlows_GivenFile              , &
+                                                              GetBudget_AnnualFlows_GivenRootZone          
+      GENERIC          :: GetZBudget_AnnualFlows           => GetZBudget_AnnualFlows_GivenFile             , &
+                                                              GetZBudget_AnnualFlows_GivenRootZone     
   END TYPE RootZoneType
   
 
@@ -1117,6 +1134,33 @@ CONTAINS
   
   
   ! -------------------------------------------------------------
+  ! --- GET ELEMENTAL VOLUMETRIC SOIL MOISTURE FOR A SPECIFIED LAND USE TYPE AT EACH LAND USE
+  ! -------------------------------------------------------------
+  SUBROUTINE GetElementSoilMVolume_ForLUType_AtEachLU(RootZone,iLUType,lBeginSoilM,rSoilM)
+    CLASS(RootZoneType),TARGET,INTENT(IN) :: RootZone
+    INTEGER,INTENT(IN)                    :: iLUType
+    LOGICAL,INTENT(IN)                    :: lBeginSoilM
+    REAL(8),INTENT(OUT)                   :: rSoilM(:,:)
+    
+    CALL RootZone%Me%GetElementSoilMVolume_ForLUType_AtEachLU(iLUType,lBeginSoilM,rSoilM)
+    
+  END SUBROUTINE GetElementSoilMVolume_ForLUType_AtEachLU
+  
+  
+  ! -------------------------------------------------------------
+  ! --- GET POND STORAGE AT ALL ELEMENTS AT EACH PONDED CROP
+  ! -------------------------------------------------------------
+  SUBROUTINE GetElementPondStorage_AtEachLU(RootZone,lBeginStor,rStor)
+    CLASS(RootZoneType),TARGET,INTENT(IN) :: RootZone
+    LOGICAL,INTENT(IN)                    :: lBeginStor
+    REAL(8),INTENT(OUT)                   :: rStor(:,:)
+    
+    CALL RootZone%Me%GetElementPondStorage_AtEachLU(lBeginStor,rStor)
+    
+  END SUBROUTINE GetElementPondStorage_AtEachLU
+  
+  
+  ! -------------------------------------------------------------
   ! --- GET ACTUAL RIPARIAN ET AT STREAM NODES 
   ! -------------------------------------------------------------
   SUBROUTINE GetActualRiparianET_AtStrmNodes(RootZone,QRVET)
@@ -1235,6 +1279,23 @@ CONTAINS
   
   
   ! -------------------------------------------------------------
+  ! --- GET PRECIPITATION AT EACH ELEMENT FOR A SPECIFIED LAND USE TYPE AT EACH LAND USE
+  ! -------------------------------------------------------------
+  SUBROUTINE GetElementPrecip_ForLUType_AtEachLU(RootZone,iLUType,rPrecip)
+    CLASS(RootZoneType),INTENT(IN) :: RootZone
+    INTEGER,INTENT(IN)             :: iLUType
+    REAL(8),INTENT(OUT)            :: rPrecip(:,:)
+    
+    IF (RootZone%iComponentVersion .EQ. 0) THEN
+        rPrecip = 0.0
+    ELSE
+        CALL RootZone%Me%GetElementPrecip_ForLUType_AtEachLU(iLUType,rPrecip)
+    END IF
+
+  END SUBROUTINE GetElementPrecip_ForLUType_AtEachLU
+  
+  
+  ! -------------------------------------------------------------
   ! --- GET RUNOFF AT EACH ELEMENT
   ! -------------------------------------------------------------
   SUBROUTINE GetElementRunoff(RootZone,iElemRegions,rRunoff)
@@ -1249,6 +1310,23 @@ CONTAINS
     END IF
 
   END SUBROUTINE GetElementRunoff
+  
+  
+  ! -------------------------------------------------------------
+  ! --- GET RUNOFF AT EACH ELEMENT FOR A SPECIFIED LAND USE TYPE AT EACH LAND USE
+  ! -------------------------------------------------------------
+  SUBROUTINE GetElementRunoff_ForLUType_AtEachLU(RootZone,iLUType,rRunoff)
+    CLASS(RootZoneType),INTENT(IN) :: RootZone
+    INTEGER,INTENT(IN)             :: iLUType
+    REAL(8),INTENT(OUT)            :: rRunoff(:,:)
+    
+    IF (RootZone%iComponentVersion .EQ. 0) THEN
+        rRunoff = 0.0
+    ELSE
+        CALL RootZone%Me%GetElementRunoff_ForLUType_AtEachLU(iLUType,rRunoff)
+    END IF
+
+  END SUBROUTINE GetElementRunoff_ForLUType_AtEachLU
   
   
   ! -------------------------------------------------------------
@@ -1271,18 +1349,35 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET APPLIED WATER FOR A SPECIFIC LAND USE TYPE AT EACH ELEMENT
   ! -------------------------------------------------------------
-  SUBROUTINE GetElementAppliedWater_ForLUType(RootZone,iElemRegions,iLUType,rAW)
+  SUBROUTINE GetElementAppliedWater_ForLUType(RootZone,iLUType,rAW)
     CLASS(RootZoneType),INTENT(IN) :: RootZone
-    INTEGER,INTENT(IN)             :: iElemRegions(:),iLUType
+    INTEGER,INTENT(IN)             :: iLUType
     REAL(8),INTENT(OUT)            :: rAW(:)
     
     IF (RootZone%iComponentVersion .EQ. 0) THEN
         rAW = 0.0
     ELSE
-        CALL RootZone%Me%GetElementAppliedWater_ForLUType(iElemRegions,iLUType,rAW)
+        CALL RootZone%Me%GetElementAppliedWater_ForLUType(iLUType,rAW)
     END IF
 
   END SUBROUTINE GetElementAppliedWater_ForLUType
+  
+  
+  ! -------------------------------------------------------------
+  ! --- GET APPLIED WATER FOR A SPECIFIC LAND USE TYPE AT EACH ELEMENT AT EACH LU
+  ! -------------------------------------------------------------
+  SUBROUTINE GetElementAppliedWater_ForLUType_AtEachLU(RootZone,iLUType,rAW)
+    CLASS(RootZoneType),INTENT(IN) :: RootZone
+    INTEGER,INTENT(IN)             :: iLUType
+    REAL(8),INTENT(OUT)            :: rAW(:,:)
+    
+    IF (RootZone%iComponentVersion .EQ. 0) THEN
+        rAW = 0.0
+    ELSE
+        CALL RootZone%Me%GetElementAppliedWater_ForLUType_AtEachLU(iLUType,rAW)
+    END IF
+
+  END SUBROUTINE GetElementAppliedWater_ForLUType_AtEachLU
   
   
   ! -------------------------------------------------------------
@@ -1305,32 +1400,48 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET RETURN FLOW AT EACH ELEMENT FOR A SPECIFIED LAND USE TYPE
   ! -------------------------------------------------------------
-  SUBROUTINE GetElementReturnFlow_ForLUType(RootZone,iElemRegions,iLUType,rReturn)
+  SUBROUTINE GetElementReturnFlow_ForLUType(RootZone,iLUType,rReturn)
     CLASS(RootZoneType),INTENT(IN) :: RootZone
-    INTEGER,INTENT(IN)             :: iElemRegions(:),iLUType
+    INTEGER,INTENT(IN)             :: iLUType
     REAL(8),INTENT(OUT)            :: rReturn(:)
     
     IF (RootZone%iComponentVersion .EQ. 0) THEN
         rReturn = 0.0
     ELSE
-        CALL RootZone%Me%GetElementReturnFlow_ForLUType(iElemRegions,iLUType,rReturn)
+        CALL RootZone%Me%GetElementReturnFlow_ForLUType(iLUType,rReturn)
     END IF
 
   END SUBROUTINE GetElementReturnFlow_ForLUType
   
   
   ! -------------------------------------------------------------
+  ! --- GET RETURN FLOW FOR A SPECIFIC LAND USE TYPE AT EACH ELEMENT AT EACH LU
+  ! -------------------------------------------------------------
+  SUBROUTINE GetElementReturnFlow_ForLUType_AtEachLU(RootZone,iLUType,rReturn)
+    CLASS(RootZoneType),INTENT(IN) :: RootZone
+    INTEGER,INTENT(IN)             :: iLUType
+    REAL(8),INTENT(OUT)            :: rReturn(:,:)
+    
+    IF (RootZone%iComponentVersion .EQ. 0) THEN
+        rReturn = 0.0
+    ELSE
+        CALL RootZone%Me%GetElementReturnFlow_ForLUType_AtEachLU(iLUType,rReturn)
+    END IF
+
+  END SUBROUTINE GetElementReturnFlow_ForLUType_AtEachLU
+  
+  
+  ! -------------------------------------------------------------
   ! --- GET PONDED AG POND DRAIN AT ALL LOCATIONS
   ! -------------------------------------------------------------
-  SUBROUTINE GetElementPondDrain(RootZone,iElemRegions,rDrain)
+  SUBROUTINE GetElementPondDrain(RootZone,rDrain)
     CLASS(RootZoneType),INTENT(IN) :: RootZone
-    INTEGER,INTENT(IN)             :: iElemRegions(:)
     REAL(8),INTENT(OUT)            :: rDrain(:)
     
     !Return if root zone is not defined
     IF (RootZone%iComponentVersion .EQ. 0) RETURN
     
-    CALL RootZone%Me%GetElementPondDrain(iElemRegions,rDrain)
+    CALL RootZone%Me%GetElementPondDrain(rDrain)
     
   END SUBROUTINE GetElementPondDrain
   
@@ -1338,21 +1449,38 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- GET PONDED AG POND DRAIN AT ALL ELEMENTS FOR A SPECIFIED LAND USE TYPE
   ! -------------------------------------------------------------
-  SUBROUTINE GetElementPondDrain_ForLUType(RootZone,iElemRegions,iLUType,rDrain)
+  SUBROUTINE GetElementPondDrain_ForLUType(RootZone,iLUType,rDrain)
     CLASS(RootZoneType),INTENT(IN) :: RootZone
-    INTEGER,INTENT(IN)             :: iElemRegions(:),iLUType
+    INTEGER,INTENT(IN)             :: iLUType
     REAL(8),INTENT(OUT)            :: rDrain(:)
     
     !Return if root zone is not defined
     IF (RootZone%iComponentVersion .EQ. 0) THEN
         rDrain = 0.0
     ELSE
-        CALL RootZone%Me%GetElementPondDrain_ForLUType(iElemRegions,iLUType,rDrain)
+        CALL RootZone%Me%GetElementPondDrain_ForLUType(iLUType,rDrain)
     END IF
     
   END SUBROUTINE GetElementPondDrain_ForLUType
 
 
+  ! -------------------------------------------------------------
+  ! --- GET POND DRAIN AT EACH ELEMENT FOR A SPECIFIED LAND USE TYPE AT EACH LAND USE
+  ! -------------------------------------------------------------
+  SUBROUTINE GetElementPondDrain_ForLUType_AtEachLU(RootZone,iLUType,rDrain)
+    CLASS(RootZoneType),INTENT(IN) :: RootZone
+    INTEGER,INTENT(IN)             :: iLUType
+    REAL(8),INTENT(OUT)            :: rDrain(:,:)
+    
+    IF (RootZone%iComponentVersion .EQ. 0) THEN
+        rDrain = 0.0
+    ELSE
+        CALL RootZone%Me%GetElementPondDrain_ForLUType_AtEachLU(iLUType,rDrain)
+    END IF
+
+  END SUBROUTINE GetElementPondDrain_ForLUType_AtEachLU
+  
+  
   ! -------------------------------------------------------------
   ! --- GET PRECIPITATION INFILTRATION AT EACH ELEMENT
   ! -------------------------------------------------------------
@@ -1405,6 +1533,23 @@ CONTAINS
   
   
   ! -------------------------------------------------------------
+  ! --- GET ACTUAL ET AT ALL ELEMENTS FOR A SPECIFIED LAND USE TYPE AT EACH LAND USE
+  ! -------------------------------------------------------------
+  SUBROUTINE GetElementActualET_ForLUType_AtEachLU(RootZone,iLUType,rET)
+    CLASS(RootZoneType),INTENT(IN) :: RootZone
+    INTEGER,INTENT(IN)             :: iLUType
+    REAL(8)                        :: rET(:,:)
+    
+    IF (RootZone%iComponentVersion .EQ. 0) THEN
+        rET = 0.0
+    ELSE
+        CALL RootZone%Me%GetElementActualET_ForLUType_AtEachLU(iLUType,rET)
+    END IF
+
+  END SUBROUTINE GetElementActualET_ForLUType_AtEachLU
+  
+  
+  ! -------------------------------------------------------------
   ! --- GET NUMBER OF AGRICULTURAL CROPS
   ! -------------------------------------------------------------
   PURE FUNCTION GetNAgCrops(RootZone) RESULT(NAgCrops)
@@ -1418,6 +1563,30 @@ CONTAINS
     END IF
 
   END FUNCTION GetNAgCrops
+  
+  
+  ! -------------------------------------------------------------
+  ! --- GET LAND USE CODES FOR A GIVEN LAND USE TYPE
+  ! -------------------------------------------------------------
+  PURE SUBROUTINE GetLandUseCodes(RootZone,iLUType,cCodes)
+    CLASS(RootZoneType),INTENT(IN)             :: RootZone
+    INTEGER,INTENT(IN)                         :: iLUType
+    CHARACTER(LEN=*),ALLOCATABLE,INTENT(INOUT) :: cCodes(:)
+    
+    !Local variables
+    INTEGER :: iErrorCode
+    
+    !Deallocate array to be safe
+    DEALLOCATE (cCodes , STAT=iErrorCode)
+    
+    !Retrieve land use codes
+    IF (RootZone%iComponentVersion .EQ. 0) THEN
+        ALLOCATE (cCodes(0))
+    ELSE
+        CALL RootZone%Me%GetLandUseCodes(iLUType,cCodes)
+    END IF
+
+  END SUBROUTINE GetLandUseCodes
   
   
   ! -------------------------------------------------------------
@@ -1490,10 +1659,10 @@ CONTAINS
 
   
   ! -------------------------------------------------------------
-  ! --- GET AREAS OF A SPECIFIED LAND USE FOR ALL ELEMENTS FOR A RANGE OF TIME
+  ! --- GET AREAS OF A SPECIFIED LAND USE FOR ALL ELEMENTS FOR A RANGE OF TIME WHEN AREA FILE IS NOT OPEN
   ! --- Note: This method is intended to be called outside of a Simulation run
   ! -------------------------------------------------------------
-  SUBROUTINE GetLandUseAreasForTimePeriod(cRootZoneMainFileName,cWorkingDirectory,cBeginDate,cEndDate,TimeStep,AppGrid,iLUType,iLU,rLUAreas,iStat)
+  SUBROUTINE GetLandUseAreasForTimePeriod_FileNotOpen(cRootZoneMainFileName,cWorkingDirectory,cBeginDate,cEndDate,TimeStep,AppGrid,iLUType,iLU,rLUAreas,iStat)
     CHARACTER(LEN=*),INTENT(IN)   :: cRootZoneMainFileName,cWorkingDirectory,cBeginDate,cEndDate
     TYPE(TimeStepType),INTENT(IN) :: TimeStep
     TYPE(AppGridType),INTENT(IN)  :: AppGrid
@@ -1502,7 +1671,7 @@ CONTAINS
     INTEGER,INTENT(OUT)           :: iStat
     
     !Local variables
-    CHARACTER(LEN=ModNameLen+27) :: ThisProcedure = ModName // 'GetNPCropAreasForTimePeriod'
+    CHARACTER(LEN=ModNameLen+40) :: ThisProcedure = ModName // 'GetLandUseAreasForTimePeriod_FileNotOpen'
     TYPE(RootZoneType)           :: DummyRootZone
     TYPE(GenericFileType)        :: RootZoneMainFile
     CHARACTER(:),ALLOCATABLE     :: cVersion
@@ -1545,13 +1714,115 @@ CONTAINS
    END SELECT
 
    !Retrieve data
-   CALL DummyRootZone%Me%GetLandUseAreasForTimePeriod(cRootZoneMainFileName,cWorkingDirectory,cBeginDate,cEndDate,TimeStep,AppGrid,iLUType,iLU,rLUAreas,iStat)
+   CALL DummyRootZone%Me%GetLandUseAreasForTimePeriod_FileNotOpen(cRootZoneMainFileName,cWorkingDirectory,cBeginDate,cEndDate,TimeStep,AppGrid,iLUType,iLU,rLUAreas,iStat)
    
    !Kill dummy root zone object
    CALL DummyRootZone%Kill()
     
-  END SUBROUTINE GetLandUseAreasForTimePeriod
+  END SUBROUTINE GetLandUseAreasForTimePeriod_FileNotOpen
   
+  
+  ! -------------------------------------------------------------
+  ! --- GET AREAS OF A SPECIFIED LAND USE FOR ALL ELEMENTS FOR A RANGE OF TIME WHEN AREA FILE IS OPEN
+  ! --- Note: This method is intended to be called outside of a Simulation run
+  ! -------------------------------------------------------------
+  SUBROUTINE GetLandUseAreasForTimePeriod_FileOpen(RootZone,cBeginDate,cEndDate,TimeStep,AppGrid,iLUType,iLU,rLUAreas,iStat)
+    CLASS(RootZoneType),INTENT(INOUT) :: RootZone
+    CHARACTER(LEN=*),INTENT(IN)       :: cBeginDate,cEndDate
+    TYPE(TimeStepType),INTENT(IN)     :: TimeStep
+    TYPE(AppGridType),INTENT(IN)      :: AppGrid
+    INTEGER,INTENT(IN)                :: iLUType,iLU
+    REAL(8),INTENT(OUT)               :: rLUAreas(:,:)  !For each (element,time)
+    INTEGER,INTENT(OUT)               :: iStat
+    
+    !Retrieve data
+    CALL RootZone%Me%GetLandUseAreasForTimePeriod_FileOpen(cBeginDate,cEndDate,TimeStep,AppGrid,iLUType,iLU,rLUAreas,iStat)
+   
+  END SUBROUTINE GetLandUseAreasForTimePeriod_FileOpen
+
+  
+  ! -------------------------------------------------------------
+  ! --- GET AREAS OF ALL LANDUSES FOR A LANDUSE CATEGORY AT ALL ELEMENTS FOR A RANGE OF TIME WHEN AREA FILE IS NOT OPEN
+  ! --- Note: This method is intended to be called outside of a Simulation run
+  ! -------------------------------------------------------------
+  SUBROUTINE GetLandUseAreasForTimePeriod_All_FileNotOpen(cRootZoneMainFileName,cWorkingDirectory,cBeginDate,cEndDate,TimeStep,AppGrid,iLUType,rLUAreas,iStat)
+    CHARACTER(LEN=*),INTENT(IN)       :: cRootZoneMainFileName,cWorkingDirectory,cBeginDate,cEndDate
+    TYPE(TimeStepType),INTENT(IN)     :: TimeStep
+    TYPE(AppGridType),INTENT(IN)      :: AppGrid
+    INTEGER,INTENT(IN)                :: iLUType
+    REAL(8),ALLOCATABLE,INTENT(INOUT) :: rLUAreas(:,:,:)  !For each (element,landuse,time)
+    INTEGER,INTENT(OUT)               :: iStat
+    
+    !Local variables
+    CHARACTER(LEN=ModNameLen+44) :: ThisProcedure = ModName // 'GetLandUseAreasForTimePeriod_All_FileNotOpen'
+    TYPE(RootZoneType)           :: DummyRootZone
+    TYPE(GenericFileType)        :: RootZoneMainFile
+    CHARACTER(:),ALLOCATABLE     :: cVersion
+    
+    !Return if no root zone file
+    IF (cRootZoneMainFileName .EQ. '') THEN
+        ALLOCATE(rLUAreas(0,0,0))
+        iStat = 0
+        RETURN
+    END IF
+    
+    !Open root zone file and retrieve version number
+    CALL RootZoneMainFile%New(FileName=cRootZoneMainFileName,InputFile=.TRUE.,IsTSFile=.FALSE.,iStat=iStat)  ;  IF (iStat .EQ. -1) RETURN
+    CALL ReadVersion(RootZoneMainFile,'ROOT ZONE',cVersion,iStat)
+    IF (iStat .EQ. -1) RETURN
+    
+    !Close file to reset it
+    CALL RootZoneMainFile%Kill()
+    
+    !Allocate memory based on version
+    SELECT CASE (TRIM(cVersion))
+        CASE ('4.0')
+            ALLOCATE(RootZone_v40_Type :: DummyRootZone%Me)
+        CASE ('4.01')
+            ALLOCATE(RootZone_v401_Type :: DummyRootZone%Me)
+        CASE ('4.1')
+            ALLOCATE(RootZone_v41_Type :: DummyRootZone%Me)
+        CASE ('4.11')
+            ALLOCATE(RootZone_v411_Type :: DummyRootZone%Me)
+        CASE ('4.12')
+            ALLOCATE(RootZone_v412_Type :: DummyRootZone%Me)
+        CASE ('4.13')
+            ALLOCATE(RootZone_v413_Type :: DummyRootZone%Me)
+        CASE ('5.0')
+            ALLOCATE(RootZone_v50_Type :: DummyRootZone%Me)
+        CASE DEFAULT
+            CALL SetLastMessage('Root Zone Component version number is not recognized ('//TRIM(cVersion)//')!',f_iFatal,ThisProcedure)
+            iStat = -1
+            RETURN
+   END SELECT
+
+   !Retrieve data
+   CALL DummyRootZone%Me%GetLandUseAreasForTimePeriod_All_FileNotOpen(cRootZoneMainFileName,cWorkingDirectory,cBeginDate,cEndDate,TimeStep,AppGrid,iLUType,rLUAreas,iStat)
+   
+   !Kill dummy root zone object
+   CALL DummyRootZone%Kill()
+    
+  END SUBROUTINE GetLandUseAreasForTimePeriod_All_FileNotOpen
+  
+  
+  ! -------------------------------------------------------------
+  ! --- GET AREAS OF ALL LANDUSES FOR A LANDUSE CATEGORY AT ALL ELEMENTS FOR A RANGE OF TIME WHEN AREA FILE IS OPEN
+  ! --- Note: This method is intended to be called outside of a Simulation run
+  ! -------------------------------------------------------------
+  SUBROUTINE GetLandUseAreasForTimePeriod_All_FileOpen(RootZone,cBeginDate,cEndDate,TimeStep,AppGrid,iLUType,rLUAreas,iStat)
+    CLASS(RootZoneType),INTENT(INOUT) :: RootZone
+    CHARACTER(LEN=*),INTENT(IN)       :: cBeginDate,cEndDate
+    TYPE(TimeStepType),INTENT(IN)     :: TimeStep
+    TYPE(AppGridType),INTENT(IN)      :: AppGrid
+    INTEGER,INTENT(IN)                :: iLUType
+    REAL(8),ALLOCATABLE,INTENT(INOUT) :: rLUAreas(:,:,:)  !For each (element,landuse,time)
+    INTEGER,INTENT(OUT)               :: iStat
+    
+    !Retrieve data
+    CALL RootZone%Me%GetLandUseAreasForTimePeriod_All_FileOpen(cBeginDate,cEndDate,TimeStep,AppGrid,iLUType,rLUAreas,iStat)
+   
+  END SUBROUTINE GetLandUseAreasForTimePeriod_All_FileOpen
+
   
   ! -------------------------------------------------------------
   ! --- GET ELEMENTAL AG AREAS
@@ -1730,6 +2001,23 @@ CONTAINS
   END SUBROUTINE GetElementPerc
 
 
+  ! -------------------------------------------------------------
+  ! --- GET PERCOLATION AT EACH ELEMENT FOR A SPECIFIED LAND USE TYPE AT EACH LAND USE
+  ! -------------------------------------------------------------
+  SUBROUTINE GetElementPerc_ForLUType_AtEachLU(RootZone,iLUType,rPerc)
+    CLASS(RootZoneType),INTENT(IN) :: RootZone
+    INTEGER,INTENT(IN)             :: iLUType
+    REAL(8),INTENT(OUT)            :: rPerc(:,:)
+    
+    IF (RootZone%iComponentVersion .EQ. 0) THEN
+        rPerc = 0.0
+    ELSE
+        CALL RootZone%Me%GetElementPerc_ForLUType_AtEachLU(iLUType,rPerc)
+    END IF
+
+  END SUBROUTINE GetElementPerc_ForLUType_AtEachLU
+  
+  
   ! -------------------------------------------------------------
   ! --- GET PERCOLATION AT AN INDIVIDUAL LOCATIONS
   ! -------------------------------------------------------------
@@ -1910,12 +2198,13 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- READ RESTART DATA
   ! -------------------------------------------------------------
-  SUBROUTINE ReadRestartData(RootZone,InFile,iStat)
+  SUBROUTINE ReadRestartData(RootZone,InFile,lConvertMoistToDepth,iStat)
     CLASS(RootZoneType)   :: RootZone
     TYPE(GenericFileType) :: InFile
+    LOGICAL,INTENT(IN)    :: lConvertMoistToDepth
     INTEGER,INTENT(OUT)   :: iStat
     
-    CALL RootZone%Me%ReadRestartData(InFile,iStat)
+    CALL RootZone%Me%ReadRestartData(InFile,lConvertMoistToDepth,iStat)
     
   END SUBROUTINE ReadRestartData
   

@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2025  
+!  Copyright (C) 2005-2026  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -2085,22 +2085,21 @@ CONTAINS
   ! --- ACCUMULATE ELEMENT VALUES TO SUBREGIONS
   ! -------------------------------------------------------------
   FUNCTION AccumElemValuesToSubregions(AppGrid,ElemValues) RESULT(RegionValues)
-    CLASS(AppGridType),TARGET,INTENT(IN) :: AppGrid
-    REAL(8),INTENT(IN)                   :: ElemValues(AppGrid%NElements)
-    REAL(8)                              :: RegionValues(AppGrid%NSubregions)
+    CLASS(AppGridType),INTENT(IN) :: AppGrid
+    REAL(8),INTENT(IN)            :: ElemValues(AppGrid%NElements)
+    REAL(8)                       :: RegionValues(AppGrid%NSubregions)
     
     !Local variables
-    INTEGER         :: indxRegion,indxElem
-    INTEGER,POINTER :: pElemSubregion(:)
+    INTEGER :: indxRegion,indxElem,iElemSubregion(AppGrid%NElements)
     
     !Initialize
-    pElemSubregion => AppGrid%AppElement%Subregion
-    RegionValues   =  0.0
+    iElemSubregion = AppGrid%AppElement%Subregion
+    RegionValues   = 0.0
     
     !Aggregate elememt values for each subregion
     DO indxElem=1,AppGrid%NElements
-      indxRegion               = pElemSubregion(indxElem)
-      RegionValues(indxRegion) = RegionValues(indxRegion) + ElemValues(indxElem)
+        indxRegion               = iElemSubregion(indxElem)
+        RegionValues(indxRegion) = RegionValues(indxRegion) + ElemValues(indxElem)
     END DO
     
   END FUNCTION AccumElemValuesToSubregions

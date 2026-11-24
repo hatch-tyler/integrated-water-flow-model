@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2025  
+!  Copyright (C) 2005-2026  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -1224,7 +1224,7 @@ CONTAINS
     
     !Make sure time unit is recognized
     IF (TimeStep%TrackTime) THEN
-        IF (IsTimeIntervalValid(cTimeUnitT) .EQ. 0) THEN
+        IF (.NOT. IsTimeIntervalValid(cTimeUnitT)) THEN
             CALL SetLastMessage('Time unit for small watershed recession coefficients is not valid!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
@@ -1385,7 +1385,7 @@ CONTAINS
     
     !Make sure time unit is recognized
     IF (TimeStep%TrackTime) THEN
-        IF (IsTimeIntervalValid(AppSWShed%cVarTimeUnit) .EQ. 0) THEN
+        IF (.NOT. IsTimeIntervalValid(AppSWShed%cVarTimeUnit)) THEN
             CALL SetLastMessage('Time unit for maximum recharge rate for small watersheds is not valid!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
@@ -1899,6 +1899,9 @@ CONTAINS
     INTEGER :: indxSWShed
     REAL(8) :: rFactor
     
+    !Return if no small watersheds
+    IF (AppSWShed%iNSWShed .EQ. 0) RETURN
+    
     !Make sure NewUnit is defined
     IF (cNewUnit .EQ. '') RETURN
     
@@ -1966,6 +1969,7 @@ CONTAINS
                 rTolerance = rSoilMoist_P * rToler
             END IF
             CALL NonPondedLUMoistureRouter(pSWSheds(indxSWShed)%Precip                     , &
+                                           0.2d0                                           , &
                                            pSWSheds(indxSWShed)%SMax                       , &
                                            rSoilMoist_P                                    , &
                                            pSWSheds(indxSWShed)%ETc * rDeltaT              , &

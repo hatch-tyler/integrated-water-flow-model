@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2025
+!  Copyright (C) 2005-2026
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -285,7 +285,7 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- CREATE NEW GW Z-BUDGET DATA FILE FOR POPULATING
   ! -------------------------------------------------------------
-  SUBROUTINE Create(GWZBudget,IsForInquiry,cZBudgetOutFileName,AppGrid,Stratigraphy,AppGW,AppStream,AppLake,AppSWShed,StrmGWConnector,TimeStep,NTIME,lDeepPerc,lRootZone_Defined,iStat)
+  SUBROUTINE Create(GWZBudget,IsForInquiry,cZBudgetOutFileName,AppGrid,Stratigraphy,AppGW,AppStream,AppLake,AppSWShed,StrmGWConnector,TimeStep,NTIME,lDeepPerc,lRootZone_Defined,lsSolTrans_Defined,iStat)
     CLASS(GWZBudgetType)                   :: GWZBudget
     LOGICAL,INTENT(IN)                     :: IsForInquiry
     CHARACTER(LEN=*),INTENT(IN)            :: cZBudgetOutFileName
@@ -298,7 +298,7 @@ CONTAINS
     TYPE(StrmGWConnectorType),INTENT(IN)   :: StrmGWConnector
     TYPE(TimeStepType),INTENT(IN)          :: TimeStep
     INTEGER,INTENT(IN)                     :: NTIME
-    LOGICAL,INTENT(IN)                     :: lDeepPerc,lRootZone_Defined
+    LOGICAL,INTENT(IN)                     :: lDeepPerc,lRootZone_Defined,lsSolTrans_Defined
     INTEGER,INTENT(OUT)                    :: iStat
     
     !Local variables
@@ -312,7 +312,7 @@ CONTAINS
     iStat = 0
     IF (AppGW%IsGWBudgetGenerated()) GWZBudget%lComputeFaceFlows    = .TRUE.
     IF (cZBudgetOutFileName .NE. '') GWZBudget%lComputeZBudgetFlows = .TRUE.
-    IF (AppGW%IsVelocityTecplotDefined()  .OR.  AppGW%IsCellVelocityOutputDefined()) THEN
+    IF (AppGW%IsVelocityTecplotDefined()  .OR.  AppGW%IsCellVelocityOutputDefined() .OR.  lsSolTrans_Defined  ) THEN      
         GWZBudget%lComputeFaceFlows       = .TRUE.
         GWZBudget%lComputeNodalVelocities = .TRUE.
     END IF
@@ -762,7 +762,7 @@ CONTAINS
   ! --- Note 2: It is assumed the relevant flow process is already updated
   ! --- Note 3: Existing Z-Budget is deleted and redefined with the new information
   ! -------------------------------------------------------------
-  SUBROUTINE Update(ZBudget,AppGrid,Stratigraphy,AppGW,AppStream,AppLake,AppSWShed,StrmGWConnector,TimeStep,NTIME,lDeepPerc,lRootZone_Defined,iStat)
+  SUBROUTINE Update(ZBudget,AppGrid,Stratigraphy,AppGW,AppStream,AppLake,AppSWShed,StrmGWConnector,TimeStep,NTIME,lDeepPerc,lRootZone_Defined,lsSolTrans_Defined,iStat)
     CLASS(GWZBudgetType)                   :: ZBudget
     TYPE(AppGridType),INTENT(IN)           :: AppGrid
     TYPE(StratigraphyType),INTENT(IN)      :: Stratigraphy
@@ -773,7 +773,7 @@ CONTAINS
     TYPE(StrmGWConnectorType),INTENT(IN)   :: StrmGWConnector
     TYPE(TimeStepType),INTENT(IN)          :: TimeStep
     INTEGER,INTENT(IN)                     :: NTIME
-    LOGICAL,INTENT(IN)                     :: lDeepPerc,lRootZone_Defined
+    LOGICAL,INTENT(IN)                     :: lDeepPerc,lRootZone_Defined,lsSolTrans_Defined
     INTEGER,INTENT(OUT)                    :: iStat
     
     !Local variables
@@ -802,6 +802,7 @@ CONTAINS
                         NTIME             , &
                         lDeepPerc         , &
                         lRootZone_Defined , &
+                        lsSolTrans_Defined, &
                         iStat             )
     
   END SUBROUTINE Update
