@@ -203,7 +203,7 @@ CONTAINS
     TYPE(AppGridType),INTENT(IN)          :: AppGrid          !Not used in this version
     TYPE(StratigraphyType),INTENT(IN)     :: Stratigraphy
     LOGICAL,INTENT(IN)                    :: IsRoutedStreams
-    TYPE(StrmGWConnectorType),INTENT(OUT):: StrmGWConnector
+    TYPE(StrmGWConnectorType),INTENT(INOUT):: StrmGWConnector
     TYPE(StrmLakeConnectorType)           :: StrmLakeConnector
     INTEGER,INTENT(OUT)                   :: iStat
     
@@ -609,7 +609,7 @@ CONTAINS
     TYPE(TimeStepType),INTENT(IN)         :: TimeStep
     INTEGER,INTENT(IN)                    :: NTIME,iLakeIDs(:)
     TYPE(StrmLakeConnectorType)           :: StrmLakeConnector
-    TYPE(StrmGWConnectorType),INTENT(OUT):: StrmGWConnector
+    TYPE(StrmGWConnectorType),INTENT(INOUT):: StrmGWConnector
     INTEGER,INTENT(OUT)                   :: iStat
     
     !Local variables
@@ -1082,7 +1082,7 @@ CONTAINS
     TYPE(GenericFileType)                 :: DataFile
     TYPE(StratigraphyType),INTENT(IN)     :: Stratigraphy
     INTEGER,INTENT(IN)                    :: iGWNodeIDs(:)
-    TYPE(StrmGWConnectorType),INTENT(OUT):: StrmGWConnector
+    TYPE(StrmGWConnectorType),INTENT(INOUT):: StrmGWConnector
     TYPE(StrmLakeConnectorType)           :: StrmLakeConnector
     TYPE(AppStream_v50_Type)              :: AppStream
     INTEGER,INTENT(OUT)                   :: iStat

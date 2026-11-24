@@ -198,7 +198,7 @@ MODULE Class_BaseAppLake
       TYPE(StratigraphyType),INTENT(IN)     :: Stratigraphy
       TYPE(AppGridType),INTENT(IN)          :: AppGrid
       TYPE(StrmLakeConnectorType)           :: StrmLakeConnector
-      TYPE(LakeGWConnectorType),INTENT(OUT) :: LakeGWConnector
+      TYPE(LakeGWConnectorType),INTENT(INOUT) :: LakeGWConnector
       INTEGER,INTENT(OUT)                   :: iStat
     END SUBROUTINE Abstract_SetStaticComponent
     
@@ -252,7 +252,7 @@ MODULE Class_BaseAppLake
       TYPE(TimeStepType),INTENT(IN)         :: TimeStep
       INTEGER,INTENT(IN)                    :: NTIME
       TYPE(StrmLakeConnectorType)           :: StrmLakeConnector
-      TYPE(LakeGWConnectorType),INTENT(OUT) :: LakeGWConnector
+      TYPE(LakeGWConnectorType),INTENT(INOUT) :: LakeGWConnector
       TYPE(PrecipitationType),INTENT(IN)    :: Precip
       TYPE(ETType),INTENT(IN)               :: ET
       INTEGER,INTENT(OUT)                   :: iStat

@@ -681,6 +681,7 @@ CONTAINS
     CALL Model%AppStream%GetStrmNodeIDs(iStrmNodeIDs)
 
     !Set the application lakes
+    Model%LakeGWConnector%Logger => Model%Logger
     CALL Model%AppLake%New(ProjectFileNames(PP_LakeDataFileID),Model%Stratigraphy,Model%AppGrid,Model%StrmLakeConnector,Model%LakeGWConnector,iStat)
     IF (iStat .EQ. -1) RETURN
     NLakes = Model%AppLake%GetNLakes()
@@ -792,6 +793,7 @@ CONTAINS
     CALL Model%AppStream%GetStrmNodeIDs(iStrmNodeIDs)
    
     !Set the application lakes
+    Model%LakeGWConnector%Logger => Model%Logger
     CALL Model%AppLake%New(cPP_FileNames(PP_LakeDataFileID),Model%Stratigraphy,Model%AppGrid,Model%StrmLakeConnector,Model%LakeGWConnector,iStat)
     IF (iStat .EQ. -1) RETURN
     NLakes = Model%AppLake%GetNLakes()
@@ -1051,6 +1053,7 @@ CONTAINS
         END IF
     END IF
     CALL DATE_AND_TIME(VALUES=iTimerStart)
+    Model%LakeGWConnector%Logger => Model%Logger
     CALL Model%AppLake%New(lForInquiry,ProjectFileNames(SIM_LakeDataFileID),Model%cSIMWorkingDirectory,Model%TimeStep,Model%NTIME,Model%AppGrid,PPBinaryFile,Model%LakeGWConnector,Model%PrecipData,Model%ETData,iStat)
     IF (iStat .EQ. -1) RETURN
     CALL DATE_AND_TIME(VALUES=iTimerValues)
@@ -1077,6 +1080,7 @@ CONTAINS
             RETURN
         END IF
     END IF
+    Model%StrmGWConnector%Logger => Model%Logger
     CALL Model%AppStream%New(Model%Logger,lForInquiry,lWSA,ProjectFileNames(SIM_StrmDataFileID),Model%cSIMWorkingDirectory,Model%TimeStep,Model%NTIME,iLakeIDs,Model%AppGrid,Model%Stratigraphy,Model%ETData,PPBinaryFile,Model%StrmLakeConnector,Model%StrmGWConnector,iStat)
     IF (iStat .EQ. -1) RETURN
     NStrmNodes          = Model%AppStream%GetNStrmNodes()
@@ -1434,6 +1438,7 @@ CONTAINS
             RETURN
         END IF
     END IF
+    Model%LakeGWConnector%Logger => Model%Logger
     CALL Model%AppLake%New(lForInquiry,ProjectFileNames(SIM_LakeDataFileID),Model%cSIMWorkingDirectory,Model%TimeStep,Model%NTIME,Model%AppGrid,Model%LakeGWConnector,Model%PrecipData,Model%ETData,iStat)
     IF (iStat .EQ. -1) RETURN
     NLakes = Model%AppLake%GetNLakes()
@@ -1457,6 +1462,7 @@ CONTAINS
             RETURN
         END IF
     END IF
+    Model%StrmGWConnector%Logger => Model%Logger
     CALL Model%AppStream%New(lForInquiry,ProjectFileNames(SIM_StrmDataFileID),Model%cSIMWorkingDirectory,Model%TimeStep,Model%NTIME,iLakeIDs,Model%AppGrid,Model%Stratigraphy,Model%ETData,Model%StrmGWConnector,Model%StrmLakeConnector,iStat)
     IF (iStat .EQ. -1) RETURN
     NStrmNodes          = Model%AppStream%GetNStrmNodes()
@@ -1817,6 +1823,7 @@ CONTAINS
             RETURN
         END IF
     END IF
+    Model%LakeGWConnector%Logger => Model%Logger
     CALL Model%AppLake%New(lForInquiry,cSIMFileNames(SIM_LakeDataFileID),Model%cSIMWorkingDirectory,Model%TimeStep,Model%NTIME,Model%AppGrid,Model%LakeGWConnector,Model%PrecipData,Model%ETData,iStat)
     IF (iStat .EQ. -1) RETURN
     NLakes = Model%AppLake%GetNLakes()
@@ -1840,6 +1847,7 @@ CONTAINS
             RETURN
         END IF
     END IF
+    Model%StrmGWConnector%Logger => Model%Logger
     CALL Model%AppStream%New(lForInquiry,cSIMFileNames(SIM_StrmDataFileID),Model%cSIMWorkingDirectory,Model%TimeStep,Model%NTIME,iLakeIDs,Model%AppGrid,Model%Stratigraphy,Model%ETData,Model%StrmGWConnector,Model%StrmLakeConnector,iStat)
     IF (iStat .EQ. -1) RETURN
     NStrmNodes          = Model%AppStream%GetNStrmNodes()

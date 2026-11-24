@@ -297,7 +297,7 @@ MODULE Class_BaseAppStream
         TYPE(AppGridType),INTENT(IN)          :: AppGrid
         TYPE(StratigraphyType),INTENT(IN)     :: Stratigraphy
         LOGICAL,INTENT(IN)                    :: IsRoutedStreams
-        TYPE(StrmGWConnectorType),INTENT(OUT):: StrmGWConnector
+        TYPE(StrmGWConnectorType),INTENT(INOUT):: StrmGWConnector
         TYPE(StrmLakeConnectorType)           :: StrmLakeConnector
         INTEGER,INTENT(OUT)                   :: iStat
      END SUBROUTINE Abstract_SetStaticComponent
@@ -355,7 +355,7 @@ MODULE Class_BaseAppStream
         TYPE(TimeStepType),INTENT(IN)         :: TimeStep
         INTEGER,INTENT(IN)                    :: NTIME,iLakeIDs(:)
         TYPE(StrmLakeConnectorType)           :: StrmLakeConnector
-        TYPE(StrmGWConnectorType),INTENT(OUT):: StrmGWConnector
+        TYPE(StrmGWConnectorType),INTENT(INOUT):: StrmGWConnector
         INTEGER,INTENT(OUT)                   :: iStat
      END SUBROUTINE Abstract_SetAllComponentsWithoutBinFile
      
