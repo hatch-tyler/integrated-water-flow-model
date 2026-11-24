@@ -207,6 +207,17 @@ CONTAINS
     NLayers       = SIZE(ParamValues,2)
     NParam        = SIZE(ParamValues,3)
 
+    !ConversionFactor(1) is for x-y coordinates; one factor per parameter must follow.
+    !(A shorter list makes the scaling below read past the end of the array.)
+    IF (SIZE(ConversionFactor) .NE. NParam+1) THEN
+        MessageArray(1) = 'Internal error in reading '//TRIM(cDescription)//' from parametric grids:'
+        MessageArray(2) = TRIM(IntToText(SIZE(ConversionFactor)))//' conversion factors given for '//TRIM(IntToText(NParam))//' parameters'
+        MessageArray(3) = '(expected '//TRIM(IntToText(NParam+1))//': one for x-y coordinates and one per parameter)!'
+        CALL Logger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+        iStat = -1
+        RETURN
+    END IF
+
     !Process parametric grids
     ParamGridLoop: &
     DO indxGrid=1,NParamGrids

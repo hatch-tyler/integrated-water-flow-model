@@ -673,7 +673,7 @@ CONTAINS
     !Local variables
     CHARACTER(LEN=ModNameLen+24) :: ThisProcedure = ModName // 'ReadSubsidenceParameters'
     INTEGER                      :: NGroup,NNodes,indxNode,indxLayer,ID,iNode
-    REAL(8)                      :: rFactors(7),rDummyArray(8),rDummy3DArray(AppGrid%NNodes,NLayers,7),rArea
+    REAL(8)                      :: rFactors(7),rParamFactors(8),rDummyArray(8),rDummy3DArray(AppGrid%NNodes,NLayers,7),rArea
     LOGICAL                      :: lProcessed(AppGrid%NNodes)
     
     !Initialize
@@ -738,8 +738,14 @@ CONTAINS
     !Parametric data input
     IF (NGroup .GT. 0) THEN
 
+        !Parametric grids need one conversion factor per parameter (after the x-y factor).
+        !The 7th parameter, NEQ (number of equivalent interbeds), is dimensionless and is
+        !not converted, as in the non-parametric input above.
+        rParamFactors(1:7) = rFactors
+        rParamFactors(8)   = 1.0d0
+
         !Read the parameter values at parametric nodes and compute the interpolation coefficients for finite element nodes
-        CALL GetValuesFromParametricGrid(AppGrid%GridType%Logger,InFile,AppGrid%GridType,iGWNodeIDs,NGroup,rFactors,.FALSE.,'subsidence',rDummy3DArray,iStat)
+        CALL GetValuesFromParametricGrid(AppGrid%GridType%Logger,InFile,AppGrid%GridType,iGWNodeIDs,NGroup,rParamFactors,.FALSE.,'subsidence',rDummy3DArray,iStat)
         IF (iStat .EQ. -1) RETURN
 
         !Initialize parameter values

@@ -792,7 +792,7 @@ CONTAINS
     !Local variables
     CHARACTER(LEN=ModNameLen+23) :: ThisProcedure = ModName // 'ReadUnsatZoneParameters'
     INTEGER                      :: NGroup,NElements,ID,indxElem,indxLayer,indxNode,iLayer,iElemIDs(AppGrid%NElements),iElem
-    REAL(8)                      :: rFactors(3),rDummyArray(1+5*NUZLayers),rDummy3DArray(AppGrid%NElements,NUZLayers,5),  &
+    REAL(8)                      :: rFactors(3),rParamFactors(6),rDummyArray(1+5*NUZLayers),rDummy3DArray(AppGrid%NElements,NUZLayers,5),  &
                                     ElemDepthToBottom(AppGrid%NElements),NodeDepthToBottom(AppGrid%NNodes)
     CHARACTER                    :: ALine*500
     LOGICAL                      :: lProcessed(AppGrid%NElements)
@@ -858,8 +858,14 @@ CONTAINS
     !Parametric data input
     IF (NGroup .GT. 0) THEN
 
+        !Parametric grids need one conversion factor per parameter (after the x-y factor).
+        !Parameters: max. thickness, total porosity, pore size distribution index,
+        !hydraulic conductivity, conductivity method. Only thickness and conductivity
+        !are converted, as in the non-parametric input above.
+        rParamFactors = [rFactors(1) , rFactors(2) , 1.0d0 , 1.0d0 , rFactors(3) , 1.0d0]
+
         !Read the parameter values at parametric nodes and compute the interpolation coefficients for grid elements
-        CALL GetValuesFromParametricGrid(AppGrid%GridType%Logger,InFile,AppGrid%GridType,iElemIDs,NGroup,rFactors,.TRUE.,'unsaturated zone',rDummy3DArray,iStat)
+        CALL GetValuesFromParametricGrid(AppGrid%GridType%Logger,InFile,AppGrid%GridType,iElemIDs,NGroup,rParamFactors,.TRUE.,'unsaturated zone',rDummy3DArray,iStat)
         IF (iStat .EQ. -1) RETURN
 
         !Initialize parameter values
