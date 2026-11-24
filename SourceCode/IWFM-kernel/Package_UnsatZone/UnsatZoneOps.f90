@@ -259,8 +259,29 @@ CONTAINS
     REAL(8)            :: rValue
     
     rValue = 1d0 + dET(ETc,WP,FC,SM) + dKunsat(SM,TN,PSDI,K,Toler,KunsatMethod)
-    
+
   END FUNCTION dSM_Function
+
+
+  ! -------------------------------------------------------------
+  ! --- SOIL MOISTURE FUNCTION AND ITS DERIVATIVE AT THE SAME SM
+  ! --- Same results as SM_Function and dSM_Function, but the unsaturated
+  ! --- hydraulic conductivity and its slope share their intermediate
+  ! --- terms (LOG/FEXP evaluations), which dominate the cost.
+  ! -------------------------------------------------------------
+  SUBROUTINE SM_FunctionAndDerivative(SMI,ETc,WP,FC,TN,PSDI,K,Inflow,Outflow,SM,Toler,KunsatMethod,rF,rdF)
+    REAL(8),INTENT(IN)  :: SMI,ETc,WP,FC,TN,PSDI,K,Inflow,Outflow,SM,Toler
+    INTEGER,INTENT(IN)  :: KunsatMethod
+    REAL(8),INTENT(OUT) :: rF,rdF
+
+    !Local variables
+    REAL(8) :: Ku,dKu
+
+    CALL KunsatAndDerivative(SM,TN,PSDI,K,Toler,KunsatMethod,Ku,dKu)
+    rF  = SM - SMI - Inflow + calcET(ETc,WP,FC,SM) + Ku + Outflow
+    rdF = 1d0 + dET(ETc,WP,FC,SM) + dKu
+
+  END SUBROUTINE SM_FunctionAndDerivative
 
 
   
@@ -444,6 +465,73 @@ CONTAINS
     END SELECT
 
   END FUNCTION dKunsat
+
+
+  ! -------------------------------------------------------------
+  ! --- UNSATURATED HYDRAULIC CONDUCTIVITY AND ITS SLOPE AT THE SAME SM
+  ! --- Bit-for-bit the values of Kunsat(...) and dKunsat(...): the same
+  ! --- expressions, with the shared intermediate terms evaluated once.
+  ! -------------------------------------------------------------
+  SUBROUTINE KunsatAndDerivative(SM,TN,PSDI,Ksat,Toler,KunsatMethod,Ku,dKu)
+    REAL(8),INTENT(IN)  :: SM,TN,PSDI,Ksat,Toler
+    INTEGER,INTENT(IN)  :: KunsatMethod
+    REAL(8),INTENT(OUT) :: Ku,dKu
+
+    !Local variables
+    REAL(8) :: A,rLogRatio,m,SM_Check,ratio,rValue,F2,dF2,rPowF2,F1,dF1,Kunsat_Check
+
+    SELECT CASE (KunsatMethod)
+
+      !Campbell's approach (Kunsat_Campbell / dKunsat_Campbell)
+      CASE (f_iCampbell)
+        IF (SM .LE. 0.0) THEN
+          Ku  = 0.0
+          dKu = 0.0
+        ELSEIF (SM .GT. TN) THEN
+          Ku  = Ksat
+          dKu = 0.0
+        ELSE
+          A         = 3d0 + 2d0/PSDI
+          rLogRatio = LOG(SM/TN)
+          Ku        = Ksat * FEXP(A*rLogRatio)
+          dKu       = Ksat * A/TN * FEXP((A-1d0)*rLogRatio)
+        END IF
+
+      !van Genuchten approach (Kunsat_vanGenuchten / dKunsat_vanGenuchten)
+      CASE (f_ivanGenuchten)
+        IF (SM .GE. TN) THEN
+          Ku  = Ksat
+          dKu = 0.0
+        ELSEIF (SM .LE. 0.0) THEN
+          Ku  = 0.0
+          dKu = 0.0
+        ELSE
+          m        = PSDI/(PSDI+1d0)
+          SM_Check = TN - f_rTolerFrac*Toler
+          IF (SM .LT. SM_Check) THEN
+            ratio   = SM/TN
+            rValue  = FEXP((1d0/m)*LOG(ratio))  ! = ratio**(1d0/m)
+            F2      = 1d0 - rValue  ;  dF2 = -1d0/(TN*m) * (rValue/ratio)
+            rPowF2  = FEXP(m*LOG(F2))           ! = F2**m
+            F1      = 1d0 - rPowF2  ;  dF1 = -m * (rPowF2/F2) * dF2
+            Ku      = Ksat * SQRT(ratio) * F1*F1
+            dKu     =  Ksat * 1d0/SQRT(ratio) * F1*F1 / (2d0 * TN)  &
+                     + 2d0 * Ksat * SQRT(ratio) * F1 * dF1
+          ELSE
+            Ku  = Kunsat_vanGenuchten(SM,TN,PSDI,Ksat,Toler)
+            !dKunsat_vanGenuchten uses Kunsat at SM itself in this range
+            Kunsat_Check = Ku
+            dKu          = (Kunsat_Check - Ksat) / (SM_Check - TN)
+          END IF
+        END IF
+
+      CASE DEFAULT
+        Ku  = Kunsat(SM,TN,PSDI,Ksat,Toler,KunsatMethod)
+        dKu = dKunsat(SM,TN,PSDI,Ksat,Toler,KunsatMethod)
+
+    END SELECT
+
+  END SUBROUTINE KunsatAndDerivative
 
 
   ! -------------------------------------------------------------
@@ -649,12 +737,13 @@ CONTAINS
     !Local variables
     INTEGER :: iter
     REAL(8) :: SM_test,F_SM_test,DF_SM_test,F_SMLow,SM_test_Check
-    LOGICAL :: Converged,UseNewtonRaphson
+    LOGICAL :: Converged,UseNewtonRaphson,lF_SMLowOK
 
-    !Initialize 
+    !Initialize
     SM               = SMI
     Converged        = .FALSE.
     UseNewtonRaphson = .TRUE.
+    lF_SMLowOK       = .FALSE.
     
     !Set SM_test_Check based on the method used to compute Kunsat 
     SELECT CASE (KunsatMethod)
@@ -677,8 +766,7 @@ CONTAINS
         DO 
             !Take a Newton-Raphson step
             IF (UseNewtonRaphson) THEN
-                F_SM_test  = SM_Function(SMI,ETc,WP,FC,TN,PSDI,K,Inflow,Outflow,SM,Toler,KunsatMethod)
-                DF_SM_test = dSM_Function(ETc,WP,FC,TN,PSDI,K,SM,Toler,KunsatMethod)
+                CALL SM_FunctionAndDerivative(SMI,ETc,WP,FC,TN,PSDI,K,Inflow,Outflow,SM,Toler,KunsatMethod,F_SM_test,DF_SM_test)
                 Delta      = F_SM_test /DF_SM_test
                 !Check if SM is already close enough to the root; if it is don't update it   
                 IF (ABS(Delta) .LT. Toler) THEN
@@ -694,7 +782,10 @@ CONTAINS
                     IF (F_SM_Test .GT. 0.0) THEN
                         IF (SM .LT. SMHigh) SMHigh = SM
                     ELSE
-                        IF (SM .GT. SMLow) SMLow = SM
+                        IF (SM .GT. SMLow) THEN
+                            SMLow      = SM
+                            lF_SMLowOK = .FALSE.
+                        END IF
                     END IF
                 ELSE
                     SM_test          = SM - (0.5 * Delta)
@@ -706,9 +797,14 @@ CONTAINS
             ELSE
                 SM_test   = (SMHigh+SMLow)/2d0
                 F_SM_Test = SM_Function(SMI,ETc,WP,FC,TN,PSDI,K,Inflow,Outflow,SM_test,Toler,KunsatMethod)
-                F_SMLow   = SM_Function(SMI,ETc,WP,FC,TN,PSDI,K,Inflow,Outflow,SMLow,Toler,KunsatMethod)
+                !Function value at SMLow is reused while SMLow is unchanged
+                IF (.NOT. lF_SMLowOK) THEN
+                    F_SMLow    = SM_Function(SMI,ETc,WP,FC,TN,PSDI,K,Inflow,Outflow,SMLow,Toler,KunsatMethod)
+                    lF_SMLowOK = .TRUE.
+                END IF
                 IF (F_SM_Test*F_SMLow .GE. 0.0) THEN
-                    SMLow  = SM_test
+                    SMLow   = SM_test
+                    F_SMLow = F_SM_Test   !SM_Function(...,SMLow,...) with SMLow = SM_test
                 ELSE
                     SMHigh = SM_test
                 END IF
