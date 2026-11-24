@@ -35,7 +35,7 @@ MODULE heclib_c_binding
   PUBLIC :: hec_zset, hec_zquery
   PUBLIC :: hec_zpathnameGetPart, hec_zpathnameForm
   PUBLIC :: hec_yearMonthDayToJulian, hec_julianToYearMonthDay
-  PUBLIC :: hec_incrementTime
+  PUBLIC :: hec_incrementTime, hec_dateToJulian, hec_timeStringToSeconds, hec_julianToDate
 
   ! Public helper functions
   PUBLIC :: f_to_c_string, c_to_f_string
@@ -289,6 +289,28 @@ MODULE heclib_c_binding
       INTEGER(C_INT), INTENT(OUT) :: julianEnd
       INTEGER(C_INT), INTENT(OUT) :: secondsEnd
     END FUNCTION hec_incrementTime
+
+    ! int dateToJulian(const char *dateString)
+    INTEGER(C_INT) FUNCTION hec_dateToJulian(dateString) BIND(C, NAME='dateToJulian')
+      IMPORT :: C_CHAR, C_INT
+      CHARACTER(KIND=C_CHAR), DIMENSION(*), INTENT(IN) :: dateString
+    END FUNCTION hec_dateToJulian
+
+    ! int timeStringToSeconds(const char *timeString)
+    INTEGER(C_INT) FUNCTION hec_timeStringToSeconds(timeString) BIND(C, NAME='timeStringToSeconds')
+      IMPORT :: C_CHAR, C_INT
+      CHARACTER(KIND=C_CHAR), DIMENSION(*), INTENT(IN) :: timeString
+    END FUNCTION hec_timeStringToSeconds
+
+    ! int julianToDate(int julianDate, int dateStyle, char *dateString, size_t sizeofDateString)
+    INTEGER(C_INT) FUNCTION hec_julianToDate(julianDate, dateStyle, dateString, sizeofDateString) &
+                   BIND(C, NAME='julianToDate')
+      IMPORT :: C_CHAR, C_INT, C_SIZE_T
+      INTEGER(C_INT), VALUE                             :: julianDate
+      INTEGER(C_INT), VALUE                             :: dateStyle
+      CHARACTER(KIND=C_CHAR), DIMENSION(*), INTENT(OUT) :: dateString
+      INTEGER(C_SIZE_T), VALUE                          :: sizeofDateString
+    END FUNCTION hec_julianToDate
 
     !--------------------------------------------------------------
     ! C Standard Library Functions

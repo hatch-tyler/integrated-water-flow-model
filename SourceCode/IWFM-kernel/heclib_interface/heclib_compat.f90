@@ -129,6 +129,13 @@ CONTAINS
   !--------------------------------------------------------------
   SUBROUTINE ZRRTS(IFLTAB, CPATH, CDATE, CTIME, NVALS, VALUES, &
                    CUNITS, CTYPE, IOFSET, ISTAT)
+    !Legacy HECLIB contract (as relied on by Class_DSSFileType):
+    !  - read exactly NVALS regular-interval values starting at the first standard
+    !    time at or after CDATE/CTIME (e.g. '31OCT4000','2400' is the Oct value of
+    !    monthly end-of-period data)
+    !  - missing values are returned as -901.0
+    !  - ISTAT = 0 all values found, 1 some values missing, 4 no values found
+    !    (including no record in the window), 12 hard error (bad pathname/interval)
     INTEGER(C_LONG_LONG), INTENT(INOUT) :: IFLTAB(*)
     CHARACTER(LEN=*), INTENT(IN) :: CPATH
     CHARACTER(LEN=*), INTENT(IN) :: CDATE
@@ -140,66 +147,111 @@ CONTAINS
     INTEGER, INTENT(OUT) :: IOFSET
     INTEGER, INTENT(OUT) :: ISTAT
 
+    REAL, PARAMETER :: rMissing = -901.0
     TYPE(C_PTR) :: tss
-    INTEGER :: nRetrieved, nCopy
+    INTEGER :: nRetrieved, nCopy, nMissing, i, iIntl, iStatParse, n1, n2, n3, n4, n5, n6
+    INTEGER(C_INT) :: iJulStart, iSecStart, iJulEnd, iSecEnd, iStatus
     CHARACTER(LEN=32) :: tmpUnits, tmpType
+    CHARACTER(LEN=65) :: cA, cB, cC, cD, cE, cF
+    CHARACTER(LEN=20, KIND=C_CHAR) :: cEndDateC
+    CHARACTER(LEN=20) :: cEndDate
+    CHARACTER(LEN=4)  :: cEndTime
+    REAL, ALLOCATABLE :: rBuf(:)
 
-    ! Local copies of input strings to ensure stable C string temporaries
     CHARACTER(LEN=LEN_TRIM(CPATH)) :: localPath
     CHARACTER(LEN=LEN_TRIM(CDATE)) :: localDate
     CHARACTER(LEN=LEN_TRIM(CTIME)) :: localTime
 
     ! Initialize outputs
-    ISTAT = 0
+    ISTAT  = 0
     IOFSET = 0
     CUNITS = ''
-    CTYPE = ''
+    CTYPE  = ''
+    IF (NVALS .LE. 0) RETURN
+    VALUES(1:NVALS) = rMissing
 
-    ! Make local copies to avoid any issues with string temporaries
     localPath = TRIM(CPATH)
     localDate = TRIM(CDATE)
     localTime = TRIM(CTIME)
 
-    ! Create time series struct with time window
+    ! Interval from the E part
+    iStatParse = 0
+    CALL ZUFPN(cA, n1, cB, n2, cC, n3, cD, n4, cE, n5, cF, n6, &
+               localPath, LEN(localPath), iStatParse)
+    CALL ZGINTL(iIntl, cE, 0, iStatParse)
+    IF (iStatParse .NE. 0 .OR. iIntl .LE. 0) THEN
+      ISTAT = 12
+      RETURN
+    END IF
+
+    ! Time window: NVALS intervals after the start; values are taken from the first
+    ! standard time in the window (this covers starts on and off interval boundaries)
+    iJulStart = hec_dateToJulian(f_to_c_string(localDate))
+    iSecStart = hec_timeStringToSeconds(f_to_c_string(localTime))
+    iStatus   = hec_incrementTime(INT(iIntl, C_INT) * 60_C_INT, INT(NVALS, C_INT), &
+                                  iJulStart, iSecStart, iJulEnd, iSecEnd)
+    IF (iSecEnd .EQ. 0) THEN
+      iJulEnd = iJulEnd - 1_C_INT
+      iSecEnd = 86400_C_INT
+    END IF
+    cEndDateC = ''
+    iStatus   = hec_julianToDate(iJulEnd, 4_C_INT, cEndDateC, INT(LEN(cEndDateC), C_SIZE_T))
+    cEndDate  = ''
+    DO i = 1, LEN(cEndDateC)
+      IF (cEndDateC(i:i) == C_NULL_CHAR) EXIT
+      cEndDate(i:i) = cEndDateC(i:i)
+    END DO
+    WRITE (cEndTime, '(2I2.2)') iSecEnd / 3600, MOD(iSecEnd / 60, 60)
+
     tss = hec_zstructTsNewTimes( &
             f_to_c_string(localPath), &
             f_to_c_string(localDate), &
             f_to_c_string(localTime), &
-            f_to_c_string(''), &  ! End date - empty to use numberValues
-            f_to_c_string(''))    ! End time
+            f_to_c_string(TRIM(cEndDate)), &
+            f_to_c_string(cEndTime))
 
     IF (.NOT. C_ASSOCIATED(tss)) THEN
-      ISTAT = -1
+      ISTAT = 12
       RETURN
     END IF
 
     ! Retrieve the data (floats, no quality notes)
-    ISTAT = hec_ztsRetrieve(IFLTAB, tss, DSS_RETRIEVE_REGULAR, 0_C_INT, 0_C_INT)
+    iStatus = hec_ztsRetrieve(IFLTAB, tss, DSS_RETRIEVE_REGULAR, 0_C_INT, 0_C_INT)
 
-    IF (ISTAT >= 0) THEN
-      ! Extract the data from the struct
+    IF (iStatus >= 0) THEN
       nRetrieved = get_ts_number_values(tss)
-
-      ! Copy float values to output array with bounds protection
-      IF (nRetrieved > 0 .AND. NVALS > 0) THEN
+      IF (nRetrieved > 0) THEN
+        ALLOCATE (rBuf(nRetrieved))
+        CALL get_ts_float_values(tss, rBuf, nRetrieved)
         nCopy = MIN(NVALS, nRetrieved)
-        CALL get_ts_float_values(tss, VALUES(1:nCopy), nCopy)
+        VALUES(1:nCopy) = rBuf(1:nCopy)
       END IF
 
       ! Get units and type strings
       tmpUnits = get_ts_units(tss)
-      tmpType = get_ts_type(tss)
-
-      ! Copy to output (trimmed to fit)
-      CUNITS = TRIM(tmpUnits)
-      CTYPE = TRIM(tmpType)
-
-      ! Set success status
-      ISTAT = 0
+      tmpType  = get_ts_type(tss)
+      CUNITS   = TRIM(tmpUnits)
+      CTYPE    = TRIM(tmpType)
     END IF
 
     ! Free the struct
     CALL hec_zstructFree(tss)
+
+    ! Legacy missing flag and status
+    nMissing = 0
+    DO i = 1, NVALS
+      IF (VALUES(i) .LT. -1.0E30 .OR. VALUES(i) .EQ. -901.0 .OR. VALUES(i) .EQ. -902.0) THEN
+        VALUES(i) = rMissing
+        nMissing  = nMissing + 1
+      END IF
+    END DO
+    IF (nMissing .EQ. 0) THEN
+      ISTAT = 0
+    ELSE IF (nMissing .LT. NVALS) THEN
+      ISTAT = 1
+    ELSE
+      ISTAT = 4
+    END IF
 
   END SUBROUTINE ZRRTS
 
@@ -441,7 +493,7 @@ CONTAINS
         INTL = 1440
       CASE ('1WEEK')
         INTL = 10080
-      CASE ('1MON')
+      CASE ('1MON', '1MONTH')
         INTL = 43200  ! Approximate
       CASE ('1YEAR')
         INTL = 525600  ! Approximate
