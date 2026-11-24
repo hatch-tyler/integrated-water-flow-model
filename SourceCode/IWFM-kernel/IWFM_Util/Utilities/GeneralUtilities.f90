@@ -68,6 +68,7 @@ MODULE GeneralUtilities
   !Public directory utilities               
   PUBLIC :: ConvertPathToWindowsStyle     , &
             ConvertPathToLinuxStyle       , &
+            NativePathName                , &
             IsPathWindowsStyle            , &
             IsAbsolutePathname            , &
             StripFileNameFromPath         , &
@@ -1958,6 +1959,27 @@ CONTAINS
     END DO
     
   END FUNCTION ConvertPathToLinuxStyle
+
+
+  ! -------------------------------------------------------------
+  ! --- CONVERT A PATH TO THE NATIVE STYLE OF THE BUILD PLATFORM
+  ! --- Model input files are usually written on Windows with '\'
+  ! --- separators. Windows accepts both '\' and '/', so the name is
+  ! --- returned unchanged there (keeps Windows behavior and output
+  ! --- byte-identical to the official build). Elsewhere '\' is not a
+  ! --- separator, so it is converted to '/'.
+  ! -------------------------------------------------------------
+  FUNCTION NativePathName(cPath) RESULT(cNative)
+    CHARACTER(LEN=*),INTENT(IN) :: cPath
+    CHARACTER(LEN=LEN(cPath))   :: cNative
+
+#ifdef _WIN32
+    cNative = cPath
+#else
+    cNative = ConvertPathToLinuxStyle(cPath)
+#endif
+
+  END FUNCTION NativePathName
 
   
   ! -------------------------------------------------------------

@@ -33,6 +33,7 @@ MODULE StrmHydrograph
                                      f_iUNKNOWN                    , &
                                      f_iDataset  
   USE GeneralUtilities       , ONLY: LocateInList                  , &
+                                     NativePathName                , &
                                      StripTextUntilCharacter       , &
                                      IntToText                     , &
                                      ArrangeText                   , &
@@ -762,7 +763,7 @@ CONTAINS
     cHDFFileName = TRIM(ADJUSTL(StripTextUntilCharacter(cFileName,'.',Back=.TRUE.))) // '.hdf'
 
     !Skip if the HDF already exists from a previous inquiry-mode load.
-    INQUIRE(FILE=TRIM(cHDFFileName), EXIST=lHDFExists)
+    INQUIRE(FILE=TRIM(NativePathName(cHDFFileName)), EXIST=lHDFExists)
     IF (lHDFExists) RETURN
 
     !Open output file HDF file

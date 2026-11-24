@@ -151,7 +151,7 @@ CONTAINS
     !Initial data settings
     iLen = LEN_TRIM(ADJUSTL(FileName))
     ALLOCATE (CHARACTER(LEN=iLen) :: ThisFile%Name)
-    ThisFile%Name  = TRIM(ADJUSTL(FileName))
+    ThisFile%Name  = NativePathName(TRIM(ADJUSTL(FileName)))
     ThisFile%UnitN = GetAUnitNumber()
 
   END SUBROUTINE NewBaseFile
@@ -285,7 +285,7 @@ CONTAINS
     CHARACTER(LEN=*),INTENT(IN) :: FileName
     LOGICAL                     :: IsConnected
 
-    INQUIRE (FILE=FileName,OPENED=IsConnected)
+    INQUIRE (FILE=NativePathName(FileName),OPENED=IsConnected)
 
   END FUNCTION IsFileOpen
 

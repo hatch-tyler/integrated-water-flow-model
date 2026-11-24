@@ -293,6 +293,9 @@ CONTAINS
     INTEGER                     :: iErrorCode,iUnitNumber
     CHARACTER                   :: cErrorMsg*500
     LOGICAL                     :: lOpen
+#ifndef _WIN32
+    INTEGER                     :: iPos
+#endif
 
     !Initialize
     iStat = 0
@@ -318,6 +321,12 @@ CONTAINS
         ALLOCATE (CHARACTER(LEN_TRIM(cLogFileName)) :: this%cName)
         this%cName  = cLogFileName
     END IF
+#ifndef _WIN32
+    !Non-Windows: '\' is not a path separator (see GeneralUtilities::NativePathName)
+    DO iPos=1,LEN(this%cName)
+        IF (this%cName(iPos:iPos) .EQ. '\') this%cName(iPos:iPos) = '/'
+    END DO
+#endif
     OPEN (UNIT=this%iUnitN,FILE=this%cName,ACTION='WRITE',STATUS='REPLACE',IOMSG=cErrorMsg,IOSTAT=iErrorCode)
     IF (iErrorCode .NE. 0) THEN
         MessageArray(1) = 'Error in opening the log file!'

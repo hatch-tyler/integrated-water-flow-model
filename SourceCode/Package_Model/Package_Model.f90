@@ -39,6 +39,7 @@ MODULE Package_Model
                                           f_iFILE                                     , &
                                           f_lLogPerfMarkers
   USE GeneralUtilities            , ONLY: IntToText                                   , &
+                                          NativePathName                              , &
                                           StripTextUntilCharacter                     , &
                                           CleanSpecialCharacters                      , &
                                           UpperCase                                   , &
@@ -6828,7 +6829,7 @@ CONTAINS
 
     !Check if restart dta file exists, if not return
     CALL EstablishAbsolutePathFileName('IW_Restart.bin',cSIMDir,cAbsPathFileName)
-    OPEN (FILE=cAbsPathFileName, UNIT=1111, STATUS='OLD' , IOSTAT=ErrorCode)
+    OPEN (FILE=NativePathName(cAbsPathFileName), UNIT=1111, STATUS='OLD' , IOSTAT=ErrorCode)
     IF (ErrorCode .NE. 0) THEN
         CLOSE (1111,IOSTAT=ErrorCode)
         RETURN
@@ -6883,7 +6884,7 @@ CONTAINS
     
     !Check if restart data file exists, if not return
     CALL EstablishAbsolutePathFileName('IW_Restart.bin',Model%cSIMWorkingDirectory,cAbsPathFileName)
-    OPEN (FILE=cAbsPathFileName, UNIT=1111, STATUS='OLD' , IOSTAT=ErrorCode)
+    OPEN (FILE=NativePathName(cAbsPathFileName), UNIT=1111, STATUS='OLD' , IOSTAT=ErrorCode)
     IF (ErrorCode .NE. 0) THEN
                     CALL Model%Logger%LogMessage('Cannot find the restart data file!'//f_cLineFeed//'Running the model from the beginning of simulation period.',f_iInfo,ThisProcedure)
         CLOSE (1111,IOSTAT=ErrorCode)

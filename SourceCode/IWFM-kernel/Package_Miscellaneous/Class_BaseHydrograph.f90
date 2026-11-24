@@ -26,6 +26,7 @@ MODULE Class_BaseHydrograph
                                      f_iFatal                       , &
                                      f_iInfo
   USE GeneralUtilities       , ONLY: ConvertID_To_Index             , &
+                                     NativePathName                 , &
                                      PrepareIDIndex                 , &
                                      LookupIDInIndex                , &
                                      StripTextUntilCharacter        , &
@@ -1070,7 +1071,7 @@ CONTAINS
     !Skip the conversion if the HDF already exists from a previous
     !inquiry-mode load. The source .out file is written once by the
     !simulation, so a previously-built .hdf remains valid.
-    INQUIRE(FILE=TRIM(cHDFFileName), EXIST=lHDFExists)
+    INQUIRE(FILE=TRIM(NativePathName(cHDFFileName)), EXIST=lHDFExists)
     IF (lHDFExists) RETURN
 
     !Open output file HDF file

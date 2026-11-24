@@ -27,6 +27,7 @@ MODULE Class_HDF5FileType
   USE TimeSeriesUtilities , ONLY: TimeStepType            , &
                                   NPeriods                
   USE GeneralUtilities    , ONLY: UpperCase               , &
+                                  NativePathName          , &
                                   IntToText
   USE Class_BaseFileType  , ONLY: BaseFileType            , &
                                   f_IO_SuccessfulRead
@@ -238,7 +239,7 @@ CONTAINS
         END IF
         
         !Open file
-        CALL H5FOPEN_F(FileName,H5F_ACC_RDONLY_F,ThisFile%FileID,ErrorCode)
+        CALL H5FOPEN_F(NativePathName(FileName),H5F_ACC_RDONLY_F,ThisFile%FileID,ErrorCode)
         IF (ErrorCode .NE. 0) THEN
             IF (PRESENT(FileOpenCode)) THEN
                 FileOpenCode = ErrorCode
@@ -326,7 +327,7 @@ CONTAINS
         CALL H5PSET_FCLOSE_DEGREE_F(iFileAccessPropListID,H5F_CLOSE_STRONG_F,ErrorCode)
         
         !Create file
-        CALL H5FCREATE_F(FileName,H5F_ACC_TRUNC_F,ThisFile%FileID,ErrorCode,access_prp=iFileAccessPropListID)  
+        CALL H5FCREATE_F(NativePathName(FileName),H5F_ACC_TRUNC_F,ThisFile%FileID,ErrorCode,access_prp=iFileAccessPropListID)  
         IF (ErrorCode .NE. 0) THEN
             IF (PRESENT(FileOpenCode)) THEN
                 FileOpenCode = ErrorCode
@@ -344,7 +345,7 @@ CONTAINS
     END IF
     
     !Add file to the open files list (grow if needed)
-    CALL AddOpenHDFFile(UpperCase(ADJUSTL(FileName)), ThisFile%FileID)
+    CALL AddOpenHDFFile(UpperCase(ADJUSTL(NativePathName(FileName))), ThisFile%FileID)
 
     !Clear memory
     DEALLOCATE (DummyArray , cDataSetNames , STAT=ErrorCode)
@@ -1745,7 +1746,7 @@ CONTAINS
     CHARACTER(LEN=LEN(FileName)) :: WorkFileName
     
     iIndex       = 0
-    WorkFileName = UpperCase(ADJUSTL(FileName))
+    WorkFileName = UpperCase(ADJUSTL(NativePathName(FileName)))
     
     DO indx=1,nOpenHDFFiles
         IF (TRIM(WorkFileName) .EQ. TRIM(OpenFileNames(indx))) THEN
@@ -1912,7 +1913,7 @@ CONTAINS
     CALL H5PSET_FCLOSE_DEGREE_F(iFileAccessPropListID,H5F_CLOSE_STRONG_F,iErrorCode)
 
     !Open file
-    CALL H5FOPEN_F(cFileName,H5F_ACC_RDWR_F,ThisFile%FileID,iErrorCode,iFileAccessPropListID)  
+    CALL H5FOPEN_F(NativePathName(cFileName),H5F_ACC_RDWR_F,ThisFile%FileID,iErrorCode,iFileAccessPropListID)  
     IF (iErrorCode .NE. 0) THEN
         CALL ThisFile%Logger%SetLastMessage('Error in re-opening HDF5 file '//TRIM(cFileName)//'!',f_iFatal,ThisProcedure)
         iStat = -1
@@ -1977,7 +1978,7 @@ CONTAINS
     END DO
 
     !Add file to the open files list (grow if needed)
-    CALL AddOpenHDFFile(UpperCase(ADJUSTL(cFileName)), ThisFile%FileID)
+    CALL AddOpenHDFFile(UpperCase(ADJUSTL(NativePathName(cFileName))), ThisFile%FileID)
     
     !Close property lists
     CALL H5PCLOSE_F(iDataAccessPropListID,iErrorCode)

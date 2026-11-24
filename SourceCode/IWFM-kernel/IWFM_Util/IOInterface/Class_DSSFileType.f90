@@ -24,6 +24,7 @@ MODULE Class_DSSFileType
   USE, INTRINSIC :: ISO_C_BINDING, ONLY: C_LONG_LONG
   USE heclib_compat
   USE GeneralUtilities    , ONLY: UpperCase                                  , &
+                                  NativePathName                             , &
                                   IntTotext
   USE TimeSeriesUtilities , ONLY: f_iTimeStampLength                         , &
                                   TimeStampToJulian                          , &
@@ -302,7 +303,7 @@ CONTAINS
       CALL ZSET('UNIT','',AUnitNumber)
 
       !Open DSS file
-      CALL ZOPEN(DSSFileListTail%IFLTAB,FileName,ErrorCode)
+      CALL ZOPEN(DSSFileListTail%IFLTAB,NativePathName(FileName),ErrorCode)
 
       !Implement actions based on error code
       IF (ErrorCode.NE.0) THEN
@@ -1715,7 +1716,7 @@ CONTAINS
     IF (.NOT. ASSOCIATED(CurrentNode)) RETURN
     IF (CurrentNode%DSSFileIndex .LT. 1) RETURN
     DO
-      IF (TRIM(ADJUSTL(UpperCase(FileName))) .EQ. TRIM(ADJUSTL(UpperCase(CurrentNode%Name)))) THEN
+      IF (TRIM(ADJUSTL(UpperCase(NativePathName(FileName)))) .EQ. TRIM(ADJUSTL(UpperCase(CurrentNode%Name)))) THEN
           FileIsOpen   = .TRUE.
           DSSFileIndex = CurrentNode%DSSFileIndex
           RETURN

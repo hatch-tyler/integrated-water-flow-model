@@ -33,6 +33,7 @@ MODULE GWHydrograph
                                      f_iDSS                    , &
                                      f_iHDF
   USE GeneralUtilities       , ONLY: ArrangeText               , &
+                                     NativePathName            , &
                                      f_cLineFeed               , &
                                      StripTextUntilCharacter   , &
                                      CleanSpecialCharacters    , &
@@ -1552,7 +1553,7 @@ CONTAINS
     !built from it on a previous inquiry-mode load remains correct.
     !Users who re-run the simulation should delete the .hdf alongside
     !IW_ModelData_ForInquiry.bin to force a rebuild.
-    INQUIRE(FILE=TRIM(cHDFFileName), EXIST=lHDFExists)
+    INQUIRE(FILE=TRIM(NativePathName(cHDFFileName)), EXIST=lHDFExists)
     IF (lHDFExists) RETURN
 
     !Open output file HDF file

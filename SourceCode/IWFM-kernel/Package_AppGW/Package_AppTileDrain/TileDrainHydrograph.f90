@@ -25,6 +25,7 @@ MODULE TileDrainHydrograph
                                       f_iFatal                      , &
                                       f_iWarn
   USE GeneralUtilities        , ONLY: ConvertID_To_Index            , &
+                                      NativePathName                , &
                                       IntToText                     , &
                                       StripTextUntilCharacter       , &
                                       ArrangeText                   , &
@@ -686,7 +687,7 @@ CONTAINS
     cHDFFileName = TRIM(ADJUSTL(StripTextUntilCharacter(cFileName,'.',Back=.TRUE.))) // '.hdf'
 
     !Skip if the HDF already exists from a previous inquiry-mode load.
-    INQUIRE(FILE=TRIM(cHDFFileName), EXIST=lHDFExists)
+    INQUIRE(FILE=TRIM(NativePathName(cHDFFileName)), EXIST=lHDFExists)
     IF (lHDFExists) RETURN
 
     !Open output file HDF file
