@@ -78,13 +78,21 @@ if(IWFM_USING_INTEL)
         # Previous /fp:fast=1 testing showed it was faster, but the comparison was
         # confounded by unconditional /Qopenmp on non-parallel targets. With that
         # fixed, /fp:consistent should match .vfproj performance.
+        #
+        # ORDER MATTERS: /standard-semantics expands to a set of /assume options
+        # that includes realloc_lhs and ieee_compares. Options are processed left
+        # to right, so /standard-semantics must come BEFORE the explicit /assume
+        # overrides (as in the .vfproj, where F2003Semantics precedes
+        # AdditionalOptions). With the reverse order, noieee_compares is silently
+        # cancelled and results differ from the official build at round-off
+        # level (verified 2026-11-24: 23 of 32 sample-model outputs changed).
         target_compile_options(iwfm_compiler_flags INTERFACE
+            /standard-semantics
+            /fpp
             /fp:consistent
             /assume:norealloc_lhs
             /assume:noieee_compares
             /Qdiag-disable:10448
-            /standard-semantics
-            /fpp
         )
 
         # Static linking - use static runtime libraries
@@ -155,12 +163,14 @@ if(IWFM_USING_INTEL)
     else()
         # Linux/macOS Intel flags
         # Note: Multiple -assume options must be comma-separated or use separate -assume flags
+        # -standard-semantics must precede the -assume overrides (see the
+        # Windows block above for why order matters).
         target_compile_options(iwfm_compiler_flags INTERFACE
+            -standard-semantics
+            -fpp
             -fp-model=fast=1
             "-assume" "norealloc_lhs,noieee_compares"
             -diag-disable=10448
-            -standard-semantics
-            -fpp
             -fPIC  # Required for shared library (IWFM_C_DLL) support
         )
 
