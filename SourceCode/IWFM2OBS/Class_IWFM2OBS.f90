@@ -40,6 +40,7 @@ MODULE Class_IWFM2OBS
                                     iHR_SUBSID, iHR_TILEDR, &
                                     iHR_STREAM, iHR_GWHEAD, &
                                     iHR_NUMHYD
+  USE Class_PESTOutput      , ONLY: PESTOutputType
 
   IMPLICIT NONE
 
@@ -71,6 +72,8 @@ MODULE Class_IWFM2OBS
     CHARACTER(LEN=500) :: cObsFile  = ' '   ! Observation SMP file
     CHARACTER(LEN=500) :: cOutFile  = ' '   ! Output SMP file
     REAL(8)            :: rThreshold = 1.0D0 ! Extrapolation threshold (days)
+    CHARACTER(LEN=500) :: cInsFile  = ' '   ! PEST instruction file (blank = none)
+    CHARACTER(LEN=500) :: cPCFFile  = ' '   ! PEST PCF file (blank = none)
     LOGICAL            :: lActive   = .FALSE.
   END TYPE HydTypeConfigType
 
@@ -206,7 +209,10 @@ CONTAINS
       IF (iErr /= 0) This%HydConfig(iHyd)%rThreshold = 1.0D0
 
       CALL InFile%ReadData(cLine, iStat)  ;  IF (iStat == -1) RETURN
+      CALL StripAndClean(cLine, This%HydConfig(iHyd)%cInsFile)
+
       CALL InFile%ReadData(cLine, iStat)  ;  IF (iStat == -1) RETURN
+      CALL StripAndClean(cLine, This%HydConfig(iHyd)%cPCFFile)
     END DO
 
     ! ---- Head differences (Y/N, then file path if Y) ----
@@ -301,8 +307,10 @@ CONTAINS
     INTEGER,             INTENT(OUT)   :: iStat
 
     INTEGER :: iHyd, i
+    LOGICAL :: lDone(iNUMHYD)
 
     iStat = 0
+    lDone = .FALSE.
 
     ! Process each hydrograph type
     DO iHyd = 1, iNUMHYD
@@ -337,6 +345,7 @@ CONTAINS
         iStat = 0  ! Continue with other types
         CYCLE
       END IF
+      lDone(iHyd) = .TRUE.
     END DO
 
     ! Multi-layer target for GW: averaging now happens pre-interpolation
@@ -390,7 +399,164 @@ CONTAINS
       END IF
     END IF
 
+    ! PEST instruction / PCF files, from the final output SMP files
+    ! (after the multi-layer post-processing above)
+    DO iHyd = 1, iNUMHYD
+      IF (.NOT. lDone(iHyd)) CYCLE
+      IF (LEN_TRIM(This%HydConfig(iHyd)%cInsFile) == 0) CYCLE
+      CALL WritePESTFiles(This%HydConfig(iHyd), cHydName(iHyd), iStat)
+      IF (iStat /= 0) THEN
+        CALL LogLastMessage()
+        CALL DefaultLogger%LogMessage('  Error writing PEST files for '//TRIM(cHydName(iHyd)), &
+             f_iWarn, cModName)
+        iStat = 0
+      END IF
+    END DO
+
   END SUBROUTINE Run
+
+
+  ! =====================================================================
+  ! WritePESTFiles - PEST instruction file (and PCF file) for one
+  !   hydrograph type, generated from its output SMP file.
+  !   Each output line becomes observation NAME = ID_NNNN (NNNN = the
+  !   line's sequence number for that ID). The instruction reads the
+  !   value from its exact columns in that line. The PCF line pairs NAME
+  !   with the observed value of the same ID/date/time in the
+  !   observation SMP file.
+  ! =====================================================================
+  SUBROUTINE WritePESTFiles(Config, cHydLabel, iStat)
+    TYPE(HydTypeConfigType), INTENT(IN)  :: Config
+    CHARACTER(LEN=*),        INTENT(IN)  :: cHydLabel
+    INTEGER,                 INTENT(OUT) :: iStat
+
+    TYPE(PESTOutputType)          :: PEST
+    CHARACTER(LEN=1000)           :: cLine
+    CHARACTER(LEN=100)            :: cTok(5)
+    CHARACTER(LEN=60)             :: cName, cPrevID, cID
+    CHARACTER(LEN=60),ALLOCATABLE :: cObsID(:), cIDs(:), cTmp(:)
+    CHARACTER(LEN=12),ALLOCATABLE :: cObsDate(:), cObsTime(:)
+    REAL(8),ALLOCATABLE           :: rObsVal(:)
+    INTEGER,ALLOCATABLE           :: iSeq(:), iTmp(:)
+    INTEGER :: iUnit, iErr, nTok, nObs, k, iObsPtr, iFound, nIDs, iID, iT, nLines, nMissing, nLong
+    REAL(8) :: rVal
+
+    iStat = 0
+
+    !Observation records (for PCF values): count, then load
+    OPEN(NEWUNIT=iUnit, FILE=NativePathName(TRIM(Config%cObsFile)), STATUS='OLD', IOSTAT=iErr)
+    IF (iErr /= 0) THEN
+      CALL DefaultLogger%SetLastMessage('Cannot open observation file: '//TRIM(Config%cObsFile), f_iFatal, cModName)
+      iStat = -1; RETURN
+    END IF
+    nObs = 0
+    DO
+      READ(iUnit, '(A)', IOSTAT=iErr) cLine
+      IF (iErr /= 0) EXIT
+      CALL TokenizeSMPLine(cLine, cTok, nTok)
+      IF (nTok >= 4) nObs = nObs + 1
+    END DO
+    ALLOCATE(cObsID(MAX(nObs,1)), cObsDate(MAX(nObs,1)), cObsTime(MAX(nObs,1)), rObsVal(MAX(nObs,1)))
+    REWIND(iUnit)
+    k = 0
+    DO
+      READ(iUnit, '(A)', IOSTAT=iErr) cLine
+      IF (iErr /= 0) EXIT
+      CALL TokenizeSMPLine(cLine, cTok, nTok)
+      IF (nTok < 4) CYCLE
+      READ(cTok(4), *, IOSTAT=iErr) rVal
+      IF (iErr /= 0) CYCLE
+      k = k + 1
+      cObsID(k)   = UpperCase(cTok(1))
+      cObsDate(k) = cTok(2)
+      cObsTime(k) = cTok(3)
+      rObsVal(k)  = rVal
+    END DO
+    nObs = k
+    CLOSE(iUnit)
+
+    !Open PEST files
+    CALL PEST%New(DefaultLogger, Config%cInsFile, Config%cPCFFile, iStat)
+    IF (iStat /= 0) RETURN
+
+    !Walk the output SMP file
+    OPEN(NEWUNIT=iUnit, FILE=NativePathName(TRIM(Config%cOutFile)), STATUS='OLD', IOSTAT=iErr)
+    IF (iErr /= 0) THEN
+      CALL DefaultLogger%SetLastMessage('Cannot open output file: '//TRIM(Config%cOutFile), f_iFatal, cModName)
+      CALL PEST%Kill()
+      iStat = -1; RETURN
+    END IF
+    ALLOCATE(cIDs(16), iSeq(16))
+    nIDs = 0;  iID = 0;  cPrevID = ' '
+    iObsPtr = 1;  nLines = 0;  nMissing = 0;  nLong = 0
+    DO
+      READ(iUnit, '(A)', IOSTAT=iErr) cLine
+      IF (iErr /= 0) EXIT
+      CALL TokenizeSMPLine(cLine, cTok, nTok)
+      IF (nTok < 4) CYCLE
+      cID = UpperCase(cTok(1))
+
+      !Sequence number of this line for its ID
+      IF (cID /= cPrevID) THEN
+        cPrevID = cID
+        iID = 0
+        DO k = 1, nIDs
+          IF (cIDs(k) == cID) THEN; iID = k; EXIT; END IF
+        END DO
+        IF (iID == 0) THEN
+          IF (nIDs == SIZE(cIDs)) THEN
+            !Grow explicitly (code is compiled with /assume:norealloc_lhs)
+            ALLOCATE(cTmp(2*nIDs), iTmp(2*nIDs))
+            cTmp(1:nIDs) = cIDs;  iTmp(1:nIDs) = iSeq
+            CALL MOVE_ALLOC(cTmp, cIDs)
+            CALL MOVE_ALLOC(iTmp, iSeq)
+          END IF
+          nIDs = nIDs + 1;  iID = nIDs
+          cIDs(iID) = cID;  iSeq(iID) = 0
+        END IF
+      END IF
+      iSeq(iID) = iSeq(iID) + 1
+      WRITE(cName, '(A,A,I4.4)') TRIM(cTok(1)), '_', iSeq(iID)
+      IF (LEN_TRIM(cName) > 20) nLong = nLong + 1
+
+      !Value field: 3 blanks after the 8-character time, 15 characters wide
+      !(see SMP2SMPType%WriteSMPLine)
+      iT = INDEX(cLine, TRIM(cTok(3)))
+      CALL PEST%WriteInsLine(cName, iT+11, iT+25)
+      nLines = nLines + 1
+
+      !Observed value: same ID, date and time (records are normally in the same order)
+      iFound = 0
+      DO k = iObsPtr, nObs
+        IF (cObsID(k) == cID .AND. cObsDate(k) == cTok(2) .AND. cObsTime(k) == cTok(3)) THEN
+          iFound = k; EXIT
+        END IF
+      END DO
+      IF (iFound == 0) THEN
+        DO k = 1, MIN(iObsPtr-1, nObs)
+          IF (cObsID(k) == cID .AND. cObsDate(k) == cTok(2) .AND. cObsTime(k) == cTok(3)) THEN
+            iFound = k; EXIT
+          END IF
+        END DO
+      END IF
+      IF (iFound > 0) THEN
+        CALL PEST%WritePCFLine(cName, rObsVal(iFound))
+        iObsPtr = iFound + 1
+      ELSE
+        nMissing = nMissing + 1
+      END IF
+    END DO
+    CLOSE(iUnit)
+    CALL PEST%Kill()
+
+    CALL DefaultLogger%LogMessage('  '//TRIM(cHydLabel)//': PEST instruction file '//TRIM(Config%cInsFile)// &
+         ' ('//TRIM(IntToText(nLines))//' observations)', f_iInfo, cModName)
+    IF (nMissing > 0) CALL DefaultLogger%LogMessage('  '//TRIM(cHydLabel)//': '//TRIM(IntToText(nMissing))// &
+         ' output lines had no matching observation record; no PCF value written for them', f_iWarn, cModName)
+    IF (nLong > 0) CALL DefaultLogger%LogMessage('  '//TRIM(cHydLabel)//': '//TRIM(IntToText(nLong))// &
+         ' observation names exceed 20 characters (limit for classic PEST; PEST++ allows longer)', f_iWarn, cModName)
+
+  END SUBROUTINE WritePESTFiles
 
   ! =====================================================================
   ! ApplyMultiLayerTarget - Post-process GW heads with T-weighted averaging

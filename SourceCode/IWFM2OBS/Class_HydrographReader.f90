@@ -95,6 +95,76 @@ MODULE Class_HydrographReader
 
 CONTAINS
 
+  ! =====================================================================
+  ! LineLabel - IWFM input lines may carry a description after " /",
+  !   e.g. "    42     / NOUTH". Returns the first word of it, upper case
+  !   (blank if the line has no description).
+  ! =====================================================================
+  FUNCTION LineLabel(cLine) RESULT(cTag)
+    CHARACTER(LEN=*), INTENT(IN) :: cLine
+    CHARACTER(LEN=30)            :: cTag
+    INTEGER :: iPos, iErr
+
+    cTag = ''
+    iPos = INDEX(cLine, ' /', BACK=.TRUE.)
+    IF (iPos > 0) THEN
+      READ(cLine(iPos+2:), *, IOSTAT=iErr) cTag
+      IF (iErr /= 0) cTag = ''
+      cTag = UpperCase(cTag)
+    END IF
+  END FUNCTION LineLabel
+
+
+  ! =====================================================================
+  ! LastToken - last blank-delimited word of the data part of a line
+  !   (before any " /" description). Hydrograph lines end with the name:
+  !   "ID NAME", "ID TYPE NAME", "ID HYDTYP LAYER NODE NAME", ...
+  ! =====================================================================
+  FUNCTION LastToken(cLine) RESULT(cTok)
+    CHARACTER(LEN=*), INTENT(IN) :: cLine
+    CHARACTER(LEN=30)            :: cTok
+    INTEGER :: iPos, iEnd, iStart
+
+    cTok = ''
+    iEnd = LEN_TRIM(cLine)
+    iPos = INDEX(cLine, ' /', BACK=.TRUE.)
+    IF (iPos > 0) iEnd = LEN_TRIM(cLine(1:iPos))
+    IF (iEnd == 0) RETURN
+    iStart = SCAN(cLine(1:iEnd), ' '//CHAR(9), BACK=.TRUE.) + 1
+    cTok   = cLine(iStart:iEnd)
+  END FUNCTION LastToken
+
+
+  ! =====================================================================
+  ! AdvanceToLabel - read lines until the one labelled cLabel. Files
+  !   without labels follow the original layout: the iFallback-th line
+  !   read is returned. The number of lines between items differs between
+  !   IWFM component versions, so labels are preferred when present.
+  ! =====================================================================
+  SUBROUTINE AdvanceToLabel(InFile, cLabel, iFallback, cLine, lFound)
+    TYPE(GenericFileType)           :: InFile
+    CHARACTER(LEN=*), INTENT(IN)    :: cLabel
+    INTEGER,          INTENT(IN)    :: iFallback
+    CHARACTER(LEN=*), INTENT(OUT)   :: cLine
+    LOGICAL,          INTENT(OUT)   :: lFound
+    INTEGER           :: i, iStat
+    CHARACTER(LEN=30) :: cTag
+
+    lFound = .FALSE.
+    DO i = 1, MAX(iFallback,1) + 60
+      CALL InFile%ReadData(cLine, iStat)
+      IF (iStat == -1) RETURN
+      cTag = LineLabel(cLine)
+      IF (cTag == cLabel) THEN
+        lFound = .TRUE.; RETURN
+      END IF
+      IF (i == iFallback .AND. cTag == '') THEN
+        lFound = .TRUE.; RETURN
+      END IF
+    END DO
+  END SUBROUTINE AdvanceToLabel
+
+
 
   ! =====================================================================
   ! ReadNonComment - Read one non-comment line from a Fortran unit
@@ -302,7 +372,7 @@ CONTAINS
     INTEGER :: iID, iHydTyp, iOutHL
     REAL(8) :: rX, rY
     CHARACTER(LEN=25) :: cName
-    CHARACTER(LEN=30) :: cTag
+    LOGICAL :: lFound
 
     iStat = 0
 
@@ -325,11 +395,12 @@ CONTAINS
     CALL GWFile%ReadData(cLine, iStat)  ;  IF (iStat == -1) THEN; CALL GWFile%Kill(); RETURN; END IF
     CALL GWFile%ReadData(cLine, iStat)  ;  IF (iStat == -1) THEN; CALL GWFile%Kill(); RETURN; END IF
 
-    ! Tile drain main file path
+    ! Tile drain main file path. Like every path in IWFM input files it is
+    ! relative to the simulation directory, not to the GW main file directory.
     CALL GWFile%ReadData(cLine, iStat)  ;  IF (iStat == -1) THEN; CALL GWFile%Kill(); RETURN; END IF
     CALL StripAndClean(cLine, cClean)
     IF (LEN_TRIM(cClean) > 0) THEN
-      CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(cClean)), TRIM(cGWDir), cAbsPath)
+      CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(cClean)), TRIM(This%cSimDir), cAbsPath)
       IF (ALLOCATED(cAbsPath)) THEN
         This%cTileDrainFile = cAbsPath
       ELSE
@@ -344,7 +415,7 @@ CONTAINS
     CALL GWFile%ReadData(cLine, iStat)  ;  IF (iStat == -1) THEN; CALL GWFile%Kill(); RETURN; END IF
     CALL StripAndClean(cLine, cClean)
     IF (LEN_TRIM(cClean) > 0) THEN
-      CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(cClean)), TRIM(cGWDir), cAbsPath)
+      CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(cClean)), TRIM(This%cSimDir), cAbsPath)
       IF (ALLOCATED(cAbsPath)) THEN
         This%cSubsidenceFile = cAbsPath
       ELSE
@@ -357,28 +428,11 @@ CONTAINS
     ! models carry an extra IHTPFLAG line), so use the "/ NOUTH" label when
     ! the file has labels. A file without labels keeps the original layout:
     ! NOUTH is the 17th line after SUBSFL.
-    DO i = 1, 40
-      CALL GWFile%ReadData(cLine, iStat)
-      IF (iStat == -1) THEN
-        CALL DefaultLogger%SetLastMessage('Unexpected end of GW main file at skip line '// &
-             TRIM(IntToText(i)), f_iFatal, cModName)
-        CALL GWFile%Kill(); iStat = -1; RETURN
-      END IF
-      ! Label = first word after the last " /" on the line
-      cTag = ''
-      iPos = INDEX(cLine, ' /', BACK=.TRUE.)
-      IF (iPos > 0) THEN
-        READ(cLine(iPos+2:), *, IOSTAT=iErr) cTag
-        IF (iErr /= 0) cTag = ''
-        cTag = UpperCase(cTag)
-      END IF
-      IF (cTag == 'NOUTH') EXIT
-      IF (i == 17 .AND. cTag == '') EXIT
-      IF (i == 40) THEN
-        CALL DefaultLogger%SetLastMessage('Cannot locate NOUTH in GW main file', f_iFatal, cModName)
-        CALL GWFile%Kill(); iStat = -1; RETURN
-      END IF
-    END DO
+    CALL AdvanceToLabel(GWFile, 'NOUTH', 17, cLine, lFound)
+    IF (.NOT. lFound) THEN
+      CALL DefaultLogger%SetLastMessage('Cannot locate NOUTH in GW main file', f_iFatal, cModName)
+      CALL GWFile%Kill(); iStat = -1; RETURN
+    END IF
 
     ! Current line is NOUTH
     CALL StripAndClean(cLine, cClean)
@@ -455,23 +509,14 @@ CONTAINS
 
     TYPE(GenericFileType) :: StrFile
     CHARACTER(LEN=1000) :: cLine, cClean
-    CHARACTER(LEN=500) :: cStrDir, cPath
+    CHARACTER(LEN=500) :: cPath
     CHARACTER(:), ALLOCATABLE :: cAbsPath
-    INTEGER :: iErr, i, iPos, iNOUTR
-    CHARACTER(LEN=25) :: cName
-    INTEGER :: iID
+    INTEGER :: iErr, i, iNOUTR
+    LOGICAL :: lFound
 
     iStat = 0
 
     IF (LEN_TRIM(This%cStreamMainFile) == 0) RETURN
-
-    cStrDir = This%cStreamMainFile
-    iPos = MAX(SCAN(cStrDir, '/\', BACK=.TRUE.), 0)
-    IF (iPos > 0) THEN
-      cStrDir = cStrDir(1:iPos)
-    ELSE
-      cStrDir = This%cWorkDir
-    END IF
 
     CALL StrFile%New(FileName=This%cStreamMainFile, InputFile=.TRUE., IsTSFile=.FALSE., &
                      Descriptor='stream main file', iStat=iStat)
@@ -481,35 +526,23 @@ CONTAINS
       iStat = 0; RETURN
     END IF
 
-    ! Read and discard version line (#4.2 etc.) — not auto-skipped by GenericFileType
+    ! Read and discard version line (#4.2 etc.) - not auto-skipped by GenericFileType
     CALL StrFile%ReadData(cLine, iStat)
     IF (iStat == -1) THEN; CALL StrFile%Kill(); iStat = 0; RETURN; END IF
 
-    ! Skip to NOUTR (7 data lines after version)
-    DO i = 1, 7
-      CALL StrFile%ReadData(cLine, iStat)
-      IF (iStat == -1) THEN
-        CALL StrFile%Kill(); iStat = 0; RETURN
-      END IF
-    END DO
-
-    ! Current line has NOUTR
+    ! NOUTR (unlabelled v4.0 layout: 7th data line after the version line)
+    CALL AdvanceToLabel(StrFile, 'NOUTR', 7, cLine, lFound)
+    IF (.NOT. lFound) THEN; CALL StrFile%Kill(); iStat = 0; RETURN; END IF
     CALL StripAndClean(cLine, cClean)
     READ(cClean, *, IOSTAT=iErr) iNOUTR
     IF (iErr /= 0 .OR. iNOUTR <= 0) THEN
       CALL StrFile%Kill(); RETURN
     END IF
 
-    ! Skip 5 lines, then read output file name
-    DO i = 1, 6
-      CALL StrFile%ReadData(cLine, iStat)
-      IF (iStat == -1) THEN
-        CALL StrFile%Kill(); iStat = 0; RETURN
-      END IF
-    END DO
-
-    ! Current line is the stream hydrograph output file path
+    ! Stream hydrograph output file (unlabelled v4.0 layout: 6th line after NOUTR)
     ! Resolve relative to simulation directory (IWFM CWD)
+    CALL AdvanceToLabel(StrFile, 'STHYDOUTFL', 6, cLine, lFound)
+    IF (.NOT. lFound) THEN; CALL StrFile%Kill(); iStat = 0; RETURN; END IF
     CALL StripAndClean(cLine, cClean)
     IF (LEN_TRIM(cClean) > 0) THEN
       CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(cClean)), TRIM(This%cSimDir), cAbsPath)
@@ -525,22 +558,18 @@ CONTAINS
 
     IF (iNOUTR > 0) THEN
       ALLOCATE(This%HydInfo(iHR_STREAM)%cHydIDs(iNOUTR))
-
       DO i = 1, iNOUTR
         CALL StrFile%ReadData(cLine, iStat)
         IF (iStat == -1) EXIT
-        ! Stream format: ID NAME NODE or ID HYDTYP NAME
-        ! Extract name (second token for streams)
-        cName = ' '
-        READ(cLine, *, IOSTAT=iErr) iID, cName
-        IF (iErr /= 0) THEN
-          WRITE(cName, '(A,I0)') 'STR', i
-        END IF
-        This%HydInfo(iHR_STREAM)%cHydIDs(i) = ADJUSTL(TRIM(cName))
+        ! Name is the last word: "ID NAME" (v4.0) or "ID NODE NAME" (later versions)
+        This%HydInfo(iHR_STREAM)%cHydIDs(i) = LastToken(cLine)
+        IF (LEN_TRIM(This%HydInfo(iHR_STREAM)%cHydIDs(i)) == 0) &
+          WRITE(This%HydInfo(iHR_STREAM)%cHydIDs(i), '(A,I0)') 'STR', i
       END DO
     END IF
 
     CALL StrFile%Kill()
+    iStat = 0
 
   END SUBROUTINE ParseStreamMainFile
 
@@ -553,63 +582,47 @@ CONTAINS
 
     TYPE(GenericFileType) :: TDFile
     CHARACTER(LEN=1000) :: cLine, cClean
-    CHARACTER(LEN=500) :: cTDDir, cPath
+    CHARACTER(LEN=500) :: cPath
     CHARACTER(:), ALLOCATABLE :: cAbsPath
-    INTEGER :: iErr, i, iPos, iNTD, iNSI
-    CHARACTER(LEN=25) :: cName
-    INTEGER :: iID
+    INTEGER :: iErr, i, iNTD, iNSI, iNOUTTD
+    LOGICAL :: lFound
 
     iStat = 0
-
-    cTDDir = This%cTileDrainFile
-    iPos = MAX(SCAN(cTDDir, '/\', BACK=.TRUE.), 0)
-    IF (iPos > 0) THEN
-      cTDDir = cTDDir(1:iPos)
-    ELSE
-      cTDDir = This%cWorkDir
-    END IF
 
     CALL TDFile%New(FileName=This%cTileDrainFile, InputFile=.TRUE., IsTSFile=.FALSE., &
                     Descriptor='tile drain main file', iStat=iStat)
     IF (iStat == -1) THEN; iStat = 0; RETURN; END IF
 
-    ! Read and discard version line (#4.0) — not auto-skipped by GenericFileType
+    ! Read and discard version line (#4.0) - not auto-skipped by GenericFileType
     CALL TDFile%ReadData(cLine, iStat)
     IF (iStat == -1) THEN; CALL TDFile%Kill(); iStat = 0; RETURN; END IF
 
-    ! First data line has NTD
-    CALL TDFile%ReadData(cLine, iStat)
-    IF (iStat == -1) THEN; CALL TDFile%Kill(); iStat = 0; RETURN; END IF
+    ! NTD: number of tile drains (first data line)
+    CALL AdvanceToLabel(TDFile, 'NTD', 1, cLine, lFound)
+    IF (.NOT. lFound) THEN; CALL TDFile%Kill(); iStat = 0; RETURN; END IF
     CALL StripAndClean(cLine, cClean)
     READ(cClean, *, IOSTAT=iErr) iNTD
-    IF (iErr /= 0 .OR. iNTD <= 0) THEN
-      CALL TDFile%Kill(); RETURN
-    END IF
+    IF (iErr /= 0 .OR. iNTD < 0) THEN; CALL TDFile%Kill(); RETURN; END IF
 
-    ! Skip 3+NTD lines, then read NSI
-    DO i = 1, iNTD + 4
-      CALL TDFile%ReadData(cLine, iStat)
-      IF (iStat == -1) THEN
-        CALL TDFile%Kill(); iStat = 0; RETURN
-      END IF
-    END DO
-
+    ! NSI: number of subsurface irrigation locations (after FACTH, FACTCDC, TUNITDR and NTD rows)
+    CALL AdvanceToLabel(TDFile, 'NSI', iNTD+4, cLine, lFound)
+    IF (.NOT. lFound) THEN; CALL TDFile%Kill(); iStat = 0; RETURN; END IF
     CALL StripAndClean(cLine, cClean)
     READ(cClean, *, IOSTAT=iErr) iNSI
-    IF (iErr /= 0) THEN
-      CALL TDFile%Kill(); RETURN
-    END IF
+    IF (iErr /= 0 .OR. iNSI < 0) THEN; CALL TDFile%Kill(); RETURN; END IF
 
-    ! Skip 6+NSI lines to get hydrograph file name
-    DO i = 1, iNSI + 7
-      CALL TDFile%ReadData(cLine, iStat)
-      IF (iStat == -1) THEN
-        CALL TDFile%Kill(); iStat = 0; RETURN
-      END IF
-    END DO
+    ! NOUTTD: number of tile drain / subsurface irrigation hydrographs
+    ! (after FACTHSI, FACTCDCSI, TUNITSI and NSI rows)
+    CALL AdvanceToLabel(TDFile, 'NOUTTD', iNSI+4, cLine, lFound)
+    IF (.NOT. lFound) THEN; CALL TDFile%Kill(); iStat = 0; RETURN; END IF
+    CALL StripAndClean(cLine, cClean)
+    READ(cClean, *, IOSTAT=iErr) iNOUTTD
+    IF (iErr /= 0 .OR. iNOUTTD <= 0) THEN; CALL TDFile%Kill(); RETURN; END IF
 
-    ! Current line is tile drain hydrograph output file path
+    ! Hydrograph output file (after FACTVLOU, UNITVLOU)
     ! Resolve relative to simulation directory (IWFM CWD)
+    CALL AdvanceToLabel(TDFile, 'TDOUTFL', 3, cLine, lFound)
+    IF (.NOT. lFound) THEN; CALL TDFile%Kill(); iStat = 0; RETURN; END IF
     CALL StripAndClean(cLine, cClean)
     IF (LEN_TRIM(cClean) > 0) THEN
       CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(cClean)), TRIM(This%cSimDir), cAbsPath)
@@ -619,23 +632,24 @@ CONTAINS
         cPath = TRIM(cClean)
       END IF
       This%HydInfo(iHR_TILEDR)%cOutFilePath = cPath
-      This%HydInfo(iHR_TILEDR)%iNHyd = iNTD
+      This%HydInfo(iHR_TILEDR)%iNHyd = iNOUTTD
       This%HydInfo(iHR_TILEDR)%lActive = .TRUE.
     END IF
 
-    IF (iNTD > 0 .AND. This%HydInfo(iHR_TILEDR)%lActive) THEN
-      ALLOCATE(This%HydInfo(iHR_TILEDR)%cHydIDs(iNTD))
-      DO i = 1, iNTD
+    IF (This%HydInfo(iHR_TILEDR)%lActive) THEN
+      ALLOCATE(This%HydInfo(iHR_TILEDR)%cHydIDs(iNOUTTD))
+      DO i = 1, iNOUTTD
         CALL TDFile%ReadData(cLine, iStat)
         IF (iStat == -1) EXIT
-        cName = ' '
-        READ(cLine, *, IOSTAT=iErr) iID, cName
-        IF (iErr /= 0) WRITE(cName, '(A,I0)') 'TD', i
-        This%HydInfo(iHR_TILEDR)%cHydIDs(i) = ADJUSTL(TRIM(cName))
+        ! "ID TYPE NAME": name is the last word
+        This%HydInfo(iHR_TILEDR)%cHydIDs(i) = LastToken(cLine)
+        IF (LEN_TRIM(This%HydInfo(iHR_TILEDR)%cHydIDs(i)) == 0) &
+          WRITE(This%HydInfo(iHR_TILEDR)%cHydIDs(i), '(A,I0)') 'TD', i
       END DO
     END IF
 
     CALL TDFile%Kill()
+    iStat = 0
 
   END SUBROUTINE ParseTileDrainMainFile
 
@@ -648,40 +662,28 @@ CONTAINS
 
     TYPE(GenericFileType) :: SBFile
     CHARACTER(LEN=1000) :: cLine, cClean
-    CHARACTER(LEN=500) :: cSBDir, cPath
+    CHARACTER(LEN=500) :: cPath
     CHARACTER(:), ALLOCATABLE :: cAbsPath
-    INTEGER :: iErr, i, iPos, iNOUTS
+    INTEGER :: iErr, i, iNOUTS, iFallback
     INTEGER :: iID, iHydTyp, iOutHL
-    REAL(8) :: rX, rY
-    CHARACTER(LEN=25) :: cName
+    LOGICAL :: lFound
 
     iStat = 0
-
-    cSBDir = This%cSubsidenceFile
-    iPos = MAX(SCAN(cSBDir, '/\', BACK=.TRUE.), 0)
-    IF (iPos > 0) THEN
-      cSBDir = cSBDir(1:iPos)
-    ELSE
-      cSBDir = This%cWorkDir
-    END IF
 
     CALL SBFile%New(FileName=This%cSubsidenceFile, InputFile=.TRUE., IsTSFile=.FALSE., &
                     Descriptor='subsidence main file', iStat=iStat)
     IF (iStat == -1) THEN; iStat = 0; RETURN; END IF
 
-    ! Read and discard version line (#4.1 or #5.1)
+    ! Version line (#4.0, #5.0)
     CALL SBFile%ReadData(cLine, iStat)
     IF (iStat == -1) THEN; CALL SBFile%Kill(); iStat = 0; RETURN; END IF
 
-    ! Skip 5 lines, then read NOUTS (6 reads total including the version discard above,
-    ! but version was already read, so 6 more data lines to reach NOUTS)
-    DO i = 1, 6
-      CALL SBFile%ReadData(cLine, iStat)
-      IF (iStat == -1) THEN
-        CALL SBFile%Kill(); iStat = 0; RETURN
-      END IF
-    END DO
-
+    ! NOUTS. Unlabelled layout: INISUBFL, TPSOUTFL, FNSUBFL, FACTLTOU, UNITLTOU,
+    ! [v5.0: interbed discretization DZ], NOUTS
+    iFallback = 6
+    IF (INDEX(ADJUSTL(cLine), '#5') == 1) iFallback = 7
+    CALL AdvanceToLabel(SBFile, 'NOUTS', iFallback, cLine, lFound)
+    IF (.NOT. lFound) THEN; CALL SBFile%Kill(); iStat = 0; RETURN; END IF
     CALL StripAndClean(cLine, cClean)
     READ(cClean, *, IOSTAT=iErr) iNOUTS
     IF (iErr /= 0 .OR. iNOUTS <= 0) THEN
@@ -716,24 +718,18 @@ CONTAINS
       DO i = 1, iNOUTS
         CALL SBFile%ReadData(cLine, iStat)
         IF (iStat == -1) EXIT
+        ! "ID HYDTYP IOUTSL X Y NAME" or "ID HYDTYP IOUTSL NODE NAME": name is the last word
         READ(cLine, *, IOSTAT=iErr) iID, iHydTyp, iOutHL
-        IF (iErr /= 0) THEN
-          iOutHL = 1
-          iHydTyp = 0
-        END IF
-        cName = ' '
-        IF (iHydTyp == 0) THEN
-          READ(cLine, *, IOSTAT=iErr) iID, iHydTyp, iOutHL, rX, rY, cName
-        ELSE
-          READ(cLine, *, IOSTAT=iErr) iID, iHydTyp, iOutHL, iID, cName
-        END IF
-        IF (iErr /= 0) WRITE(cName, '(A,I0)') 'SUB', i
-        This%HydInfo(iHR_SUBSID)%cHydIDs(i) = ADJUSTL(TRIM(cName))
+        IF (iErr /= 0) iOutHL = 1
+        This%HydInfo(iHR_SUBSID)%cHydIDs(i) = LastToken(cLine)
+        IF (LEN_TRIM(This%HydInfo(iHR_SUBSID)%cHydIDs(i)) == 0) &
+          WRITE(This%HydInfo(iHR_SUBSID)%cHydIDs(i), '(A,I0)') 'SUB', i
         This%HydInfo(iHR_SUBSID)%iLayers(i) = iOutHL
       END DO
     END IF
 
     CALL SBFile%Kill()
+    iStat = 0
 
   END SUBROUTINE ParseSubsidenceMainFile
 
