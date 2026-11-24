@@ -165,10 +165,15 @@ if(IWFM_USING_INTEL)
         # Note: Multiple -assume options must be comma-separated or use separate -assume flags
         # -standard-semantics must precede the -assume overrides (see the
         # Windows block above for why order matters).
+        # Same floating-point model as the Windows/.vfproj build
+        # (/fp:consistent). -fp-model=fast=1 allows value-changing
+        # optimizations, so Linux results could not match official IWFM
+        # (8 of 32 sample outputs identical vs 32 of 32 with consistent,
+        # same ifx 2026.1.1). It was ~17% faster (4m36s vs 5m32s).
         target_compile_options(iwfm_compiler_flags INTERFACE
             -standard-semantics
             -fpp
-            -fp-model=fast=1
+            -fp-model=consistent
             "-assume" "norealloc_lhs,noieee_compares"
             -diag-disable=10448
             -fPIC  # Required for shared library (IWFM_C_DLL) support
@@ -202,7 +207,11 @@ if(IWFM_USING_INTEL)
             "$<$<CONFIG:Debug>:SHELL:-warn uncalled>"
         )
 
-        # Release-specific flags (matches DWR Visual Studio project)
+        # Release-specific flags. -O2 matches the DWR Visual Studio project.
+        # -ipo is kept: with -fp-model=consistent it does not change results
+        # (verified 2026-11-24, ifx 2026.1.1: Linux outputs identical to the
+        # official Windows 2026.0.1848 exe with or without -ipo) and it is
+        # ~13% faster on the sample model (5m32s vs 6m22s).
         target_compile_options(iwfm_compiler_flags INTERFACE
             $<$<CONFIG:Release>:-O2>
             $<$<CONFIG:Release>:-ipo>
