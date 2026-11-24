@@ -6,7 +6,8 @@ MODULE Class_PESTOutput
 
   USE MessageLogger    , ONLY: MessageLoggerType , &
                                f_iFatal
-  USE GeneralUtilities , ONLY: IntToText
+  USE GeneralUtilities , ONLY: IntToText      , &
+                               NativePathName
 
   IMPLICIT NONE
 
@@ -54,7 +55,7 @@ CONTAINS
     This%iInsUnit = iInsUnit
     This%iPCFUnit = iPCFUnit
 
-    OPEN(UNIT=iInsUnit, FILE=cInsFile, STATUS='REPLACE', IOSTAT=iErr)
+    OPEN(UNIT=iInsUnit, FILE=NativePathName(cInsFile), STATUS='REPLACE', IOSTAT=iErr)
     IF (iErr /= 0) THEN
       CALL This%Logger%SetLastMessage('Cannot open instruction file: '//TRIM(cInsFile), f_iFatal, cModName)
       iStat = -1
@@ -62,7 +63,7 @@ CONTAINS
     END IF
     WRITE(iInsUnit, '(A)') 'pif #'
 
-    OPEN(UNIT=iPCFUnit, FILE=cPCFFile, STATUS='REPLACE', IOSTAT=iErr)
+    OPEN(UNIT=iPCFUnit, FILE=NativePathName(cPCFFile), STATUS='REPLACE', IOSTAT=iErr)
     IF (iErr /= 0) THEN
       CALL This%Logger%SetLastMessage('Cannot open PCF file: '//TRIM(cPCFFile), f_iFatal, cModName)
       CLOSE(iInsUnit)

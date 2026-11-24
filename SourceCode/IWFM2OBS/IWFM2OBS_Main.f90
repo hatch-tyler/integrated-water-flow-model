@@ -24,9 +24,11 @@ PROGRAM IWFM2OBS_Main
   TYPE(IWFM2OBSType) :: App
   CHARACTER(LEN=500) :: cInputFile
   INTEGER            :: iStat, iNArgs
+  LOGICAL            :: lFailed
 
   ! Start timer
   CALL DefaultTimer%Start()
+  lFailed = .TRUE.   !Cleared only when every step succeeds
 
   DO  ! Single-pass block for structured error exit
 
@@ -70,6 +72,8 @@ PROGRAM IWFM2OBS_Main
     CALL App%Run(iStat)
     IF (iStat == -1) THEN
       CALL LogLastMessage()
+      CALL App%Kill()
+      EXIT
     END IF
 
     ! Clean up
@@ -77,6 +81,7 @@ PROGRAM IWFM2OBS_Main
 
     CALL DefaultLogger%LogMessage(' ', f_iInfo, 'IWFM2OBS')
     CALL DefaultLogger%LogMessage('NORMAL TERMINATION - IWFM2OBS', f_iInfo, 'IWFM2OBS')
+    lFailed = .FALSE.
 
     EXIT  ! Normal exit from single-pass block
   END DO
@@ -84,5 +89,8 @@ PROGRAM IWFM2OBS_Main
   CALL DefaultTimer%Stop()
   CALL DefaultLogger%PrintRunTime()
   CALL KillLogFile()
+
+  !Report failure to the calling shell/script
+  IF (lFailed) STOP 1
 
 END PROGRAM IWFM2OBS_Main

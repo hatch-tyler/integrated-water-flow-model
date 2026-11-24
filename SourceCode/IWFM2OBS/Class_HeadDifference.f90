@@ -9,6 +9,7 @@ MODULE Class_HeadDifference
                                f_iWarn        , &
                                f_iInfo
   USE GeneralUtilities , ONLY: UpperCase      , &
+                               NativePathName , &
                                IntToText
 
   IMPLICIT NONE
@@ -74,7 +75,7 @@ CONTAINS
     This%Logger => Logger
 
     ! Count lines
-    OPEN(UNIT=iUnit, FILE=cHDFile, STATUS='OLD', IOSTAT=iErr)
+    OPEN(UNIT=iUnit, FILE=NativePathName(cHDFile), STATUS='OLD', IOSTAT=iErr)
     IF (iErr /= 0) THEN
       CALL This%Logger%SetLastMessage('Cannot open head difference file: '//TRIM(cHDFile), f_iFatal, cModName)
       iStat = -1

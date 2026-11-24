@@ -22,6 +22,7 @@ MODULE Class_IWFM2OBS
                                  f_iWarn           , &
                                  f_iInfo
   USE GeneralUtilities   , ONLY: IntToText         , &
+                                 NativePathName    , &
                                  UpperCase
   USE IWFM2OBS_Utilities , ONLY: StripAndClean
   USE TimeSeriesUtilities, ONLY: JulianDateToDayMonthYear
@@ -358,9 +359,9 @@ CONTAINS
 
         ! Copy GW_Sim.smp -> GW_Sim_ml.smp (contents are identical since
         ! InterpolateDirect already wrote the averaged data)
-        OPEN(UNIT=198, FILE=TRIM(cSrcFile), STATUS='OLD', IOSTAT=iErr2)
+        OPEN(UNIT=198, FILE=NativePathName(TRIM(cSrcFile)), STATUS='OLD', IOSTAT=iErr2)
         IF (iErr2 == 0) THEN
-          OPEN(UNIT=199, FILE=TRIM(cMlFile), STATUS='REPLACE', IOSTAT=iErr2)
+          OPEN(UNIT=199, FILE=NativePathName(TRIM(cMlFile)), STATUS='REPLACE', IOSTAT=iErr2)
           IF (iErr2 == 0) THEN
             DO
               READ(198, '(A)', IOSTAT=iErr2) cCopyLine
@@ -450,7 +451,7 @@ CONTAINS
     END IF
 
     ! ---- Step 1: Read entire per-layer SMP into memory ----
-    OPEN(UNIT=iInUnit, FILE=This%HydConfig(iGWHEAD)%cOutFile, &
+    OPEN(UNIT=iInUnit, FILE=NativePathName(This%HydConfig(iGWHEAD)%cOutFile), &
          STATUS='OLD', IOSTAT=iErr)
     IF (iErr /= 0) THEN
       CALL DefaultLogger%SetLastMessage('Cannot open per-layer SMP: '// &
@@ -537,7 +538,7 @@ CONTAINS
            f_iInfo, cModName)
 
       ! ---- Step 3: Open output files ----
-      OPEN(UNIT=iOutUnit, FILE=cOutFile, STATUS='REPLACE', IOSTAT=iErr)
+      OPEN(UNIT=iOutUnit, FILE=NativePathName(cOutFile), STATUS='REPLACE', IOSTAT=iErr)
       IF (iErr /= 0) THEN
         CALL DefaultLogger%SetLastMessage('Cannot open multi-layer output: '// &
              TRIM(cOutFile), f_iFatal, cModName)
@@ -695,7 +696,7 @@ CONTAINS
     END IF
 
     ! ---- Step 1: Read entire per-layer SMP into memory ----
-    OPEN(UNIT=iInUnit, FILE=This%HydConfig(iSUBSID)%cOutFile, &
+    OPEN(UNIT=iInUnit, FILE=NativePathName(This%HydConfig(iSUBSID)%cOutFile), &
          STATUS='OLD', IOSTAT=iErr)
     IF (iErr /= 0) THEN
       CALL DefaultLogger%SetLastMessage('Cannot open per-layer subsidence SMP: '// &
@@ -780,7 +781,7 @@ CONTAINS
       IF (iNUniq > 0) iIDCount(iNUniq) = iNAll - iIDStart(iNUniq) + 1
 
       ! ---- Step 3: Open output file ----
-      OPEN(UNIT=iOutUnit, FILE=cOutFile, STATUS='REPLACE', IOSTAT=iErr)
+      OPEN(UNIT=iOutUnit, FILE=NativePathName(cOutFile), STATUS='REPLACE', IOSTAT=iErr)
       IF (iErr /= 0) THEN
         CALL DefaultLogger%SetLastMessage('Cannot open multi-layer subsidence output: '// &
              TRIM(cOutFile), f_iFatal, cModName)
@@ -887,7 +888,7 @@ CONTAINS
     iStat = 0
 
     ! Step 1: Pre-load observation IDs from the obs SMP file
-    OPEN(UNIT=iObsUnit, FILE=This%HydConfig(iHyd)%cObsFile, &
+    OPEN(UNIT=iObsUnit, FILE=NativePathName(This%HydConfig(iHyd)%cObsFile), &
          STATUS='OLD', IOSTAT=iErr)
     IF (iErr /= 0) THEN
       CALL DefaultLogger%SetLastMessage('Cannot open observation file: '// &

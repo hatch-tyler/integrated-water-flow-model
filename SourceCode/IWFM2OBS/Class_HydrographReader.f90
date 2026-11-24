@@ -15,6 +15,7 @@ MODULE Class_HydrographReader
                                  f_iWarn           , &
                                  f_iInfo
   USE GeneralUtilities   , ONLY: IntToText         , &
+                                 NativePathName    , &
                                  UpperCase         , &
                                  EstablishAbsolutePathFileName
   USE TimeSeriesUtilities, ONLY: DayMonthYearToJulianDate      , &
@@ -200,20 +201,22 @@ CONTAINS
     CALL EstablishAbsolutePathFileName(TRIM(cClean), TRIM(cSimDir), cAbsPath)
     This%cStreamMainFile = cAbsPath
 
-    ! Files 4-11: skip remaining 8 file entries
-    DO i = 1, 8
+    ! Files 4..N, then BDT (start date). The number of file entries differs
+    ! between IWFM versions (12 in 2025.0.1747; 13 in 2026.0.1848, which added
+    ! the transport main file), so skip entries until the first line whose
+    ! first token is a date: take that token's part before '_'.
+    iErr = -1
+    DO i = 1, 30
       CALL SimFile%ReadData(cLine, iStat)  ;  IF (iStat == -1) RETURN
+      CALL StripAndClean(cLine, cClean)
+      iPos = INDEX(cClean, ' ')
+      IF (iPos > 1) cClean = cClean(1:iPos-1)
+      iPos = SCAN(cClean, '_')
+      IF (iPos > 0) cClean = cClean(1:iPos-1)
+      CALL ParseDateFromString(cClean, iDateSpec, This%iStartDay, This%iStartMon, &
+           This%iStartYr, iErr)
+      IF (iErr == 0) EXIT
     END DO
-
-    ! BDT (start date) — extract first token, then date portion before '_'
-    CALL SimFile%ReadData(cLine, iStat)  ;  IF (iStat == -1) RETURN
-    CALL StripAndClean(cLine, cClean)
-    iPos = INDEX(cClean, ' ')
-    IF (iPos > 1) cClean = cClean(1:iPos-1)
-    iPos = SCAN(cClean, '_')
-    IF (iPos > 0) cClean = cClean(1:iPos-1)
-    CALL ParseDateFromString(cClean, iDateSpec, This%iStartDay, This%iStartMon, &
-         This%iStartYr, iErr)
     IF (iErr /= 0) THEN
       CALL DefaultLogger%SetLastMessage('Cannot parse start date from simulation file', &
            f_iFatal, cModName)
@@ -299,6 +302,7 @@ CONTAINS
     INTEGER :: iID, iHydTyp, iOutHL
     REAL(8) :: rX, rY
     CHARACTER(LEN=25) :: cName
+    CHARACTER(LEN=30) :: cTag
 
     iStat = 0
 
@@ -348,12 +352,30 @@ CONTAINS
       END IF
     END IF
 
-    ! Skip 16 more lines (lines 5-20 in GW main), then line 21 = NOUTH
-    DO i = 1, 17
+    ! Advance to the NOUTH line. The number of lines between SUBSFL and NOUTH
+    ! differs between GW main file versions (e.g. the IWFM 2025/2026 sample
+    ! models carry an extra IHTPFLAG line), so use the "/ NOUTH" label when
+    ! the file has labels. A file without labels keeps the original layout:
+    ! NOUTH is the 17th line after SUBSFL.
+    DO i = 1, 40
       CALL GWFile%ReadData(cLine, iStat)
       IF (iStat == -1) THEN
         CALL DefaultLogger%SetLastMessage('Unexpected end of GW main file at skip line '// &
              TRIM(IntToText(i)), f_iFatal, cModName)
+        CALL GWFile%Kill(); iStat = -1; RETURN
+      END IF
+      ! Label = first word after the last " /" on the line
+      cTag = ''
+      iPos = INDEX(cLine, ' /', BACK=.TRUE.)
+      IF (iPos > 0) THEN
+        READ(cLine(iPos+2:), *, IOSTAT=iErr) cTag
+        IF (iErr /= 0) cTag = ''
+        cTag = UpperCase(cTag)
+      END IF
+      IF (cTag == 'NOUTH') EXIT
+      IF (i == 17 .AND. cTag == '') EXIT
+      IF (i == 40) THEN
+        CALL DefaultLogger%SetLastMessage('Cannot locate NOUTH in GW main file', f_iFatal, cModName)
         CALL GWFile%Kill(); iStat = -1; RETURN
       END IF
     END DO
@@ -755,7 +777,7 @@ CONTAINS
     END IF
 
     ! Open the .out file
-    OPEN(UNIT=iInUnit, FILE=This%HydInfo(iHydType)%cOutFilePath, &
+    OPEN(UNIT=iInUnit, FILE=NativePathName(This%HydInfo(iHydType)%cOutFilePath), &
          STATUS='OLD', IOSTAT=iErr)
     IF (iErr /= 0) THEN
       CALL DefaultLogger%SetLastMessage('Cannot open .out file: '// &
@@ -778,7 +800,7 @@ CONTAINS
     END DO
 
     ! Open temp SMP output
-    OPEN(UNIT=iOutUnit, FILE=cTempSMPFile, STATUS='REPLACE', IOSTAT=iErr)
+    OPEN(UNIT=iOutUnit, FILE=NativePathName(cTempSMPFile), STATUS='REPLACE', IOSTAT=iErr)
     IF (iErr /= 0) THEN
       CLOSE(iInUnit); DEALLOCATE(rVal)
       CALL DefaultLogger%SetLastMessage('Cannot create temp SMP: '//TRIM(cTempSMPFile), &
@@ -899,7 +921,7 @@ CONTAINS
     lHDF = (iFileType == f_iHDF)
 
     ! Verify file exists
-    INQUIRE(FILE=TRIM(cReadPath), EXIST=lFileExists)
+    INQUIRE(FILE=NativePathName(TRIM(cReadPath)), EXIST=lFileExists)
     IF (.NOT. lFileExists) THEN
       CALL DefaultLogger%SetLastMessage('Hydrograph file not found: '//TRIM(cReadPath), &
            f_iFatal, cModName)
@@ -929,7 +951,7 @@ CONTAINS
     END IF
     IF (.NOT. lHDF) THEN
       ! For text: count data lines (skip *-header lines)
-      OPEN(UNIT=iInUnit, FILE=TRIM(cReadPath), &
+      OPEN(UNIT=iInUnit, FILE=NativePathName(TRIM(cReadPath)), &
            STATUS='OLD', RECL=2000000, IOSTAT=iErr)
       IF (iErr /= 0) THEN
         CALL DefaultLogger%SetLastMessage('Cannot open hydrograph file: '// &
@@ -957,7 +979,7 @@ CONTAINS
     IF (iHydType == iHR_GWHEAD .AND. LEN_TRIM(This%cWellSpecFile) > 0) THEN
       ! Count wells in well_specs.dat
       iNWells = 0
-      OPEN(UNIT=iWSUnit, FILE=This%cWellSpecFile, STATUS='OLD', IOSTAT=iErr)
+      OPEN(UNIT=iWSUnit, FILE=NativePathName(This%cWellSpecFile), STATUS='OLD', IOSTAT=iErr)
       IF (iErr == 0) THEN
         READ(iWSUnit, '(A)', IOSTAT=iErr) cLine  ! skip header
         DO
@@ -979,7 +1001,7 @@ CONTAINS
       IF (LEN_TRIM(This%cWellSpecFile) > 0) THEN
         iNWells = 0
         ! Count wells in well_specs.dat (header + data lines)
-        OPEN(UNIT=iWSUnit, FILE=This%cWellSpecFile, STATUS='OLD', IOSTAT=iErr)
+        OPEN(UNIT=iWSUnit, FILE=NativePathName(This%cWellSpecFile), STATUS='OLD', IOSTAT=iErr)
         IF (iErr == 0) THEN
           READ(iWSUnit, '(A)', IOSTAT=iErr) cLine  ! skip header
           DO

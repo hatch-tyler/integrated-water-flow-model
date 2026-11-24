@@ -16,6 +16,7 @@ MODULE Class_CalcTypeHyd
                                     f_iWarn        , &
                                     f_iInfo
   USE GeneralUtilities     , ONLY: IntToText      , &
+                                   NativePathName , &
                                     UpperCase
   USE TimeSeriesUtilities  , ONLY: DayMonthYearToJulianDate , &
                                     JulianDateToDayMonthYear
@@ -113,7 +114,7 @@ CONTAINS
     ! Read control file (uses raw I/O — CalcTypeHyd format uses #
     ! inline comments which conflict with IWFM's / comment convention)
     ! ================================================================
-    OPEN(UNIT=iInUnit, FILE=cInputFile, STATUS='OLD', IOSTAT=iErr)
+    OPEN(UNIT=iInUnit, FILE=NativePathName(cInputFile), STATUS='OLD', IOSTAT=iErr)
     IF (iErr /= 0) THEN
       CALL DefaultLogger%SetLastMessage('Cannot open input file: '//TRIM(cInputFile), &
            f_iFatal, cModName)
@@ -212,7 +213,7 @@ CONTAINS
       iStat = -1; RETURN
     END IF
 
-    OPEN(UNIT=180, FILE=TRIM(cWtsFile), STATUS='OLD', IOSTAT=iErr)
+    OPEN(UNIT=180, FILE=NativePathName(TRIM(cWtsFile)), STATUS='OLD', IOSTAT=iErr)
     IF (iErr /= 0) THEN
       CALL DefaultLogger%SetLastMessage('Cannot open weights file: '//TRIM(cWtsFile), &
            f_iFatal, cModName)
@@ -355,7 +356,7 @@ CONTAINS
     ALLOCATE(iCnt(This%iNVal, This%iNClusWells))
     iCnt = 0
 
-    OPEN(UNIT=iUnit, FILE=cWLFile, STATUS='OLD', IOSTAT=iErr)
+    OPEN(UNIT=iUnit, FILE=NativePathName(cWLFile), STATUS='OLD', IOSTAT=iErr)
     IF (iErr /= 0) THEN
       CALL DefaultLogger%SetLastMessage('Cannot open water level file: '//TRIM(cWLFile), &
            f_iFatal, cModName)
@@ -499,6 +500,7 @@ CONTAINS
     REAL(8) :: rSumProduct, rNzWtSum, rTypeHydro
     CHARACTER(LEN=2)  :: cClusStr
     CHARACTER(LEN=50) :: cHeader, cOutFile
+    CHARACTER(LEN=500) :: cBase
     CHARACTER(LEN=20) :: cPstNam
     CHARACTER(LEN=4)  :: cIdStr
     REAL(8), ALLOCATABLE :: rNonZeroWts(:,:), rDeMeaned(:,:)
@@ -560,17 +562,23 @@ CONTAINS
         END DO
       END DO
 
-      ! Set up output file name
-      k = SCAN(This%cWtsFile, '.')
-      IF (k > 0) THEN
-        cHeader = 'sim_'//TRIM(ADJUSTL(This%cWtsFile(1:k-1)))// &
-                  '_cls'//TRIM(ADJUSTL(cClusStr))
+      ! Set up output file name: sim_{weights file base name}_cls{N}, written
+      ! to the working directory. Use only the file name (no directory) and
+      ! drop its extension at the LAST '.', so paths such as
+      ! ..\data\weights.txt work.
+      cBase = ADJUSTL(This%cWtsFile)
+      k = SCAN(cBase, '/\', BACK=.TRUE.)
+      IF (k > 0) cBase = cBase(k+1:)
+      k = SCAN(cBase, '.', BACK=.TRUE.)
+      IF (k > 1) cBase = cBase(1:k-1)
+      IF (LEN_TRIM(cBase) > 0) THEN
+        cHeader = 'sim_'//TRIM(cBase)//'_cls'//TRIM(ADJUSTL(cClusStr))
       ELSE
         cHeader = 'sim_cls'//TRIM(ADJUSTL(cClusStr))
       END IF
       cOutFile = TRIM(ADJUSTL(cHeader))//'.out'
 
-      OPEN(UNIT=iOutUnit, FILE=cOutFile, STATUS='REPLACE', IOSTAT=iErr)
+      OPEN(UNIT=iOutUnit, FILE=NativePathName(cOutFile), STATUS='REPLACE', IOSTAT=iErr)
       IF (iErr /= 0) THEN
         CALL DefaultLogger%SetLastMessage('Cannot open output file: '//TRIM(cOutFile), &
              f_iFatal, cModName)

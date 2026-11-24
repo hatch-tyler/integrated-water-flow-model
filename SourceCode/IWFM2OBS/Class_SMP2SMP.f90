@@ -13,6 +13,7 @@ MODULE Class_SMP2SMP
                                f_iWarn        , &
                                f_iInfo
   USE GeneralUtilities , ONLY: UpperCase      , &
+                               NativePathName , &
                                IntToText
   USE IWFM2OBS_Utilities, ONLY: SortStringsIndex
   USE TimeSeriesUtilities, ONLY: DayMonthYearToJulianDate , &
@@ -727,7 +728,7 @@ CONTAINS
     iStat = 0
 
     ! Open files
-    OPEN(UNIT=iObsUnit, FILE=cObsFile, STATUS='OLD', IOSTAT=iErr)
+    OPEN(UNIT=iObsUnit, FILE=NativePathName(cObsFile), STATUS='OLD', IOSTAT=iErr)
     IF (iErr /= 0) THEN
       CALL This%Logger%SetLastMessage('Cannot open observation file: '//TRIM(cObsFile), f_iFatal, cModName)
       iStat = -1
@@ -742,7 +743,7 @@ CONTAINS
     END IF
 
     ! Open and read model SMP data
-    OPEN(UNIT=iModUnit, FILE=cModFile, STATUS='OLD', IOSTAT=iErr)
+    OPEN(UNIT=iModUnit, FILE=NativePathName(cModFile), STATUS='OLD', IOSTAT=iErr)
     IF (iErr /= 0) THEN
       CALL This%Logger%SetLastMessage('Cannot open model file: '//TRIM(cModFile), f_iFatal, cModName)
       iStat = -1
@@ -759,7 +760,7 @@ CONTAINS
     END IF
 
     ! Open output file
-    OPEN(UNIT=iOutUnit, FILE=cOutFile, STATUS='REPLACE', IOSTAT=iErr)
+    OPEN(UNIT=iOutUnit, FILE=NativePathName(cOutFile), STATUS='REPLACE', IOSTAT=iErr)
     IF (iErr /= 0) THEN
       CALL This%Logger%SetLastMessage('Cannot open output file: '//TRIM(cOutFile), f_iFatal, cModName)
       iStat = -1
@@ -949,7 +950,7 @@ CONTAINS
     IF (iNFiltered > 1) CALL SortStringsIndex(cSorted, iSortIdx, 1, iNFiltered)
 
     ! ---- Open files ----
-    OPEN(UNIT=iObsUnit, FILE=cObsFile, STATUS='OLD', IOSTAT=iErr)
+    OPEN(UNIT=iObsUnit, FILE=NativePathName(cObsFile), STATUS='OLD', IOSTAT=iErr)
     IF (iErr /= 0) THEN
       CALL This%Logger%SetLastMessage('Cannot open observation file: '//TRIM(cObsFile), &
            f_iFatal, cModName)
@@ -957,7 +958,7 @@ CONTAINS
       iStat = -1; RETURN
     END IF
 
-    OPEN(UNIT=iOutUnit, FILE=cOutFile, STATUS='REPLACE', IOSTAT=iErr)
+    OPEN(UNIT=iOutUnit, FILE=NativePathName(cOutFile), STATUS='REPLACE', IOSTAT=iErr)
     IF (iErr /= 0) THEN
       CALL This%Logger%SetLastMessage('Cannot open output file: '//TRIM(cOutFile), &
            f_iFatal, cModName)
