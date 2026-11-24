@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2025  
+!  Copyright (C) 2005-2026  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -46,18 +46,35 @@ MODULE Class_BaseFileType
   PRIVATE
   PUBLIC  :: BaseFileType    , &
              IsFileOpen      , &
-             GetAUnitNumber
+             GetAUnitNumber                , &
+             f_IO_TSData_NotYetTimeToRead  , &
+             f_IO_TSData_BadTimeStamp      , &
+             f_IO_TSData_DssReadError      , &
+             f_IO_SuccessfulRead           , &
+             f_IO_UnsuccessfulRead         , &
+             f_IO_FileNotFound
 
   
   ! -------------------------------------------------------------
   ! --- PARAMETERS
   ! -------------------------------------------------------------
-  INTEGER,PARAMETER :: f_iDefaultUnitNumber = -200   ,&
-                       f_iMinUnitNumber     = 8      ,&
+  INTEGER,PARAMETER :: f_iDefaultUnitNumber = -200                 , &
+                       f_iMinUnitNumber     = 8                    , &
                        f_iMaxUnitNumber     = 50008     
   INTEGER,SAVE      :: LastUnitConnected    = f_iMinUnitNumber - 1  !Used only by GetAUnitNumber (DSS files)
   
   
+  ! -------------------------------------------------------------
+  ! --- I/O FLAGS
+  ! -------------------------------------------------------------
+  INTEGER,PARAMETER :: f_IO_TSData_NotYetTimeToRead = -1     , &
+                       f_IO_TSData_BadTimeStamp     = 1      , &
+                       f_IO_TSData_DssReadError     = 2      , &
+                       f_IO_SuccessfulRead          = 0      , &
+                       f_IO_UnsuccessfulRead        = -99    , &
+                       f_IO_FileNotFound            = -2
+
+
   ! -------------------------------------------------------------
   ! --- BASE FILE DATA TYPE
   ! -------------------------------------------------------------

@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2025  
+!  Copyright (C) 2005-2026  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -42,7 +42,8 @@ MODULE Class_AgLandUse_v50
                                       RealTSDataInFileType                    , &
                                       IntTSDataInFileType                     , &
                                       PrepareTSDOutputFile                    , &
-                                      f_iUNKNOWN 
+                                      f_iUNKNOWN                              , &
+                                      f_IO_SuccessfulRead
   USE Package_Discretization  , ONLY: AppGridType
   USE Class_GenericLandUse    , ONLY: GenericLandUseType
   USE Class_LandUseDataFile   , ONLY: LandUseDataFileType  
@@ -147,7 +148,8 @@ MODULE Class_AgLandUse_v50
       PROCEDURE,PASS   :: New
       PROCEDURE,PASS   :: Kill
       PROCEDURE,PASS   :: GetMaxAndMinNetReturnFlowFrac
-      PROCEDURE,NOPASS :: GetAreasForTimePeriod
+      PROCEDURE,NOPASS :: GetAreasForTimePeriod_FileNotOpen
+      PROCEDURE,PASS   :: GetAreasForTimePeriod_FileOpen
       PROCEDURE,PASS   :: SetAreas
       PROCEDURE,PASS   :: ReadTSData
       PROCEDURE,PASS   :: ReadRestartData
@@ -158,6 +160,8 @@ MODULE Class_AgLandUse_v50
       PROCEDURE,PASS   :: Simulate
       PROCEDURE,PASS   :: ComputeWaterDemand
       PROCEDURE,PASS   :: RewindTSInputFilesToTimeStamp
+      GENERIC          :: GetAreasForTimePeriod           => GetAreasForTimePeriod_FileNotOpen , &
+                                                             GetAreasForTimePeriod_FileOpen
   END TYPE AgDatabase_v50_Type
 
 
@@ -647,7 +651,7 @@ CONTAINS
         CALL ReuseFracFile%ReadTSData(TimeStep,'Reuse fractions data',FileReadCode_Reuse,iStat)          ;  IF (iStat .EQ. -1) RETURN
         
         !If new data is read, find min and max
-        IF (FileReadCode_Return.EQ.0  .OR.  FileReadCode_Reuse.EQ.0) THEN
+        IF (FileReadCode_Return.EQ.f_IO_SuccessfulRead  .OR.  FileReadCode_Reuse.EQ.f_IO_SuccessfulRead) THEN
             DO indx=1,SIZE(AgLand%iColReturnFrac)
                 rRT      = ReturnFracFile%rValues(AgLand%iColReturnFrac(indx))
                 rRU      = ReuseFracFile%rValues(AgLand%iColReuseFrac(indx))
@@ -668,10 +672,10 @@ CONTAINS
   
   
   ! -------------------------------------------------------------
-  ! --- GET AREAS OF AG FOR AT ALL ELEMENTS FOR A TIME PERIOD
+  ! --- GET AREAS OF AG FOR AT ALL ELEMENTS FOR A TIME PERIOD WHEN FILE IS NOT OPEN
   ! --- Note: This method is not meant to be called during a Simulation
   ! -------------------------------------------------------------
-  SUBROUTINE GetAreasForTimePeriod(cMainFileName,cWorkingDirectory,cBeginDate,cEndDate,TimeStep,AppGrid,rAreas,iStat)
+  SUBROUTINE GetAreasForTimePeriod_FileNotOpen(cMainFileName,cWorkingDirectory,cBeginDate,cEndDate,TimeStep,AppGrid,rAreas,iStat)
     CHARACTER(LEN=*),INTENT(IN)   :: cMainFileName,cWorkingDirectory,cBeginDate,cEndDate
     TYPE(TimeStepType),INTENT(IN) :: TimeStep
     TYPE(AppGridType),INTENT(IN)  :: AppGrid
@@ -708,11 +712,29 @@ CONTAINS
     CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(cALine)),cWorkingDirectory,cAreaFileName)
     
     !Retrieve areas
-    CALL ReadLandUseAreasForTimePeriod(cAreaFileName,cWorkingDirectory,cBeginDate,cEndDate,TimeStep,AppGrid,1,1,rAreas,iStat)
+    CALL ReadLandUseAreasForTimePeriod(cAreaFileName,cWorkingDirectory,'Agricultural crop area file',cBeginDate,cEndDate,TimeStep,AppGrid,1,1,rAreas,iStat)
 
 10  CALL MainFile%Kill()
     
-  END SUBROUTINE GetAreasForTimePeriod
+  END SUBROUTINE GetAreasForTimePeriod_FileNotOpen
+
+  
+  ! -------------------------------------------------------------
+  ! --- GET AREAS OF AG FOR AT ALL ELEMENTS FOR A TIME PERIOD WHEN FILE IS NOT OPEN
+  ! --- Note: This method is not meant to be called during a Simulation
+  ! -------------------------------------------------------------
+  SUBROUTINE GetAreasForTimePeriod_FileOpen(AgLand,cBeginDate,cEndDate,TimeStep,AppGrid,rAreas,iStat)
+    CLASS(AgDatabase_v50_Type),INTENT(INOUT) :: AgLand
+    CHARACTER(LEN=*),INTENT(IN)              :: cBeginDate,cEndDate
+    TYPE(TimeStepType),INTENT(IN)            :: TimeStep
+    TYPE(AppGridType),INTENT(IN)             :: AppGrid
+    REAL(8),INTENT(OUT)                      :: rAreas(:,:)  !For each (element,time)
+    INTEGER,INTENT(OUT)                      :: iStat
+           
+    !Retrieve areas
+    CALL ReadLandUseAreasForTimePeriod(AgLand%SubregionCropAreaDataFile,'Agricultural crop area file',cBeginDate,cEndDate,TimeStep,AppGrid,1,rAreas,iStat)
+
+  END SUBROUTINE GetAreasForTimePeriod_FileOpen
   
   
 
@@ -1135,6 +1157,7 @@ CONTAINS
                 
                 !Simulate
                 CALL NonPondedLUMoistureRouter(PrecipD                                    ,  &
+                                               0.2d0                                      ,  &
                                                pAgData%SMax(indxSoil,indxRegion)          ,  &
                                                SoilM_P                                    ,  &
                                                ETc                                        ,  & 
@@ -1300,6 +1323,7 @@ CONTAINS
 
                     CASE (f_iDemandFromMoistAtEnd)
                         CALL NonPondedLUMoistureRouter(PrecipD                                ,  &
+                                                       0.2d0                                  ,  &
                                                        pAgData%SMax(indxSoil,indxRegion)      ,  &
                                                        SoilM_P                                ,  &
                                                        ETc                                    ,  & 
@@ -1342,6 +1366,7 @@ CONTAINS
                 SoilM            = pAgData%SoilM_Precip_P(indxSoil,indxRegion) + pAgData%SoilM_AW_P(indxSoil,indxRegion) + pAgData%SoilM_Oth_P(indxSoil,indxRegion)
                 TargetSoilM_Soil = MIN(FieldCapacity * TargetSoilM , TotalPorosity)
                 CALL NonPondedCropDemand(PrecipD                               ,  &
+                                         0.2d0                                 ,  &
                                          pAgData%SMax(indxSoil,indxRegion)     ,  &
                                          GM                                    ,  &
                                          fRF                                   ,  &

@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2025  
+!  Copyright (C) 2005-2026  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -450,7 +450,7 @@ CONTAINS
     CALL LakeDataFile%ReadData(ALine,iStat)     ;  IF (iStat .EQ. -1) RETURN 
     CALL CleanSpecialCharacters(ALine)
     AppLake%cTimeUnitOutflow = ADJUSTL(StripTextUntilCharacter(ALine,f_cInlineCommentChar))
-    IF (IsTimeIntervalValid(AppLake%cTimeUnitOutflow) .EQ. 0) THEN
+    IF (.NOT. IsTimeIntervalValid(AppLake%cTimeUnitOutflow)) THEN
         CALL AppLake%Logger%SetLastMessage('Time unit of lake outflow in the rating tables is not recognized!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN

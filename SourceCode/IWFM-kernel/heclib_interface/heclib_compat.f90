@@ -37,7 +37,7 @@ MODULE heclib_compat
   PUBLIC :: ZBEGDT, ZINCBK
   PUBLIC :: ZDTYPE, ZDELET
   PUBLIC :: ZCOFIL
-  PUBLIC :: IYMDJL, JLIYMD
+  PUBLIC :: IYMDJL, JLIYMD, INCTIM
 
   ! Public type for compatibility
   PUBLIC :: C_LONG_LONG
@@ -615,5 +615,38 @@ CONTAINS
     JLIYMD = 0  ! Success
 
   END FUNCTION JLIYMD
+
+  !--------------------------------------------------------------
+  ! INCTIM - Increment a date/time by a number of intervals
+  ! Args: Interval, Flag (0: interval in minutes, 1: in days), NPeriods,
+  !       StartJulian, StartMinutes, EndJulian, EndMinutes
+  ! Returns: 0 (legacy callers ignore the return value)
+  ! Note: Monthly and longer intervals (e.g. 43200 minutes = 1MON) are
+  !       handled as calendar intervals by HEC-DSS 7 incrementTime.
+  !--------------------------------------------------------------
+  INTEGER FUNCTION INCTIM(INTL, IFLAG, NPER, JULS, ISTIME, JULE, IETIME)
+    INTEGER, INTENT(IN)  :: INTL, IFLAG, NPER, JULS, ISTIME
+    INTEGER, INTENT(OUT) :: JULE, IETIME
+
+    INTEGER(C_INT) :: iIntervalSeconds, iJulEnd, iSecEnd, iDummy
+
+    IF (IFLAG .EQ. 1) THEN
+      iIntervalSeconds = INT(INTL, C_INT) * 86400_C_INT
+    ELSE
+      iIntervalSeconds = INT(INTL, C_INT) * 60_C_INT
+    END IF
+
+    IF (iIntervalSeconds .EQ. 0 .OR. NPER .EQ. 0) THEN
+      JULE   = JULS
+      IETIME = ISTIME
+    ELSE
+      iDummy = hec_incrementTime(iIntervalSeconds, INT(NPER, C_INT), INT(JULS, C_INT), &
+                                 INT(ISTIME, C_INT) * 60_C_INT, iJulEnd, iSecEnd)
+      JULE   = iJulEnd
+      IETIME = iSecEnd / 60
+    END IF
+    INCTIM = 0
+
+  END FUNCTION INCTIM
 
 END MODULE heclib_compat

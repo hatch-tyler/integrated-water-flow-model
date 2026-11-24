@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2025  
+!  Copyright (C) 2005-2026  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -29,7 +29,13 @@ MODULE IOInterface_Local
                                         DefaultLogger          , &
                                         f_iWarn                , &
                                         f_iFatal
-  USE Class_BaseFileType        , ONLY: BaseFileType           
+  USE Class_BaseFileType        , ONLY: BaseFileType                 , &
+                                        f_IO_TSData_NotYetTimeToRead , &
+                                        f_IO_TSData_BadTimeStamp     , &
+                                        f_IO_TSData_DssReadError     , &
+                                        f_IO_SuccessfulRead          , &
+                                        f_IO_UnsuccessfulRead        , &   
+                                        f_IO_FileNotFound            
   USE Class_AsciiFileType       , ONLY: AsciiInFileType        , &
                                         AsciiTSDInFileType     , &
                                         AsciiOutFileType       , &
@@ -70,7 +76,13 @@ MODULE IOInterface_Local
             f_iGroup               , &
             f_iDataSet             , &
             f_iAttribute           , &
-            f_iMaxDatasetNameLen
+            f_iMaxDatasetNameLen         , &
+            f_IO_TSData_NotYetTimeToRead , &
+            f_IO_TSData_DssReadError     , &
+            f_IO_TSData_BadTimeStamp     , &
+            f_IO_SuccessfulRead          , &
+            f_IO_UnsuccessfulRead        , &
+            f_IO_FileNotFound          
 
   
   ! -------------------------------------------------------------
@@ -789,11 +801,7 @@ CONTAINS
     
     SELECT TYPE (p => ThisFile%Me)
       TYPE IS (DSSInFileType)  !DSS input file
-          IF (PRESENT(NRowsOfData)) THEN
-              CALL p%SetParameters_DssInFile(PathNames,NColumnsOfData,NRowsOfData,iStat=iStat)
-          ELSE
-              CALL p%SetParameters_DssInFile(PathNames,NColumnsOfData,iStat=iStat)
-          END IF
+          CALL p%SetParameters_DssInFile(PathNames,NColumnsOfData,iStat,NRowsOfData)
 
       TYPE IS (DSSOutFileType) !DSS output file
           IF (PRESENT(NRowsOfData)) THEN

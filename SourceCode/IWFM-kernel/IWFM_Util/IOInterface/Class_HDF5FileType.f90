@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2025  
+!  Copyright (C) 2005-2026  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -28,7 +28,8 @@ MODULE Class_HDF5FileType
                                   NPeriods                
   USE GeneralUtilities    , ONLY: UpperCase               , &
                                   IntToText
-  USE Class_BaseFileType  , ONLY: BaseFileType
+  USE Class_BaseFileType  , ONLY: BaseFileType            , &
+                                  f_IO_SuccessfulRead
   USE HDF5
   IMPLICIT NONE
   
@@ -891,7 +892,7 @@ CONTAINS
     
     !Initialize
     iStat        = 0
-    FileReadCode = 0
+    FileReadCode = f_IO_SuccessfulRead
     
     !Calculate time offset
     IF (ThisFile%TimeStep%TrackTime) THEN

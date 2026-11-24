@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2025  
+!  Copyright (C) 2005-2026  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -126,6 +126,7 @@ MODULE Package_Model
                                           f_iPump_ElemPump                            , &
                                           f_iBudgetType_GW
   USE Package_AppSubsidence       , ONLY: AppSubsidenceType
+  USE TransportManager            , ONLY: TransportManagerType
   USE Package_AppStream           , ONLY: AppStreamType                               , &
                                           f_iAllRecvLoss                              , &
                                           f_iBudgetType_StrmNode                      , &
@@ -218,8 +219,9 @@ MODULE Package_Model
             PP_KDEB_PrintMessages        , &
             PP_KDEB_PrintFEStiffness     , &
             PP_KDEB_Otherwise            , &
-            iRestart                     , &
-            iNoRestart                
+            f_iRestart_BDT               , &
+            f_iRestart                   , &
+            f_iNoRestart                
   
 
   ! -------------------------------------------------------------
@@ -231,8 +233,9 @@ MODULE Package_Model
                        PP_KDEB_PrintMessages     = 2  , &
                        PP_KDEB_PrintFEStiffness  = 1  , &
                        PP_KDEB_Otherwise         = 0  , &
-                       iRestart                  = 1  , &
-                       iNoRestart                = 0
+                       f_iRestart_BDT            = 2  , &
+                       f_iRestart                = 1  , &
+                       f_iNoRestart              = 0
   
   
   ! -------------------------------------------------------------
@@ -254,11 +257,13 @@ MODULE Package_Model
   TYPE ModelType
       TYPE(ProgramTimerType)               :: Timer
       TYPE(MessageLoggerType)              :: Logger
-      INTEGER                              :: iRestartOption                 = iNoRestart
+      INTEGER                              :: iRestartOption                 = f_iNoRestart
       LOGICAL                              :: lIsForInquiry                  = .FALSE.
       LOGICAL                              :: lAppUnsatZone_Defined          = .FALSE.
       LOGICAL                              :: lRootZone_Defined              = .FALSE.
       LOGICAL                              :: lModel_ForInquiry_Defined      = .FALSE.
+      LOGICAL                              :: lTransport_Defined             = .FALSE. 
+      LOGICAL                              :: lFlow_Simulated                = .TRUE.
       CHARACTER(:),ALLOCATABLE             :: cPPWorkingDirectory            
       CHARACTER(:),ALLOCATABLE             :: cSIMWorkingDirectory           
       CHARACTER                            :: cGWMainInputFileName*500       = ''       
@@ -272,6 +277,7 @@ MODULE Package_Model
       TYPE(AppLakeType)                    :: AppLake
       TYPE(RootZoneType)                   :: RootZone
       TYPE(AppUnsatZoneType)               :: AppUnsatZone
+      TYPE(TransportManagerType)           :: Transport
       TYPE(AppSmallWatershedType)          :: AppSWShed
       TYPE(StrmLakeConnectorType)          :: StrmLakeConnector
       TYPE(StrmGWConnectorType)            :: StrmGWConnector
@@ -367,6 +373,9 @@ MODULE Package_Model
       PROCEDURE,PASS   :: GetGWHeads_All
       PROCEDURE,PASS   :: GetGWHeads_ForALayer
       PROCEDURE,PASS   :: GetGWHeadsIC
+      PROCEDURE,PASS   :: GetGWStorage_ForNodeLayer
+      PROCEDURE,PASS   :: GetGWBoundaryFlow_ForNodeLayer
+      PROCEDURE,PASS   :: GetGWBoundaryFlow_ForNodeLayerIndex
       PROCEDURE,PASS   :: GetSubsidence_All
       PROCEDURE,PASS   :: GetNWells
       PROCEDURE,PASS   :: GetWellIDs
@@ -493,12 +502,14 @@ MODULE Package_Model
       PROCEDURE,NOPASS :: PrintVersionNumbers
       PROCEDURE,PASS   :: SimulateAll
       PROCEDURE,PASS   :: SimulateOneTimeStep
+      PROCEDURE,PASS   :: SimulateTransportOneTimeStep
       PROCEDURE,PASS   :: SimulateForAnInterval
       PROCEDURE,PASS   :: PrintResults
       PROCEDURE,PASS   :: PrintRestartData
       PROCEDURE,PASS   :: AdvanceTime
       PROCEDURE,PASS   :: AdvanceState
       PROCEDURE,PASS   :: IsStrmUpstreamNode
+      PROCEDURE,PASS   :: IsFlowSimulated
       PROCEDURE,PASS   :: IsEndOfSimulation
       PROCEDURE,PASS   :: IsBoundaryNode
       PROCEDURE,PASS   :: ConvertTimeUnit
@@ -538,7 +549,7 @@ MODULE Package_Model
   ! -------------------------------------------------------------
   ! --- SIMULATION RELATED DATA
   ! -------------------------------------------------------------
-  INTEGER,PARAMETER :: nSIM_InputFiles              = 12 , &
+  INTEGER,PARAMETER :: nSIM_InputFiles              = 13 , &
                        SIM_BinaryInputFileID        = 1  , &     !!!!
                        SIM_GWDataFileID             = 2  , &     !
                        SIM_StrmDataFileID           = 3  , &     !
@@ -550,8 +561,8 @@ MODULE Package_Model
                        SIM_SuppAdjSpecFileID        = 9  , &     !
                        SIM_PrecipDataFileID         = 10 , &     !
                        SIM_ETDataFileID             = 11 , &     !
-                       SIM_CropCoeffFileID          = 12         !!!!
-
+		               SIM_CropCoeffFileID          = 12 , &     !
+                       SIM_TransManFILEID           = 13    !!!!
   ! -------------------------------------------------------------
   ! --- MISC. ENTITIES
   ! -------------------------------------------------------------
@@ -999,6 +1010,17 @@ CONTAINS
     CALL DATE_AND_TIME(VALUES=iTimerValues)
     CALL LogInitTime(Model%Logger, 'Grid+Stratigraphy', iTimerStart, iTimerValues)
 
+    !Transport 
+    CALL Model%Transport%New(lForInquiry,ProjectFileNames(SIM_TransManFILEID),Model%cSIMWorkingDirectory, Model%AppGrid,Model%Stratigraphy,Model%TimeStep,iStat)
+    IF (iStat .EQ. -1) RETURN
+    Model%lTransport_Defined = Model%Transport%IsTransportDefined()
+    IF (Model%lTransport_Defined) THEN
+        Model%lFlow_Simulated = Model%Transport%IsFlowSimulated()
+        IF (.NOT. Model%lFlow_Simulated) RETURN
+    ELSE
+        Model%lFlow_Simulated = .TRUE.
+    END IF
+
     !Component connectors
     CALL DATE_AND_TIME(VALUES=iTimerStart)
     CALL Model%StrmLakeConnector%New(Model%Logger,PPBinaryFile,iStat)  ;  IF (iStat .EQ. -1) RETURN
@@ -1188,6 +1210,7 @@ CONTAINS
                              Model%NTIME                         , &
                              lDeepPerc_Defined                   , &
                              Model%lRootZone_Defined             , &
+                             Model%lTransport_Defined , &
                              iStat                               )
     IF (iStat .EQ. -1) RETURN
     CALL DATE_AND_TIME(VALUES=iTimerValues)
@@ -1206,10 +1229,16 @@ CONTAINS
     !Close binary file
     CALL PPBinaryFile%Kill()
     
-    !If the model is being restarted, read the data from previous run
-    IF (iRestart .EQ. iRestartModel) THEN
-        CALL ReadRestartData(Model,iStat)
-        IF (iStat .EQ. -1) RETURN
+    !If the model is being restarted, either from previous run or beginning using available restart data
+    IF (iRestartModel .NE. f_iNoRestart) THEN
+        IF (iRestartModel .EQ. f_iRestart) THEN
+            CALL ReadRestartData(Model,.TRUE.,iStat)   !When model will be retsarted from the point that it stopped last, convert moisture contents to depths
+        ELSE
+            CALL ReadRestartData(Model,.FALSE.,iStat)  !When model will be started from BDT but with initial conditions from the Restart file, keep moisture content as content (they will be converted to depth when root depths are read in later)
+        END IF
+        IF (iStat .NE. 0) RETURN
+        CALL Model%AppGW%ReprintInitialValues(Model%AppGrid,Model%Stratigraphy,ProjectFileNames(SIM_GWDataFileID),StrmConnectivity,Model%TimeStep,Model%NTIME,iStat)  
+        IF (iStat .NE. 0) RETURN
         CALL Model%AdvanceState()
     END IF
     
@@ -1368,6 +1397,16 @@ CONTAINS
     CALL Model%IrigFracFile%SetLogger(DefaultLogger)
     CALL Model%GWZBudget%SetLogger(DefaultLogger)
 
+    !Transport 
+    CALL Model%Transport%New(lForInquiry,ProjectFileNames(SIM_TransManFILEID),Model%cSIMWorkingDirectory, Model%AppGrid,Model%Stratigraphy,Model%TimeStep,iStat)
+    IF (iStat .EQ. -1) RETURN
+    Model%lTransport_Defined = Model%Transport%IsTransportDefined()
+    IF (Model%lTransport_Defined) THEN
+        Model%lFlow_Simulated = Model%Transport%IsFlowSimulated()
+        IF (.NOT. Model%lFlow_Simulated) RETURN
+    ELSE
+        Model%lFlow_Simulated = .TRUE.
+    END IF
 
     !Solution scheme control data
     CALL Model%Matrix%SetSolver(MSOLVE,0.01d0*Model%Convergence%Tolerance,Model%Convergence%IterMax,RELAX,iStat)  ;  IF (iStat .EQ. -1) RETURN
@@ -1541,6 +1580,7 @@ CONTAINS
                              Model%NTIME                         , &
                              lNetDeepPerc_Defined                , &
                              Model%lRootZone_Defined             , &
+                             Model%lTransport_Defined , &
                              iStat                               )
     IF (iStat .EQ. -1) RETURN
     
@@ -1551,10 +1591,16 @@ CONTAINS
     !Convert time unit to a consistent unit
     CALL ConvertTimeUnit(Model)
     
-    !If the model is being restarted, read the data from previous run
-    IF (iRestart .EQ. iRestartModel) THEN
-        CALL ReadRestartData(Model,iStat)
-        IF (iStat .EQ. -1) RETURN
+    !If the model is being restarted, either from previous run or beginning using available restart data
+    IF (iRestartModel .NE. f_iNoRestart) THEN
+        IF (iRestartModel .EQ. f_iRestart) THEN
+            CALL ReadRestartData(Model,.TRUE.,iStat)   !When model will be retsarted from the point that it stopped last, convert moisture contents to depths
+        ELSE
+            CALL ReadRestartData(Model,.FALSE.,iStat)  !When model will be started from BDT but with initial conditions from the Restart file, keep moisture content as content (they will be converted to depth when root depths are read in later)
+        END IF
+        IF (iStat .NE. 0) RETURN
+        CALL Model%AppGW%ReprintInitialValues(Model%AppGrid,Model%Stratigraphy,ProjectFileNames(SIM_GWDataFileID),StrmConnectivity,Model%TimeStep,Model%NTIME,iStat)  
+        IF (iStat .NE. 0) RETURN
         CALL Model%AdvanceState()
     END IF
     
@@ -1600,18 +1646,17 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- NEW MODEL (STATIC AND DYNAMIC COMPONENTS) WITH ALL INFO SUPPLIED BY DUMMY ARGUMENTS
   ! -------------------------------------------------------------
-  SUBROUTINE SetAllComponents_WithoutBinFile_AllDataSupplied(Model,cProjectNameForDSS,cPP_WorkingDirectory,cSIM_WorkingDirectory,cProjectTitles,cPPFileNames,cSIMFileNames,PP_KOUT,PP_KDEB,PP_FACTLTOU,PP_UNITLTOU,PP_FACTAROU,PP_UNITAROU,cSimBeginDateAndTime,cSimEndDateAndTime,cUnitT,iGenRestartFile,iRestartOption,CACHE,SIM_KDEB,MSOLVE,Relax,iMaxIter,iMaxIterSupply,Toler,TolerSupply,iAdjustFlag,IsRoutedStreams,lForInquiry,iStat)
+  SUBROUTINE SetAllComponents_WithoutBinFile_AllDataSupplied(Model,cProjectNameForDSS,cPP_WorkingDirectory,cSIM_WorkingDirectory,cProjectTitles,cPPFileNames,cSIMFileNames,PP_KOUT,PP_KDEB,PP_FACTLTOU,PP_UNITLTOU,PP_FACTAROU,PP_UNITAROU,cSimBeginDateAndTime,cSimEndDateAndTime,cUnitT,iGenRestartFile,iRestartModel,CACHE,SIM_KDEB,MSOLVE,Relax,iMaxIter,iMaxIterSupply,Toler,TolerSupply,iAdjustFlag,IsRoutedStreams,lForInquiry,iStat)
     CLASS(ModelType),TARGET     :: Model
     CHARACTER(LEN=*),INTENT(IN) :: cProjectNameForDSS,cPP_WorkingDirectory,cSIM_WorkingDirectory,cProjectTitles(3),cPPFileNames(nPP_InputFiles),cSIMFileNames(nSIM_InputFiles),PP_UNITLTOU,PP_UNITAROU,cSimBeginDateAndTime,cSimEndDateAndTime,cUnitT
-    INTEGER,INTENT(IN)          :: PP_KOUT,PP_KDEB,iGenRestartFile,iRestartOption,CACHE,SIM_KDEB,MSOLVE,iMaxIter,iMaxIterSupply,iAdjustFlag
+    INTEGER,INTENT(IN)          :: PP_KOUT,PP_KDEB,iGenRestartFile,iRestartModel,CACHE,SIM_KDEB,MSOLVE,iMaxIter,iMaxIterSupply,iAdjustFlag
     REAL(8),INTENT(IN)          :: PP_FACTLTOU,PP_FACTAROU,Relax,Toler,TolerSupply
     LOGICAL,INTENT(IN)          :: IsRoutedStreams,lForInquiry
     INTEGER,INTENT(OUT)         :: iStat
     
     !Local variables
     CHARACTER(LEN=ModNameLen+47),PARAMETER           :: ThisProcedure = ModName // 'SetAllComponents_WithoutBinFile_AllDataSupplied'
-    INTEGER                                          :: NNodes,NElements,iRestartModel, &
-                                                        NFaces,NLayers,NLakes,NStrmNodes,ErrorCode,indxLake
+    INTEGER                                          :: NNodes,NElements,NFaces,NLayers,NLakes,NStrmNodes,ErrorCode,indxLake
     CHARACTER                                        :: Text*70,cErrorMsg*300
     LOGICAL                                          :: lDiversions_Defined,lNetDeepPerc_Defined
     INTEGER,ALLOCATABLE                              :: LakeElems(:),iStrmNodeIDs(:),iLakeIDs(:),iHydLocationTypeList(:),iHydCompList(:), &
@@ -1726,6 +1771,16 @@ CONTAINS
     CALL Model%IrigFracFile%SetLogger(DefaultLogger)
     CALL Model%GWZBudget%SetLogger(DefaultLogger)
 
+    !Transport 
+    CALL Model%Transport%New(lForInquiry,cSIMFileNames(SIM_TransManFILEID),Model%cSIMWorkingDirectory, Model%AppGrid,Model%Stratigraphy,Model%TimeStep,iStat)
+    IF (iStat .EQ. -1) RETURN
+    Model%lTransport_Defined = Model%Transport%IsTransportDefined()
+    IF (Model%lTransport_Defined) THEN
+        Model%lFlow_Simulated = Model%Transport%IsFlowSimulated()
+        IF (.NOT. Model%lFlow_Simulated) RETURN
+    ELSE
+        Model%lFlow_Simulated = .TRUE.
+    END IF
 
     !Solution scheme control data
     Model%Convergence%Tolerance = Toler
@@ -1738,6 +1793,13 @@ CONTAINS
     CALL Model%SupplyAdjust%SetAdjustFlag(iAdjustFlag,iStat)
     IF (iStat .EQ. -1) RETURN
     
+    !If restarting from the last simulation timestep it stopped  
+    IF (iRestartModel .EQ. f_iRestart) THEN
+        CALL ReadRestartDateAndTime(Model%Logger,TRIM(Model%cSIMWorkingDirectory),Model%NTIME,Model%TimeStep,iStat)
+        IF (iStat .EQ. -1) RETURN
+        Model%NTIME = NPeriods(Model%TimeStep%DELTAT_InMinutes,Model%TimeStep%CurrentDateAndTime,Model%TimeStep%EndDateAndTime)
+    END IF   
+       
     !Precipitation data
     CALL Model%PrecipData%New(Model%Logger,cSIMFileNames(SIM_PrecipDataFileID),Model%cSIMWorkingDirectory,'precipitation data',Model%TimeStep,iStat)
     IF (iStat .EQ. -1) RETURN
@@ -1901,6 +1963,7 @@ CONTAINS
                              Model%NTIME                         , &
                              lNetDeepPerc_Defined                , &
                              Model%lRootZone_Defined             , &
+                             Model%lTransport_Defined , &
                              iStat                               )
     IF (iStat .EQ. -1) RETURN
     
@@ -1912,9 +1975,15 @@ CONTAINS
     CALL ConvertTimeUnit(Model)
     
     !If the model is being restarted, read the data from previous run
-    IF (iRestartOption .EQ. iRestartModel) THEN
-        CALL ReadRestartData(Model,iStat)
-        IF (iStat .EQ. -1) RETURN
+    IF (iRestartModel .NE. f_iNoRestart) THEN
+        IF (iRestartModel .EQ. f_iRestart) THEN
+            CALL ReadRestartData(Model,.TRUE.,iStat)   !When model will be retsarted from the point that it stopped last, convert moisture contents to depths
+        ELSE
+            CALL ReadRestartData(Model,.FALSE.,iStat)  !When model will be started from BDT but with initial conditions from the Restart file, keep moisture content as content (they will be converted to depth when root depths are read in later)
+        END IF
+        IF (iStat .NE. 0) RETURN
+        CALL Model%AppGW%ReprintInitialValues(Model%AppGrid,Model%Stratigraphy,cSIMFileNames(SIM_GWDataFileID),StrmConnectivity,Model%TimeStep,Model%NTIME,iStat)  
+        IF (iStat .NE. 0) RETURN
         CALL Model%AdvanceState()
     END IF
        
@@ -3776,6 +3845,47 @@ CONTAINS
     END IF
     
   END SUBROUTINE GetNames
+  
+  
+  ! -------------------------------------------------------------
+  ! --- GET GW STORAGE (AND ITS DERIVATIVE, IF DESIRED) AT A NODE AND LAYER
+  ! -------------------------------------------------------------
+  SUBROUTINE GetGWStorage_ForNodeLayer(Model,iNode,iLayer,rNodalStor,rdNodalStor)
+    CLASS(ModelType),INTENT(IN)  :: Model
+    INTEGER,INTENT(IN)           :: iNode,iLayer
+    REAL(8),INTENT(OUT)          :: rNodalStor
+    REAL(8),OPTIONAL,INTENT(OUT) :: rdNodalStor
+    
+    CALL Model%AppGW%GetStorage_ForNodeLayer(Model%Stratigraphy,iNode,iLayer,rNodalStor,rdNodalStor)
+
+  END SUBROUTINE GetGWStorage_ForNodeLayer
+  
+  
+  ! -------------------------------------------------------------
+  ! --- GET GW BOUNDARY FLOW AT A NODE AND LAYER FOR A SPECIFIED B.C. TYPE AND INDEX
+  ! --- Note: Thsi metod is used by Simulation_MM
+  ! -------------------------------------------------------------
+  FUNCTION GetGWBoundaryFlow_ForNodeLayerIndex(Model,iBCType,iNode,iLayer,iIndex) RESULT(rBCFlow)
+    CLASS(ModelType),INTENT(IN) :: Model
+    INTEGER,INTENT(IN)          :: iBCType,iNode,iLayer,iIndex
+    REAL(8)                     :: rBCFlow
+    
+    rBCFlow = Model%AppGW%GetBoundaryFlowAtNodeLayerIndex(iBCType,iNode,iLayer,iIndex)
+
+  END FUNCTION GetGWBoundaryFlow_ForNodeLayerIndex
+  
+  
+  ! -------------------------------------------------------------
+  ! --- GET GW BOUNDARY FLOW AT A NODE AND LAYER FOR A SPECIFIED B.C. TYPE
+  ! -------------------------------------------------------------
+  FUNCTION GetGWBoundaryFlow_ForNodeLayer(Model,iBCType,iNode,iLayer) RESULT(rBCFlow)
+    CLASS(ModelType),INTENT(IN) :: Model
+    INTEGER,INTENT(IN)          :: iBCType,iNode,iLayer
+    REAL(8)                     :: rBCFlow
+    
+    rBCFlow = Model%AppGW%GetBoundaryFlowAtNodeLayer(iBCType,iNode,iLayer)
+
+  END FUNCTION GetGWBoundaryFlow_ForNodeLayer
   
   
   ! -------------------------------------------------------------
@@ -6361,6 +6471,7 @@ CONTAINS
                                      Model%NTIME                         , &
                                      lDeepPerc_Defined                   , &
                                      Model%lRootZone_Defined             , &
+                                     Model%lTransport_Defined , &
                                      iStat                               )
         END IF
     END IF
@@ -6371,13 +6482,14 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- SET GW BOUNDARY CONDITION
   ! -------------------------------------------------------------
-  SUBROUTINE SetGWBC(Model,iNode,iLayer,iBCType,iStat,rFlow,rHead,rMaxBCFlow,rConductance,rConstrainingHeadBC)
+  SUBROUTINE SetGWBC(Model,iNode,iLayer,iBCType,iStat,iBCIndex,rFlow,rHead,rMaxBCFlow,rConductance,rConstrainingHeadBC)
     CLASS(ModelType),TARGET     :: Model
     INTEGER,INTENT(IN)          :: iNode,iLayer,iBCType
     INTEGER,INTENT(OUT)         :: iStat
+    INTEGER,OPTIONAL,INTENT(IN) :: iBCIndex
     REAL(8),OPTIONAL,INTENT(IN) :: rFlow,rHead,rMaxBCFlow,rConductance,rConstrainingHeadBC
     
-    CALL Model%AppGW%SetBC(iNode,iLayer,iBCType,Model%AppGrid%AppNode%ID,iStat,rFlow,rHead,rMaxBCFlow,rConductance,rConstrainingHeadBC) 
+    CALL Model%AppGW%SetBC(iNode,iLayer,iBCType,Model%AppGrid%AppNode%ID,iStat,iBCIndex,rFlow,rHead,rMaxBCFlow,rConductance,rConstrainingHeadBC) 
     
   END SUBROUTINE SetGWBC
   
@@ -6525,7 +6637,7 @@ CONTAINS
        IF (iStat .EQ. -1) RETURN 
     END DO
 
-    !BACWARD COMPATIBILITY: Check if there are 11 or 12 lines of entries for filenames
+    !BACWARD COMPATIBILITY: Check if there are 11, 12 or 13 lines of entries for filenames
     CALL MainControlFile%ReadData(cDummyArray,iStat)  ;  IF (iStat .NE. 0) RETURN
     iLineCount = SIZE(cDummyArray)
     CALL MainControlFile%BackspaceFile(iLineCount)
@@ -6567,6 +6679,11 @@ CONTAINS
     
     !Is the model being restarted?
     CALL MainControlFile%ReadData(iRestartModel,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    IF (iRestartModel.NE.f_iRestart .AND. iRestartModel.NE.f_iNoRestart .AND. iRestartModel.NE.f_iRestart_BDT) THEN
+        CALL Model%Logger%SetLastMessage('Invalid value for RESTART',f_iFatal,ThisProcedure)
+        iStat = -1
+        RETURN
+    END IF
 
     !Based on the time tracking option, read in the relevant data
     SELECT CASE (Model%TimeStep%TrackTime)
@@ -6668,8 +6785,8 @@ CONTAINS
     !Water budget control options
     CALL MainControlFile%ReadData(iAdjustFlag,iStat)  ;  IF (iStat .EQ. -1) RETURN
     
-    !If restarting, overwrite the simulation begin time and number of simulation timesteps  
-    IF (iRestartModel .EQ. iRestart) THEN
+    !If restarting from the last simulation timestep it stopped  
+    IF (iRestartModel .EQ. f_iRestart) THEN
         CALL ReadRestartDateAndTime(Model%Logger,TRIM(Model%cSIMWorkingDirectory),Model%NTIME,Model%TimeStep,iStat)
         IF (iStat .EQ. -1) RETURN
         Model%NTIME = NPeriods(Model%TimeStep%DELTAT_InMinutes,Model%TimeStep%CurrentDateAndTime,Model%TimeStep%EndDateAndTime)
@@ -6740,21 +6857,23 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- READ IN RESTART DATA
   ! -------------------------------------------------------------
-  SUBROUTINE ReadRestartData(Model,iStat)
+  SUBROUTINE ReadRestartData(Model,lConvertMoistToDepth,iStat)
     TYPE(ModelType)     :: Model
+    LOGICAL,INTENT(IN)  :: lConvertMoistToDepth
     INTEGER,INTENT(OUT) :: iStat
     
     !Local variables
     CHARACTER(LEN=ModNameLen+15),PARAMETER :: ThisProcedure = ModName // 'ReadRestartData'
-    INTEGER                                :: ErrorCode
+    INTEGER                                :: ErrorCode, RestartTimeStep
     TYPE(GenericFileType)                  :: InputFile
-    CHARACTER(LEN=f_iTimeStampLength)      :: EndDateAndTime,BeginDateAndTime
+    CHARACTER(LEN=f_iTimeStampLength)      :: EndDateAndTime, BeginDateAndTime, RestartDateAndTime
     CHARACTER(:),ALLOCATABLE               :: cAbsPathFileName
+    REAL(8)                                :: RestartTime
     
     !Initialize
     iStat = 0
     
-    !Check if restart dta file exists, if not return
+    !Check if restart data file exists, if not return
     CALL EstablishAbsolutePathFileName('IW_Restart.bin',Model%cSIMWorkingDirectory,cAbsPathFileName)
     OPEN (FILE=cAbsPathFileName, UNIT=1111, STATUS='OLD' , IOSTAT=ErrorCode)
     IF (ErrorCode .NE. 0) THEN
@@ -6773,10 +6892,10 @@ CONTAINS
     CALL InputFile%New(FileName=cAbsPathFileName,InputFile=.TRUE.,IsTSFile=.FALSE.,Descriptor='Model restart file',FileType='BIN',iStat=iStat)
     IF (iStat .EQ. -1) RETURN
     
-    !Restart simulation date and time
-    CALL InputFile%ReadData(Model%TimeStep%CurrentTime,iStat)  ;  IF (iStat .EQ. -1) RETURN
-    CALL InputFile%ReadData(Model%TimeStep%CurrentTimeStep,iStat)  ;  IF (iStat .EQ. -1) RETURN  
-    CALL InputFile%ReadData(Model%TimeStep%CurrentDateAndTime,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    !Save Restart simulation date and time
+    CALL InputFile%ReadData(RestartTime,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    CALL InputFile%ReadData(RestartTimeStep,iStat)  ;  IF (iStat .EQ. -1) RETURN  
+    CALL InputFile%ReadData(RestartDateAndTime,iStat)  ;  IF (iStat .EQ. -1) RETURN
     
     !Make sure that Restart file points to a date that is between the simulation period
     IF ((Model%TimeStep%CurrentDateAndTime .TSLT. BeginDateAndTime)   .OR.   (Model%TimeStep%CurrentDateAndTime .TSGE. EndDateAndTime)) THEN
@@ -6811,7 +6930,7 @@ CONTAINS
     
     !Root zone 
     IF (Model%lRootZone_Defined) THEN
-        CALL Model%RootZone%ReadRestartData(InputFile,iStat)  
+        CALL Model%RootZone%ReadRestartData(InputFile,lConvertMoistToDepth,iStat)  
         IF (iStat .EQ. -1) RETURN
     END IF
     
@@ -6851,6 +6970,12 @@ CONTAINS
                rGWReturnFlowsIntoStrmNodes(Model%AppStream%GetNStrmNodes())                , &
                rGWReturnFlowsIntoLakes(Model%AppLake%GetNLakes())
     
+    !Return if Flow is not simulated (i.e. only Transport is simulated with previously simulated flow results)
+    IF (.NOT. Model%lFlow_Simulated) THEN
+        iStat = 0
+        RETURN
+    END IF
+    
     !Initialize
     iStat = 0
     
@@ -6861,7 +6986,7 @@ CONTAINS
     CALL Model%WSA%PrintResults(Model%lEndOfSimulation,Model%TimeStep,Model%AppStream)
     
     !Print restart file, if asked for
-    IF (Model%iRestartOption .EQ. iRestart) THEN
+    IF (Model%iRestartOption .EQ. f_iRestart) THEN
         CALL PrintRestartData(Model,iStat)
         IF (iStat .NE. 0) RETURN
     END IF
@@ -7237,8 +7362,13 @@ CONTAINS
     INTEGER,ALLOCATABLE :: iDiversionsOW_Local(:),iStrmInflowsOW_Local(:),iBypassesOW_Local(:) 
     REAL(8),ALLOCATABLE :: rDiversionsOW_Local(:),rStrmInflowsOW_Local(:),rBypassesOW_Local(:)  
     
-    !Initialize
+    !Return if flow is not simulated (i.e. only Transport is simulated with previously simulated flow values)
+    IF (.NOT. Model%lFlow_Simulated) THEN
     iStat    = 0
+        RETURN
+    END IF
+    
+    !Initialize
     TimeStep = Model%TimeStep
     
     !Read  WSA-related time series variables
@@ -7498,6 +7628,9 @@ CONTAINS
     !Local variables
     CHARACTER(LEN=10) :: CharCurrentTime
 
+    !Advance time for Transport component
+    CALL Model%Transport%AdvanceTime()
+    
     !Increment the time step counter and check if end-of-simulation reached
     Model%TimeStep%CurrentTimeStep = Model%TimeStep%CurrentTimeStep + 1
 
@@ -7524,9 +7657,16 @@ CONTAINS
                                     CALL Model%Logger%LogMessage(MessageArray(1),f_iMessage,'',Destination=f_iSCREEN)
             END IF
             MessageArray(1) = f_cLineFeed//REPEAT('-',50)//f_cLineFeed//TRIM(MessageArray(1))//f_cLineFeed//REPEAT('-',50)
-                            CALL Model%Logger%LogMessage(MessageArray(1),f_iMessage,'',Destination=f_iFILE)
+            CALL Model%Logger%LogMessage(MessageArray(1),f_iMessage,'',Destination=f_iFILE)
+            IF (Model%lTransport_Defined) THEN
+                IF (Model%lFlow_Simulated) THEN
             IF (Model%TimeStep%CurrentDateAndTime .EQ. Model%TimeStep%EndDateAndTime) Model%lEndOfSimulation = .TRUE.
-
+                ELSE
+                    Model%lEndOfSimulation = Model%Transport%IsEndOfSimulation()
+                END IF
+            ELSE
+                IF (Model%TimeStep%CurrentDateAndTime .EQ. Model%TimeStep%EndDateAndTime) Model%lEndOfSimulation = .TRUE.
+            END IF
     END SELECT
 
   END SUBROUTINE AdvanceTime
@@ -7540,9 +7680,6 @@ CONTAINS
     INTEGER,INTENT(IN)  :: iDummy   !Dummy argument to differentiate the procedure interface from that of SimulateForOneTimeStep
     INTEGER,INTENT(OUT) :: iStat
     
-    !Initailize
-    iStat = 0
-    
     DO 
        CALL Model%AdvanceTime()
        
@@ -7552,9 +7689,12 @@ CONTAINS
        
        CALL Model%PrintResults(iStat)  ;  IF (iStat .EQ. -1) RETURN
        
+        CALL Model%AdvanceState()  
+        
+        CALL Model%SimulateTransportOneTimeStep(iStat)  ;  IF (iStat .EQ. -1) RETURN
+          
        IF (Model%IsEndOfSimulation()) EXIT
        
-       CALL Model%AdvanceState()  
     END DO
 
   END SUBROUTINE SimulateAll
@@ -7630,11 +7770,14 @@ CONTAINS
         !Print out simulation results
         CALL Model%PrintResults(iStat)  ;  IF (iStat .EQ. -1) RETURN
                                        
-        !Exit the do-loop if it is end of simulation; i.e. last time step
-        IF (Model%IsEndOfSimulation()) EXIT
-      
         !Advance state of the system
         CALL Model%AdvanceState()
+
+        !Simulate transport
+        CALL Model%SimulateTransportOneTimeStep(iStat)  ;  IF (iStat .EQ. -1) RETURN
+        
+       !Exit the do-loop if it is end of simulation; i.e. last time step
+        IF (Model%IsEndOfSimulation()) EXIT      
 
     END DO
     
@@ -7642,7 +7785,7 @@ CONTAINS
   
   
   ! -------------------------------------------------------------
-  ! --- SIMULATE A SINGLE TIME STEP
+  ! --- SIMULATE A SINGLE TIME STEP FOR FLOW
   ! -------------------------------------------------------------
   SUBROUTINE SimulateOneTimeStep(Model,iStat)
     CLASS(ModelType),TARGET :: Model
@@ -7656,8 +7799,13 @@ CONTAINS
                                 rGWReturnFlowIntoStrmNodes(Model%AppStream%GetNStrmNodes()),rGWReturnFlowIntoLakes(Model%AppLake%GetNLakes())
     INTEGER,SAVE,ALLOCATABLE :: iStrmNodeIDs(:),iLakeIDs(:),iGWNodeIDs(:)
     
-    !Initialize
+    !Return if Flow is not simulated (i.e. only Transport is simulated with previously simulated flow results)
+    IF (.NOT. Model%lFlow_Simulated) THEN
     iStat      = 0
+        RETURN
+    END IF
+    
+    !Initialize
     NStrmNodes = Model%AppStream%GetNStrmNodes()
     NLakes     = Model%AppLake%GetNLakes()
     
@@ -7868,6 +8016,31 @@ CONTAINS
     CALL Model%SupplyAdjust%ResetState()
     
   END SUBROUTINE SimulateOneTimeStep
+    
+    
+  ! -------------------------------------------------------------
+  ! --- SIMULATE A SINGLE TIME STEP FOR TRANSPORT
+  ! -------------------------------------------------------------
+  SUBROUTINE SimulateTransportOneTimeStep(Model,iStat)
+    CLASS(ModelType),INTENT(INOUT) :: Model
+    INTEGER,INTENT(OUT)            :: iStat
+    
+    !Return if Transport is not simulated
+    IF (.NOT. Model%lTransport_Defined) THEN
+        iStat = 0
+        RETURN
+    END IF
+    
+    !Simulate and print results for Transport for one time step
+    CALL Model%Transport%ReadTSData(Model%AppGrid, Model%Stratigraphy, Model%TimeStep, iStat)
+    IF (iStat .EQ. -1) RETURN
+    
+    CALL Model%Transport%SimulateOneTimeStep( Model%AppGW,  Model%AppGrid, Model%Stratigraphy, Model%TimeStep, iStat)  
+    IF (iStat .EQ. -1) RETURN
+        
+    CALL Model%Transport%PrintResults(Model%AppGW, Model%AppGrid, Model%Stratigraphy, Model%TimeStep, iStat)
+   
+  END SUBROUTINE SimulateTransportOneTimeStep
     
     
   ! -------------------------------------------------------------
@@ -8169,6 +8342,18 @@ CONTAINS
     
     
   ! -------------------------------------------------------------
+  ! --- CHECK IF FLOW SIMULATION IS DEFINED
+  ! -------------------------------------------------------------
+  PURE FUNCTION IsFlowSimulated(Model) RESULT(lDefined)    
+    CLASS(ModelType),INTENT(IN) :: Model
+    LOGICAL                     :: lDefined
+    
+    lDefined = Model%lFlow_Simulated
+    
+  END FUNCTION IsFlowSimulated
+  
+    
+  ! -------------------------------------------------------------
   ! --- CHECK IF END OF SIMULATION
   ! -------------------------------------------------------------
   PURE FUNCTION IsEndOfSimulation(Model) RESULT(lEndOfSimulation)
@@ -8186,6 +8371,9 @@ CONTAINS
   SUBROUTINE AdvanceState(Model)
     CLASS(ModelType),TARGET :: Model
  
+    !If flow is not simulated, return
+    IF (.NOT. Model%lFlow_Simulated) RETURN
+    
     CALL Model%AppGW%AdvanceState(Model%Stratigraphy)
     CALL Model%RootZone%AdvanceState()
     CALL Model%AppStream%AdvanceState()
@@ -8259,6 +8447,7 @@ CONTAINS
                                      Model%NTIME                         , &
                                      lDeepPerc_Defined                   , &
                                      Model%lRootZone_Defined             , &
+                                     Model%lTransport_Defined , &
                                      iStat                               )
         END IF
     END IF
@@ -8302,6 +8491,7 @@ CONTAINS
                                  Model%NTIME                         , &
                                  lDeepPerc_Defined                   , &
                                  Model%lRootZone_Defined             , &
+                                 Model%lTransport_Defined , &
                                  iStat                               )
     END IF
 

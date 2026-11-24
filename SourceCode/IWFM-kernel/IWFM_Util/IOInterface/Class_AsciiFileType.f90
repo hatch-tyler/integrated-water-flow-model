@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2025
+!  Copyright (C) 2005-2026
 !  State of California, Department of Water Resources
 !
 !  This program is free software; you can redistribute it and/or
@@ -44,7 +44,11 @@ MODULE Class_AsciiFileType
                                    f_iTimeStampLength              , &
                                    OPERATOR(.TSGT.)
   USE Class_BaseFileType   , ONLY: BaseFileType                    , &
-                                   IsFileOpen
+                                   IsFileOpen                      , &
+                                   f_IO_UnsuccessfulRead           , &
+                                   f_IO_SuccessfulRead             , &
+                                   f_IO_TSData_BadTimeStamp        , &
+                                   f_IO_TSData_NotYetTimeToRead
   IMPLICIT NONE
 
 
@@ -118,7 +122,7 @@ MODULE Class_AsciiFileType
       INTEGER             :: NSP                       = 1            !Number of time steps to update the time series data
       INTEGER             :: NFQ                       = 0            !Repitition frequency of the time series data; after NFQ times of read actions the file is rewound
       INTEGER             :: TimeStampedData           = 0            !Flag to distinguish if the time series data is time stamped or not (0 = not known; 1 = time stamped ; -1 = non-time stamped)
-      INTEGER             :: NumberOfBlocksToSkip      = 1            !Number of data blocks (groups of data lines between comment lines) to skip after rewinding the file to reach the time series data
+      INTEGER,PUBLIC      :: NumberOfBlocksToSkip      = 1            !Number of data blocks (groups of data lines between comment lines) to skip after rewinding the file to reach the time series data
       INTEGER             :: NumberOfDataLines         = -1           !Number of data lines over which a single time series entry is distributed
       INTEGER             :: NumberOfReads             = 0            !Total number of read actions performed on the file since it was opened or last rewound
       INTEGER             :: NumberOfTimeStepsPassed   = 0            !Number of time steps that passed since the last read action
@@ -136,6 +140,7 @@ MODULE Class_AsciiFileType
       PROCEDURE,PASS :: SetDataInterval
       PROCEDURE,PASS :: SetParameters
       PROCEDURE,PASS :: Rewind_To_BeginningOfTSData
+      PROCEDURE,PASS :: Rewind_To_BeginningOfTSOUTData
       PROCEDURE,PASS :: ReadSingleData_AsciiTSDInFile
       PROCEDURE,PASS :: ReadArrayData_AsciiTSDInFile
       PROCEDURE,PASS :: ReadMatrixData_AsciiTSDInFile
@@ -1012,16 +1017,16 @@ CONTAINS
     SELECT TYPE (Data)
         TYPE IS (INTEGER)
             CALL ThisFile%ReadMatrixData_AsciiTSDInFile(Time,iData,FileReadCode,iStat,TraceTime)
-            IF (FileReadCode .EQ. 0) Data = iData(1,1) !If any value is read, transfer that value to tyhe return variable
+            IF (FileReadCode .EQ. f_IO_SuccessfulRead) Data = iData(1,1) !If any value is read, transfer that value to tyhe return variable
 
         TYPE IS (REAL(8))
             CALL ThisFile%ReadMatrixData_AsciiTSDInFile(Time,rData,FileReadCode,iStat,TraceTime)
-            IF (FileReadCode .EQ. 0) Data = rData(1,1) !If any value is read, transfer that value to tyhe return variable
+            IF (FileReadCode .EQ. f_IO_SuccessfulRead) Data = rData(1,1) !If any value is read, transfer that value to tyhe return variable
 
         TYPE IS (CHARACTER(LEN=*))
             ALLOCATE(CHARACTER(LEN=LEN(Data)) :: cData(1,1))
             CALL ThisFile%ReadMatrixData_AsciiTSDInFile(Time,cData,FileReadCode,iStat,TraceTime)
-            IF (FileReadCode .EQ. 0) Data = cData(1,1) !If any value is read, transfer that value to tyhe return variable
+            IF (FileReadCode .EQ. f_IO_SuccessfulRead) Data = cData(1,1) !If any value is read, transfer that value to tyhe return variable
 
         CLASS DEFAULT
             CALL ThisFile%Logger%SetLastMessage('Trying to read unrecognized data type from file '//ThisFile%Name//'!',f_iFatal,ThisProcedure)
@@ -1054,11 +1059,11 @@ CONTAINS
     SELECT TYPE (Data)
         TYPE IS (INTEGER)
             CALL ThisFile%ReadMatrixData_AsciiTSDInFile(Time,iData,FileReadCode,iStat,TraceTime)
-            IF (FileReadCode .EQ. 0) Data = iData(1,:) !If any value is read, transfer that value to tyhe return variable
+            IF (FileReadCode .EQ. f_IO_SuccessfulRead) Data = iData(1,:) !If any value is read, transfer that value to tyhe return variable
 
         TYPE IS (REAL(8))
             CALL ThisFile%ReadMatrixData_AsciiTSDInFile(Time,rData,FileReadCode,iStat,TraceTime)
-            IF (FileReadCode .EQ. 0) Data = rData(1,:) !If any value is read, transfer that value to tyhe return variable
+            IF (FileReadCode .EQ. f_IO_SuccessfulRead) Data = rData(1,:) !If any value is read, transfer that value to tyhe return variable
 
         CLASS DEFAULT
             CALL ThisFile%Logger%SetLastMessage('Trying to read unrecognized data type from file '//ThisFile%Name//'!',f_iFatal,ThisProcedure)
@@ -1090,7 +1095,7 @@ CONTAINS
     ELSE
         IsTimeTracingRequired = .TRUE.
     END IF
-    FileReadCode = -99  !Default; problem in assigning a status code to Stat
+    FileReadCode = f_IO_UnsuccessfulRead  !Default; problem in assigning a status code to Stat
 
     !Check if a non time-stamped or a time-stamped data will be read
     IF (IsTimeTracingRequired) THEN
@@ -1098,7 +1103,7 @@ CONTAINS
         IF (lDataTimeStamped) THEN
             CALL ReadTimeStampedMatrixData(iStat)
         ELSE
-            FileReadCode = 1  !Data is not properly time stamped
+            FileReadCode = f_IO_TSData_BadTimeStamp  !Data is not properly time stamped
             RETURN
         END IF
     ELSE
@@ -1125,12 +1130,12 @@ CONTAINS
               TYPE IS (REAL(8))
                   !Convert the rate-type data so that the time unit matches the time step of simulation
                   IF (ALLOCATED(ThisFile%RateTypeData)) &
-                      CALL AdjustRateTypeData(Data,ThisFile%RateTypeData,ConversionFactor=REAL(ThisFile%NSP,8))
+                      CALL AdjustRateTypeData(Data,ThisFile%RateTypeData,rConversionFactor=REAL(ThisFile%NSP,8))
           END SELECT
-          FileReadCode = 0
+          FileReadCode = f_IO_SuccessfulRead
       ELSE
           CALL IncrementNumberOfTimeStepsPassed(ThisFile)
-          FileReadCode = -1  !Data was not read because it wasn't time to read data
+          FileReadCode = f_IO_TSData_NotYetTimeToRead  !Data was not read because it wasn't time to read data
       END IF
     END SUBROUTINE ReadNonTimeStampedMatrixData
 
@@ -1188,13 +1193,13 @@ CONTAINS
           SELECT TYPE (Data)
               TYPE IS (REAL(8))
                   IF (ALLOCATED(ThisFile%RateTypeData)) &
-                      CALL AdjustRateTypeData(Data,ThisFile%RateTypeData,DataInterval=ThisFile%Interval_InMinutes,LastDataDate=LastDataDate)
+                      CALL AdjustRateTypeData(Data,ThisFile%RateTypeData,iDataInterval=ThisFile%Interval_InMinutes,cLastDataDate=LastDataDate)
           END SELECT
 
           !If read method is completed, then no error occured
-          FileReadCode = 0
+          FileReadCode = f_IO_SuccessfulRead
       ELSE
-          FileReadCode = -1  !Data was not read because it wasn't time to read data
+          FileReadCode = f_IO_TSData_NotYetTimeToRead  !Data was not read because it wasn't time to read data
       END IF
     END SUBROUTINE ReadTimeStampedMatrixData
 
@@ -1220,7 +1225,7 @@ CONTAINS
 
     !Initialize
     iStat                      = 0
-    FileReadCode               = 0
+    FileReadCode               = f_IO_SuccessfulRead
     nActualOutput              = 0
     cReadDateAndTime           = cBeginDateAndTime
     JulianDate_ReadDateAndTime = TimeStampToJulian(cReadDateAndTime)
@@ -1229,13 +1234,13 @@ CONTAINS
     SELECT TYPE (Data)
         TYPE IS (REAL(8))
             CALL ReadMatrixData_AsciiTSDInFile(ThisFile,cReadDateAndTime,rDataIni,FileReadCode,iStat,TraceTime=.TRUE.)
-            IF (FileReadCode .NE. 0) RETURN
+            IF (FileReadCode .NE. f_IO_SuccessfulRead) RETURN
             nActualOutput = 1
             Data(1)       = rDataIni(iRow,iCol)
             rDataDates(1) = ThisFile%JulianDate2
         TYPE IS (INTEGER)
             CALL ReadMatrixData_AsciiTSDInFile(ThisFile,cReadDateAndTime,iDataIni,FileReadCode,iStat,TraceTime=.TRUE.)
-            IF (FileReadCode .NE. 0) RETURN
+            IF (FileReadCode .NE. f_IO_SuccessfulRead) RETURN
             nActualOutput = 1
             Data(1)       = iDataIni(iRow,iCol)
             rDataDates(1) = ThisFile%JulianDate2
@@ -1256,7 +1261,7 @@ CONTAINS
 
                 !Read data
                 CALL ReadMatrixData_AsciiTSDInFile(ThisFile,cReadDateAndTime,rData,FileReadCode,iStat,TraceTime=.TRUE.)
-                IF (FileReadCode .NE. 0) EXIT
+                IF (FileReadCode .NE. f_IO_SuccessfulRead) EXIT
                 nActualOutput             = nActualOutput + 1
                 Data(nActualOutput)       = rData(iRow,iCol)
                 rDataDates(nActualOutput) = ThisFile%JulianDate2
@@ -1274,7 +1279,7 @@ CONTAINS
 
                 !Read data
                 CALL ReadMatrixData_AsciiTSDInFile(ThisFile,cReadDateAndTime,iData,FileReadCode,iStat,TraceTime=.TRUE.)
-                IF (FileReadCode .NE. 0) EXIT
+                IF (FileReadCode .NE. f_IO_SuccessfulRead) EXIT
                 nActualOutput             = nActualOutput + 1
                 Data(nActualOutput)       = iData(iRow,iCol)
                 rDataDates(nActualOutput) = ThisFile%JulianDate2
@@ -2169,6 +2174,29 @@ CONTAINS
     ThisFile%JulianDate2 = Dummy%JulianDate2
 
   END SUBROUTINE Rewind_To_BeginningOfTSData
+
+
+  ! -------------------------------------------------------------
+  ! --- REWIND TIME SERIES OUTPUT FILE TO THE BEGINNING OF THE TIME SERIES DATA
+  ! -------------------------------------------------------------
+  SUBROUTINE Rewind_To_BeginningOfTSOUTData(ThisFile,iStat)
+    CLASS(AsciiTSDInFileType) :: ThisFile
+    INTEGER,INTENT(OUT)       :: iStat
+
+    !Local variables
+    TYPE(AsciiTSDInFileType) :: Dummy
+
+    !Initialize
+    iStat = 0
+
+    CALL ThisFile%Rewind()
+    !CALL ThisFile%SkipDataBlocks(ThisFile%NumberOfBlocksToSkip,iStat=iStat)  ;  IF (iStat .EQ. -1) RETURN
+    CALL SkipComment(ThisFile,iStat=iStat)                                  ;  IF (iStat .EQ. -1) RETURN
+
+    ThisFile%JulianDate1 = Dummy%JulianDate1
+    ThisFile%JulianDate2 = Dummy%JulianDate2
+
+  END SUBROUTINE Rewind_To_BeginningOfTSOUTData
 
 
 END MODULE

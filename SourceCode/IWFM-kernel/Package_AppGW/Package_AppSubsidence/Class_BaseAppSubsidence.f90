@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2025  
+!  Copyright (C) 2005-2026  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -211,12 +211,12 @@ MODULE Class_BaseAppSubsidence
     END SUBROUTINE Abstract_ProcessSubsidenceParameters
     
     
-    SUBROUTINE Abstract_UpdateSubsidence(AppSubsidence,AppGrid,Stratigraphy,GWHead,GWHead_P)
+    SUBROUTINE Abstract_UpdateSubsidence(AppSubsidence,AppGrid,Stratigraphy,GWHead,GWHead_P,rStorage)
         IMPORT                            :: BaseAppSubsidenceType,AppGridType,StratigraphyType
         CLASS(BaseAppSubsidenceType)      :: AppSubsidence
         TYPE(AppGridType),INTENT(IN)      :: AppGrid
         TYPE(StratigraphyType),INTENT(IN) :: Stratigraphy
-        REAL(8),INTENT(IN)                :: GWHead(:,:),GWHead_P(:,:)
+        REAL(8),INTENT(IN)                :: GWHead(:,:),GWHead_P(:,:),rStorage(:,:)
     END SUBROUTINE Abstract_UpdateSubsidence
     
     

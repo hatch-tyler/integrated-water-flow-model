@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2025  
+!  Copyright (C) 2005-2026  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -547,6 +547,10 @@ CONTAINS
         rSupplyRequired = SUM(Pumping(indxPump)%rNodePumpRequired) !Note that sum of rNodePumpRequired can be less than Pumping(indxPump)%SupplyRequired because there may not be enough water at nodes to service SupplyRequirement
         
         !Cycle if it is a recharge (recharge is never modified)
+        IF (rSupplyRequired .EQ. 0.0) THEN
+            Pumping(indxPump)%SupplyActual    = rSupplyRequired   !rewritesupplyActual to 0.0 when rSupplyRequired is 0.0 (i.e., recharge) to ensure that the actual supply is not negative when the required supply is 0.0
+            Pumping(indxPump)%rNodePumpActual = Pumping(indxPump)%rNodePumpRequired
+        END IF
         IF (rSupplyRequired .GE. 0.0) CYCLE
         
         !Element information

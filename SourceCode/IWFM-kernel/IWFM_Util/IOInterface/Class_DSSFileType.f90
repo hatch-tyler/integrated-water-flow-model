@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2025
+!  Copyright (C) 2005-2026
 !  State of California, Department of Water Resources
 !
 !  This program is free software; you can redistribute it and/or
@@ -37,10 +37,13 @@ MODULE Class_DSSFileType
                                   TimeStampToJulianDateAndMinutes            , &
                                   IncrementJulianDateAndMinutesAfterMidnight , &
                                   DayMonthYearToJulianDate                   , &
+                                  AdjustTimeStampWithYear4000                , &  
                                   AdjustRateTypeData                         , &
                                   SetTSDCacheSize                            , &
                                   NPeriods                                   , &
                                   IncrementTimeStamp                         , &
+                                  IntervalInMinutes_To_IntervalText          , &
+                                  IsLeapYear                                 , &
                                   OPERATOR(.TSGT.)
   USE MessageLogger       , ONLY: MessageLoggerType                          , &
                                   DefaultLogger                              , &
@@ -48,7 +51,10 @@ MODULE Class_DSSFileType
                                   f_iWarn                                    , &
                                   f_iFatal
   USE Class_BaseFileType  , ONLY: BaseFileType                               , &
-                                  GetAUnitNumber
+                                  GetAUnitNumber                             , &
+                                  f_IO_SuccessfulRead                        , &
+                                  f_IO_TSData_NotYetTimeToRead               , &
+                                  f_IO_TSData_DssReadError
   IMPLICIT NONE
 
 
@@ -110,11 +116,21 @@ MODULE Class_DSSFileType
   TYPE,EXTENDS(BaseFileType) :: DssInFileType   !BaseFileType component is not used, all that info will be stored in the DSSFileListNode data
       PRIVATE
       TYPE(DSSFileListNodeType),POINTER                   :: pFileData            => NULL()       !DSS file data node that is associated with this DSS input file
-      CHARACTER(LEN=f_iTimeStampLength)                   :: DateOfLastDataRead   = ''            !Date of the last data that was read from the DSS file
-      INTEGER                                             :: Interval_InMinutes   = 0             !Time interval of data in minutes
+      CHARACTER(LEN=f_iTimeStampLength)                   :: cFirstDataDate                   = ''            !Date of the first data in the file  
+      REAL(8)                                             :: JulianOfLastDataRead             = -HUGE(0d0)    !Julian date (real number) of the last data that was read from the DSS file for each (pathname)
+      INTEGER                                             :: Interval_InMinutes               =  0            !Time interval of data in minutes for each (pathname)
       CHARACTER(LEN=f_iDefaultPathNameLength),ALLOCATABLE :: PathNames(:)                         !Path names used
-      LOGICAL,ALLOCATABLE                                 :: Year4000Flag(:)                      !Flag to represent if the data uses Year 4000 flag for repetetive data
-      LOGICAL,ALLOCATABLE                                 :: RateTypeData(:)                      !Flag to specify if the data being read is a rate type data; this information is used to convert the time-series data based on the time step of the simulation)
+      LOGICAL,ALLOCATABLE                                 :: Year4000Flag(:)                                  !Flag to represent if the data uses Year 4000 flag for repetetive data, defined for each (pathname)
+      LOGICAL,ALLOCATABLE                                 :: RateTypeData(:)                                  !Flag to specify if the data being read is a rate type data defined for each (pathname); this information is used to convert the time-series data based on the time step of the simulation)!
+      !--- Use Cache for regular-interval dss data array reads                                
+      LOGICAL                                             :: lMatrixCacheBuilt                = .FALSE.       !Indicates whether the cached Matrix has been initialized and populated
+      LOGICAL                                             :: lMartixRecycle                   = .FALSE.       !Flag to indicate whether to recycle the cached matrix for 4000 year
+      INTEGER                                             :: iMatrixCacheNPeriods             = 0             !Number of time periods currently stored in the cached matrix
+      INTEGER                                             :: iMatrixCachePointer              = 1             !the location of pointer in the cached matrix (used when reading data in chunks)
+      INTEGER                                             :: iMatrixCacheHECJulianDay         = 0             !HEC Julian date corresponding to the first cached time step in the matrix cache                                           
+      INTEGER                                             :: iMatrixCacheMinutesAfterMidnight = 0             !Minutes after midnight corresponding to the first cached time step in the matrix cache
+      CHARACTER(LEN=f_iTimeStampLength)                   :: cMatrixCacheStartTS              = ''            !Timestamp corresponding to the first cached time step                                          
+      REAL(8),ALLOCATABLE                                 :: rMatrixCacheData(:,:,:)                          !Cached matrix data array with dimensions: (row, column, time)                                      
   CONTAINS
       PROCEDURE,PASS :: New                                  => New_DSSInFile
       PROCEDURE,PASS :: Kill                                 => Kill_DSSInFile
@@ -423,9 +439,10 @@ CONTAINS
     CALL ThisFile%KillBaseFile()
     
     !Then clear the rest of the data (do not clear the Next pointer as it may be pointing to a legitimate data node)
-    ThisFile%DSSFileIndex     = Dummy%DSSFileIndex    
-    ThisFile%IFLTAB           = Dummy%IFLTAB          
-    ThisFile%iNConnectedFiles = Dummy%iNConnectedFiles
+    SELECT TYPE (p => ThisFile)
+        TYPE IS (DSSFileListNodeType) 
+            p = Dummy
+    END SELECT 
 
   END SUBROUTINE Kill_DSSFileListNode
 
@@ -442,15 +459,20 @@ CONTAINS
     TYPE(DSSInFileType) :: Dummy
 
     !First, free the memory from pointer arrays
-    DEALLOCATE (ThisFile%PathNames , ThisFile%Year4000Flag , ThisFile%RateTypeData , STAT=iErrorCode)
+    DEALLOCATE (ThisFile%PathNames    , &
+                ThisFile%Year4000Flag , &
+                STAT=iErrorCode       )
+    IF (ALLOCATED(ThisFile%RateTypeData)) DEALLOCATE (ThisFile%RateTypeData , STAT=iErrorCode)
     
     !Then, kill the DSS file list node
     IF (ASSOCIATED(ThisFile%pFileData)) CALL ThisFile%pFileData%Kill()
     
     !Reset the rest of the data fields
+    SELECT TYPE (p => ThisFile)
+        TYPE IS (DSSInFileType)
+            p = Dummy
+    END SELECT
     ThisFile%pFileData          => NULL()
-    ThisFile%DateOfLastDataRead =  Dummy%DateOfLastDataRead
-    ThisFile%Interval_InMinutes =  Dummy%Interval_InMinutes
     
   END SUBROUTINE Kill_DSSInFile
 
@@ -569,68 +591,69 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- SET PARAMETERS FOR DSS INPUT FILE
   ! -------------------------------------------------------------
-  SUBROUTINE SetParameters_DSSInFile(ThisFile,PathNames,NColumnsOfData,NRowsOfData,iStat)
+  SUBROUTINE SetParameters_DSSInFile(ThisFile,cPathNames,iNColumnsOfData,iStat,iNRowsOfData)
     CLASS(DSSInFileType)                               :: ThisFile
-    CHARACTER(LEN=f_iDefaultPathNameLength),INTENT(IN) :: PathNames(:)
-    INTEGER,INTENT(IN)                                 :: NColumnsOfData
-    INTEGER,OPTIONAL,INTENT(IN)                        :: NRowsOfData
+    CHARACTER(LEN=f_iDefaultPathNameLength),INTENT(IN) :: cPathNames(:)
+    INTEGER,INTENT(IN)                                 :: iNColumnsOfData
     INTEGER,INTENT(OUT)                                :: iStat
+    INTEGER,OPTIONAL,INTENT(IN)                        :: iNRowsOfData
 
     !Local variables
     CHARACTER(LEN=ModNameLen+23),PARAMETER  :: ThisProcedure = ModName // 'SetParameters_DSSInFile'
-    CHARACTER(LEN=f_iDefaultPartNameLength) :: APart,BPart,CPart,DPart,EPart,FPart
-    CHARACTER(LEN=32)                       :: DummyUnits, DummyType
-    INTEGER                                 :: nrows,indx,DummyInt,Interval_InMinutes,NVALS,ErrorCode
+    CHARACTER(LEN=f_iDefaultPartNameLength) :: cAPart,cBPart,cCPart,cDPart,cEPart,cFPart
+    CHARACTER(LEN=32)                       :: cDummyUnits,cDummyType
+    CHARACTER(LEN=8)                        :: cInterval
+    INTEGER                                 :: nrows,indx,iDummyInt,iNVALS,iErrorCode,Interval_InMinutes
     REAL                                    :: rValue(1)
 
     !Initialize variables
     iStat = 0
-    IF (PRESENT(NRowsOfData)) THEN
-        nrows = NRowsOfData
+    IF (PRESENT(iNRowsOfData)) THEN
+        nrows = iNRowsOfData
     ELSE
         nrows = 1
     END IF
 
     !Allocate space for the path names
-    IF (nrows*NColumnsOfData.NE.SIZE(PathNames)) THEN
+    IF (nrows*iNColumnsOfData .NE. SIZE(cPathNames)) THEN
         CALL ThisFile%Logger%SetLastMessage('Error in sizing of path name array for '//ThisFile%pFileData%Name//'!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
-    ALLOCATE (ThisFile%PathNames(nrows*NColumnsOfData)          , &
-              ThisFile%Year4000Flag(nrows*NColumnsOfData)       , &
-              STAT=ErrorCode                                    )
-    IF (ErrorCode .NE. 0) THEN
+    ALLOCATE (ThisFile%PathNames(nrows*iNColumnsOfData)    , &
+              ThisFile%Year4000Flag(nrows*iNColumnsOfData) , &
+              STAT=iErrorCode                              )
+    IF (iErrorCode .NE. 0) THEN
         CALL ThisFile%Logger%SetLastMessage('Error in allocating memory for the path names for '//ThisFile%pFileData%Name//'!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF
-    ThisFile%PathNames    = PathNames
+    ThisFile%PathNames    = cPathNames
     ThisFile%Year4000Flag = .FALSE.
 
-    !Set the time interval of data in minutes
-    DO indx=1,SIZE(PathNames)
-      CALL ZUFPN(APart ,DummyInt                    , &
-                 BPart ,DummyInt                    , &
-                 CPart ,DummyInt                    , &
-                 DPart ,DummyInt                    , &
-                 EPart ,DummyInt                    , &
-                 FPart ,DummyInt                    , &
-                 PathNames(indx)                    , &
-                 LEN_TRIM(PathNames(indx))          , &
-                 ErrorCode                          )
-      IF (ErrorCode .NE. 0) THEN
+    !Set the time interval of data in minutes, and check if the data uses Year 4000 flag
+    DO indx=1,SIZE(cPathNames)
+      CALL ZUFPN(cAPart,iDummyInt           , &
+                 cBPart,iDummyInt           , &
+                 cCPart,iDummyInt           , &
+                 cDPart,iDummyInt           , &
+                 cEPart,iDummyInt           , &
+                 cFPart,iDummyInt           , &
+                 cPathNames(indx)           , &
+                 LEN_TRIM(cPathNames(indx)) , &
+                 iErrorCode                 )
+      IF (iErrorCode .NE. 0) THEN
           CALL ThisFile%Logger%SetLastMessage('Error in finding the interval length of a pathname in file '//ThisFile%pFileData%Name//'!',f_iFatal,ThisProcedure)
           iStat = -1
           RETURN
       END IF
 
-      !Set the time interval in minutes
-      DummyInt = 1
-      CALL ZGINTL(Interval_InMinutes ,&
-                  EPart              ,&
-                  DummyInt           ,&
-                  DummyInt           )
+      !Set the time interval in minutes; make sure data intervals are all the same
+      iDummyInt = 1
+      CALL ZGINTL(Interval_InMinutes , &
+                  cEPart             , &
+                  iDummyInt          , &
+                  iDummyInt          )
       SELECT CASE (indx)
         CASE (1)
           ThisFile%Interval_InMinutes = Interval_InMinutes
@@ -641,30 +664,39 @@ CONTAINS
               iStat = -1
               RETURN
           END IF
-
       END SELECT
+
+      !Set the Year 4000 flag
+      !Skip for large files (>1000 pathnames) to avoid C library instability
+      !at scale. The Year 4000 flag is a legacy feature rarely used.
+      IF (SIZE(cPathNames) .LE. 1000) THEN
+          iNVALS = 1
+          CALL ZRRTS(ThisFile%pFileData%IFLTAB ,&
+                     cPathNames(indx)          ,&
+                     '01JAN4000'               ,&
+                     '0001'                    ,&
+                     iNVALS                    ,&
+                     rValue(1)                 ,&
+                     cDummyUnits               ,&
+                     cDummyType                ,&
+                     iDummyInt                 ,&
+                     iErrorCode                )
+          IF (iErrorCode .EQ. 0) ThisFile%Year4000Flag(indx) = .TRUE.
+      END IF
+      
+      !Annual interval with Year4000 flag (i.e. single entry) is not allowed for consistency with ASCII timeseries data input
+      IF (ThisFile%Year4000Flag(indx)) THEN
+          cInterval = IntervalInMinutes_To_IntervalText(ThisFile%Interval_InMinutes , 8)
+          IF (TRIM(UpperCase(cInterval)) .EQ. '1YEAR') THEN
+              MessageArray(1) = 'Annual-interval data with Year-4000 flag is not allowed.'
+              MessageArray(2) = 'It appears such a setup is used for pathname'
+              MessageArray(3) = TRIM(cPathNames(indx)) // '.'
+              CALL ThisFile%Logger%SetLastMessage(MessageArray(1:3),f_iFatal,ThisProcedure)
+              iStat = -1
+              RETURN
+          END IF 
+      END IF  
     END DO
-
-    !Check if the data uses Year 4000 flag
-    !Skip for large files (>1000 pathnames) to avoid C library instability
-    !at scale. The Year 4000 flag is a legacy feature rarely used.
-    IF (SIZE(PathNames) <= 1000) THEN
-      DO indx=1,SIZE(PathNames)
-        NVALS = 1
-        CALL ZRRTS(ThisFile%pFileData%IFLTAB,&
-                   PathNames(indx)          ,&
-                   '01JAN4000'              ,&
-                   '0001'                   ,&
-                   NVALS                    ,&
-                   rValue(1)                ,&
-                   DummyUnits               ,&
-                   DummyType                ,&
-                   DummyInt                 ,&
-                   ErrorCode                )
-        IF (ErrorCode .EQ. 0) ThisFile%Year4000Flag(indx) = .TRUE.
-      END DO
-    END IF
-
   END SUBROUTINE SetParameters_DSSInFile
 
 
@@ -886,11 +918,11 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- READ REGULAR INTERVAL TIME SERIES ARRAY DATA
   ! -------------------------------------------------------------
-  SUBROUTINE ReadRegularIntervalArray_DssInFile(ThisFile,SimulationTime,Data,FileReadCode,iStat)
+  SUBROUTINE ReadRegularIntervalArray_DssInFile(ThisFile,cSimulationTime,Data,iFileReadCode,iStat)
     CLASS(DssInFileType)        :: ThisFile
-    CHARACTER(LEN=*),INTENT(IN) :: SimulationTime
+    CHARACTER(LEN=*),INTENT(IN) :: cSimulationTime
     CLASS(*),INTENT(OUT)        :: Data(:)
-    INTEGER,INTENT(OUT)         :: FileReadCode,iStat
+    INTEGER,INTENT(OUT)         :: iFileReadCode,iStat
 
     !Local variables
     CHARACTER(LEN=ModNameLen+34),PARAMETER :: ThisProcedure = ModName // 'ReadRegularIntervalArray_DssInFile'
@@ -902,12 +934,12 @@ CONTAINS
 
     SELECT TYPE (Data)
         TYPE IS (INTEGER)
-            CALL ThisFile%ReadRegularIntervalMatrix_DSSInFile(SimulationTime,iData,FileReadCode,iStat)
-            IF (FileReadCode .EQ. 0) Data = iData(1,:)
+            CALL ThisFile%ReadRegularIntervalMatrix_DSSInFile(cSimulationTime,iData,iFileReadCode,iStat)
+            IF (iFileReadCode .EQ. f_IO_SuccessfulRead) Data = iData(1,:)
 
         TYPE IS (REAL(8))
-            CALL ThisFile%ReadRegularIntervalMatrix_DSSInFile(SimulationTime,rData,FileReadCode,iStat)
-            IF (FileReadCode .EQ. 0) Data = rData(1,:)
+            CALL ThisFile%ReadRegularIntervalMatrix_DSSInFile(cSimulationTime,rData,iFileReadCode,iStat)
+            IF (iFileReadCode .EQ. f_IO_SuccessfulRead) Data = rData(1,:)
 
         CLASS DEFAULT
             CALL ThisFile%Logger%SetLastMessage('The specified data type cannot be read from file '//ThisFile%pFileData%Name//'!',f_iFatal,ThisProcedure)
@@ -921,19 +953,33 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- READ REGULAR INTERVAL TIME SERIES MATRIX DATA
   ! -------------------------------------------------------------
-  SUBROUTINE ReadRegularIntervalMatrix_DssInFile(ThisFile,SimulationTime,Data,FileReadCode,iStat)
+  SUBROUTINE ReadRegularIntervalMatrix_DssInFile(ThisFile,cSimulationTime,Data,iFileReadCode,iStat)
     CLASS(DssInFileType)        :: ThisFile
-    CHARACTER(LEN=*),INTENT(IN) :: SimulationTime
+    CHARACTER(LEN=*),INTENT(IN) :: cSimulationTime
     CLASS(*),INTENT(OUT)        :: Data(:,:)
-    INTEGER,INTENT(OUT)         :: FileReadCode,iStat
+    INTEGER,INTENT(OUT)         :: iFileReadCode,iStat
 
     !Local variables
-    CHARACTER(LEN=ModNameLen+35),PARAMETER :: ThisProcedure = ModName // 'ReadRegularIntervalMatrix_DssInFile'
+    CHARACTER(LEN=ModNameLen+35)      :: ThisProcedure = ModName // 'ReadRegularIntervalMatrix_DssInFile'
+    INTEGER                           :: iNCol,iNRow
     REAL(8)                                :: rData(SIZE(Data,Dim=1),SIZE(Data,Dim=2))
+    CHARACTER(LEN=f_iTimeStampLength) :: cYear4000SimTimeStamp
+    CHARACTER                         :: cSimDate*20,cSimTime*4,cYear4000SimDate*20,cYear4000SimTime*4
 
     !Initialize
     iStat        = 0
-    FileReadCode = -99
+    iFileReadCode = f_IO_TSData_NotYetTimeToRead
+    iNRow         = SIZE(rData,DIM=1)
+    iNCol         = SIZE(rData,DIM=2)
+
+    !Return if it is not time to read data
+    IF (TimeStampToJulian(cSimulationTime) .LE. ThisFile%JulianOfLastDataRead) RETURN
+    
+    !Serve from cached data array if available
+    IF (ThisFile%lMatrixCacheBuilt) THEN
+        CALL ReadMatrixFromCache(ThisFile,cSimulationTime,iNRow,iNCol,Data,iFileReadCode,iStat)
+        RETURN
+    END IF
 
     !Make sure that Data type is recognized for reading
     SELECT TYPE (Data)
@@ -947,119 +993,330 @@ CONTAINS
             RETURN
     END SELECT
 
-    !Read data
-    IF (ThisFile%DateOfLastDataRead .EQ. '') THEN
-        !First reading from the file
-        CALL ReadData(rData)
-        SELECT TYPE (Data)
-            TYPE IS (REAL(8))
-                Data = rData
-            TYPE IS (INTEGER)
-                Data = INT(rData)
-        END SELECT
-    ELSE
-        !Later readings from the file; check if it is time to read
-        IF (TimeStampToJulian(SimulationTime) .GT. TimeStampToJulian(ThisFile%DateOfLastDataRead)) THEN
-            CALL ReadData(rData)
-            SELECT TYPE (Data)
-                TYPE IS (REAL(8))
-                    Data = rData
-                TYPE IS (INTEGER)
-                    Data = INT(rData)
-            END SELECT
-        ELSE
-            FileReadCode = -1
-        END IF
+    !Initialize variables that will be used for data reading
+    cYear4000SimTimeStamp = TimeStampToYear4000(cSimulationTime)
+    cYear4000SimDate      = DSSStyleDate(cYear4000SimTimeStamp)
+    cYear4000SimTime      = DSSStyleHoursAfterMidnight(cYear4000SimTimeStamp)
+    
+    !Convert SimulationTime to DSS style simulation date and time
+    cSimDate = DSSStyleDate(cSimulationTime)
+    cSimTime = DSSStyleHoursAfterMidnight(cSimulationTime)
+    
+    !If this is the first time, figure out the date of the first data point and build The cache Matrix
+    IF (ThisFile%cFirstDataDate .EQ. '') THEN
+        CALL IdentifyFirstDataDate(ThisFile,iNRow,iNCol,iStat) ; IF (iStat .NE. 0) RETURN
     END IF
+    CALL BuildMatrixCache(ThisFile,iNRow,iNCol,iStat) ; IF (iStat .NE. 0) RETURN
+    CALL ReadMatrixFromCache(ThisFile,cSimulationTime,iNRow,iNCol,Data,iFileReadCode,iStat) 
 
 
   CONTAINS
 
 
-    !####################################################
-    ! --- READ REGULAR INTERVAL TIME SERIES DATA
-    !####################################################
-    SUBROUTINE ReadData(rData)
-      REAL(8),INTENT(OUT) :: rData(:,:)
+    !################################################################
+    !### IDENTIFY DATE OF FIRST DATA IN EACH PATHNAME
+    !################################################################
+    SUBROUTINE IdentifyFirstDataDate(ThisFile,iNRow,iNCol,iStat)
+      TYPE(DSSInFileType),INTENT(INOUT) :: ThisFile
+      INTEGER,INTENT(IN)                :: iNRow,iNCol
+      INTEGER,INTENT(OUT)               :: iStat
 
       !Local variables
-      CHARACTER(LEN=f_iTimeStampLength) :: WorkTimeStamp
-      INTEGER                           :: ncol,nrow,colnum,rownum,indx,DataTimeOffset,JulianDate,MinutesAfterMidnight, &
-                                           SimulationTimeOffset,NVALS,HECJulianDate,iDay,iMonth,iYear,iDummy,ErrorCode
-      REAL                              :: Values(1)
-      CHARACTER                         :: SimDate*20,WorkSimDate*20,SimTime*4,WorkSimTime*4,DataUnit*8,DataType*8
-      ! Note: IYMDJL and JLIYMD are now provided by heclib_compat module
+      INTEGER                           :: iNVals,indx,iErrorCode,iDataTimeOffset,iDay,iMonth,iYear,iHECJulianDate,   &
+                                           iIWFMJulianDate,iMinutesAfterMidnight,iOffset,iNPeriods,iHECEndJulianDate, &
+                                           iEndMinutesAfterMidnight,iColNum,iRowNum,indxData,iSimulationTimeOffset,   &
+                                           iDummy
+      REAL(8)                           :: rData(iNRow,iNCol),rJulianOfLastDataRead_Temp
+      CHARACTER(LEN=f_iTimeStampLength) :: cWorkTimeStamp,cLastDataDateAndTime
+      CHARACTER                         :: cWorkSimDate*20,cWorkSimTime*4,cDataUnit*32,cDataType*32
+      REAL,ALLOCATABLE                  :: rValues(:)
+      ! Note: IYMDJL, JLIYMD and INCTIM are provided by heclib_compat module
 
-      !Initialize variables
+      !Initialize
       iStat         = 0
-      nrow          = SIZE(rData,DIM=1)
-      ncol          = SIZE(rData,DIM=2)
-      WorkTimeStamp = TimeStampToYear4000(SimulationTime)
+      !Identify number of data points to read for a 10 year worth of data
+      iNVals = NPeriods(ThisFile%Interval_InMinutes,'12/31/2000_24:00','12/31/2010_24:00')
+      ALLOCATE (rValues(iNVals))
 
-      !Convert SimulationTime to DSS style simulation date and time
-      SimDate = DSSStyleDate(SimulationTime)
-      SimTime = DSSStyleHoursAfterMidnight(SimulationTime)
-
-      !Start reading data
       DO indx=1,SIZE(ThisFile%PathNames)
           !Adjust SimDate and SimTime if Year4000 flag is used
           IF (ThisFile%Year4000Flag(indx)) THEN
-              WorkSimDate = DSSStyleDate(WorkTimeStamp)
-              WorkSimTime = DSSStyleHoursAfterMidnight(WorkTimeStamp)
+              cWorkTimeStamp = cYear4000SimTimeStamp
+              cWorkSimDate   = cYear4000SimDate
+              cWorkSimTime   = cYear4000SimTime
           ELSE
-              WorkSimDate = SimDate
-              WorkSimTime = SimTime
+              cWorkTimeStamp = cSimulationTime
+              cWorkSimDate   = cSimDate
+              cWorkSimTime   = cSimTime
           END IF
 
-          !Read data
-          NVALS = 1
+          !Row and column indicies in rData varaible to put the read data in
+          iColNum = MOD(indx,iNCol) ; IF (iColNum .EQ. 0)     iColNum = iNCol
+          iRowNum = indx/iNCol      ; IF (iColNum .NE. iNCol) iRowNum = iRowNum + 1
+          
+          !Read data (keep reading until a legit data is read)
+          DO
           CALL ZRRTS(ThisFile%pFileData%IFLTAB, &
                      ThisFile%PathNames(indx) , &
-                     WorkSimDate              , &
-                     WorkSimTime              , &
-                     NVALS                    , &
-                     Values                   , &
-                     DataUnit                 , &
-                     DataType                 , &
-                     DataTimeOffset           , &
-                     ErrorCode                )
-
-          !Transfer data to the return array
-          colnum = MOD(indx,ncol) ; IF (colnum .EQ. 0)    colnum = ncol
-          rownum = indx/ncol      ; IF (colnum .NE. ncol) rownum = rownum+1
-          rData(rownum,colnum) = REAL(Values(1),8)
-
-          !Check if the data was read without any problems
-          IF (ErrorCode .NE. 0) THEN
-              FileReadCode    = 2
-              MessageArray(1) = 'Error in reading data from pathname'
+                         cWorkSimDate             , &
+                         cWorkSimTime             , &
+                         iNVals                   , &
+                         rValues                  , &
+                         cDataUnit                , &
+                         cDataType                , &
+                         iDataTimeOffset          , &
+                         iErrorCode               )
+              IF (iErrorCode .EQ. 0) THEN
+                  rData(iRowNum,iColNum) = REAL(rValues(1),8) 
+                  EXIT
+              ELSEIF (iErrorCode .LE. 3) THEN
+                  DO indxData=1,iNVals
+                      IF (INT(rValues(indxData)) .EQ. -901) CYCLE
+                      IF (INT(rValues(indxData)) .EQ. -902) CYCLE
+                      rData(iRowNum,iColNum) = REAL(rValues(indxData),8)
+                      cWorkTimeStamp         = IncrementTimeStamp(cWorkTimeStamp,ThisFile%Interval_InMinutes,indxData-1)
+                      cWorkSimDate           = DSSStyleDate(cWorkTimeStamp)
+                      cWorkSimTime           = DSSStyleHoursAfterMidnight(cWorkTimeStamp)
+                      EXIT
+                  END DO  
+                  EXIT
+              ELSEIF (iErrorCode .GT. 10) THEN
+                  MessageArray(1) = 'Error in identifying the date of the first data point stored in pathname'
               MessageArray(2) = TRIM(ThisFile%PathNames(indx))
-              CALL ThisFile%Logger%LogMessage(MessageArray(1:2),f_iWarn,ThisProcedure)
+                  CALL ThisFile%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                  iStat = -1
               RETURN
           ELSE
-              FileReadCode = 0
+                  cWorkTimeStamp = IncrementTimeStamp(cWorkTimeStamp,ThisFile%Interval_InMinutes,iNVals)
+                  cWorkSimDate   = DSSStyleDate(cWorkTimeStamp)
+                  cWorkSimTime   = DSSStyleHoursAfterMidnight(cWorkTimeStamp)
           END IF
-
       END DO
 
       !Find the date of the data read from the DSS file
-      iDay          = ExtractDay(SimulationTime)
-      iMonth        = ExtractMonth(SimulationTime)
-      iYear         = ExtractYear(SimulationTime)
-      HECJulianDate = IYMDJL(iYear,iMonth,iDay)  !HEC style Julian date
-      CALL TimeStampToJulianDateAndMinutes(SimulationTime,JulianDate,MinutesAfterMidnight) !IWFM style Julian date
-      CALL ZOFSET(HECJulianDate,MinutesAfterMidnight,ThisFile%Interval_InMinutes,1,SimulationTimeOffset)
-      iDummy = JLIYMD(HECJulianDate,iYear,iMonth,iDay)            !Find the day,month,year of updated HEC style Julian date
-      CALL DayMonthYearToJulianDate(iDay,iMonth,iYear,JulianDate) !Convert date of data read to IWFM style Julian date
-      ThisFile%DateOfLastDataRead = JulianDateAndMinutesToTimeStamp(JulianDate,MinutesAfterMidnight)
+          iDay           = ExtractDay(cWorkTimeStamp)
+          iMonth         = ExtractMonth(cWorkTimeStamp)
+          iYear          = ExtractYear(cWorkTimeStamp)
+          iHECJulianDate = IYMDJL(iYear,iMonth,iDay)                                                             !HEC style Julian date
+          CALL TimeStampToJulianDateAndMinutes(cWorkTimeStamp,iIWFMJulianDate,iMinutesAfterMidnight)             !IWFM style Julian date
+          CALL ZOFSET(iHECJulianDate,iMinutesAfterMidnight,ThisFile%Interval_InMinutes,1,iSimulationTimeOffset)  !Adjust HECJulianDate upwards to the DSS data block boundary
+          !If data interval is larger than 1MON (=43200 minutes), use offset as number of months to take care of leap years
+          IF (ThisFile%Interval_InMinutes .GT. 43200) THEN
+              iOffset   = 43200
+              iNPeriods = iDataTimeOffset/43200
+          ELSE
+              iOffset   = iDataTimeOffset
+              iNPeriods = 1
+          END IF
+          iDummy = INCTIM(iOffset,0,iNPeriods,iHECJulianDate,iMinutesAfterMidnight,iHECEndJulianDate,iEndMinutesAfterMidnight)  !Increment HECJulianDate by ofsset to bring to the DSS data timestamp
+          ThisFile%iMatrixCacheHECJulianDay = iHECEndJulianDate
+          ThisFile%iMatrixCacheMinutesAfterMidnight = iEndMinutesAfterMidnight
+          iDummy = JLIYMD(iHECEndJulianDate,iYear,iMonth,iDay)                                                                  !Find the day,month,year of updated HEC style Julian date
+          CALL DayMonthYearToJulianDate(iDay,iMonth,iYear,iIWFMJulianDate)                                                      !Convert date of data read to IWFM style Julian date
+          cLastDataDateAndTime = JulianDateAndMinutesToTimeStamp(iIWFMJulianDate,iMinutesAfterMidnight)
+          CALL AdjustTimeStampWithYear4000(cLastDataDateAndTime,cSimulationTime,ThisFile%Year4000Flag(indx)) !Convert year-4000 to 
+          rJulianOfLastDataRead_Temp = TimeStampToJulian(cLastDataDateAndTime)
+          IF (indx .EQ. 1) THEN
+              ThisFile%JulianOfLastDataRead = rJulianOfLastDataRead_Temp
+          ELSE
+              IF (rJulianOfLastDataRead_Temp .NE. ThisFile%JulianOfLastDataRead) THEN
+                  iStat           = -1
+                  MessageArray(1) = 'Pathname '//TRIM(ThisFile%PathNames(indx))//' is being read at a different time than the others.'
+                  MessageArray(2) = 'All pathnames for a particular dataset have to be read at the same time!'
+                  CALL ThisFile%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+                  RETURN
+              END IF
+          END IF
+      END DO
 
-      !Convert the time series data so that the time unit is consistent with the simulation time step unit
-      IF (ALLOCATED(ThisFile%RateTypeData))  &
-        CALL AdjustRateTypeData(rData,ThisFile%RateTypeData,DataInterval=ThisFile%Interval_InMinutes,LastDataDate=ThisFile%DateOfLastDataRead)
+      ! Save first DSS data DateAndTime for cache matrix object
+      ThisFile%cMatrixCacheStartTS = cLastDataDateAndTime
+      ThisFile%cFirstDataDate      = cLastDataDateAndTime
 
-    END SUBROUTINE ReadData
+    END SUBROUTINE IdentifyFirstDataDate 
+    
+    
+    !################################################################
+    !### Save data into DSS matrix cache for N years worth of data
+    !################################################################
+    SUBROUTINE BuildMatrixCache(ThisFile,iNRow,iNCol,iStat)
+      TYPE(DSSInFileType),INTENT(INOUT) :: ThisFile
+      INTEGER,INTENT(IN)                :: iNRow,iNCol
+      INTEGER,INTENT(OUT)               :: iStat
+      
+      !Local variables
+      INTEGER                           :: iNVals,indx,iErrorCode,iDataTimeOffset,iNValsOneYear
+      INTEGER                           :: iRowcounter,iColcounter
+      CHARACTER(LEN=f_iTimeStampLength) :: cWorkTS
+      CHARACTER                         :: cWorkSimDate*20,cWorkSimTime*4,cDataUnit*32,cDataType*32
+      REAL,ALLOCATABLE                  :: rValues(:)
+
+      iStat       = 0
+      iRowcounter = 1
+      iColcounter = 0
+      
+      ! Determine allocation length based on interval
+      IF (ThisFile%Interval_InMinutes < 43200) THEN
+          iNVals = NPeriods(ThisFile%Interval_InMinutes, '12/31/2009_24:00', '12/31/2010_24:00')      ! Sub-monthly interval  use 1 year
+      ELSE
+          iNVals = NPeriods(ThisFile%Interval_InMinutes, '12/31/2000_24:00', '12/31/2030_24:00')      ! Monthly or longer  use 30 years
+      END IF
+      
+      !Start timestamp for cache (apply Year4000 if needed)
+      IF (ThisFile%Year4000Flag(1)) THEN
+          cWorkTS       = TimeStampToYear4000(ThisFile%cMatrixCacheStartTS)
+          iNVals        = NPeriods(ThisFile%Interval_InMinutes,cWorkTS,'12/31/4000_24:00') + 1   ! Number of periods between first data timestamp and the end of year 4000
+          iNValsOneYear = NPeriods(ThisFile%Interval_InMinutes,'12/31/3999_24:00','12/31/4000_24:00') ! One year worth of periods 
+          IF (iNVals .EQ. iNValsOneYear) ThisFile%lMartixRecycle = .TRUE.   ! recycle catche matix for case 4000
+          
+      ELSE
+          cWorkTS = ThisFile%cMatrixCacheStartTS
+      END IF
+      
+      cWorkSimDate = DSSStyleDate(cWorkTS) !convert to dss style to use in zrrts
+      cWorkSimTime = DSSStyleHoursAfterMidnight(cWorkTS)
+      
+      ! Allocate and initilaze cache data array and make sure it is empty
+      DEALLOCATE(ThisFile%rMatrixCacheData , STAT=iErrorCode)
+      ALLOCATE(ThisFile%rMatrixCacheData(iNRow,iNCol,iNVals))   
+      ALLOCATE(rValues(iNVals))
+
+      DO indx=1,SIZE(ThisFile%PathNames)
+          
+          iColcounter = iColcounter + 1
+          IF (iColcounter .GT. iNCol) THEN
+              iRowcounter = iRowcounter + 1
+              iColcounter = 1
+          END IF         
+          
+          CALL ZRRTS(ThisFile%pFileData%IFLTAB, &
+                     ThisFile%PathNames(indx) , &
+                     cWorkSimDate             , &
+                     cWorkSimTime             , &
+                     iNVals                   , &
+                     rValues                  , &
+                     cDataUnit                , &
+                     cDataType                , &
+                     iDataTimeOffset          , &
+                     iErrorCode               )
+
+          !Accept 0 and the “some missing” cases (<=3) same as  IdentifyFirstDataDate logic
+          IF (.NOT.(iErrorCode .EQ. 0 .OR. iErrorCode .LE. 3)) THEN
+              MessageArray(1) = 'Error building DSS matrix cache for pathname'
+              MessageArray(2) = TRIM(ThisFile%PathNames(indx))
+              CALL ThisFile%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
+              iStat = -1
+              DEALLOCATE(rValues)
+              RETURN
+          END IF
+                    
+     
+          ThisFile%rMatrixCacheData(iRowcounter,iColcounter,:) = REAL(rValues,8)
+        
+          
+      END DO
+
+      DEALLOCATE(rValues)
+      ThisFile%iMatrixCacheNPeriods = iNVals
+      ThisFile%lMatrixCacheBuilt   = .TRUE.
+
+    END SUBROUTINE BuildMatrixCache
+    
+    
+    !################################################################
+    !### Read data from DSS matrix cache
+    !################################################################
+    SUBROUTINE ReadMatrixFromCache(ThisFile,cSimulationTime,iNRow,iNCol,Data,iFileReadCode,iStat)
+      TYPE(DSSInFileType),INTENT(INOUT) :: ThisFile
+      CHARACTER(LEN=*),INTENT(IN)       :: cSimulationTime
+      INTEGER,INTENT(IN)                :: iNRow,iNCol
+      CLASS(*),INTENT(OUT)              :: Data(iNRow,iNCol)
+      INTEGER,INTENT(OUT)               :: iFileReadCode,iStat
+      
+      !Local variables
+      INTEGER                           :: iDay,iMonth,iYear,iNValsOneYear,iIWFMJulianDate,iNPeriods,iDummy  
+      REAL(8)                           :: rSlice(iNRow,iNCol)
+      CHARACTER(LEN=f_iTimeStampLength) :: cLastDataDateAndTime
+      LOGICAL                           :: lisFeb28
+      ! Note: JLIYMD and INCTIM are provided by heclib_compat module
+
+      iStat         = 0
+      iFileReadCode = f_IO_SuccessfulRead
+      iNPeriods     = 1
+      lisFeb28      = .FALSE.
+
+      ! Rebuild cache  and reset pointer if needed
+      IF (ThisFile%iMatrixCachePointer .GT. ThisFile%iMatrixCacheNPeriods) THEN 
+          
+          ThisFile%iMatrixCachePointer =  1
+          ThisFile%cMatrixCacheStartTS = cSimulationTime
+          IF (ThisFile%Year4000Flag(1)) THEN
+              iNValsOneYear = NPeriods(ThisFile%Interval_InMinutes,'01/01/4000_24:00','01/01/4001_24:00')
+              iDummy        = INCTIM(ThisFile%Interval_InMinutes               , &
+                                     0                                         , &
+                                     -iNValsOneYear                            , &
+                                     ThisFile%iMatrixCacheHECJulianDay         , &
+                                     ThisFile%iMatrixCacheMinutesAfterMidnight , &
+                                     ThisFile%iMatrixCacheHECJulianDay         , &
+                                     ThisFile%iMatrixCacheMinutesAfterMidnight )  !bring it back to begining if year 4000
+          END IF   
+          IF (.NOT. ThisFile%lMartixRecycle) THEN       ! for special case year 4000
+              CALL BuildMatrixCache(ThisFile,iNRow,iNCol,iStat) 
+              IF (iStat .NE. 0) THEN
+                  iFileReadCode = f_IO_TSData_DssReadError
+                  RETURN
+              END IF
+          END IF
+      END IF
+          
+      !Convert DSSHECjulian format to IWFMJulian format to use in main subroutine
+      iDummy = JLIYMD(ThisFile%iMatrixCacheHECJulianDay,iYear,iMonth,iDay)   !                                           !Find the day,month,year of updated HEC style Julian date
+      CALL DayMonthYearToJulianDate(iDay,iMonth,iYear,iIWFMJulianDate)                                                     !Convert date of data read to IWFM style Julian date
+      cLastDataDateAndTime = JulianDateAndMinutesToTimeStamp(iIWFMJulianDate,ThisFile%iMatrixCacheMinutesAfterMidnight)
+      IF (cLastDataDateAndTime == "02/28/4000_24:00") lisFeb28 = .TRUE.  ! for monthly it checks 02/29/4000 so thre is no problem
+      CALL AdjustTimeStampWithYear4000(cLastDataDateAndTime,cSimulationTime,ThisFile%Year4000Flag(1)) !Convert year-4000 to 
+      IF (.NOT. IsLeapYear(ExtractYear(cLastDataDateAndTime)) .AND. lisFeb28) THEN  ! if 28 feb and normal year the skip Feb 29
+          iNPeriods = NPeriods(ThisFile%Interval_InMinutes,'02/28/4000_24:00','02/29/4000_24:00') + 1  ! arbitrary date woth one day of data
+      END IF
+      ThisFile%JulianOfLastDataRead = TimeStampToJulian(cLastDataDateAndTime) 
+     
+      rSlice = ThisFile%rMatrixCacheData(:,:,ThisFile%iMatrixCachePointer)
+     
+      
+      !Apply rate-type adjustment at the timestep level 
+      IF (ALLOCATED(ThisFile%RateTypeData)) THEN
+          CALL AdjustRateTypeData(rSlice                                      , &
+                                  ThisFile%RateTypeData                       , &
+                                  iDataInterval = ThisFile%Interval_InMinutes , &
+                                  cLastDataDate = cLastDataDateAndTime        )
+      END IF
+
+      SELECT TYPE (Data)
+          TYPE IS (REAL(8))
+              Data = rSlice
+          TYPE IS (INTEGER)
+              Data = INT(rSlice)
+          CLASS DEFAULT
+              CALL ThisFile%Logger%SetLastMessage('The specified data type cannot be read from file '//ThisFile%pFileData%Name//'!',f_iFatal,ThisProcedure)
+              iStat         = -1
+              iFileReadCode = f_IO_TSData_DssReadError
+              RETURN
+      END SELECT
+
+      !increase CatcheMatrix timestep and counter (update iMatrixCacheHECJulianDay)
+      iDummy                       = INCTIM(ThisFile%Interval_InMinutes               , &
+                                            0                                         , &
+                                            iNPeriods                                 , &
+                                            ThisFile%iMatrixCacheHECJulianDay         , &
+                                            ThisFile%iMatrixCacheMinutesAfterMidnight , &
+                                            ThisFile%iMatrixCacheHECJulianDay         , &
+                                            ThisFile%iMatrixCacheMinutesAfterMidnight )  !Increment HECJulianDate by ofsset to bring to the DSS data timestamp
+      ThisFile%iMatrixCachePointer = ThisFile%iMatrixCachePointer + iNPeriods
+
+    END SUBROUTINE ReadMatrixFromCache
 
   END SUBROUTINE ReadRegularIntervalMatrix_DssInFile
+
 
 
   ! -------------------------------------------------------------
@@ -1734,7 +1991,9 @@ CONTAINS
 
   ! -------------------------------------------------------------
   ! --- REWIND DSS INPUT FILE
-  ! --- Note: DSS files are not really rewound; the relevant argument is set properly so that the data can be read in in a random fashion
+  ! --- Note: DSS files are not really rewound; the relevant arguments are 
+  ! ---       set properly so that the data can be read into cache in a 
+  ! ---       random fashion
   ! -------------------------------------------------------------
   SUBROUTINE Rewind_To_BeginningOfTSData(ThisFile)
     CLASS(DSSInFileType) :: ThisFile
@@ -1742,7 +2001,13 @@ CONTAINS
     !Local variables
     TYPE(DSSInFileType) :: Dummy
 
-    ThisFile%DateOfLastDataRead = Dummy%DateOfLastDataRead
+    ThisFile%JulianOfLastDataRead             = -HUGE(0d0)
+    ThisFile%lMatrixCacheBuilt                = Dummy%lMatrixCacheBuilt
+    ThisFile%iMatrixCacheNPeriods             = Dummy%iMatrixCacheNPeriods
+    ThisFile%iMatrixCachePointer              = Dummy%iMatrixCachePointer
+    ThisFile%iMatrixCacheHECJulianDay         = Dummy%iMatrixCacheHECJulianDay                                                      
+    ThisFile%iMatrixCacheMinutesAfterMidnight = Dummy%iMatrixCacheMinutesAfterMidnight            
+    ThisFile%cMatrixCacheStartTS              = ThisFile%cFirstDataDate                                
 
   END SUBROUTINE Rewind_To_BeginningOfTSData
 

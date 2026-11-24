@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2025  
+!  Copyright (C) 2005-2026  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -516,9 +516,9 @@ CONTAINS
     INTEGER,INTENT(OUT)           :: iStat
     
     !Local variables
-    CHARACTER :: Text*20,FormatSpec*500,DataUnit(1)*10,DataType(1)*10,      &
-                 CPart(1)*32,FPart(TDHyd%NHyd)*32,Header(3,1+TDHyd%NHyd)*50, &
-                 HeaderFormat(3)*500,WorkArray(4)*3000,TitleLines(1)*3000
+    CHARACTER :: FormatSpec*500,DataUnit(1)*10,DataType(1)*10,CPart(1)*32,           &
+                 FPart(TDHyd%NHyd)*32,Header(3,1+TDHyd%NHyd)*50,HeaderFormat(3)*500, &
+                 WorkArray(4)*3000,TitleLines(1)*3000
     INTEGER   :: NColumnsOfData,NRowsOfData,indx,IOUTTD(TDHyd%NHyd)
     LOGICAL   :: OverwriteNColumnsOfData,PrintColumnNo
     
@@ -530,12 +530,11 @@ CONTAINS
     IF (iStat .EQ. -1) RETURN
     
     !Prepare output file
-    Text                    = IntToText(TDHyd%NHyd)
     NColumnsOfData          = TDHyd%NHyd
     NRowsOfData             = 1
     OverwriteNColumnsOfData = .TRUE.
     PrintColumnNo           = .FALSE.
-    FormatSpec              = '(A21,'//TRIM(Text)//'(2X,F10.2))'
+    FormatSpec              = '(A21,*(2X,G11.4E2))'
     DataUnit(1)             = ADJUSTL(TDHyd%UnitFlow)
     DataType(1)             = 'PER-CUM'
     CPart(1)                = ADJUSTL('FLOW')
@@ -554,23 +553,33 @@ CONTAINS
     WorkArray(4)=ArrangeText('[(-): TILE DRAIN OUTFLOW          ]',47)
     CALL PrepareTitle(TitleLines(1),WorkArray(1:4),49,42)
     Header = ''
-    WRITE (Header(1,1),'(A1,5X,A13)') '*','HYDROGRAPH ID'
-    WRITE (Header(2,1),'(A1,14X,A4)') '*','NODE'
-    WRITE (Header(3,1),'(A1,8X,A4)') '*','TIME'
+    WRITE (Header(1,1),'(A19)') '*     HYDROGRAPH ID'
+    WRITE (Header(2,1),'(A19)') '*              NODE'
+    WRITE (Header(3,1),'(A13)') '*        TIME'
     DO indx=1,TDHyd%NHyd
         IF (TDHyd%iHydTypes(indx) .EQ.  f_iSubIrig) THEN
-            WRITE (Header(1,indx+1),'(I10)') SubIrigIDs(TDHyd%iHydIndices(indx))
-            WRITE (Header(2,indx+1),'(I10)') NodeIDs(SubIrigNodes(TDHyd%iHydIndices(indx)))
+            IF (indx .EQ. 1) THEN
+                WRITE (Header(1,indx+1),'(I11)') SubIrigIDs(TDHyd%iHydIndices(indx))
+                WRITE (Header(2,indx+1),'(I11)') NodeIDs(SubIrigNodes(TDHyd%iHydIndices(indx)))
+            ELSE
+                WRITE (Header(1,indx+1),'(I13)') SubIrigIDs(TDHyd%iHydIndices(indx))
+                WRITE (Header(2,indx+1),'(I13)') NodeIDs(SubIrigNodes(TDHyd%iHydIndices(indx)))
+            END IF
             IOUTTD(indx) = NodeIDs(SubIrigNodes(TDHyd%iHydIndices(indx)))
         ELSE
-            WRITE (Header(1,indx+1),'(I10)') DrainIDs(TDHyd%iHydIndices(indx))
-            WRITE (Header(2,indx+1),'(I10)') NodeIDs(DrainNodes(TDHyd%iHydIndices(indx)))
+            IF (indx .EQ. 1) THEN
+                WRITE (Header(1,indx+1),'(I11)') DrainIDs(TDHyd%iHydIndices(indx))
+                WRITE (Header(2,indx+1),'(I11)') NodeIDs(DrainNodes(TDHyd%iHydIndices(indx)))
+            ELSE
+                WRITE (Header(1,indx+1),'(I13)') DrainIDs(TDHyd%iHydIndices(indx))
+                WRITE (Header(2,indx+1),'(I13)') NodeIDs(DrainNodes(TDHyd%iHydIndices(indx)))
+            END IF
             IOUTTD(indx) = NodeIDs(DrainNodes(TDHyd%iHydIndices(indx)))
         END IF  
     END DO
-    HeaderFormat(1) = '(A19,2X,'//TRIM(Text)//'(2X,A10))'
-    HeaderFormat(2) = '(A19,2X,'//TRIM(Text)//'(2X,A10))'
-    HeaderFormat(3) = '(A13,'//TRIM(Text)//'(A))'
+    HeaderFormat(1) = '(A19,A11,*(A13))'
+    HeaderFormat(2) = '(A19,A11,*(A13))'
+    HeaderFormat(3) = '(A13,*(A))'
     
     !Prepare the time series output file
     CALL PrepareTSDOutputFile(TDHyd%OutFile            , &
@@ -666,6 +675,10 @@ CONTAINS
     !Return if no output
     IF (.NOT. TDHyd%InFile_ForInquiry_Defined) RETURN
 
+    !Increment time step by 1 since the original timestep is refering to t=0 but the output starts at t=1
+    TimeStep_Local                    = TimeStep
+    TimeStep_Local%CurrentDateAndTime = IncrementTimeStamp(TimeStep_Local%CurrentDateAndTime,TimeStep_Local%DELTAT_InMinutes)
+    
     !Get the name of the text/DSS file
     CALL TDHyd%InFile_ForInquiry%GetFileName(cFileName)
 
@@ -683,14 +696,13 @@ CONTAINS
     !Create dataset
     NColumns(1)     = TDHyd%NHyd
     cDataSetName(1) = '/Tile_Drain_Hydrographs'
-    CALL OutFile%CreateHDFDataSet(cPathNames=cDataSetName,NColumns=NColumns,NTime=NTIME,TimeStep=TimeStep,DataType=0d0,iStat=iStat)
+    CALL OutFile%CreateHDFDataSet(cPathNames=cDataSetName,NColumns=NColumns,NTime=NTIME,TimeStep=TimeStep_Local,DataType=0d0,iStat=iStat)
     IF (iStat .EQ. -1) RETURN
     
     !Conversion factor used when printing out results
     rConvFactor = 1.0 / TDHyd%FactFlow
 
     !Transfer heads to HDF file
-    TimeStep_Local = TimeStep
     DO indxTime=1,NTIME
         !Read data
         CALL TDHyd%InFile_ForInquiry%ReadTSData(TimeStep_Local,'tile drain hydrographs',FileReadCode,iStat)

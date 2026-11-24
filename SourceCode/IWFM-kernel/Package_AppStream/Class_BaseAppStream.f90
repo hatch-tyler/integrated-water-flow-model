@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2025  
+!  Copyright (C) 2005-2026  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -297,7 +297,7 @@ MODULE Class_BaseAppStream
         TYPE(AppGridType),INTENT(IN)          :: AppGrid
         TYPE(StratigraphyType),INTENT(IN)     :: Stratigraphy
         LOGICAL,INTENT(IN)                    :: IsRoutedStreams
-        TYPE(StrmGWConnectorType),INTENT(OUT) :: StrmGWConnector
+        TYPE(StrmGWConnectorType),INTENT(OUT):: StrmGWConnector
         TYPE(StrmLakeConnectorType)           :: StrmLakeConnector
         INTEGER,INTENT(OUT)                   :: iStat
      END SUBROUTINE Abstract_SetStaticComponent
@@ -355,7 +355,7 @@ MODULE Class_BaseAppStream
         TYPE(TimeStepType),INTENT(IN)         :: TimeStep
         INTEGER,INTENT(IN)                    :: NTIME,iLakeIDs(:)
         TYPE(StrmLakeConnectorType)           :: StrmLakeConnector
-        TYPE(StrmGWConnectorType),INTENT(OUT) :: StrmGWConnector
+        TYPE(StrmGWConnectorType),INTENT(OUT):: StrmGWConnector
         INTEGER,INTENT(OUT)                   :: iStat
      END SUBROUTINE Abstract_SetAllComponentsWithoutBinFile
      
@@ -823,8 +823,8 @@ CONTAINS
 
     !Local variables
     CHARACTER(LEN=ModNameLen+32) :: ThisProcedure = ModName // 'GetBudget_MonthlyFlows_GivenFile'
-    INTEGER,PARAMETER            :: iReadCols(14) = [1,2,3,4,5,6,7,8,9,10,11,12,13,14]
-    INTEGER                      :: iNTimeSteps,iLocationIndexOrdered,iDimActual
+    INTEGER                      :: iNTimeSteps,iLocationIndexOrdered,iDimActual,iNCols,indx
+    INTEGER,ALLOCATABLE          :: iReadCols(:)
     REAL(8),ALLOCATABLE          :: rValues(:,:)
     TYPE(StrmNodeBudgetType)     :: StrmNodeBudget
     
@@ -849,6 +849,17 @@ CONTAINS
             !Update the index based on the ordered reach numbers in Budget file
             iLocationIndexOrdered = RoutingOrderedReachIndex_To_IDOrderedReachIndex(iStrmReachIDs,iLocationIndex)
             
+            !Number of columns available in the Budget file (includes Time column)
+            CALL Budget%GetNDataColumns(1,iNCols,iStat)
+            IF (iStat .NE. 0) RETURN
+    
+            !BACKWARD COMPATIBILITY: 
+            ! 17 columns: Original number of columns
+            ! 18 columns: Diversion Spills column is added
+            ! 19 columns: GW Return Flow column is added
+            ALLOCATE (iReadCols(iNCols-3))  !Remove Time, Discrepancy and Diversion Shortage columns
+            iReadCols = [(indx,indx=1,iNCols-3)]
+    
             !Get simulation time steps and allocate array to read data
             iNTimeSteps = Budget%GetNTimeSteps()
             ALLOCATE (rValues(SIZE(iReadCols)+1,iNTimeSteps)) !Adding 1 to the first dimension for Time column; it will be removed later
@@ -858,7 +869,9 @@ CONTAINS
             IF (iStat .NE. 0) RETURN
             
             !Store values in return argument
-            ALLOCATE (rFlows(13,iDimActual) , cFlowNames(13))
+            ALLOCATE (rFlows(iNCols-4,iDimActual) , cFlowNames(iNCols-4))
+            !Original budget columns
+            IF (iNCols .EQ. 17) THEN
             rFlows(1,:)  = rValues(2,1:iDimActual)                             !Upstream Inflow              
             rFlows(2,:)  = -rValues(3,1:iDimActual)                            !Downstream Outflow          
             rFlows(3,:)  = rValues(4,1:iDimActual)                             !Tributary Inflow            
@@ -888,6 +901,77 @@ CONTAINS
             cFlowNames(11) = 'Surface Evaporation'          
             cFlowNames(12) = 'Diversion'          
             cFlowNames(13) = 'Bypass Flow'       
+                
+            !Diversion Spills column is included
+            ELSE IF (iNCols .EQ. 18) THEN
+                rFlows(1,:)  =  rValues(2,1:iDimActual)                             !Upstream Inflow              
+                rFlows(2,:)  = -rValues(3,1:iDimActual)                             !Downstream Outflow          
+                rFlows(3,:)  =  rValues(4,1:iDimActual)                             !Tributary Inflow            
+                rFlows(4,:)  =  rValues(5,1:iDimActual)                             !Tile Drain  
+                rFlows(5,:)  =  rValues(6,1:iDimActual)                             !Runoff                      
+                rFlows(6,:)  =  rValues(7,1:iDimActual)                             !Return Flow 
+                rFlows(7,:)  =  rValues(8,1:iDimActual)                             !Diversion spills
+                rFlows(8,:)  =  rValues(9,1:iDimActual)                             !Pond drain                  
+                rFlows(9,:)  =  rValues(10,1:iDimActual) + rValues(11,1:iDimActual) !Gain from GW    
+                rFlows(10,:) =  rValues(12,1:iDimActual)                            !Gain from Lake               
+                rFlows(11,:) = -rValues(13,1:iDimActual)                            !Riparian ET                  
+                rFlows(12,:) = -rValues(14,1:iDimActual)                            !Surface evaporation                  
+                rFlows(13,:) = -rValues(15,1:iDimActual)                            !Diversion                    
+                rFlows(14,:) = -rValues(16,1:iDimActual)                            !By-pass Flow                 
+                
+                !Flow names
+                cFlowNames     = ''
+                cFlowNames(1)  = 'Upstream Inflow'    
+                cFlowNames(2)  = 'Downstream Outflow' 
+                cFlowNames(3)  = 'Tributary Inflow'   
+                cFlowNames(4)  = 'Tile Drain'
+                cFlowNames(5)  = 'Runoff'             
+                cFlowNames(6)  = 'Return Flow' 
+                cFlowNames(7)  = 'Diversion Spills'
+                cFlowNames(8)  = 'Pond Drain'        
+                cFlowNames(9)  = 'Gain from GW'    
+                cFlowNames(10) = 'Gain from Lake'     
+                cFlowNames(11) = 'Riparian ET'        
+                cFlowNames(12) = 'Surface Evaporation'          
+                cFlowNames(13) = 'Diversion'          
+                cFlowNames(14) = 'Bypass Flow'
+                
+            ! Diversion Spills and GW Return columns are included
+            ELSE
+                rFlows(1,:)  =  rValues(2,1:iDimActual)                             !Upstream Inflow              
+                rFlows(2,:)  = -rValues(3,1:iDimActual)                             !Downstream Outflow          
+                rFlows(3,:)  =  rValues(4,1:iDimActual)                             !Tributary Inflow            
+                rFlows(4,:)  =  rValues(5,1:iDimActual)                             !Tile Drain  
+                rFlows(5,:)  =  rValues(6,1:iDimActual)                             !GW Return Flow
+                rFlows(6,:)  =  rValues(7,1:iDimActual)                             !Runoff                      
+                rFlows(7,:)  =  rValues(8,1:iDimActual)                             !Return Flow 
+                rFlows(8,:)  =  rValues(9,1:iDimActual)                             !Diversion spills
+                rFlows(9,:)  =  rValues(10,1:iDimActual)                            !Pond drain                  
+                rFlows(10,:) =  rValues(11,1:iDimActual) + rValues(12,1:iDimActual) !Gain from GW    
+                rFlows(11,:) =  rValues(13,1:iDimActual)                            !Gain from Lake               
+                rFlows(12,:) = -rValues(14,1:iDimActual)                            !Riparian ET                  
+                rFlows(13,:) = -rValues(15,1:iDimActual)                            !Surface evaporation                  
+                rFlows(14,:) = -rValues(16,1:iDimActual)                            !Diversion                    
+                rFlows(15,:) = -rValues(17,1:iDimActual)                            !By-pass Flow                 
+                
+                !Flow names
+                cFlowNames     = ''
+                cFlowNames(1)  = 'Upstream Inflow'    
+                cFlowNames(2)  = 'Downstream Outflow' 
+                cFlowNames(3)  = 'Tributary Inflow'   
+                cFlowNames(4)  = 'Tile Drain'
+                cFlowNames(5)  = 'Groundwater Return Flow'
+                cFlowNames(6)  = 'Runoff'             
+                cFlowNames(7)  = 'Return Flow' 
+                cFlowNames(8)  = 'Diversion Spills'
+                cFlowNames(9)  = 'Pond Drain'        
+                cFlowNames(10) = 'Gain from GW'    
+                cFlowNames(11) = 'Gain from Lake'     
+                cFlowNames(12) = 'Riparian ET'        
+                cFlowNames(13) = 'Surface Evaporation'          
+                cFlowNames(14) = 'Diversion'          
+                cFlowNames(15) = 'Bypass Flow'
+            END IF
     END SELECT
         
   END SUBROUTINE GetBudget_MonthlyFlows_GivenFile

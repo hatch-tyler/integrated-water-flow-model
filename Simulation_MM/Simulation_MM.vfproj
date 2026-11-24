@@ -106,17 +106,13 @@
 				</Filter>
 				<Filter Name="Package_AppSmallWatershed">
 					<Filter Name="Version_4.0">
-						<File RelativePath="..\SourceCode\IWFM-kernel\Package_AppSmallWatershed\Version_4.0\Class_AppSmallWatershed_v40.f90">
-						</File>
+						<File RelativePath="..\SourceCode\IWFM-kernel\Package_AppSmallWatershed\Version_4.0\Class_AppSmallWatershed_v40.f90"/>
 					</Filter>
 					<Filter Name="Version_4.1">
-						<File RelativePath="..\SourceCode\IWFM-kernel\Package_AppSmallWatershed\Version_4.1\Class_AppSmallWatershed_v41.f90">
-						</File>
+						<File RelativePath="..\SourceCode\IWFM-kernel\Package_AppSmallWatershed\Version_4.1\Class_AppSmallWatershed_v41.f90"/>
 					</Filter>
-					<File RelativePath="..\SourceCode\IWFM-kernel\Package_AppSmallWatershed\Class_BaseAppSmallWatershed.f90">
-					</File>
-					<File RelativePath="..\SourceCode\IWFM-kernel\Package_AppSmallWatershed\Package_AppSmallWatershed.f90">
-					</File>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_AppSmallWatershed\Class_BaseAppSmallWatershed.f90"/>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_AppSmallWatershed\Package_AppSmallWatershed.f90"/>
 				</Filter>
 				<Filter Name="Package_AppStream">
 					<Filter Name="Version_4.0">
@@ -259,6 +255,30 @@
 					<File RelativePath="..\SourceCode\IWFM-kernel\Package_Supply\Package_Supply.f90"/>
 					<File RelativePath="..\SourceCode\IWFM-kernel\Package_Supply\SupplyAdjustment.f90"/>
 				</Filter>
+				<Filter Name="Package_Transport">
+					<Filter Name="LagrangianTransport">
+						<Filter Name="Package_ParticleTracking">
+							<File RelativePath="..\SourceCode\IWFM-kernel\Package_Transport\LagrangianTransport\Package_SoluteTransport\Package_LagrangianSoluteTransport.f90">
+							</File>
+							<File RelativePath="..\SourceCode\IWFM-kernel\Package_Transport\LagrangianTransport\Package_SoluteTransport\RandomNumberGeneratorZig.f90">
+							</File>
+						</Filter>
+						<Filter Name="Package_SoluteTransport">
+							<File RelativePath="..\SourceCode\IWFM-kernel\Package_Transport\LagrangianTransport\Package_ParticleTracking\Package_ParticleTracking.f90">
+							</File>
+						</Filter>
+						<File RelativePath="..\SourceCode\IWFM-kernel\Package_Transport\LagrangianTransport\Class_LagrangianTransport.f90">
+						</File>
+						<File RelativePath="..\SourceCode\IWFM-kernel\Package_Transport\LagrangianTransport\LagrangianParcel_LinkedList.f90">
+						</File>
+					</Filter>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_Transport\Class_TransportBase.f90">
+					</File>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_Transport\TransportDataReader.f90">
+					</File>
+					<File RelativePath="..\SourceCode\IWFM-kernel\Package_Transport\TransportManager.f90">
+					</File>
+				</Filter>
 				<Filter Name="Package_UnsatZone">
 					<File RelativePath="..\SourceCode\IWFM-kernel\Package_UnsatZone\Class_Soil.f90"/>
 					<File RelativePath="..\SourceCode\IWFM-kernel\Package_UnsatZone\Package_UnsatZone.f90"/>
@@ -287,8 +307,7 @@
 				<File RelativePath="..\SourceCode\WSA_ANN\WSA_ANN.f90"/>
 			</Filter>
 			<File RelativePath="..\SourceCode\Simulation_MM\Coarray_Debugging_Mod.f90"/>
-			<File RelativePath="..\SourceCode\Simulation_MM\IWFM_f2_MM.f90">
-			</File>
+			<File RelativePath="..\SourceCode\Simulation_MM\IWFM_f2_MM.f90"/>
 		</Filter>
 	</Files>
 	<Globals/>

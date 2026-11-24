@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2025  
+!  Copyright (C) 2005-2026  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -42,6 +42,9 @@ MODULE IOInterface
             f_iDataSet              , &
             f_iAttribute            , &
             f_iMaxDatasetNameLen    , &
+            f_IO_TSData_NotYetTimeToRead , &
+            f_IO_SuccessfulRead          , &
+            f_IO_UnsuccessfulRead        , &
       
             !From TSDFileHandler
             IntTSDataInFileType     , &

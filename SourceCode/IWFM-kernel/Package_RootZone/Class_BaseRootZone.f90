@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2025  
+!  Copyright (C) 2005-2026  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -180,20 +180,30 @@ MODULE Class_BaseRootZone
       PROCEDURE,PASS                                                          :: GetZBudget_MonthlyFlows_GivenRootZone
       PROCEDURE,NOPASS                                                        :: GetZBudget_MonthlyFlows_GivenFile
       PROCEDURE,PASS                                                          :: GetZBudget_TSData
-      PROCEDURE(Abstract_GetLandUseAreasForTimePeriod),NOPASS,DEFERRED        :: GetLandUseAreasForTimePeriod
+      PROCEDURE(Abstract_GetLandUseAreasForTimePeriod_FileNotOpen),NOPASS,DEFERRED     :: GetLandUseAreasForTimePeriod_FileNotOpen
+      PROCEDURE(Abstract_GetLandUseAreasForTimePeriod_FileOpen),PASS,DEFERRED          :: GetLandUseAreasForTimePeriod_FileOpen
+      PROCEDURE(Abstract_GetLandUseAreasForTimePeriod_All_FileNotOpen),NOPASS,DEFERRED :: GetLandUseAreasForTimePeriod_All_FileNotOpen
+      PROCEDURE(Abstract_GetLandUseAreasForTimePeriod_All_FileOpen),PASS,DEFERRED      :: GetLandUseAreasForTimePeriod_All_FileOpen
       PROCEDURE(Abstract_GetNAgCrops),PASS,DEFERRED                           :: GetNAgCrops
       PROCEDURE(Abstract_GetNDemandLocations),PASS,DEFERRED                   :: GetNDemandLocations
+      PROCEDURE(Abstract_GetLandUseCodes),PASS,DEFERRED                                :: GetLandUseCodes
       PROCEDURE,PASS                                                          :: GetElementPrecip
+      PROCEDURE(Abstract_GetElementPrecip_ForLUType_AtEachLU),PASS,DEFERRED            :: GetElementPrecip_ForLUType_AtEachLU
       PROCEDURE(Abstract_GetElementRunoff),PASS,DEFERRED                      :: GetElementRunoff
+      PROCEDURE(Abstract_GetElementRunoff_ForLUType_AtEachLU),PASS,DEFERRED            :: GetElementRunoff_ForLUType_AtEachLU
       PROCEDURE(Abstract_GetElementAppliedWater),PASS,DEFERRED                :: GetElementAppliedWater
       PROCEDURE(Abstract_GetElementAppliedWater_ForLUType),PASS,DEFERRED      :: GetElementAppliedWater_ForLUType
+      PROCEDURE(Abstract_GetElementAppliedWater_ForLUType_AtEachLU),PASS,DEFERRED      :: GetElementAppliedWater_ForLUType_AtEachLU
       PROCEDURE(Abstract_GetElementReturnFlow),PASS,DEFERRED                  :: GetElementReturnFlow
       PROCEDURE(Abstract_GetElementReturnFlow_ForLUType),PASS,DEFERRED        :: GetElementReturnFlow_ForLUType
+      PROCEDURE(Abstract_GetElementReturnFlow_ForLUType_AtEachLU),PASS,DEFERRED        :: GetElementReturnFlow_ForLUType_AtEachLU
       PROCEDURE(Abstract_GetElementPrecipInfilt),PASS,DEFERRED                :: GetElementPrecipInfilt
       PROCEDURE(Abstract_GetElementInfilt),PASS,DEFERRED                      :: GetElementInfilt
       PROCEDURE(Abstract_GetElementActualET),PASS,DEFERRED                    :: GetElementActualET
+      PROCEDURE(Abstract_GetElementActualET_ForLUType_AtEachLU),PASS,DEFERRED          :: GetElementActualET_ForLUType_AtEachLU
       PROCEDURE(Abstract_GetElementPondDrain),PASS,DEFERRED                   :: GetElementPondDrain
       PROCEDURE(Abstract_GetElementPondDrain_ForLUType),PASS,DEFERRED         :: GetElementPondDrain_ForLUType
+      PROCEDURE(Abstract_GetElementPondDrain_ForLUType_AtEachLU),PASS,DEFERRED         :: GetElementPondDrain_ForLUType_AtEachLU
       PROCEDURE(Abstract_GetWaterDemandAll),PASS,DEFERRED                     :: GetWaterDemandAll
       PROCEDURE(Abstract_GetWaterDemandAtLocations),PASS,DEFERRED             :: GetWaterDemandAtLocations
       PROCEDURE(Abstract_GetWaterSupply),PASS,DEFERRED                        :: GetWaterSupply
@@ -208,7 +218,10 @@ MODULE Class_BaseRootZone
       PROCEDURE(Abstract_GetDemandAgAreas),PASS,DEFERRED                      :: GetDemandAgAreas
       PROCEDURE(Abstract_GetDemandUrbanAreas),PASS,DEFERRED                   :: GetDemandUrbanAreas
       PROCEDURE(Abstract_GetElementSoilMVolume),PASS,DEFERRED                 :: GetElementSoilMVolume
+      PROCEDURE(Abstract_GetElementSoilMVolume_ForLUType_AtEachLU),PASS,DEFERRED       :: GetElementSoilMVolume_ForLUType_AtEachLU
+      PROCEDURE(Abstract_GetElementPondStorage_AtEachLU),PASS,DEFERRED                 :: GetElementPondStorage_AtEachLU
       PROCEDURE(Abstract_GetElementPerc),PASS,DEFERRED                        :: GetElementPerc
+      PROCEDURE(Abstract_GetElementPerc_ForLUType_AtEachLU),PASS,DEFERRED              :: GetElementPerc_ForLUType_AtEachLU
       PROCEDURE(Abstract_GetPercElement),PASS,DEFERRED                        :: GetPercElement
       PROCEDURE(Abstract_GetFlowsToStreams),PASS,DEFERRED                     :: GetFlowsToStreams
       PROCEDURE(Abstract_GetFlowsToLakes),PASS,DEFERRED                       :: GetFlowsToLakes
@@ -399,12 +412,36 @@ MODULE Class_BaseRootZone
      END FUNCTION Abstract_GetNDemandLocations
 
 
+     PURE SUBROUTINE Abstract_GetLandUseCodes(RootZone,iLUType,cCodes)
+        IMPORT                                     :: BaseRootZoneType
+        CLASS(BaseRootZoneType),INTENT(IN)         :: RootZone
+        INTEGER,INTENT(IN)                         :: iLUType 
+        CHARACTER(LEN=*),ALLOCATABLE,INTENT(INOUT) :: cCodes(:)
+     END SUBROUTINE Abstract_GetLandUseCodes
+
+
+     SUBROUTINE Abstract_GetElementPrecip_ForLUType_AtEachLU(RootZone,iLUType,rPrecip)
+        IMPORT                             :: BaseRootZoneType
+        CLASS(BaseRootZoneType),INTENT(IN) :: RootZone
+        INTEGER,INTENT(IN)                 :: iLUType
+        REAL(8),INTENT(OUT)                :: rPrecip(:,:)
+     END SUBROUTINE Abstract_GetElementPrecip_ForLUType_AtEachLU
+
+
      SUBROUTINE Abstract_GetElementRunoff(RootZone,iElemRegions,rRunoff)
         IMPORT                             :: BaseRootZoneType
         CLASS(BaseRootZoneType),INTENT(IN) :: RootZone
         INTEGER,INTENT(IN)                 :: iElemRegions(:)
         REAL(8),INTENT(OUT)                :: rRunoff(:)
      END SUBROUTINE Abstract_GetElementRunoff
+
+
+     SUBROUTINE Abstract_GetElementRunoff_ForLUType_AtEachLU(RootZone,iLUType,rRunoff)
+        IMPORT                             :: BaseRootZoneType
+        CLASS(BaseRootZoneType),INTENT(IN) :: RootZone
+        INTEGER,INTENT(IN)                 :: iLUType
+        REAL(8),INTENT(OUT)                :: rRunoff(:,:)
+     END SUBROUTINE Abstract_GetElementRunoff_ForLUType_AtEachLU
 
 
      SUBROUTINE Abstract_GetElementAppliedWater(RootZone,iElemRegions,rAW)
@@ -415,12 +452,20 @@ MODULE Class_BaseRootZone
      END SUBROUTINE Abstract_GetElementAppliedWater
 
 
-     RECURSIVE SUBROUTINE Abstract_GetElementAppliedWater_ForLUType(RootZone,iElemRegions,iLUType,rAW)
+     RECURSIVE SUBROUTINE Abstract_GetElementAppliedWater_ForLUType(RootZone,iLUType,rAW)
         IMPORT                             :: BaseRootZoneType
         CLASS(BaseRootZoneType),INTENT(IN) :: RootZone
-        INTEGER,INTENT(IN)                 :: iElemRegions(:),iLUType
+        INTEGER,INTENT(IN)                 :: iLUType
         REAL(8),INTENT(OUT)                :: rAW(:)
      END SUBROUTINE Abstract_GetElementAppliedWater_ForLUType
+
+
+     SUBROUTINE Abstract_GetElementAppliedWater_ForLUType_AtEachLU(RootZone,iLUType,rAW)
+        IMPORT                             :: BaseRootZoneType
+        CLASS(BaseRootZoneType),INTENT(IN) :: RootZone
+        INTEGER,INTENT(IN)                 :: iLUType
+        REAL(8),INTENT(OUT)                :: rAW(:,:)
+     END SUBROUTINE Abstract_GetElementAppliedWater_ForLUType_AtEachLU
 
 
      SUBROUTINE Abstract_GetElementReturnFlow(RootZone,iElemRegions,rReturn)
@@ -431,12 +476,20 @@ MODULE Class_BaseRootZone
      END SUBROUTINE Abstract_GetElementReturnFlow
 
 
-     RECURSIVE SUBROUTINE Abstract_GetElementReturnFlow_ForLUType(RootZone,iElemRegions,iLUType,rReturn)
+     RECURSIVE SUBROUTINE Abstract_GetElementReturnFlow_ForLUType(RootZone,iLUType,rReturn)
         IMPORT                             :: BaseRootZoneType
         CLASS(BaseRootZoneType),INTENT(IN) :: RootZone
-        INTEGER,INTENT(IN)                 :: iElemRegions(:),iLUType
+        INTEGER,INTENT(IN)                 :: iLUType
         REAL(8),INTENT(OUT)                :: rReturn(:)
      END SUBROUTINE Abstract_GetElementReturnFlow_ForLUType
+
+
+     SUBROUTINE Abstract_GetElementReturnFlow_ForLUType_AtEachLU(RootZone,iLUType,rReturn)
+        IMPORT                             :: BaseRootZoneType
+        CLASS(BaseRootZoneType),INTENT(IN) :: RootZone
+        INTEGER,INTENT(IN)                 :: iLUType
+        REAL(8),INTENT(OUT)                :: rReturn(:,:)
+     END SUBROUTINE Abstract_GetElementReturnFlow_ForLUType_AtEachLU
 
 
      SUBROUTINE Abstract_GetElementPrecipInfilt(RootZone,ElemRegion,PrecipInfilt)
@@ -463,20 +516,35 @@ MODULE Class_BaseRootZone
      END SUBROUTINE Abstract_GetElementActualET
 
 
-     SUBROUTINE Abstract_GetElementPondDrain(RootZone,iElemRegions,rDrain)
+     SUBROUTINE Abstract_GetElementActualET_ForLUType_AtEachLU(RootZone,iLUType,rET)
         IMPORT                             :: BaseRootZoneType
         CLASS(BaseRootZoneType),INTENT(IN) :: RootZone
-        INTEGER,INTENT(IN)                 :: iElemRegions(:)
+        INTEGER,INTENT(IN)                 :: iLUType
+        REAL(8),INTENT(OUT)                :: rET(:,:)
+     END SUBROUTINE Abstract_GetElementActualET_ForLUType_AtEachLU
+
+
+     SUBROUTINE Abstract_GetElementPondDrain(RootZone,rDrain)
+        IMPORT                             :: BaseRootZoneType
+        CLASS(BaseRootZoneType),INTENT(IN) :: RootZone
         REAL(8),INTENT(OUT)                :: rDrain(:)
      END SUBROUTINE Abstract_GetElementPondDrain
 
 
-     SUBROUTINE Abstract_GetElementPondDrain_ForLUType(RootZone,iElemRegions,iLUType,rDrain)
+     SUBROUTINE Abstract_GetElementPondDrain_ForLUType(RootZone,iLUType,rDrain)
         IMPORT                             :: BaseRootZoneType
         CLASS(BaseRootZoneType),INTENT(IN) :: RootZone
-        INTEGER,INTENT(IN)                 :: iElemRegions(:),iLUType
+        INTEGER,INTENT(IN)                 :: iLUType
         REAL(8),INTENT(OUT)                :: rDrain(:)
      END SUBROUTINE Abstract_GetElementPondDrain_ForLUType
+
+
+     SUBROUTINE Abstract_GetElementPondDrain_ForLUType_AtEachLU(RootZone,iLUType,rDrain)
+        IMPORT                             :: BaseRootZoneType
+        CLASS(BaseRootZoneType),INTENT(IN) :: RootZone
+        INTEGER,INTENT(IN)                 :: iLUType
+        REAL(8),INTENT(OUT)                :: rDrain(:,:)
+     END SUBROUTINE Abstract_GetElementPondDrain_ForLUType_AtEachLU
 
 
      SUBROUTINE Abstract_GetWaterDemandAll(RootZone,iDemandFor,rDemand)
@@ -506,8 +574,8 @@ MODULE Class_BaseRootZone
      END SUBROUTINE Abstract_GetWaterSupply
      
      
-    SUBROUTINE Abstract_GetLandUseAreasForTimePeriod(cRootZoneMainFileName,cWorkingDirectory,cBeginDate,cEndDate,TimeStep,AppGrid,iLUType,iLU,rLUAreas,iStat,Logger)
-      IMPORT                        :: TimeStepType,AppGridType,MessageLoggerType
+     SUBROUTINE Abstract_GetLandUseAreasForTimePeriod_FileNotOpen(cRootZoneMainFileName,cWorkingDirectory,cBeginDate,cEndDate,TimeStep,AppGrid,iLUType,iLU,rLUAreas,iStat,Logger)
+       IMPORT                        :: TimeStepType,AppGridType,MessageLoggerType
       CHARACTER(LEN=*),INTENT(IN)   :: cRootZoneMainFileName,cWorkingDirectory,cBeginDate,cEndDate
       TYPE(TimeStepType),INTENT(IN) :: TimeStep
       TYPE(AppGridType),INTENT(IN)  :: AppGrid
@@ -515,7 +583,42 @@ MODULE Class_BaseRootZone
       REAL(8),INTENT(OUT)           :: rLUAreas(:,:)  !For each (element,time)
       INTEGER,INTENT(OUT)           :: iStat
       TYPE(MessageLoggerType),OPTIONAL,INTENT(INOUT) :: Logger
-    END SUBROUTINE Abstract_GetLandUseAreasForTimePeriod
+     END SUBROUTINE Abstract_GetLandUseAreasForTimePeriod_FileNotOpen
+     
+     
+     SUBROUTINE Abstract_GetLandUseAreasForTimePeriod_FileOpen(RootZone,cBeginDate,cEndDate,TimeStep,AppGrid,iLUType,iLU,rLUAreas,iStat)
+       IMPORT                                :: BaseRootZoneType,TimeStepType,AppGridType
+       CLASS(BaseRootZoneType),INTENT(INOUT) :: RootZone
+       CHARACTER(LEN=*),INTENT(IN)           :: cBeginDate,cEndDate
+       TYPE(TimeStepType),INTENT(IN)         :: TimeStep
+       TYPE(AppGridType),INTENT(IN)          :: AppGrid
+       INTEGER,INTENT(IN)                    :: iLUType,iLU    !iLU is not used for urban lands
+       REAL(8),INTENT(OUT)                   :: rLUAreas(:,:)  !For each (element,time)
+       INTEGER,INTENT(OUT)                   :: iStat
+     END SUBROUTINE Abstract_GetLandUseAreasForTimePeriod_FileOpen
+     
+     
+     SUBROUTINE Abstract_GetLandUseAreasForTimePeriod_All_FileNotOpen(cRootZoneMainFileName,cWorkingDirectory,cBeginDate,cEndDate,TimeStep,AppGrid,iLUType,rLUAreas,iStat)
+       IMPORT                            :: TimeStepType,AppGridType
+       CHARACTER(LEN=*),INTENT(IN)       :: cRootZoneMainFileName,cWorkingDirectory,cBeginDate,cEndDate
+       TYPE(TimeStepType),INTENT(IN)     :: TimeStep
+       TYPE(AppGridType),INTENT(IN)      :: AppGrid
+       INTEGER,INTENT(IN)                :: iLUType
+       REAL(8),ALLOCATABLE,INTENT(INOUT) :: rLUAreas(:,:,:)  !For each (element,landuse,time)
+       INTEGER,INTENT(OUT)               :: iStat
+     END SUBROUTINE Abstract_GetLandUseAreasForTimePeriod_All_FileNotOpen
+     
+     
+     SUBROUTINE Abstract_GetLandUseAreasForTimePeriod_All_FileOpen(RootZone,cBeginDate,cEndDate,TimeStep,AppGrid,iLUType,rLUAreas,iStat)
+       IMPORT                                :: BaseRootZoneType,TimeStepType,AppGridType
+       CLASS(BaseRootZoneType),INTENT(INOUT) :: RootZone
+       CHARACTER(LEN=*),INTENT(IN)           :: cBeginDate,cEndDate
+       TYPE(TimeStepType),INTENT(IN)         :: TimeStep
+       TYPE(AppGridType),INTENT(IN)          :: AppGrid
+       INTEGER,INTENT(IN)                    :: iLUType
+       REAL(8),ALLOCATABLE,INTENT(INOUT)     :: rLUAreas(:,:,:)  !For each (element,landuse,time)
+       INTEGER,INTENT(OUT)                   :: iStat
+     END SUBROUTINE Abstract_GetLandUseAreasForTimePeriod_All_FileOpen
 
   
     SUBROUTINE Abstract_GetElementAgAreas(RootZone,Areas)
@@ -601,6 +704,23 @@ MODULE Class_BaseRootZone
      END SUBROUTINE Abstract_GetElementSoilMVolume
      
      
+     SUBROUTINE Abstract_GetElementSoilMVolume_ForLUType_AtEachLU(RootZone,iLUType,lBeginSoilM,rSoilM)
+        IMPORT                                    :: BaseRootZoneType
+        CLASS(BaseRootZoneType),TARGET,INTENT(IN) :: RootZone
+        INTEGER,INTENT(IN)                        :: iLUType
+        LOGICAL,INTENT(IN)                        :: lBeginSoilM
+        REAL(8),INTENT(OUT)                       :: rSoilM(:,:)
+     END SUBROUTINE Abstract_GetElementSoilMVolume_ForLUType_AtEachLU
+     
+     
+     SUBROUTINE Abstract_GetElementPondStorage_AtEachLU(RootZone,lBeginStor,rStor)
+        IMPORT                                    :: BaseRootZoneType
+        CLASS(BaseRootZoneType),TARGET,INTENT(IN) :: RootZone
+        LOGICAL,INTENT(IN)                        :: lBeginStor
+        REAL(8),INTENT(OUT)                       :: rStor(:,:)
+     END SUBROUTINE Abstract_GetElementPondStorage_AtEachLU
+     
+     
      SUBROUTINE Abstract_GetElementPerc(RootZone,iElemRegions,rPerc)
         IMPORT                             :: BaseRootZoneType
         CLASS(BaseRootZoneType),INTENT(IN) :: RootZone
@@ -609,6 +729,14 @@ MODULE Class_BaseRootZone
      END SUBROUTINE Abstract_GetElementPerc
      
      
+     SUBROUTINE Abstract_GetElementPerc_ForLUType_AtEachLU(RootZone,iLUType,rPerc)
+        IMPORT                             :: BaseRootZoneType
+        CLASS(BaseRootZoneType),INTENT(IN) :: RootZone
+        INTEGER,INTENT(IN)                 :: iLUType
+        REAL(8),INTENT(OUT)                :: rPerc(:,:)
+     END SUBROUTINE Abstract_GetElementPerc_ForLUType_AtEachLU
+
+
      FUNCTION Abstract_GetPercElement(RootZone,iElem,AppGrid) RESULT(Perc)
         IMPORT                                :: BaseRootZoneType,AppGridType
         CLASS(BaseRootZoneType),INTENT(IN)    :: RootZone
@@ -684,10 +812,11 @@ MODULE Class_BaseRootZone
      END SUBROUTINE Abstract_ReadTSData
      
      
-     SUBROUTINE Abstract_ReadRestartData(RootZone,InFile,iStat)
+     SUBROUTINE Abstract_ReadRestartData(RootZone,InFile,lConvertMoistToDepth,iStat)
         IMPORT                  :: BaseRootZoneType,GenericFileType
         CLASS(BaseRootZoneType) :: RootZone
         TYPE(GenericFileType)   :: InFile
+        LOGICAL,INTENT(IN)      :: lConvertMoistToDepth
         INTEGER,INTENT(OUT)     :: iStat
      END SUBROUTINE Abstract_ReadRestartData
      
@@ -782,7 +911,6 @@ MODULE Class_BaseRootZone
         CLASS(BaseRootZoneType),INTENT(IN) :: RootZone
         TYPE(GenericFileType)              :: OutFile
      END SUBROUTINE Abstract_PrintRestartData
-     
      
   END INTERFACE
   

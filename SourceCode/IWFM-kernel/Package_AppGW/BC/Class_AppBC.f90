@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2025  
+!  Copyright (C) 2005-2026  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -29,8 +29,9 @@ MODULE Class_AppBC
                                       PrepareTitle                  , &  
                                       FirstLocation                 , &
                                       IntToText                     , &
-                                      LocateInList, &
-                                   f_cInlineCommentChar
+                                      LocateInList                  , &
+                                      GetUniqueArrayComponents      , &
+                                      f_cInlineCommentChar
   USE TimeSeriesUtilities     , ONLY: TimeStepType                  , &
                                       TimeIntervalConversion        
   USE IOInterface             , ONLY: GenericFileType               , &
@@ -101,6 +102,7 @@ MODULE Class_AppBC
       PROCEDURE,PASS :: GetBoundaryFlowAtNodeLayer
       PROCEDURE,PASS :: GetBoundaryFlowAtNodeLayer_All
       PROCEDURE,PASS :: GetBoundaryFlowAtElementNodeLayer 
+      PROCEDURE,PASS :: GetBoundaryFlowAtNodeLayerIndex
       PROCEDURE,PASS :: GetSubregionalFlows 
       PROCEDURE,PASS :: SetBCNodes
       PROCEDURE,PASS :: SetBC
@@ -504,15 +506,20 @@ CONTAINS
       
       !Local variables
       INTEGER             :: NBCNodes,indxNode,iNode,indxElem,iElem,iRegion,indxVertex
-      INTEGER,ALLOCATABLE :: iBCNodes(:)
+      INTEGER,ALLOCATABLE :: iBCNodesAll(:),iBCNodes(:)
       REAL(8)             :: rFlow
       
       !Initialize
       rRegionFlows = 0.0
 
-      !Get the number and list of b.c. nodes with the defined b.c. type
-      CALL AppBC%GetNodesWithBCType(iLayer,iBCType,iBCNodes)
+      !Get the number and list of "unique" b.c. nodes (since assigning multiple GHB and Constrained GHBs are allowed at a single node) with the defined b.c. type
+      CALL AppBC%GetNodesWithBCType(iLayer,iBCType,iBCNodesAll)
+      IF (SIZE(iBCNodesAll) .EQ. 0) THEN
+          RETURN
+      ELSE
+          CALL GetUniqueArrayComponents(iBCNodesAll,iBCNodes)
       NBCNodes = SIZE(iBCNodes)
+      END IF  
       
       !Compile b.c. flows into subregional flows
       DO indxNode=1,NBCNodes
@@ -641,6 +648,20 @@ CONTAINS
     IF (PRESENT(lAddToRHS)) lAddToRHS = lAddToRHSLocal
     
   END SUBROUTINE GetBoundaryFlowAtElementNodeLayer
+  
+    
+  ! -------------------------------------------------------------
+  ! --- GET BOUNDARY FLOW AT A NODE WITH DEFINED B.C. TYPE AND B.C. INDEX AT A LAYER
+  ! --- Note: This method is used by Simulation_MM
+  ! -------------------------------------------------------------
+  SUBROUTINE GetBoundaryFlowAtNodeLayerIndex(AppBC,iBCType,iNode,iLayer,iIndex,rFlow)
+    CLASS(AppBCType),INTENT(IN) :: AppBC
+    INTEGER,INTENT(IN)          :: iBCType,iNode,iLayer,iIndex
+    REAL(8),INTENT(OUT)         :: rFlow
+    
+    rFlow = LayerBC_GetBCFlowWithBCTypeNodeIndex(iNode,iIndex,iBCType,AppBC%LayerBC(iLayer))
+    
+  END SUBROUTINE GetBoundaryFlowAtNodeLayerIndex
   
     
   ! -------------------------------------------------------------
@@ -849,13 +870,14 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- SET BOUNDARY CONDITION
   ! -------------------------------------------------------------
-  SUBROUTINE SetBC(AppBC,iNode,iLayer,iBCType,iNodeIDs,iStat,rFlow,rHead,rMaxBCFlow,rConductance,rConstrainingHeadBC)
+  SUBROUTINE SetBC(AppBC,iNode,iLayer,iBCType,iNodeIDs,iStat,iBCIndex,rFlow,rHead,rMaxBCFlow,rConductance,rConstrainingHeadBC)
     CLASS(AppBCType)            :: AppBC
     INTEGER,INTENT(IN)          :: iNode,iLayer,iBCType,iNodeIDs(:)
     INTEGER,INTENT(OUT)         :: iStat
+    INTEGER,OPTIONAL,INTENT(IN) :: iBCIndex
     REAL(8),OPTIONAL,INTENT(IN) :: rFlow,rHead,rMaxBCFlow,rConductance,rConstrainingHeadBC
     
-    CALL AppBC%LayerBC(iLayer)%SetBC(iNode,iBCType,iStat,rFlow,rHead,rMaxBCFlow,rConductance,rConstrainingHeadBC)
+    CALL AppBC%LayerBC(iLayer)%SetBC(iNode,iBCType,iStat,iBCIndex,rFlow,rHead,rMaxBCFlow,rConductance,rConstrainingHeadBC)
     IF (iStat .NE. 0) RETURN
     
     !Check for inconsistencies

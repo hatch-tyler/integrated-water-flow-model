@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2025
+!  Copyright (C) 2005-2026
 !  State of California, Department of Water Resources
 !
 !  This program is free software; you can redistribute it and/or
@@ -71,6 +71,7 @@ MODULE TimeSeriesUtilities
           OPERATOR(.TSGE.)                                  , &
           OPERATOR(.TULE.)                                  , &
           CTimeStep_To_RTimeStep                            , &
+          IntervalInMinutes_To_IntervalText                 , &
           TimeIntervalConversion                            , &
           SetSimulationTimeStep                             , &
           SetCacheLimit                                     , &
@@ -169,7 +170,7 @@ MODULE TimeSeriesUtilities
   END INTERFACE
 
 
-CONTAINS
+    CONTAINS
 
 
 !////////////////////////////////////////////////////////////////////////////////
@@ -181,9 +182,29 @@ CONTAINS
 !////////////////////////////////////////////////////////////////////////////////
 
   ! -------------------------------------------------------------
-  ! --- FUNCTION TO CHECK IF A TIEM INTERVAL IS RECOGNIZED
+  ! --- FUNCTION TO RETRIEVE INTERVAL IN TEXT CORRESPONDING TO INTERVAL IN MINUTES
   ! -------------------------------------------------------------
-  FUNCTION IsTimeIntervalValid(cInterval) RESULT(iIndex)
+  FUNCTION IntervalInMinutes_To_IntervalText(iInterval,iLen) RESULT(cInterval)
+    INTEGER,INTENT(IN)  :: iInterval,iLen
+    CHARACTER(LEN=iLen) :: cInterval
+
+    !Local variables
+    INTEGER :: iLoc
+    
+    !Initialize
+    cInterval = ''
+    
+    iLoc = LocateInList(iInterval , f_iRecognizedIntervals_InMinutes)
+    IF (iLoc .LT. 1) RETURN
+    cInterval = f_cRecognizedIntervals(iLoc)
+
+  END FUNCTION IntervalInMinutes_To_IntervalText
+  
+  
+  ! -------------------------------------------------------------
+  ! --- FUNCTION TO RETRIEVE INDEX OF TIME INTERVAL IN RECOGNIZED INTERVALS
+  ! -------------------------------------------------------------
+  FUNCTION GetTimeIntervalIndex(cInterval) RESULT(iIndex)
     CHARACTER(LEN=*),INTENT(IN) :: cInterval
     INTEGER                     :: iIndex
 
@@ -193,6 +214,27 @@ CONTAINS
     END DO
 
     IF (iIndex .GT. SIZE(f_cRecognizedIntervals)) iIndex = 0
+
+  END FUNCTION GetTimeIntervalIndex
+  
+  
+  ! -------------------------------------------------------------
+  ! --- FUNCTION TO CHECK IF A TIME INTERVAL IS RECOGNIZED
+  ! -------------------------------------------------------------
+  FUNCTION IsTimeIntervalValid(cInterval) RESULT(lValid)
+    CHARACTER(LEN=*),INTENT(IN) :: cInterval
+    LOGICAL                     :: lValid
+
+    !Local variables
+    INTEGER :: indx
+    
+    indx = GetTimeIntervalIndex(cInterval)
+    IF (indx .EQ. 0) THEN
+        lValid = .FALSE.
+    ELSE
+        lValid = .TRUE.
+    END IF
+    
 
   END FUNCTION IsTimeIntervalValid
 
@@ -675,23 +717,29 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- SUBROUTINE TO ADJUST THE YEAR 4000 FLAG WITH THE YEAR OF ANOTHER TIME STAMP
   ! -------------------------------------------------------------
-  SUBROUTINE AdjustTimeStampWithYear4000(AdjustedTimeStamp,TimeStamp,Year4000Flag)
-    CHARACTER(LEN=f_iTimeStampLength)            :: AdjustedTimeStamp
-    CHARACTER(LEN=f_iTimeStampLength),INTENT(IN) :: TimeStamp
-    LOGICAL,INTENT(OUT)                          :: Year4000Flag
+  SUBROUTINE AdjustTimeStampWithYear4000(cAdjustedTimeStamp,cTimeStamp,lYear4000Flag)
+    CHARACTER(LEN=f_iTimeStampLength)            :: cAdjustedTimeStamp
+    CHARACTER(LEN=f_iTimeStampLength),INTENT(IN) :: cTimeStamp
+    LOGICAL,INTENT(OUT)                          :: lYear4000Flag
 
     !Local variables
-    INTEGER::Year
-    !Default
-    Year4000Flag=.FALSE.
+    INTEGER :: iYear
+    
+    !Initialize
+    lYear4000Flag = .FALSE.
 
     !If year in AdjustedTimeStamp is 4000, replace it with the year in TimeStamp
-    IF (ExtractYear(AdjustedTimeStamp).EQ.4000) THEN
-      Year4000Flag=.TRUE.
+    IF (ExtractYear(cAdjustedTimeStamp) .EQ. 4000) THEN
+        lYear4000Flag = .TRUE.
+        
       !Extract year from TimeStamp
-      Year=ExtractYear(TimeStamp)
+        iYear = ExtractYear(cTimeStamp)
+        
       !Replace Year4000 flag in AdjustedTimeStamp by year from TimeStamp
-      AdjustedTimeStamp(7:10)=TRIM(IntToText(Year))
+        cAdjustedTimeStamp(7:10) = TRIM(IntToText(iYear))
+        
+        !Correct Feb. 29 for non-leap year if needed
+        cAdjustedTimeStamp = LeapYearCorrection(cAdjustedTimeStamp)
     END IF
 
   END SUBROUTINE AdjustTimeStampWithYear4000
@@ -990,52 +1038,57 @@ CONTAINS
 
   ! -------------------------------------------------------------
   ! --- MODIFY THE TIME SERIES RATE TYPE INPUT DATA SO THAT ITS TIME UNIT IS CONSISTENT WITH SIMULATION TIME STEP
+  ! --- Note1: Except from land use areas, all other timeseries input data is 1D; i.e. r(1,n)
+  ! ---        Land use areas are not rate type data, so rate type will never be applied to a 2D timeseries input data
+  ! --- Note2: Either ConversionFactor or DataInterval and LastDataDate are supposed to be provided, but not both
+  ! ---        In modern IWFM models, ConversionFactor is never provided
   ! -------------------------------------------------------------
-  SUBROUTINE AdjustRateTypeData(r,RateTypeDataArray,ConversionFactor,DataInterval,LastDataDate)
-    REAL(8),DIMENSION(:,:)                                :: r
-    LOGICAL,DIMENSION(:),INTENT(IN)                       :: RateTypeDataArray
-    REAL(8),OPTIONAL,INTENT(IN)                           :: ConversionFactor     !In this case the conversion factor is supplied directly
-    INTEGER,OPTIONAL,INTENT(IN)                           :: DataInterval         !In this case the time step length in minutes and
-    CHARACTER(LEN=f_iTimeStampLength),OPTIONAL,INTENT(IN) :: LastDataDate         ! the date of last data read are supplied as character
+  SUBROUTINE AdjustRateTypeData(r,RateTypeDataArray,rConversionFactor,iDataInterval,cLastDataDate)
+    REAL(8),INTENT(INOUT)                                 :: r(:,:)
+    LOGICAL,INTENT(IN)                                    :: RateTypeDataArray(:)
+    REAL(8),OPTIONAL,INTENT(IN)                           :: rConversionFactor     !In this case the conversion factor is supplied directly
+    INTEGER,OPTIONAL,INTENT(IN)                           :: iDataInterval         !In this case the time step length in minutes and
+    CHARACTER(LEN=f_iTimeStampLength),OPTIONAL,INTENT(IN) :: cLastDataDate         ! the date of last data read are supplied as character
 
     !Local variables
     INTEGER                           :: nrow,ncol
     REAL(8)                           :: r1d(SIZE(r,DIM=1)*SIZE(r,DIM=2))
-    REAL(8)                           :: Factor
-    CHARACTER(LEN=f_iTimeStampLength) :: TimeStampBegin
+    REAL(8)                           :: rFactor
+    CHARACTER(LEN=f_iTimeStampLength) :: cTimeStampBegin
 
     !Initialize
-    nrow=SIZE(r,DIM=1)
-    ncol=SIZE(r,DIM=2)
+    nrow = SIZE(r,DIM=1)
+    ncol = SIZE(r,DIM=2)
 
     !Calculate conversion factor if necessary
-    IF (PRESENT(ConversionFactor)) THEN        !Conversion factor is supplied directly
-      Factor=ConversionFactor
-    ELSEIF (PRESENT(DataInterval) .AND. PRESENT(LastDataDate)) THEN !Time step length and the date of last data read are supplied
-      IF (DataInterval.EQ.0) THEN
-        Factor=1d0
+    IF (PRESENT(rConversionFactor)) THEN        !Conversion factor is supplied directly
+        rFactor = 1D0 / rConversionFactor
+    ELSEIF (PRESENT(iDataInterval) .AND. PRESENT(cLastDataDate)) THEN !Time step length and the date of last data read are supplied
+        IF (iDataInterval .EQ. 0) THEN
+            rFactor = 1D0
       ELSE
         !Decrement the time stamp of the data last read by the interval minutes
-        TimeStampBegin=IncrementTimeStamp_IntervalInMinutes(LastDataDate,-DataInterval)
+            cTimeStampBegin = IncrementTimeStamp_IntervalInMinutes(cLastDataDate,-iDataInterval)
         !Compute Factor
-        Factor=REAL(NPeriods(SimulationTimeStep_InMinutes,TimeStampBegin,LastDataDate),8)
+            rFactor = 1D0 / REAL(NPeriods(SimulationTimeStep_InMinutes,cTimeStampBegin,cLastDataDate),8)
       END IF
     END IF
 
     !Convert
     SELECT CASE (SIZE(RateTypeDataArray))
       CASE (1)
-        IF (RateTypeDataArray(1)) r(:,:)=r(:,:)/Factor
+            IF (RateTypeDataArray(1)) r = r  * rFactor
 
       CASE DEFAULT
-        r1d=PACK(TRANSPOSE(r),MASK=.TRUE.)
-        WHERE (RateTypeDataArray) r1d=r1d/Factor
-        r=RESHAPE(r1d,(/nrow,ncol/),ORDER=(/2,1/))
-
+            r1d = PACK(TRANSPOSE(r),MASK=.TRUE.)
+            WHERE (RateTypeDataArray) r1d = r1d * rFactor
+            r = RESHAPE(r1d,[nrow,ncol],ORDER=[2,1])
     END SELECT
 
   END SUBROUTINE AdjustRateTypeData
 
+
+   
 
 !////////////////////////////////////////////////////////////////////////////////
 !////////////////////////////////////////////////////////////////////////////////
@@ -1257,7 +1310,7 @@ CONTAINS
     DeltaT           = 1.0 !DELTAT is always 1.0 since the unit includes the time step length, e.g. DELTAT = 1 12HOUR
     
     !Make sure that UNITT entry is a recognized time step
-    TimeStepIndex = IsTimeIntervalValid(UNITT)
+    TimeStepIndex = GetTimeIntervalIndex(UNITT)
     IF (TimeStepIndex .EQ. 0) THEN
       IF (PRESENT(iStat)) THEN
           CALL DefaultLogger%SetLastMessage(TRIM(UNITT)// ' is not a recognized time step',f_iFatal,ThisProcedure)

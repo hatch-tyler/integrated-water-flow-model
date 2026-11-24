@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2022  
+!  Copyright (C) 2005-2026  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -35,9 +35,10 @@
 !
 !***********************************************************************
 PROGRAM IWFM_f2_MultiModel
+  !$ USE OMP_LIB
   USE ProgramTimer           , ONLY: DefaultTimer            , &
                                      ProgramTimerType
-  USE MessageLogger          , ONLY: SetLogFileName          , &
+  USE MessageLogger          , ONLY: DefaultLogger , SetLogFileName          , &
                                      KillLogFile             , &
                                      DefaultLogger           , &
                                      LogLastMessage          , &
@@ -86,6 +87,7 @@ PROGRAM IWFM_f2_MultiModel
   TYPE ModelConnectionType
       INTEGER             :: iMaxIter             = 100     !Maximum number of iterations between models 
       REAL(8)             :: rConvergence         = 0.1     !Convergence creteria (change in flow/flow)
+      REAL(8)             :: rOmega               = 1.0     !Under relaxation parameter; must be between 0.0 and 1.0
       REAL(8)             :: rMaxNonConvergeFlow  = 0.0     !Maximum exchange flow that did not converge at the last iteration
       CHARACTER(LEN=30)   :: cMaxNonConvergeVar   = ''      !Variable for rMaxNonConvergeFlow
       CHARACTER(LEN=30)   :: cMaxNonConvergeModel = ''      !Model for rMaxNonConvergeFlow
@@ -93,18 +95,22 @@ PROGRAM IWFM_f2_MultiModel
       !Connections in the aquifer
       INTEGER             :: iNLinkNodesGW        = 0       !Number of connections in the aquifer
       REAL(8),ALLOCATABLE :: rFlowGW(:)                     !Current estimate of boundary flow at each node at each (connection)
-      REAL(8),ALLOCATABLE :: rFlowGW_P(:)                   !Previous boundary flow at each node at each (connection)
+      REAL(8),ALLOCATABLE :: rFlowGW_P(:)                   !Previous iteration boundary flow at each node at each (connection)
       INTEGER,ALLOCATABLE :: iModelGW(:)                    !Index of first connecting model for each (connection)    
       INTEGER,ALLOCATABLE :: iNodeGW(:)                     !Index of node in first model for each (connection)
       INTEGER,ALLOCATABLE :: iLayerGW(:)                    !Aquifer layer in first model for each (connection) 
       REAL(8),ALLOCATABLE :: rHeadGW(:)                     !Head at the node in first model for each (connection)
-      REAL(8),ALLOCATABLE :: rEffectiveConductanceGW(:)     !Effective conductance between above model, node, layer and all the connecting nodes at each (connection)
+      REAL(8),ALLOCATABLE :: rHeadGW_P(:)                   !Head from the previous iteration at the node in first model for each (connection)
       INTEGER,ALLOCATABLE :: iNConnectedNodesGW(:)          !Total number of nodes connecting to above model, node, layer at each connection(:)
       INTEGER,ALLOCATABLE :: iModelConnectedGW(:,:)         !List of models connecting to above model, node, layer at each (:,connection)
       INTEGER,ALLOCATABLE :: iNodeConnectedGW(:,:)          !List of nodes connecting to above model, node, layer at each (:,connection)
       INTEGER,ALLOCATABLE :: iLayerConnectedGW(:,:)         !List of aquifer  layers connecting to above model, node, layer at each (:,connection)
+      INTEGER,ALLOCATABLE :: iConnectionIndexGW(:,:)        !The index of our node (iNodeGW) within the connected node's b.c. list described at each (:,connection)
       REAL(8),ALLOCATABLE :: rConductanceConnectedGW(:,:)   !List of conductance between connecting nodes at each (:,connection) 
       REAL(8),ALLOCATABLE :: rHeadConnectedGW(:,:)          !List of heads at connecting nodes at each (:,connection) 
+      REAL(8),ALLOCATABLE :: rHeadConnectedGW_P(:,:)        !List of heads from previous iteration at connecting nodes at each (:,connection) 
+      REAL(8),ALLOCATABLE :: rFlowConnectedGW(:,:)          !Flows to/from connecting nodes at each (:,connection) 
+      REAL(8),ALLOCATABLE :: rFlowConnectedGW_P(:,:)        !Flows from previous iteration to/from connecting nodes at each (:,connection) 
       !Connections in streams
       INTEGER             :: iNLinkNodesST        = 0       !Number of connections in the streams
       REAL(8),ALLOCATABLE :: rFlowST(:)                     !Current estimate of flow at each outflowing stream node at each (connection) 
@@ -151,7 +157,7 @@ PROGRAM IWFM_f2_MultiModel
   TYPE(GHBConductanceTempDataType)       :: ConductanceTempData[*]
   
   !Local variables to the image
-  INTEGER             :: indxTime,iErrImage,iFlowBCID,iDummy,iModelIndex,iIter,indx,iNode
+  INTEGER             :: indxTime,iErrImage,iDummy,iModelIndex,iIter,indx,iNode,iGHBCID,iConstrainedGHBCID
   INTEGER,ALLOCATABLE :: iActiveImages(:)
   LOGICAL             :: lMaster,lRunner,lFirstCall
   
@@ -163,10 +169,12 @@ PROGRAM IWFM_f2_MultiModel
   lRunner      = .FALSE.
   
   !Flow BC ID used by the Model class
-  CALL Model%GetGWBCFlags(iFlowBCID,iDummy,iDummy,iDummy)
+  CALL Model%GetGWBCFlags(iDummy,iDummy,iGHBCID,iConstrainedGHBCID)
   
-  !****REMOVE THIS WHEN DONE DEBUGGING****
+  !****COMMENT OUT BELOW LINE WHEN DONE DEBUGGING****
   !CALL Enable_Coarray_Debugging
+  !****COMMENT OUT ABOVE LINE WHEN DONE DEBUGGING****
+  
   !Prepare control parameters for the run
   CALL PrepareForRun(cSimFileName,cModelNames,iNModels,iModelIndex,iModelIDs,iActiveImages,Connections,iStat)
   IF (iStat .NE. 0) iStat[iErrImage] = iStat
@@ -193,10 +201,8 @@ PROGRAM IWFM_f2_MultiModel
   IF (iStat[iErrImage] .NE. 0) CALL EndExecution()
   
   !Convert model link node IDs to indices and prepare connections to pass flows between models
-  IF (lRunner) THEN
       CALL PrepConnections(Model,cModelNames,iModelIndex,Connections,iStat)
       IF (iStat .NE. 0) iStat[iErrImage] = iStat
-  END IF
   SYNC IMAGES(iActiveImages)
   IF (iStat[iErrImage] .NE. 0) CALL EndExecution()
   
@@ -207,6 +213,7 @@ PROGRAM IWFM_f2_MultiModel
   IF (iStat[iErrImage] .NE. 0) CALL EndExecution()
   
   !Simulate
+  lFirstCall = .TRUE.
   DO indxTime=1,iNTime
       !Advance time
       CALL AdvanceTime(Model,TimeStep)
@@ -228,14 +235,17 @@ PROGRAM IWFM_f2_MultiModel
       SYNC IMAGES(iActiveImages)
       IF (iStat[iErrImage] .NE. 0) CALL EndExecution()
       
+      !Set iteration parameters
+      lConverged            = .FALSE.
+      iIter                 = 1
+      Connections[1]%rOmega = 1.0
+      SYNC IMAGES(iActiveImages)
+
           
       !Simulate until convergence between models
-      lConverged = .FALSE.
-      lFirstCall = .TRUE.
-      iIter      = 1
       DO
-          !Set boundary flows
-          CALL SetFlowBC(Model,iModelIndex,lFirstCall,Connections,iStat)
+          !Set boundary conditions
+          CALL SetBC(Model,iModelIndex,lFirstCall,Connections,iStat)
           IF (iStat .NE. 0) iStat[iErrImage] = iStat
           SYNC IMAGES(iActiveImages)
           IF (iStat[iErrImage] .NE. 0) CALL EndExecution()
@@ -277,7 +287,7 @@ PROGRAM IWFM_f2_MultiModel
           MessageArray(2) = 'Maximum exchange flow that did not converge (units in consistent'
           MessageArray(3) = ' simulation units) at time step '//TRIM(IntToText(Connections%iMaxNonConvergeTStep))//':'
           WRITE (MessageArray(4),'(G13.6,4X,A,4X,A)') Connections%rMaxNonConvergeFlow,TRIM(Connections%cMaxNonConvergeVar),TRIM(Connections%cMaxNonConvergeModel)
-          CALL DefaultLogger%LogMessage(MessageArray(1:4),f_iWarn,'',iDestination=f_iSCREEN_FILE)
+          CALL DefaultLogger%LogMessage(MessageArray(1:4),f_iWarn,f_cModName,iDestination=f_iSCREEN_FILE)
       END IF
   END IF
       
@@ -308,7 +318,7 @@ CONTAINS
     !Local variables
     CHARACTER(LEN=f_iModNameLen+15),PARAMETER :: ThisProcedure = f_cModName // '::PrepareForRun'
     CHARACTER,ALLOCATABLE                     :: cSimFileNames(:)*500
-    INTEGER                                   :: indxModel,iImage,indx,iNActiveImages
+    INTEGER                                   :: indxModel,iImage,indx,iNActiveImages,iNThreads
     CHARACTER                                 :: RDATE*30,RTIME*30 
     
     !Initialize
@@ -384,6 +394,15 @@ CONTAINS
     !Model index
     iModelIndex = THIS_IMAGE() - 1
     
+    !Set OpenMP environment for runner images
+    IF (lRunner) THEN
+        !$ CALL KMP_SET_BLOCKTIME(0)                                    !Let threads sleep right away
+        !$ iNThreads = MAX(MIN(OMP_GET_NUM_PROCS() , 16)/iNModels , 1)  !Set number of threads to minimum of 16 or number of available 
+        !$ CALL OMP_SET_NUM_THREADS(iNThreads)                          !   processors, divided by the number of models
+        !$ CALL OMP_SET_MAX_ACTIVE_LEVELS(2)                            !Maximum 2 levels of nested paralellization
+        !$ CALL KMP_SET_STACKSIZE_S(16777216)                           !Set thread stack size to 16MB
+    END IF
+    
   END SUBROUTINE PrepareForRun
   
   
@@ -450,6 +469,13 @@ CONTAINS
     !Convergence creteria
     CALL MainControlFile%ReadData(Connections%iMaxIter,iStat)     ;  IF (iStat .EQ. -1) RETURN
     CALL MainControlFile%ReadData(Connections%rConvergence,iStat) ;  IF (iStat .EQ. -1) RETURN
+    
+    !Make sure under-relxation parameter is accepatable
+    IF (Connections%rOmega.LE.0.0  .OR.  Connections%rOmega.GT. 1.0) THEN
+        CALL DefaultLogger%SetLastMessage('Under-relaxation parameter (OMEGA) must be between 0.0 and 1.0, and cannot be equal to 0.0!',f_iFatal,ThisProcedure)
+        iStat = -1
+        RETURN
+    END IF
     
     !Read connecting nodes, models and layers for GW
     CALL ReadControlData_GW(MainControlFile,iModelIDs,Connections,iStat)  ;  IF (iStat .EQ. -1) RETURN
@@ -524,13 +550,19 @@ CONTAINS
     END DO
     !Allocate memory for the conductance, head terms, flows
     ALLOCATE (Connections%rHeadGW(Connections%iNLinkNodesGW)                                      , &
+              Connections%rHeadGW_P(Connections%iNLinkNodesGW)                                    , &
               Connections%rFlowGW(Connections%iNLinkNodesGW)                                      , &
               Connections%rFlowGW_P(Connections%iNLinkNodesGW)                                    , &
-              Connections%rEffectiveConductanceGW(Connections%iNLinkNodesGW)                      , &
+              Connections%iConnectionIndexGW(f_iMaxConnectedNodes,Connections%iNLinkNodesGW)      , &
               Connections%rHeadConnectedGW(f_iMaxConnectedNodes,Connections%iNLinkNodesGW)        , &
-              Connections%rConductanceConnectedGW(f_iMaxConnectedNodes,Connections%iNLinkNodesGW) )
+              Connections%rHeadConnectedGW_P(f_iMaxConnectedNodes,Connections%iNLinkNodesGW)      , &
+              Connections%rConductanceConnectedGW(f_iMaxConnectedNodes,Connections%iNLinkNodesGW) , &
+              Connections%rFlowConnectedGW(f_iMaxConnectedNodes,Connections%iNLinkNodesGW)        , &
+              Connections%rFlowConnectedGW_P(f_iMaxConnectedNodes,Connections%iNLinkNodesGW)      )
     Connections%rFlowGW   = 0.0
     Connections%rFlowGW_P = 0.0
+    Connections%rFlowConnectedGW   = 0.0
+    Connections%rFlowConnectedGW_P = 0.0
 
   END SUBROUTINE ReadControlData_GW
   
@@ -938,47 +970,47 @@ CONTAINS
     CHARACTER(LEN=*),INTENT(IN)             :: cModelNames(:)[*]
     INTEGER,INTENT(IN)                      :: iModelIndex
     TYPE(ModelConnectionType),INTENT(INOUT) :: Connections[*]
-    INTEGER,INTENT(OUT)                     :: iStat 
+    INTEGER,INTENT(OUT)                     :: iStat[*] 
     
     !Local variables
     CHARACTER(LEN=f_iModNameLen+17),PARAMETER :: ThisProcedure = f_cModName // '::PrepConnections'
-    INTEGER                                   :: iNodeID,iNodeIndex,indx,indx1,iCount,iNBypasses,iIndex,iDest,iDestType, &
-                                                 iBPID,iConnectedBPID,iStrmNodeExport,iNDiver,iDivID,iConnectedDivID
-    INTEGER,ALLOCATABLE                       :: iBCNodes(:),iBCLayers(:),iBypassIDs(:),iDiverIDs(:)
+    INTEGER                                   :: iNodeID,iNodeIndex,indx,indx1,iNBypasses,iIndex,iDest,iDestType,         &
+                                                 iBPID,iConnectedBPID,iStrmNodeExport,iNDiver,iDivID,iConnectedDivID,     &
+                                                 iModelConnected,iNodeConnected,iLayerConnected,iModelFind, &   
+                                                 iNodeFind,iLayerFind
+    INTEGER,ALLOCATABLE                       :: iBypassIDs(:),iDiverIDs(:)
     
     !Initialize
     iStat = 0
+    iStat[iErrImage] = 0  
     
-    !Allocate memory
-    ALLOCATE (iBCNodes(Connections[1]%iNLinkNodesGW) , iBCLayers(Connections[1]%iNLinkNodesGW))
-    iCount = 0
+    !Sync active images so that they all strat this section with a clean iStat[iErrImage]
+    SYNC IMAGES(iActiveImages)  
     
+    IF (lRunner) THEN
     !=====================================
     !=== Prepare gw nodes
     !=====================================
     DO indx=1,Connections[1]%iNLinkNodesGW
         IF (Connections[1]%iModelGW(indx) .EQ. iModelIndex) THEN
-            iCount     = iCount + 1 
             iNodeID    = Connections[1]%iNodeGW(indx)
             iNodeIndex = LocateInList(iNodeID,Model%iNodeIDs)
             !Is node ID legit?
             IF (iNodeIndex .EQ. 0) THEN
                 CALL DefaultLogger%SetLastMessage('Node '//TRIM(IntTotext(iNodeID))//' listed for model linkage is not in '//TRIM(cModelNames(iModelIndex)[1])//' model!',f_iFatal,ThisProcedure)
                 iStat = -1
-                RETURN
+                    iStat[iErrImage] = -1
+                    GOTO 10
             END IF
             !Node must be a boundary node
             IF (.NOT. Model%IsBoundaryNode(iNodeIndex)) THEN
                 CALL DefaultLogger%SetLastMessage('Node '//TRIM(IntTotext(iNodeID))//' listed for model linkage in '//TRIM(cModelNames(iModelIndex)[1])//' model is not a boundary node!',f_iFatal,ThisProcedure)
                 iStat = -1
-                RETURN
+                    iStat[iErrImage] = -1
+                    GOTO 10
             END IF
             !Assign node index
             Connections[1]%iNodeGW(indx) = iNodeIndex
-            
-            !Save b.c. node and layer to be removed
-            iBCNodes(iCount)  = iNodeIndex
-            iBCLayers(iCount) = Connections[1]%iLayerGW(indx)
         END IF
         
         !Loop over connected nodes
@@ -990,13 +1022,15 @@ CONTAINS
                 IF (iNodeIndex .EQ. 0) THEN
                     CALL DefaultLogger%SetLastMessage('Groundwater node '//TRIM(IntTotext(iNodeID))//' listed for model linkage is not in model '//TRIM(cModelNames(iModelIndex)[1])//'!',f_iFatal,ThisProcedure)
                     iStat = -1
-                    RETURN
+                        iStat[iErrImage] = -1
+                        GOTO 10
                 END IF
                 !Node must be a boundary node
                 IF (.NOT. Model%IsBoundaryNode(iNodeIndex)) THEN
                     CALL DefaultLogger%SetLastMessage('Groundwater node '//TRIM(IntTotext(iNodeID))//' listed for model linkage in '//TRIM(cModelNames(iModelIndex)[1])//' model is not a boundary node!',f_iFatal,ThisProcedure)
                     iStat = -1
-                    RETURN
+                        iStat[iErrImage] = -1
+                        GOTO 10
                 END IF
                 !Assign node index
                 Connections[1]%iNodeConnectedGW(indx1,indx) = iNodeIndex
@@ -1004,12 +1038,6 @@ CONTAINS
         END DO
     END DO
   
-    !Remove previously defined b.c. nodes from model
-    CALL Model%RemoveGWBC(iBCNodes(1:iCount),iBCLayers(1:iCount),.FALSE.,iStat)  ;  IF (iStat .NE. 0) RETURN
-    
-    !Add new b.c. nodes as specified-flow b.c.
-    CALL Model%SetGWBCNodes(iBCNodes(1:iCount),iBCLayers(1:iCount),iFlowBCID,.TRUE.,iStat)  ;  IF (iStat .NE. 0) RETURN
-    
     
     !=====================================
     !=== Prepare stream nodes
@@ -1023,7 +1051,8 @@ CONTAINS
              IF (iNodeIndex .EQ. 0) THEN
                  CALL DefaultLogger%SetLastMessage('Stream node '//TRIM(IntTotext(iNodeID))//' listed for model linkage is not in model '//TRIM(cModelNames(iModelIndex)[1])//'!',f_iFatal,ThisProcedure)
                  iStat = -1
-                 RETURN
+                     iStat[iErrImage] = -1
+                     GOTO 10
              END IF
              !Assign node index
              Connections[1]%iNodeST(indx) = iNodeIndex
@@ -1037,7 +1066,8 @@ CONTAINS
              IF (iNodeIndex .EQ. 0) THEN
                  CALL DefaultLogger%SetLastMessage('Stream node '//TRIM(IntTotext(iNodeID))//' listed for model linkage is not in model '//TRIM(cModelNames(iModelIndex)[1])//'!',f_iFatal,ThisProcedure)
                  iStat = -1
-                 RETURN
+                     iStat[iErrImage] = -1
+                     GOTO 10
              END IF
              !Assign node index
              Connections[1]%iNodeConnectedST(indx) = iNodeIndex
@@ -1063,7 +1093,8 @@ CONTAINS
             IF (iIndex .EQ. 0) THEN
                 CALL DefaultLogger%SetLastMessage('Bypass '//TRIM(IntTotext(iBPID))//' listed for model linkage is not in the exporting model '//TRIM(cModelNames(iModelIndex)[1])//'!',f_iFatal,ThisProcedure)
                 iStat = -1
-                RETURN
+                    iStat[iErrImage] = -1
+                    GOTO 10
             END IF
             Connections[1]%iBP(indx) = iIndex
             
@@ -1072,7 +1103,8 @@ CONTAINS
             IF (iDestType .NE. f_iFlowDest_Outside) THEN
                 CALL DefaultLogger%SetLastMessage('Bypass '//TRIM(IntTotext(iBPID))//' listed for model linkage in model '//TRIM(cModelNames(iModelIndex)[1])//' is not delivered outside that model!',f_iFatal,ThisProcedure)
                 iStat = -1
-                RETURN
+                    iStat[iErrImage] = -1
+                    GOTO 10
             END IF
         END IF
         
@@ -1083,7 +1115,8 @@ CONTAINS
             IF (iIndex .EQ. 0) THEN
                 CALL DefaultLogger%SetLastMessage('Bypass '//TRIM(IntTotext(iConnectedBPID))//' listed for model linkage is not in the importing model '//TRIM(cModelNames(iModelIndex)[1])//'!',f_iFatal,ThisProcedure)
                 iStat = -1
-                RETURN
+                    iStat[iErrImage] = -1
+                    GOTO 10
             END IF
             Connections[1]%iConnectedBP(indx) = iIndex
             
@@ -1092,7 +1125,8 @@ CONTAINS
             IF (iStrmNodeExport .NE. 0) THEN
                 CALL DefaultLogger%SetLastMessage('Bypass '//TRIM(IntTotext(iConnectedBPID))//' listed for model linkage in model '//TRIM(cModelNames(iModelIndex)[1])//' is not imported from outside the model area!',f_iFatal,ThisProcedure)
                 iStat = -1
-                RETURN
+                    iStat[iErrImage] = -1
+                    GOTO 10
             END IF
         END IF
     END DO
@@ -1116,7 +1150,8 @@ CONTAINS
             IF (iIndex .EQ. 0) THEN
                 CALL DefaultLogger%SetLastMessage('Diversion '//TRIM(IntTotext(iDivID))//' listed for model linkage is not in the exporting model '//TRIM(cModelNames(iModelIndex)[1])//'!',f_iFatal,ThisProcedure)
                 iStat = -1
-                RETURN
+                    iStat[iErrImage] = -1
+                    GOTO 10
             END IF
             Connections[1]%iDiv(indx) = iIndex
             
@@ -1125,7 +1160,8 @@ CONTAINS
             IF (iDestType .NE. f_iFlowDest_Outside) THEN
                 CALL DefaultLogger%SetLastMessage('Diversion '//TRIM(IntTotext(iDivID))//' listed for model linkage in model '//TRIM(cModelNames(iModelIndex)[1])//' is not delivered outside that model!',f_iFatal,ThisProcedure)
                 iStat = -1
-                RETURN
+                    iStat[iErrImage] = -1
+                    GOTO 10
             END IF
         END IF
         
@@ -1136,7 +1172,8 @@ CONTAINS
             IF (iIndex .EQ. 0) THEN
                 CALL DefaultLogger%SetLastMessage('Diversion '//TRIM(IntTotext(iConnectedDivID))//' listed for model linkage is not in the importing model '//TRIM(cModelNames(iModelIndex)[1])//'!',f_iFatal,ThisProcedure)
                 iStat = -1
-                RETURN
+                    iStat[iErrImage] = -1
+                    GOTO 10
             END IF
             Connections[1]%iConnectedDiv(indx) = iIndex
             
@@ -1145,10 +1182,42 @@ CONTAINS
             IF (iStrmNodeExport .NE. 0) THEN
                 CALL DefaultLogger%SetLastMessage('Diversion '//TRIM(IntTotext(iConnectedDivID))//' listed for model linkage in model '//TRIM(cModelNames(iModelIndex)[1])//' is not imported from outside the model area!',f_iFatal,ThisProcedure)
                 iStat = -1
-                RETURN
+                    iStat[iErrImage] = -1
+                    GOTO 10
             END IF
         END IF
     END DO
+    END IF
+10  SYNC IMAGES(iActiveImages)
+    IF (iStat[iErrImage] .NE. 0) RETURN
+
+    
+    !Find the index of a node as it appears as b.c. within the connected nodes' b.c. list
+    IF (lMaster) THEN    
+        DO indx=1,Connections%iNLinkNodesGW
+            iModelFind = Connections%iModelGW(indx)
+            iNodeFind  = Connections%iNodeGW(indx)
+            iLayerFind = Connections%iLayerGW(indx)
+            DO indx1=1,Connections%iNConnectedNodesGW(indx)
+                iModelConnected                            = Connections%iModelConnectedGW(indx1,indx)
+                iNodeConnected                             = Connections%iNodeConnectedGW(indx1,indx)
+                iLayerConnected                            = Connections%iLayerConnectedGW(indx1,indx)
+                Connections%iConnectionIndexGW(indx1,indx) = IndexOfConnection(Connections%iModelGW           , &
+                                                                               Connections%iNodeGW            , &
+                                                                               Connections%iLayerGW           , &
+                                                                               iModelConnected                , &
+                                                                               iNodeConnected                 , &
+                                                                               iLayerConnected                , &
+                                                                               iModelFind                     , &
+                                                                               iNodeFind                      , &
+                                                                               iLayerFind                     , &
+                                                                               Connections%iNConnectedNodesGW , &
+                                                                               Connections%iModelConnectedGW  , &
+                                                                               Connections%iNodeConnectedGW   , &
+                                                                               Connections%iLayerConnectedGW  )
+            END DO
+        END DO
+    END IF   
     
   END SUBROUTINE PrepConnections
   
@@ -1165,11 +1234,15 @@ CONTAINS
     
     !Local variables
     CHARACTER(LEN=f_iModNameLen+21),PARAMETER :: ThisProcedure = f_cModName // '::ComputeConductances'
-    INTEGER                                   :: indx,indx1,ErrorCode,iNode1,iNode2,iLayer1,iLayer2,iNPairs,       &
-                                                 iNLayers,iNNodes,iCount,iModel1,iModel2,iNConnectedNodes         
+    INTEGER                                   :: indx,indx1,iErrorCode,iNode1,iNode2,iLayer1,iLayer2,iNPairs, &
+                                                 iNLayers,iNNodes,iCount,iModel1,iModel2,iNConnectedNodes,    &
+                                                 indxConnectedNode,iNConnectedNodesToConnectedNode,iDim,      &
+                                                 iMaxNConnectedNodes
     REAL(8)                                   :: rDistance,rX1,rY1,rX2,rY2,rLength1,rLength2,rThick1,rThick2,      &
                                                  rK1,rK2,rLength,rConductanceInv1,rConductanceInv2,rThick
-    REAL(8),ALLOCATABLE                       :: rKh(:,:),rX(:),rY(:),rTopElev(:,:),rBottomElev(:,:)
+    INTEGER,ALLOCATABLE                       :: iBCNodes(:),iBCLayers(:)
+    REAL(8),ALLOCATABLE                       :: rKh(:,:),rX(:),rY(:),rTopElev(:,:),rBottomElev(:,:),rConductances(:), &
+                                                 rConstrainingBCHeads(:)
     
     !Initialize
     iStat = 0
@@ -1246,8 +1319,14 @@ CONTAINS
             rK1      = ConductanceTempData%rK1(indx)
             rLength1 = ConductanceTempData%rLength1(indx)
             rThick1  = ConductanceTempData%rThick1(indx)
-            DO indx1=1,Connections%iNConnectedNodesGW(indx)
+            iNConnectedNodes = Connections%iNConnectedNodesGW(indx)
+            DO indx1=1,iNConnectedNodes
                 iCount    = iCount + 1
+                iModel2                         = Connections%iModelConnectedGW(indx1,indx)
+                iNode2                          = Connections%iNodeConnectedGW(indx1,indx)
+                iLayer2                         = Connections%iLayerConnectedGW(indx1,indx)
+                indxConnectedNode               = FindNodeInList(iModel2,iNode2,iLayer2,Connections%iModelGW,Connections%iNodeGW,Connections%iLayerGW)
+                iNConnectedNodesToConnectedNode = Connections%iNConnectedNodesGW(indxConnectedNode)
                 rX2       = ConductanceTempData%rX2(iCount)
                 rY2       = ConductanceTempData%rY2(iCount)
                 rK2       = ConductanceTempData%rK2(iCount)
@@ -1256,8 +1335,8 @@ CONTAINS
                 rDistance = SQRT((rX1-rX2)*(rX1-rX2) + (rY1-rY2)*(rY1-rY2))  ;  IF (rDistance .EQ. 0.0) rDistance = 1.0
                 rLength   = MIN(rLength1 , rLength2) 
                 rThick    = MIN(rThick1 , rThick2)
-                rConductanceInv1 = rK1*rThick*rLength  ;  IF (rConductanceInv1 .GT. 0.0) rConductanceInv1 = 1D0 / rConductanceInv1
-                rConductanceInv2 = rK2*rThick*rLength  ;  IF (rConductanceInv2 .GT. 0.0) rConductanceInv2 = 1D0 / rConductanceInv2
+                rConductanceInv1                = rK1*rThick*rLength/REAL(iNConnectedNodes,8)                 ;  IF (rConductanceInv1 .GT. 0.0) rConductanceInv1 = 1D0 / rConductanceInv1
+                rConductanceInv2                = rK2*rThick*rLength/REAL(iNConnectedNodesToConnectedNode,8)  ;  IF (rConductanceInv2 .GT. 0.0) rConductanceInv2 = 1D0 / rConductanceInv2
                 IF (rConductanceInv1.EQ.0.0  .OR.  rConductanceInv2.EQ.0.0) THEN
                     Connections%rConductanceConnectedGW(indx1,indx) = 0.0
                 ELSE
@@ -1266,11 +1345,10 @@ CONTAINS
             END DO
         END DO
         
-        !Compute effective conductances at each node,layer,model combination
+        !Inform user about zero effective conductance
         DO indx=1,Connections%iNLinkNodesGW
             iNConnectedNodes                          = Connections%iNConnectedNodesGW(indx)
-            Connections%rEffectiveConductanceGW(indx) = SUM(Connections%rConductanceConnectedGW(1:iNConnectedNodes,indx))
-            IF (Connections%rEffectiveConductanceGW(indx) .EQ. 0.0) THEN
+            IF (SUM(Connections%rConductanceConnectedGW(1:iNConnectedNodes,indx)) .EQ. 0.0) THEN
                 iModel1         = iModelIDs(Connections%iModelGW(indx))
                 iNode1          = Model[Connections%iModelGW(indx)+1]%iNodeIDs(Connections%iNodeGW(indx))
                 iLayer1         = Connections%iLayerGW(indx)
@@ -1280,10 +1358,8 @@ CONTAINS
                 CALL DefaultLogger%LogMessage(MessageArray(1:3),f_iInfo,ThisProcedure)
             END IF
         END DO
-    END IF
     
     !Clear memory of the temp data
-    IF (lMaster) THEN
         DEALLOCATE (ConductanceTempData%rK1      , &
                     ConductanceTempData%rK2      , &
                     ConductanceTempData%rX1      , &
@@ -1294,7 +1370,37 @@ CONTAINS
                     ConductanceTempData%rLength2 , &
                     ConductanceTempData%rThick1  , &
                     ConductanceTempData%rThick2  , &
-                    STAT = ErrorCode             )
+                    STAT = iErrorCode            )
+    END IF
+    SYNC IMAGES(iActiveImages)
+    
+    IF (lRunner) THEN
+        !Collect boundary gw nodes and layers for this model 
+        iMaxNConnectedNodes = MAXVAL(Connections[1]%iNConnectedNodesGW)
+        iDim                = Connections[1]%iNLinkNodesGW * iMaxNConnectedNodes 
+        ALLOCATE (iBCNodes(iDim) , iBCLayers(iDim) , rConductances(iDim) , rConstrainingBCHeads(iDim))
+        rConstrainingBCHeads = -HUGE(0D0)
+        iCount               =0
+        DO indx=1,Connections[1]%iNLinkNodesGW
+            IF (Connections[1]%iModelGW(indx) .EQ. iModelIndex) THEN
+                DO indx1=1,Connections[1]%iNConnectedNodesGW(indx)
+                    iCount                = iCount + 1
+                    iBCNodes(iCount)      = Connections[1]%iNodeGW(indx)
+                    iBCLayers(iCount)     = Connections[1]%iLayerGW(indx)
+                    rConductances(iCount) = Connections[1]%rConductanceConnectedGW(indx1,indx)
+                END DO
+            END IF
+        END DO
+        
+        !Remove previously defined b.c. nodes from model
+        CALL Model%RemoveGWBC(iBCNodes(1:iCount),iBCLayers(1:iCount),.FALSE.,iStat) 
+        IF (iStat .NE. 0) RETURN
+        
+        !Add new b.c. nodes as constrained general head b.c. along with their conductance
+        CALL Model%SetGWBCNodes(iBCNodes(1:iCount),iBCLayers(1:iCount),iConstrainedGHBCID,.TRUE.,iStat,rConductances=rConductances(1:iCount),rConstrainingBCHeads=rConstrainingBCHeads(1:iCount)) 
+
+        !Clear memory
+        DEALLOCATE (iBCNodes , iBCLayers , rConductances , rConstrainingBCHeads , STAT=iErrorCode)
     END IF
     
   END SUBROUTINE ComputeConductances
@@ -1329,9 +1435,9 @@ CONTAINS
   
   
   ! -------------------------------------------------------------
-  ! --- SET BOUNDARY FLOWS 
+  ! --- SET BOUNDARY CONDITIONS 
   ! -------------------------------------------------------------
-  SUBROUTINE SetFlowBC(Model,iModelIndex,lFirstCall,Connections,iStat)
+  SUBROUTINE SetBC(Model,iModelIndex,lFirstCall,Connections,iStat)
     TYPE(ModelWithIDType)     :: Model[*]
     INTEGER,INTENT(IN)        :: iModelIndex
     LOGICAL,INTENT(IN)        :: lFirstCall
@@ -1339,32 +1445,41 @@ CONTAINS
     INTEGER,INTENT(OUT)       :: iStat
     
     !Local variables
-    INTEGER                  :: indx,iNode,iLayer
+    INTEGER                  :: indx,indx1,iNode,iLayer
+    REAL(8)                  :: rHeadConnectedGW_Relaxed,rMaxBCFlow
     LOGICAL,SAVE             :: lDataInitialized  = .FALSE. 
     INTEGER,SAVE             :: iNLinkNodesGW,iNLinkNodesST,iNLinkNodesBP,iNLinkNodesDiv
-    INTEGER,ALLOCATABLE,SAVE :: iModelGW(:),iNodeGW(:),iLayerGW(:),iModelST(:),iNodeST(:)    , &
-                                iModelConnectedST(:),iNodeConnectedST(:),iModelConnectedBP(:), &
-                                iConnectedBP(:),iModelConnectedDiv(:),iConnectedDiv(:) 
-    REAL(8),ALLOCATABLE,SAVE :: rFlowGW(:),rInflowConnectedReadST(:),rFlowST(:),rFlowBP(:),rFlowDiv(:)
+    REAL(8),SAVE             :: rOmega
+    INTEGER,ALLOCATABLE,SAVE :: iModelGW(:),iNodeGW(:),iLayerGW(:),iNConnectedNodesGW(:),        &
+                                iModelST(:),iNodeST(:),iModelConnectedST(:),iNodeConnectedST(:), &
+                                iModelConnectedBP(:),iConnectedBP(:),                            &
+                                iModelConnectedDiv(:),iConnectedDiv(:) 
+    REAL(8),ALLOCATABLE,SAVE :: rFlowGW(:),rFlowConnectedGW(:,:),rFlowConnectedGW_P(:,:),        &
+                                rHeadConnectedGW(:,:),rHeadConnectedGW_P(:,:),                   &
+                                rInflowConnectedReadST(:),rFlowST(:),rFlowBP(:),rFlowDiv(:)
     
     !Initailize
     iStat = 0
     
     IF (lFirstCall) THEN
-        !First collect heads from models
+        !First collect heads and flows from models
         IF (lRunner) CALL CollectHeadsFlows(Model,iModelIndex,Connections)
         SYNC IMAGES (iActiveImages)
         
-        !Calculate gw flows and store the connection flows at the beginning of time step
+        !Store the connection flows at the beginning of time step; assume gw boundary flows are zero
         IF (lMaster) THEN
-            CALL CalculateGWFlows(Connections)
-            Connections%rFlowGW_P = Connections%rFlowGW
+            Connections%rFlowGW            = 0.0
+            Connections%rFlowGW_P          = 0.0
+            Connections%rFlowConnectedGW   = 0.0
+            Connections%rFlowConnectedGW_P = 0.0
+            Connections%rHeadGW_P          = Connections%rHeadGW
+            Connections%rHeadConnectedGW_P = Connections%rHeadConnectedGW
             Connections%rFlowST_P = Connections%rFlowST
         END IF
         SYNC IMAGES (iActiveImages)
     END IF
   
-    !Pass boundary flows to models
+    !Pass GHBCs, stream flows, bypasses and diversions to models
     IF (lRunner) THEN
         !Copy info from master (this proved to be faster than getting information one at a time)
         IF (.NOT. lDataInitialized) THEN
@@ -1376,6 +1491,11 @@ CONTAINS
                       iNodeGW(iNLinkNodesGW)                , &
                       iLayerGW(iNLinkNodesGW)               , &
                       rFlowGW(iNLinkNodesGW)                , &
+                      iNConnectedNodesGW(iNLinkNodesGW)                      , &
+                      rFlowConnectedGW(f_iMaxConnectedNodes,iNLinkNodesGW)   , &
+                      rFlowConnectedGW_P(f_iMaxConnectedNodes,iNLinkNodesGW) , &
+                      rHeadConnectedGW(f_iMaxConnectedNodes,iNLinkNodesGW)   , &
+                      rHeadConnectedGW_P(f_iMaxConnectedNodes,iNLinkNodesGW) , &
                       iModelST(iNLinkNodesST)               , &
                       iNodeST(iNLinkNodesST)                , &
                       iModelConnectedST(iNLinkNodesST)      , &
@@ -1391,6 +1511,7 @@ CONTAINS
             iModelGW           = Connections[1]%iModelGW
             iNodeGW            = Connections[1]%iNodeGW
             iLayerGW           = Connections[1]%iLayerGW
+            iNConnectedNodesGW = Connections[1]%iNConnectedNodesGW
             iModelST           = Connections[1]%iModelST
             iNodeST            = Connections[1]%iNodeST
             iModelConnectedST  = Connections[1]%iModelConnectedST
@@ -1403,18 +1524,32 @@ CONTAINS
             lDataInitialized  = .TRUE.
         END IF
         rFlowGW                = Connections[1]%rFlowGW
+        rFlowConnectedGW       = Connections[1]%rFlowConnectedGW
+        rFlowConnectedGW_P     = Connections[1]%rFlowConnectedGW_P
+        rHeadConnectedGW       = Connections[1]%rHeadConnectedGW
+        rHeadConnectedGW_P     = Connections[1]%rHeadConnectedGW_P
         rInflowConnectedReadST = Connections[1]%rInflowConnectedReadST
         rFlowST                = Connections[1]%rFlowST
         rFlowBP                = Connections[1]%rFlowBP
         rFlowDiv               = Connections[1]%rFlowDiv
+        rOmega                 = Connections[1]%rOmega
         
         !Groundwater b.c.
         DO indx=1,iNLinkNodesGW
             IF (iModelGW(indx) .EQ. iModelIndex) THEN
                 iNode  = iNodeGW(indx)
                 iLayer = iLayerGW(indx)
-                CALL Model%SetGWBC(iNode,iLayer,iFlowBCID,iStat,rFlow=rFlowGW(indx))
+                DO indx1=1,iNConnectedNodesGW(indx)
+                    !Compute under-relaxed head to be used in next iteration
+                    rHeadConnectedGW_Relaxed = rOmega*rHeadConnectedGW(indx1,indx) + (1D0-rOmega)*rHeadConnectedGW_P(indx1,indx)
+                    IF (rFlowConnectedGW(indx1,indx) .LT. 0.0) THEN  !This is flow that is occuring at the connected node, so a negative value means flow entering into our node (iNode)
+                        rMaxBCFlow = -rFlowConnectedGW(indx1,indx)
+                    ELSE
+                        rMaxBCFlow = HUGE(0D0)
+                    END IF
+                    CALL Model%SetGWBC(iNode,iLayer,iConstrainedGHBCID,iStat,iBCIndex=indx1,rHead=rHeadConnectedGW_Relaxed,rMaxBCFlow=rMaxBCFlow)
                 IF (iStat .NE. 0) RETURN
+                END DO
             END IF
         END DO
         
@@ -1449,11 +1584,11 @@ CONTAINS
         END DO
     END IF
     
-  END SUBROUTINE SetFlowBC
+  END SUBROUTINE SetBC
     
   
   ! -------------------------------------------------------------
-  ! --- COLLECT GW HEADS, FLOWS FROM MODELS TO PASS TO OTHER MODELS AS B.C.
+  ! --- COLLECT GW HEADS AND FLOWS FROM MODELS TO PASS TO OTHER MODELS AS B.C.
   ! -------------------------------------------------------------
   SUBROUTINE CollectHeadsFlows(Model,iModelIndex,Connections)
     TYPE(ModelWithIDType),INTENT(IN) :: Model[*]
@@ -1461,14 +1596,14 @@ CONTAINS
     TYPE(ModelConnectionType)        :: Connections[*]
     
     !Local variables
-    INTEGER                  :: indx,indx1,iNode,iLayer,iNConnectedNodes
+    INTEGER                  :: indx,indx1,iNode,iLayer,iConnectionIndex,iNodeConnected,iLayerConnected,iConnectionIndexCheck
     LOGICAL,SAVE             :: lDataInitialized = .FALSE.
     INTEGER,SAVE             :: iNLinkNodesGW,iNLinkNodesST,iNLinkNodesBP,iNLinkNodesDiv
-    INTEGER,ALLOCATABLE,SAVE :: iModelGW(:),iNodeGW(:),iLayerGW(:),iModelConnectedGW(:,:), &
-                                iNodeConnectedGW(:,:),iLayerConnectedGW(:,:),iModelST(:),  &
+    INTEGER,ALLOCATABLE,SAVE :: iModelGW(:),iNodeGW(:),iLayerGW(:),iNConnectedNodesGW(:),iModelConnectedGW(:,:)  , &
+                                iNodeConnectedGW(:,:),iLayerConnectedGW(:,:),iConnectionIndexGW(:,:),iModelST(:) , &
                                 iNodeST(:),iModelBP(:),iBP(:),iModelDiv(:),iDiv(:)
     
-    !Copy infor from master
+    !Copy info from master
     IF (.NOT. lDataInitialized) THEN
         iNLinkNodesGW  = Connections[1]%iNLinkNodesGW
         iNLinkNodesST  = Connections[1]%iNLinkNodesST
@@ -1477,9 +1612,11 @@ CONTAINS
         ALLOCATE (iModelGW(iNLinkNodesGW)                               , &
                   iLayerGW(iNLinkNodesGW)                               , &
                   iNodeGW(iNLinkNodesGW)                                , &
+                  iNConnectedNodesGW(iNLinkNodesGW)                      , &
                   iModelConnectedGW(f_iMaxConnectedNodes,iNLinkNodesGW) , &
                   iNodeConnectedGW(f_iMaxConnectedNodes,iNLinkNodesGW)  , &
                   iLayerConnectedGW(f_iMaxConnectedNodes,iNLinkNodesGW) , &
+                  iConnectionIndexGW(f_iMaxConnectedNodes,iNLinkNodesGW) , &
                   iModelST(iNLinkNodesST)                               , &
                   iNodeST(iNLinkNodesST)                                , &
                   iModelBP(iNLinkNodesBP)                               , &
@@ -1494,6 +1631,8 @@ CONTAINS
         iModelConnectedGW = Connections[1]%iModelConnectedGW
         iNodeConnectedGW  = Connections[1]%iNodeConnectedGW
         iLayerConnectedGW = Connections[1]%iLayerConnectedGW
+        iConnectionIndexGW = Connections[1]%iConnectionIndexGW
+        iNConnectedNodesGW = Connections[1]%iNConnectedNodesGW 
         iModelST          = Connections[1]%iModelST
         iNodeST           = Connections[1]%iNodeST
         iModelBP          = Connections[1]%iModelBP
@@ -1504,19 +1643,21 @@ CONTAINS
         lDataInitialized  = .TRUE.
     END IF
     
-    !Collect heads from model
+    !Collect gw heads and boundary flows from model
     DO indx=1,iNLinkNodesGW
         IF (iModelGW(indx) .EQ. iModelIndex) THEN
             iNode                        = iNodeGW(indx)
             iLayer                       = iLayerGW(indx)
             Connections[1]%rHeadGW(indx) = Model%GetGWHead_AtOneNodeLayer(iNode,iLayer,lPrevious=.FALSE.)
+            Connections[1]%rFlowGW(indx) = Model%GetGWBoundaryFlow_ForNodeLayer(iConstrainedGHBCID,iNode,iLayer)
         END IF
-        iNConnectedNodes = Connections[1]%iNConnectedNodesGW(indx)
-        DO indx1=1,iNConnectedNodes
+        DO indx1=1,iNConnectedNodesGW(indx)
             IF (iModelConnectedGW(indx1,indx) .EQ. iModelIndex) THEN
-                iNode                                       = iNodeConnectedGW(indx1,indx)
-                iLayer                                      = iLayerConnectedGW(indx1,indx)
-                Connections[1]%rHeadConnectedGW(indx1,indx) = Model%GetGWHead_AtOneNodeLayer(iNode,iLayer,lPrevious=.FALSE.)
+                iNodeConnected                              = iNodeConnectedGW(indx1,indx)
+                iLayerConnected                             = iLayerConnectedGW(indx1,indx)
+                iConnectionIndex                            = iConnectionIndexGW(indx1,indx)
+                Connections[1]%rHeadConnectedGW(indx1,indx) = Model%GetGWHead_AtOneNodeLayer(iNodeConnected,iLayerConnected,lPrevious=.FALSE.)
+                Connections[1]%rFlowConnectedGW(indx1,indx) = Model%GetGWBoundaryFlow_ForNodeLayerIndex(iConstrainedGHBCID,iNodeConnected,iLayerConnected,iConnectionIndex)
             END IF
         END DO
     END DO
@@ -1542,28 +1683,8 @@ CONTAINS
             Connections[1]%rFlowDiv(indx) = Model%GetStrmDiversionDelivery(iDiv(indx))
         END IF
     END DO
+    
   END SUBROUTINE CollectHeadsFlows
-  
-  
-  ! -------------------------------------------------------------
-  ! --- CALCULATE GROUNDWATER FLOWS BETWEEN MODELS
-  ! -------------------------------------------------------------
-  SUBROUTINE CalculateGWFlows(Connections)
-    TYPE(ModelConnectionType) :: Connections
-    
-    !Local variables
-    INTEGER :: indx,iNConnectedNodes
-    REAL(8) :: rEffConductance
-    
-    DO indx=1,Connections%iNLinkNodesGW
-        rEffConductance = Connections%rEffectiveConductanceGW(indx)
-        IF (rEffConductance .NE. 0.0) THEN
-            iNConnectedNodes          = Connections%iNConnectedNodesGW(indx)
-            Connections%rFlowGW(indx) = SUM(Connections%rConductanceConnectedGW(1:iNConnectedNodes,indx) * Connections%rHeadConnectedGW(1:iNConnectedNodes,indx)) - (Connections%rHeadGW(indx) * rEffConductance)
-        END IF
-    END DO
-
-  END SUBROUTINE CalculateGWFlows
   
   
   ! -------------------------------------------------------------
@@ -1587,24 +1708,30 @@ CONTAINS
     cModel     = 'n/a'
     lConverged = .TRUE.
     
-    !Retrieve the latest heads from models
+    !Before updating flows and heads, store the current ones as previous values
+    IF (lMaster) THEN
+        Connections%rFlowGW_P          = Connections%rFlowGW
+        Connections%rHeadGW_P          = Connections%rHeadGW
+        Connections%rHeadConnectedGW_P = Connections%rHeadConnectedGW
+        Connections%rFlowConnectedGW_P = Connections%rFlowConnectedGW
+        Connections%rFlowST_P          = Connections%rFlowST
+    END IF
+    SYNC IMAGES (iActiveImages)
+    
+    !Retrieve the latest heads and flows from models
     IF (lRunner) CALL CollectHeadsFlows(Model,iModelIndex,Connections)
     SYNC IMAGES (iActiveImages)
     
     !Calculate flows based on new heads and check convergence
     IF (lMaster) THEN
-        !Calculate gw flows
-        CALL CalculateGWFlows(Connections)
-        
         !Calculate convergence from groundwater
         rConverge = 0.0
         rDiffMax  = 0.0
         rValue    = 0.0 
         DO indx=1,Connections%iNLinkNodesGW
-            IF (Connections%rFlowGW(indx) .EQ. 0.0) CYCLE
             rDiff     = ABS(Connections%rFlowGW(indx)-Connections%rFlowGW_P(indx)) / Connections%rFlowGW(indx)
             rConverge = rConverge + rDiff*rDiff
-            IF (ABS(rDiff) .GT. rDiffMax) THEN
+            IF (ABS(rDiff) .GT. ABS(rDiffMax)) THEN
                 rValue    = Connections%rFlowGW(indx)
                 rDiffMax  = rDiff
                 indxModel = Connections%iModelGW(indx)
@@ -1621,7 +1748,7 @@ CONTAINS
             IF (Connections%rFlowST(indx) .EQ. 0.0) CYCLE
             rDiff     = ABS(Connections%rFlowST(indx)-Connections%rFlowST_P(indx)) / Connections%rFlowST(indx)
             rConverge = rConverge + rDiff*rDiff
-            IF (ABS(rDiff) .GT. rDiffMax) THEN
+            IF (ABS(rDiff) .GT. ABS(rDiffMax)) THEN
                 rValue    = Connections%rFlowST(indx)
                 rDiffMax  = rDiff
                 indxModel = Connections%iModelST(indx)
@@ -1635,7 +1762,7 @@ CONTAINS
         !Convergence from bypass flows 
         !Don't do anything; if stream flows converge so should bypasses
         
-        !Print-out converegence
+        !Print-out convergence
         WRITE (cMessage,'(I7,4X,G13.6,4X,G13.6,4X,G13.6,4X,A,4X,A)') iIter,SQRT(rConverge),rDiffMax,rValue,ADJUSTL(cVariable),TRIM(ADJUSTL(cModel))
         CALL DefaultLogger%LogMessage(TRIM(cMessage),f_iMessage,'',Destination=f_iFILE)
         
@@ -1652,15 +1779,65 @@ CONTAINS
         END IF
         
         !If not converged advance iteration and calculations
-        IF (.NOT. lConverged) THEN
-            iIter                 = iIter + 1
-            Connections%rFlowGW_P = Connections%rFlowGW
-            Connections%rFlowST_P = Connections%rFlowST
+        IF (.NOT. lConverged) iIter = iIter + 1
+        
+        !Adjust under-relaxation parameter based on iteration numbers
+        IF (iIter .GE. 30) THEN
+            IF (MOD(iIter,10) .EQ. 0) Connections%rOmega = MAX(0.5 * Connections%rOmega  ,  0.01)
         END IF
 
     END IF
     
   END FUNCTION CheckConvergence
+  
+  
+  ! -------------------------------------------------------------
+  ! --- FIND INDEX OF A CONNECTION IN A LIST OF CONNECTIONS FOR GW NODES
+  ! -------------------------------------------------------------
+  FUNCTION IndexOfConnection(iModelGW,iNodeGW,iLayerGW,iThisModel,iThisNode,iThisLayer,iConnectedModel,iConnectedNode,iConnectedLayer,iNConnections,iModelConnectedGW,iNodeConnectedGW,iLayerConnectedGW) RESULT(iIndex)
+    INTEGER,INTENT(IN) :: iModelGW(:),iNodeGW(:),iLayerGW(:),iThisModel,iThisNode,iThisLayer, &
+                          iConnectedModel,iConnectedNode,iConnectedLayer,iNConnections(:),    &
+                          iModelConnectedGW(:,:),iNodeConnectedGW(:,:),iLayerConnectedGW(:,:)
+    INTEGER            :: iIndex
+    
+    !Local variables
+    INTEGER :: indxThis,indx
+    
+    !First locate the model, node and layer in the list
+    indxThis = FindNodeInList(iThisModel,iThisNode,iThisLayer,iModelGW,iNodeGW,iLayerGW)
+    
+    !Now find the index of connection for the given node in the list for (iThisModel, iThisNode, iThisLayer)
+    DO indx=1,iNConnections(indxThis)
+        IF (iModelConnectedGW(indx,indxThis) .EQ. iConnectedModel) THEN
+            IF (iNodeConnectedGW(indx,indxThis) .EQ. iConnectedNode) THEN
+                IF (iLayerConnectedGW(indx,indxThis) .EQ. iConnectedLayer) THEN
+                    iIndex = indx
+                    EXIT
+                END IF
+            END IF
+        END IF
+    END DO
+    
+  END FUNCTION IndexOfConnection
+  
+  
+  ! -------------------------------------------------------------
+  ! --- FIND A NODE IN LIST OF LINK NODES
+  ! -------------------------------------------------------------
+  FUNCTION FindNodeInList(iModel,iNode,iLayer,iModelList,iNodeList,iLayerList) RESULT(indx)
+    INTEGER,INTENT(IN) :: iModel,iNode,iLayer,iModelList(:),iNodeList(:),iLayerList(:)
+    INTEGER            :: indx
+    
+    !Find
+    DO indx=1,SIZE(iModelList)
+        IF (iModelList(indx) .EQ. iModel) THEN
+            IF (iNodeList(indx) .EQ. iNode) THEN
+                IF (iLayerList(indx) .EQ. iLayer) EXIT
+            END IF
+        END IF
+    END DO
+    
+  END FUNCTION FindNodeInList
   
   
   ! -------------------------------------------------------------

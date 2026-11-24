@@ -308,6 +308,20 @@ set(IWFM_PACKAGE_GWZBUDGET_SOURCES
 )
 
 # =============================================================================
+# Package_Transport (Lagrangian particle tracking / solute transport, added upstream in 2026.0.1848)
+# =============================================================================
+set(IWFM_PACKAGE_TRANSPORT_SOURCES
+    ${IWFM_KERNEL_DIR}/Package_Transport/Class_TransportBase.f90
+    ${IWFM_KERNEL_DIR}/Package_Transport/TransportDataReader.f90
+    ${IWFM_KERNEL_DIR}/Package_Transport/LagrangianTransport/LagrangianParcel_LinkedList.f90
+    ${IWFM_KERNEL_DIR}/Package_Transport/LagrangianTransport/Package_SoluteTransport/RandomNumberGeneratorZig.f90
+    ${IWFM_KERNEL_DIR}/Package_Transport/LagrangianTransport/Class_LagrangianTransport.f90
+    ${IWFM_KERNEL_DIR}/Package_Transport/LagrangianTransport/Package_ParticleTracking/Package_ParticleTracking.f90
+    ${IWFM_KERNEL_DIR}/Package_Transport/LagrangianTransport/Package_SoluteTransport/Package_LagrangianSoluteTransport.f90
+    ${IWFM_KERNEL_DIR}/Package_Transport/TransportManager.f90
+)
+
+# =============================================================================
 # Combined Lists
 # =============================================================================
 
@@ -332,6 +346,7 @@ set(IWFM_ALL_KERNEL_SOURCES
     ${IWFM_PACKAGE_SMALLWATERSHED_SOURCES}
     ${IWFM_PACKAGE_APPUNSATZONE_SOURCES}
     ${IWFM_PACKAGE_GWZBUDGET_SOURCES}
+    ${IWFM_PACKAGE_TRANSPORT_SOURCES}
 )
 
 # Kernel + Version sources (~159 files, for Budget/ZBudget/IWFM2OBS etc.)

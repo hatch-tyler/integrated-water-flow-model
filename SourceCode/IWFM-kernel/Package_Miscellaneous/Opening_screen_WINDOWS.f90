@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2025
+!  Copyright (C) 2005-2026
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -60,7 +60,7 @@ CONTAINS
     INTEGER,PARAMETER                    :: f_RepeatCount_2 = f_OPEN_SCREEN_LINE_LENGTH-2 
     CHARACTER(LEN=10)                    :: TodaysDate
     CHARACTER(f_OPEN_SCREEN_LINE_LENGTH) ::                                                          &   !The text (line by line) of opening screen
-       f_L(39) =[CHAR(201) //            REPEAT(CHAR(205),f_RepeatCount_2)             // CHAR(187) ,&
+       f_L(34) =[CHAR(201) //            REPEAT(CHAR(205),f_RepeatCount_2)             // CHAR(187) ,&
                  CHAR(186) // '             Integrated Water Flow Model              ' // CHAR(186) ,&
                  CHAR(186) // '                       IWFM                           ' // CHAR(186) ,&
                  CHAR(186) // 'THIS PART OF ARRAY IS OVERWRITEN BY INDIVIDUAL PROGRAM' // CHAR(186) ,&
@@ -89,14 +89,9 @@ CONTAINS
                  CHAR(186) // ' 59 Temple Place - Suite 330, Boston, MA              ' // CHAR(186) ,&
                  CHAR(186) // '                      02111-1307, USA.                ' // CHAR(186) ,&
                  CHAR(186) // '                                                      ' // CHAR(186) ,&
+                 CHAR(186) // '                                                      ' // CHAR(186) ,&
                  CHAR(186) // ' For technical support, e-mail:                       ' // CHAR(186) ,&
                  CHAR(186) // ' IWFMtechsupport@water.ca.gov                         ' // CHAR(186) ,&
-                 CHAR(186) // '                                                      ' // CHAR(186) ,&
-                 CHAR(186) // '   Principal Programmer and Technical Support:        ' // CHAR(186) ,&
-                 CHAR(186) // '       Dr. Emin Can Dogrul ... Senior Engineer, DWR   ' // CHAR(186) ,&
-                 CHAR(186) // '                  (916) 902 9914                      ' // CHAR(186) ,&
-                 CHAR(186) // '              can.dogrul@water.ca.gov                 ' // CHAR(186) ,&
-                 CHAR(186) // '                                                      ' // CHAR(186) ,&
                  CHAR(186) // '                                                      ' // CHAR(186) ,&
                  CHAR(200) //            REPEAT(CHAR(205),f_RepeatCount_2)             // CHAR(188) ]  
     

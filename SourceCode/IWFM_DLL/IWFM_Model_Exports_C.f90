@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2025  
+!  Copyright (C) 2005-2026  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -5003,28 +5003,47 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- FINITE ELEMENT INTERPOLATION
   ! -------------------------------------------------------------
-  SUBROUTINE IW_Model_FEInterpolate(iModelID,rX,rY,iElemIndex,iNodes,rCoeff) BIND(C,NAME='IW_Model_FEInterpolate')
+  SUBROUTINE IW_Model_FEInterpolate(iModelID,XP,YP,iElemIndex,NVertex,Nodes,Coeff,iStat) BIND(C,NAME='IW_Model_FEInterpolate')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_FEInterpolate
-    INTEGER(C_INT),INTENT(IN)         :: iModelID
-    REAL(C_DOUBLE),INTENT(IN)              :: rX,rY
-    INTEGER(C_INT),INTENT(OUT)             :: iElemIndex
-    INTEGER(C_INT), INTENT(OUT)            :: iNodes(4)
-    REAL(C_DOUBLE), INTENT(OUT)            :: rCoeff(4)
-    
-    ! local variables
-    INTEGER,ALLOCATABLE :: iNodes_local(:)
-    REAL(8),ALLOCATABLE :: rCoeff_local(:)
-    INTEGER             :: iNVertices 
-    
-    TYPE(ModelType),POINTER :: pMdl
-    pMdl => GetModelByID(iModelID)
+    INTEGER(C_INT),INTENT(IN)  :: iModelID
+    REAL(C_DOUBLE),INTENT(IN)  :: XP,YP
+    INTEGER(C_INT),INTENT(OUT) :: iElemIndex,NVertex,Nodes(4),iStat
+    REAL(C_DOUBLE),INTENT(OUT) :: Coeff(4)
 
-    CALL pMdl%FEInterpolate(rX,rY,iElemIndex,iNodes_local,rCoeff_local)
-    
-    iNVertices = SIZE(iNodes_local)
-    iNodes(1:iNVertices) = iNodes_local
-    rCoeff(1:iNVertices) = rCoeff_local
-  
+    !Local variables
+    INTEGER                 :: iElem
+    INTEGER,ALLOCATABLE     :: iNodesLocal(:)
+    REAL(8),ALLOCATABLE     :: rCoeffLocal(:)
+    TYPE(ModelType),POINTER :: pMdl
+
+    !Initialize outputs
+    iElemIndex = 0
+    NVertex    = 0
+    Nodes      = 0
+    Coeff      = 0.0
+
+    !Make sure we have an active model
+    pMdl => GetModelByID(iModelID)
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
+        iStat = -1
+        RETURN
+    END IF
+
+    iStat = 0
+
+    !Find the element the point belongs to and the interpolation coefficients
+    CALL pMdl%FEInterpolate(XP,YP,iElem,iNodesLocal,rCoeffLocal)
+    iElemIndex = iElem
+
+    !Return if point was not located within the grid
+    IF (iElem .EQ. 0) RETURN
+
+    !Copy nodes and interpolation coefficients
+    NVertex          = SIZE(iNodesLocal)
+    Nodes(1:NVertex) = iNodesLocal
+    Coeff(1:NVertex) = rCoeffLocal
+
   END SUBROUTINE IW_Model_FEInterpolate
   
   
@@ -5153,7 +5172,7 @@ CONTAINS
   
     
   ! -------------------------------------------------------------
-  ! --- SIMULATE MODEL FOR A SINGLE TIME STEP
+  ! --- SIMULATE FLOW MODEL FOR A SINGLE TIME STEP
   ! -------------------------------------------------------------
   SUBROUTINE IW_Model_SimulateForOneTimeStep(iModelID,iStat) BIND(C,NAME='IW_Model_SimulateForOneTimeStep')
     !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_SimulateForOneTimeStep
@@ -5173,6 +5192,29 @@ CONTAINS
     CALL pMdl%Simulate(iStat)
                                              
   END SUBROUTINE IW_Model_SimulateForOneTimeStep
+  
+    
+  ! -------------------------------------------------------------
+  ! --- SIMULATE TRANSPORT MODEL FOR A SINGLE TIME STEP
+  ! -------------------------------------------------------------
+  SUBROUTINE IW_Model_SimulateTransportForOneTimeStep(iModelID,iStat) BIND(C,NAME='IW_Model_SimulateTransportForOneTimeStep')
+    !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_SimulateTransportForOneTimeStep
+    INTEGER(C_INT),INTENT(IN)  :: iModelID
+    INTEGER(C_INT),INTENT(OUT) :: iStat
+
+    !Make sure we have an active model
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
+        iStat = -1
+        RETURN
+    END IF
+
+    CALL pMdl%SimulateTransportOneTimeStep(iStat)
+
+  END SUBROUTINE IW_Model_SimulateTransportForOneTimeStep
   
     
   ! -------------------------------------------------------------
@@ -5501,6 +5543,5 @@ CONTAINS
     END DO
 
   END SUBROUTINE StringArray_To_StringScalar
-  
   
 END MODULE

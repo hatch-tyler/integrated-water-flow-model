@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2025  
+!  Copyright (C) 2005-2026  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -117,8 +117,8 @@ CONTAINS
   !  *** Note *** All values are assumed to be converted to depths
   !               before being sent to this subroutine
   ! --------------------------------------------------------------
-  SUBROUTINE NonPondedLUMoistureRouter(Precip,SMAX,SMI,ETc,K,TN,FC,WP,PSDI,Inflow,Tolerance,KunsatMethod,IterMax,SMN,Runoff,FILTRN,ET,DP,Excess,Delta)
-    REAL(8),INTENT(IN)  :: Precip,SMAX,SMI,ETc,K,TN,FC,WP,PSDI,Inflow,Tolerance
+  SUBROUTINE NonPondedLUMoistureRouter(Precip,rInitialAbstraction,SMAX,SMI,ETc,K,TN,FC,WP,PSDI,Inflow,Tolerance,KunsatMethod,IterMax,SMN,Runoff,FILTRN,ET,DP,Excess,Delta)
+    REAL(8),INTENT(IN)  :: Precip,rInitialAbstraction,SMAX,SMI,ETc,K,TN,FC,WP,PSDI,Inflow,Tolerance
     INTEGER,INTENT(IN)  :: KunsatMethod,IterMax
     REAL(8),INTENT(OUT) :: SMN,Runoff,FILTRN,DP,ET,Excess,Delta
 
@@ -126,7 +126,7 @@ CONTAINS
     REAL(8) :: SMHigh,SMLow,TotalInflow
 
     !Compute infiltration and runoff of precipitation
-    CALL SCSMethod_HELP(Precip,SMI,SMAX,FC,TN,Runoff,FILTRN)
+    CALL SCSMethod_HELP(Precip,rInitialAbstraction,SMI,SMAX,FC,TN,Runoff,FILTRN)
     
     !Total inflow
     TotalInflow = Inflow + FILTRN
@@ -166,8 +166,8 @@ CONTAINS
   !  *** Note *** All values are assumed to be converted to depths
   !               before being sent to this subroutine
   ! --------------------------------------------------------------
-  SUBROUTINE PondedLUMoistureRouter(Precip,SMAX,PondDepth,SMI,ETc,K,TN,FC,WP,PSDI,Inflow,Tolerance,KunsatMethod,IterMax,SMN,Runoff,Drain,FILTRN,ET,DP,Excess,Delta)
-    REAL(8),INTENT(IN)  :: Precip,SMAX,PondDepth,SMI,ETc,K,TN,FC,WP,PSDI,Inflow,Tolerance
+  SUBROUTINE PondedLUMoistureRouter(Precip,rInitialAbstraction,SMAX,PondDepth,SMI,ETc,K,TN,FC,WP,PSDI,Inflow,Tolerance,KunsatMethod,IterMax,SMN,Runoff,Drain,FILTRN,ET,DP,Excess,Delta)
+    REAL(8),INTENT(IN)  :: Precip,rInitialAbstraction,SMAX,PondDepth,SMI,ETc,K,TN,FC,WP,PSDI,Inflow,Tolerance
     INTEGER,INTENT(IN)  :: KunsatMethod,IterMax
     REAL(8),INTENT(OUT) :: SMN,Runoff,Drain,FILTRN,DP,ET,Excess,Delta
 
@@ -192,7 +192,7 @@ CONTAINS
             Runoff = MAX(SMI + Precip - SMMax  ,  0.0)
             FILTRN = MIN(MAX(Precip - Runoff , 0.0) , Precip)
         ELSEIF (SMI .LT. TN) THEN
-            CALL SCSMethod_HELP(Precip,SMI,SMAX,FC,TN,Runoff,FILTRN)
+            CALL SCSMethod_HELP(Precip,rInitialAbstraction,SMI,SMAX,FC,TN,Runoff,FILTRN)
             IF (PondDepth .GT. 0.0) THEN
               FILTRN = FILTRN + MIN(Runoff , PondDepth)
               Runoff = MAX(Runoff - PondDepth  , 0.0)
@@ -280,8 +280,8 @@ CONTAINS
   !  *** Note *** All values are assumed to be converted to depths
   !               before being sent to this subroutine
   ! --------------------------------------------------------------
-  SUBROUTINE NonPondedCropDemand(Precip,SMAX,Inflow,fRF,fRU,LF,ETc,K,TN,FC,WP,TRGSM,PSDI,SMI,Tolerance,KunsatMethod,IterMax,DemandRaw,Demand,Delta)
-    REAL(8),INTENT(IN)  :: Precip,SMAX,Inflow,fRF,fRU,LF,ETc,K,TN,FC,WP,TRGSM,PSDI,SMI,Tolerance
+  SUBROUTINE NonPondedCropDemand(Precip,rInitialAbstraction,SMAX,Inflow,fRF,fRU,LF,ETc,K,TN,FC,WP,TRGSM,PSDI,SMI,Tolerance,KunsatMethod,IterMax,DemandRaw,Demand,Delta)
+    REAL(8),INTENT(IN)  :: Precip,rInitialAbstraction,SMAX,Inflow,fRF,fRU,LF,ETc,K,TN,FC,WP,TRGSM,PSDI,SMI,Tolerance
     INTEGER,INTENT(IN)  :: KunsatMethod,IterMax
     REAL(8),INTENT(OUT) :: DemandRaw,Demand,Delta
 
@@ -290,7 +290,7 @@ CONTAINS
     INTEGER :: Iter
 
     !Compute infiltration and runoff of precipitation
-    CALL SCSMethod_HELP(Precip,SMI,SMAX,FC,TN,Runoff,FILTRN)
+    CALL SCSMethod_HELP(Precip,rInitialAbstraction,SMI,SMAX,FC,TN,Runoff,FILTRN)
     
     !Compute ET at target soil moisture
     ET = calcET(ETc,WP,FC,TRGSM)
@@ -345,8 +345,8 @@ CONTAINS
   !  *** Note *** All values are assumed to be converted to depths
   !               before being sent to this subroutine
   ! --------------------------------------------------------------
-  SUBROUTINE PondedCropDemand(Precip,SMAX,Inflow,dRF,dRU,PondDepth,ETc,K,TN,FC,SMI,DemandRaw,Demand)
-    REAL(8),INTENT(IN)  :: Precip,SMAX,Inflow,dRF,dRU,PondDepth,ETc,K,TN,FC,SMI
+  SUBROUTINE PondedCropDemand(Precip,rInitialAbstraction,SMAX,Inflow,dRF,dRU,PondDepth,ETc,K,TN,FC,SMI,DemandRaw,Demand)
+    REAL(8),INTENT(IN)  :: Precip,rInitialAbstraction,SMAX,Inflow,dRF,dRU,PondDepth,ETc,K,TN,FC,SMI
     REAL(8),INTENT(OUT) :: DemandRaw,Demand
 
     !Local variables
@@ -369,7 +369,7 @@ CONTAINS
             Runoff = MAX(SMI + Precip - SMMax  ,  0.0)
             FILTRN = MIN(MAX(Precip - Runoff , 0.0) , Precip)
         ELSEIF (SMI .LT. TN) THEN
-            CALL SCSMethod_HELP(Precip,SMI,SMAX,FC,TN,Runoff,FILTRN)
+            CALL SCSMethod_HELP(Precip,rInitialAbstraction,SMI,SMAX,FC,TN,Runoff,FILTRN)
             IF (PondDepth .GT. 0.0) THEN
                 FILTRN = FILTRN + MIN(Runoff , PondDepth)
                 Runoff = MAX(Runoff - PondDepth  , 0.0)

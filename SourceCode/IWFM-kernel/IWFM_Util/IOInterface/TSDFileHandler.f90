@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2025  
+!  Copyright (C) 2005-2026  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -28,7 +28,12 @@ MODULE TSDFileHandler
                                    f_iTXT                         , &
                                    f_iBIN                         , &
                                    f_iDSS                         , &
-                                   f_iUNKNOWN                        
+                                   f_iUNKNOWN                     , &
+                                   f_IO_SuccessfulRead            , &
+                                   f_IO_FileNotFound              , &
+                                   f_IO_TSData_DssReadError       , &
+                                   f_IO_TSData_NotYetTimeToRead   , &
+                                   f_IO_TSData_BadTimeStamp
   USE GeneralUtilities     , ONLY: StripTextUntilCharacter        , &
                                    LowerCase                      , &
                                    IntToText                      , &
@@ -184,7 +189,6 @@ CONTAINS
     CHARACTER(LEN=ModNameLen+19) :: ThisProcedure = ModName // 'IntTSDataInFile_New'
     CHARACTER                    :: DSSFL*1000
     INTEGER                      :: NCOL,NSP,NFQ,ErrorCode
-    LOGICAL                      :: lDummyArray(1) = .FALSE.
     CHARACTER(:),ALLOCATABLE     :: cAbsPathFileName
     
     !Initialize
@@ -202,7 +206,7 @@ CONTAINS
       CALL CleanSpecialCharacters(DSSFL)
       DSSFL = ADJUSTL(StripTextUntilCharacter(DSSFL,f_cInlineCommentChar))
       CALL EstablishAbsolutePathFileName(TRIM(DSSFL),cWorkingDirectory,cAbsPathFileName)
-      CALL PrepareTSDInputFile(pFile,TrackTime,TRIM(cFileDescription),NCOL,cAbsPathFileName,NSP,NFQ,BlocksToSkip,lDummyArray,iStat)
+      CALL PrepareTSDInputFile(pFile,TrackTime,TRIM(cFileDescription),NCOL,cAbsPathFileName,NSP,NFQ,BlocksToSkip,iStat)
       IF (iStat .EQ. -1) RETURN
     
       !Allocate memory for iValue
@@ -234,7 +238,6 @@ CONTAINS
     !Local variables
     CHARACTER(LEN=ModNameLen+23) :: ThisProcedure = ModName // 'IntPairTSDataInFile_New'
     INTEGER                      :: iNCOL,iNSP,iNFQ,iErrorCode
-    LOGICAL                      :: lDummyArray(1) = .FALSE.
     
     !Initialize
     iStat = 0
@@ -247,7 +250,7 @@ CONTAINS
       CALL pFile%ReadData(iNCOL,iStat)                                                                                       ;  IF (iStat .EQ. -1) RETURN 
       CALL pFile%ReadData(iNSP,iStat)                                                                                        ;  IF (iStat .EQ. -1) RETURN 
       CALL pFile%ReadData(iNFQ,iStat)                                                                                        ;  IF (iStat .EQ. -1) RETURN 
-      CALL PrepareTSDInputFile(pFile,TrackTime,TRIM(cFileDescription),iNCOL,'',iNSP,iNFQ,BlocksToSkip,lDummyArray,iStat)
+      CALL PrepareTSDInputFile(pFile,TrackTime,TRIM(cFileDescription),iNCOL,'',iNSP,iNFQ,BlocksToSkip,iStat)
       IF (iStat .EQ. -1) RETURN
     
       !Allocate memory for iValues1 and iValues2
@@ -284,7 +287,6 @@ CONTAINS
     CHARACTER(LEN=ModNameLen+20) :: ThisProcedure = ModName // 'RealTSDataInFile_New'
     CHARACTER                    :: DSSFL*1000
     INTEGER                      :: NCOL,NSP,NFQ,ErrorCode,indx
-    LOGICAL                      :: lDummyArray(1) = .FALSE.
     CHARACTER(:),ALLOCATABLE     :: cAbsPathFileName
     
     !Initialize 
@@ -317,11 +319,7 @@ CONTAINS
       CALL CleanSpecialCharacters(DSSFL)
       DSSFL = ADJUSTL(StripTextUntilCharacter(DSSFL,f_cInlineCommentChar))
       CALL EstablishAbsolutePathFileName(TRIM(DSSFL),cWorkingDirectory,cAbsPathFileName)
-      IF (PRESENT(RateTypeData)) THEN
-          CALL PrepareTSDInputFile(pFile,TrackTime,TRIM(cFileDescription),NCOL,cAbsPathFileName,NSP,NFQ,BlocksToSkip,RateTypeData,iStat)
-      ELSE
-          CALL PrepareTSDInputFile(pFile,TrackTime,TRIM(cFileDescription),NCOL,cAbsPathFileName,NSP,NFQ,BlocksToSkip,lDummyArray,iStat)
-      END IF
+      CALL PrepareTSDInputFile(pFile,TrackTime,TRIM(cFileDescription),NCOL,cAbsPathFileName,NSP,NFQ,BlocksToSkip,iStat,RateTypeData)
       IF (iStat .EQ. -1) RETURN
       
       !Allocate memory for iValue
@@ -445,11 +443,11 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- NEW 2D REAL TS DATA INPUT FILE INITIALLY DEFINED AS A TEXT FILE (MAY BE POINTING TO A DSS FILE FOR TS DATA)
   ! -------------------------------------------------------------
-  SUBROUTINE Real2DTSDataInFile_New(TSFile,cFileName,cWorkingDirectory,cFileDescription,TrackTime,BlocksToSkip,lFactorDefined,lReadDims,nRow,nCol,Factor,RateTypeData,cOtherData,iStat)
+  SUBROUTINE Real2DTSDataInFile_New(TSFile,cFileName,cWorkingDirectory,cFileDescription,TrackTime,BlocksToSkip,lFactorDefined,lReadDims,nRow,nCol_ASCII,nCol_DSS,Factor,RateTypeData,cOtherData,iStat)
     CLASS(Real2DTSDataInFileType)         :: TSFile
     CHARACTER(LEN=*),INTENT(IN)           :: cFileName,cWorkingDirectory,cFileDescription
     LOGICAL,INTENT(IN)                    :: TrackTime,lFactorDefined,lReadDims
-    INTEGER,INTENT(IN)                    :: BlocksToSkip,nRow,nCol
+    INTEGER,INTENT(IN)                    :: BlocksToSkip,nRow,nCol_ASCII,nCol_DSS
     REAL(8),INTENT(OUT)                   :: Factor(:)
     LOGICAL,OPTIONAL,INTENT(IN)           :: RateTypeData(:)
     CHARACTER(LEN=*),OPTIONAL,ALLOCATABLE :: cOtherData(:,:)
@@ -459,7 +457,6 @@ CONTAINS
     CHARACTER(LEN=ModNameLen+22) :: ThisProcedure = ModName // 'Real2DTSDataInFile_New'
     CHARACTER                    :: DSSFL*1000
     INTEGER                      :: nRowLocal,nColLocal,NSP,NFQ,ErrorCode,indx
-    LOGICAL                      :: lDummyArray(1) = .FALSE.
     CHARACTER(:),ALLOCATABLE     :: cAbsPathFileName
 
     !Initialize 
@@ -479,7 +476,7 @@ CONTAINS
         CALL pFile%ReadData(nColLocal,iStat)  ;  IF (iStat .EQ. -1) RETURN 
       ELSE
         nRowLocal = nRow
-        nColLocal = nCol
+        nColLocal = nCol_ASCII  !Assume data will be read in from ASCII file
       END IF
       
       !Conversion factor
@@ -504,12 +501,9 @@ CONTAINS
       !Process DSS file if specified
       CALL CleanSpecialCharacters(DSSFL)
       DSSFL = ADJUSTL(StripTextUntilCharacter(DSSFL,f_cInlineCommentChar))
+      IF (LEN_TRIM(DSSFL) .NE. 0) nColLocal = nCol_DSS
       CALL EstablishAbsolutePathFileName(TRIM(DSSFL),cWorkingDirectory,cAbsPathFileName)
-      IF (PRESENT(RateTypeData)) THEN
-          CALL PrepareTSDInputFile(pFile,TrackTime,TRIM(cFileDescription),nRowLocal*nColLocal,cAbsPathFileName,NSP,NFQ,BlocksToSkip,RateTypeData,iStat)
-      ELSE
-          CALL PrepareTSDInputFile(pFile,TrackTime,TRIM(cFileDescription),nRowLocal*nColLocal,cAbsPathFileName,NSP,NFQ,BlocksToSkip,lDummyArray,iStat)
-      END IF
+      CALL PrepareTSDInputFile(pFile,TrackTime,TRIM(cFileDescription),nRowLocal*nColLocal,cAbsPathFileName,NSP,NFQ,BlocksToSkip,iStat,RateTypeData)
       IF (iStat .EQ. -1) RETURN
       
       !Allocate memory for iValue
@@ -922,7 +916,7 @@ CONTAINS
     REAL(8),INTENT(OUT)           :: rData(:),rDataDates(:)
     INTEGER,INTENT(OUT)           :: nActualOutput,FileReadCode,iStat
     
-    FileReadCode = 0
+    FileReadCode = f_IO_SuccessfulRead
     CALL ThisFile%File%ReadData(iRow,iCol,ThisFile%nRow,ThisFile%nCol,iPathNameIndex,cBeginDateAndTime,cEndDateAndTime,nActualOutput,rData,rDataDates,FileReadCode,iStat)
     
   END SUBROUTINE Real2DTSDataInFile_ReadTSData_ForTimeRange
@@ -942,7 +936,7 @@ CONTAINS
     iStat = 0
 
     IF (ThisFile%iGetFileType() .EQ. f_iUNKNOWN) THEN
-        FileReadCode = -2  !File not found
+        FileReadCode = f_IO_FileNotFound  !File not found
         
     ELSE
         !Read data 
@@ -952,20 +946,20 @@ CONTAINS
         !Proceed based on the returned error code
         SELECT CASE (FileReadCode)
           !It wasn't time to read; do nothing
-          CASE (-1)
+          CASE (f_IO_TSData_NotYetTimeToRead)
         
           !The data is not properly time stamped
-          CASE (1)
+          CASE (f_IO_TSData_BadTimeStamp)
             CALL GenerateTimeStampError(DataDescriptor,ThisFile%Logger)
             iStat = -1
         
           !Error in reading data from DSS file
-          CASE (2)
+          CASE (f_IO_TSData_DssReadError)
             CALL GenerateDataRetrievalError(DataDescriptor,ThisFile%Logger)
             iStat = -1
             
           !Data was read without any problem
-          CASE (0)
+          CASE (f_IO_SuccessfulRead)
         
         END SELECT
     END IF
@@ -976,41 +970,41 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- READ 1-D ARRAY TIME SERIES DATA
   ! -------------------------------------------------------------
-  SUBROUTINE Read1DTSData(ThisFile,TimeStep,DataDescriptor,TSData,FileReadCode,iStat)
+  SUBROUTINE Read1DTSData(ThisFile,TimeStep,cDataDescriptor,rTSData,iFileReadCode,iStat)
     TYPE(GenericFileType)         :: ThisFile
     TYPE(TimeStepType),INTENT(IN) :: TimeStep
-    CHARACTER(LEN=*),INTENT(IN)   :: DataDescriptor
-    REAL(8)                       :: TSData(:)
-    INTEGER,INTENT(OUT)           :: FileReadCode,iStat
+    CHARACTER(LEN=*),INTENT(IN)   :: cDataDescriptor
+    REAL(8)                       :: rTSData(:)
+    INTEGER,INTENT(OUT)           :: iFileReadCode,iStat
     
     !Initialize
     iStat = 0
 
     IF (ThisFile%iGetFileType() .EQ. f_iUNKNOWN) THEN
-        FileReadCode = -2  !File not found
+        iFileReadCode = f_IO_FileNotFound  
         
     ELSE
         !Read data 
-        CALL ThisFile%ReadData(TimeStep%CurrentDateAndTime,TSData,FileReadCode,iStat,TimeStep%TrackTime)
+        CALL ThisFile%ReadData(TimeStep%CurrentDateAndTime,rTSData,iFileReadCode,iStat,TimeStep%TrackTime)
         IF (iStat .EQ. -1) RETURN
         
         !Proceed based on the returned error code
-        SELECT CASE (FileReadCode)
+        SELECT CASE (iFileReadCode)
           !It wasn't time to read; do nothing
-          CASE (-1)
+          CASE (f_IO_TSData_NotYetTimeToRead)
         
           !The data is not properly time stamped
-          CASE (1)
-            CALL GenerateTimeStampError(DataDescriptor,ThisFile%Logger)
+          CASE (f_IO_TSData_BadTimeStamp)
+            CALL GenerateTimeStampError(cDataDescriptor,ThisFile%Logger)
             iStat = -1
         
           !Error in reading data from DSS file
-          CASE (2)
-            CALL GenerateDataRetrievalError(DataDescriptor,ThisFile%Logger)
+          CASE (f_IO_TSData_DssReadError)
+            CALL GenerateDataRetrievalError(cDataDescriptor,ThisFile%Logger)
             iStat = -1
             
           !Data was read without any problem
-          CASE (0)
+          CASE (f_IO_SuccessfulRead)
         
         END SELECT
     END IF
@@ -1032,7 +1026,7 @@ CONTAINS
     iStat = 0
 
     IF (ThisFile%iGetFileType() .EQ. f_iUNKNOWN) THEN
-        FileReadCode = -2   !File not found
+        FileReadCode = f_IO_FileNotFound
         
     ELSE 
         !Read data 
@@ -1042,20 +1036,20 @@ CONTAINS
         !Proceed based on the returned error code
         SELECT CASE (FileReadCode)
           !It wasn't time to read; do nothing
-          CASE (-1)
+          CASE (f_IO_TSData_NotYetTimeToRead)
         
           !The data is not properly time stamped
-          CASE (1)
+          CASE (f_IO_TSData_BadTimeStamp)
             CALL GenerateTimeStampError(DataDescriptor,ThisFile%Logger)
             iStat = -1
             
           !Error in reading data from DSS file
-          CASE (2)
+          CASE (f_IO_TSData_DssReadError)
             CALL GenerateDataRetrievalError(DataDescriptor,ThisFile%Logger)
             iStat = -1
         
           !Data was read without any problem
-          CASE (0)
+          CASE (f_IO_SuccessfulRead)
         
         END SELECT
     END IF
@@ -1278,14 +1272,14 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- SUBROUTINE TO REDEFINE A TIME SERIES ASCII INPUT FILE AS DSS FILE
   ! -------------------------------------------------------------
-  SUBROUTINE PrepareTSDInputFile(ThisFile,TrackTime,FileDefinition,NPathNames,DSSFileName,NSP,NFQ,BlocksToSkip,RateTypeData,iStat)
+  SUBROUTINE PrepareTSDInputFile(ThisFile,TrackTime,FileDefinition,NPathNames,DSSFileName,NSP,NFQ,BlocksToSkip,iStat,RateTypeData)
     TYPE(GenericFileType)       :: ThisFile
     LOGICAL,INTENT(IN)          :: TrackTime
     CHARACTER(LEN=*),INTENT(IN) :: FileDefinition
     INTEGER,INTENT(IN)          :: NPathNames,NSP,NFQ,BlocksToSkip
     CHARACTER(LEN=*)            :: DSSFileName
-    LOGICAL,OPTIONAL,INTENT(IN) :: RateTypeData(:)
     INTEGER,INTENT(OUT)         :: iStat
+    LOGICAL,OPTIONAL,INTENT(IN) :: RateTypeData(:)
 
     !Local variables
     CHARACTER(LEN=ModNameLen+19)   :: ThisProcedure = ModName // 'PrepareTSDInputFile'

@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2025  
+!  Copyright (C) 2005-2026  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -182,7 +182,7 @@ MODULE Class_AppGW
       LOGICAL                       :: lSimulateGWReturnFlow        = .FALSE.  !Flag to to turn on or off simulation of groundwater return flow
       TYPE(GWHydrographType)        :: GWHyd                                   !Groundwater hydrograph output related data
       REAL(8)                       :: FactHead                     = 1.0      !Conversion factor for output groundwater heads
-      CHARACTER(LEN=10)             :: UnitHead                     = ''       !Unit of output head values
+      CHARACTER(LEN=10),PUBLIC      :: UnitHead                     = ''       !Unit of output head values
       REAL(8)                       :: FactFlow                     = 1.0      !Conversion factor for output groundwater flows
       CHARACTER(LEN=10)             :: UnitFlow                     = ''       !Unit of output groundwater flow values
       REAL(8)                       :: FactVelocity                 = 1.0      !Conversion factor for output groundwater flow velocities
@@ -191,7 +191,7 @@ MODULE Class_AppGW
       LOGICAL                       :: lAppBC_Defined               = .FALSE.  !Flag to check any boundary conditions other than non-flow b.c. is defined
       TYPE(AppTileDrainType)        :: AppTileDrain                            !Tile drain/subsurface irrigation component
       LOGICAL                       :: lTileDrain_Defined           = .FALSE.  !Flag to check if tile drains/subsurface irrigation are simulated
-      TYPE(AppPumpingType)          :: AppPumping                              !Pumping component
+      TYPE(AppPumpingType),PUBLIC   :: AppPumping                              !Pumping component
       LOGICAL                       :: lPumping_Defined             = .FALSE.  !Flag to check if pumping/recharge component is used
       TYPE(AppSubsidenceType)       :: AppSubsidence                           !Subsidence component
       LOGICAL                       :: lSubsidence_Defined          = .FALSE.  !Flag to check if subsidence is modeled
@@ -246,6 +246,7 @@ MODULE Class_AppGW
       PROCEDURE,PASS   :: GetGWHeads_ForALayer_GivenAppGW
       PROCEDURE,NOPASS :: GetGWHeads_ForALayer_GivenFile 
       PROCEDURE,NOPASS :: GetGWHeadsIC
+      PROCEDURE,PASS   :: GetStorage_ForNodeLayer
       PROCEDURE,PASS   :: GetNodalStorages
       PROCEDURE,PASS   :: GetElementDepthToGW              
       PROCEDURE,PASS   :: GetHorizontalFlow  
@@ -286,6 +287,7 @@ MODULE Class_AppGW
       PROCEDURE,PASS   :: GetiColAdjust                     
       PROCEDURE,PASS   :: GetNNodesWithBCType               
       PROCEDURE,PASS   :: GetNodesWithBCType                
+      PROCEDURE,PASS   :: GetBoundaryFlowAtNodeLayerIndex
       PROCEDURE,PASS   :: GetBoundaryFlowAtElementNodeLayer
       PROCEDURE,PASS   :: GetBoundaryFlowAtNodeLayer
       PROCEDURE,PASS   :: GetBoundaryFlowAtNodeLayer_All
@@ -298,6 +300,7 @@ MODULE Class_AppGW
       PROCEDURE,PASS   :: SetSupplySpecs
       PROCEDURE,PASS   :: SetPumpRequired
       PROCEDURE,PASS   :: SetVelocities
+      PROCEDURE,PASS   :: GetVelocities
       PROCEDURE,PASS   :: IsGWBudgetGenerated  
       PROCEDURE,PASS   :: IsCellVelocityOutputDefined
       PROCEDURE,PASS   :: IsVelocityTecplotDefined
@@ -314,6 +317,7 @@ MODULE Class_AppGW
       PROCEDURE,PASS   :: ReadRestartData
       PROCEDURE,PASS   :: PrintResults
       PROCEDURE,PASS   :: PrintRestartData
+      PROCEDURE,PASS   :: ReprintInitialValues
       PROCEDURE,PASS   :: UpdateHeads                       
       PROCEDURE,PASS   :: UpdateStorage                     
       PROCEDURE,PASS   :: ResetHeads                        
@@ -1822,6 +1826,48 @@ CONTAINS
   
 
   ! -------------------------------------------------------------
+  ! --- GET STORAGE (AND ITS DERIVATIVE, IF DESIRED) AT A SPECIFIED NODE AND LAYER
+  ! -------------------------------------------------------------
+  SUBROUTINE GetStorage_ForNodeLayer(AppGW,Stratigraphy,iNode,iLayer,rNodalStor,rdNodalStor)
+    CLASS(AppGWType),INTENT(IN)       :: AppGW
+    TYPE(StratigraphyType),INTENT(IN) :: Stratigraphy
+    INTEGER,INTENT(IN)                :: iNode,iLayer
+    REAL(8),INTENT(OUT)               :: rNodalStor
+    REAL(8),OPTIONAL,INTENT(OUT)      :: rdNodalStor
+    
+    !If not an active node
+    IF (.NOT. Stratigraphy%ActiveNode(iNode,iLayer)) THEN
+        rNodalStor = 0.0
+        IF (PRESENT(rdNodalStor)) rdNodalStor = 0.0
+        RETURN
+    END IF
+    
+    !Compute storage and its derivative, if desired
+    ASSOCIATE (pTopElev    => Stratigraphy%TopElev    , &
+               pBottomElev => Stratigraphy%BottomElev , &
+               pHead       => AppGW%State%Head        , &
+               pSs         => AppGW%Nodes%Ss          , &
+               pSy         => AppGW%Nodes%Sy          )
+        IF (pHead(iNode,iLayer) .LT. pTopElev(iNode,iLayer)) THEN
+            rNodalStor = (pHead(iNode,iLayer)-pBottomElev(iNode,iLayer)) * pSy(iNode,iLayer) 
+        ELSE
+            rNodalStor = (pHead(iNode,iLayer)-pTopElev(iNode,iLayer)) * pSs(iNode,iLayer)      &
+                       + (pTopElev(iNode,iLayer)-pBottomElev(iNode,iLayer)) * pSy(iNode,iLayer)
+        END IF  
+        
+        IF (PRESENT(rdNodalStor)) THEN
+            IF (pHead(iNode,iLayer) .LT. pTopElev(iNode,iLayer)) THEN
+                rdNodalStor = pSy(iNode,iLayer) 
+            ELSE
+                rdNodalStor = pSs(iNode,iLayer)      
+            END IF          
+        END IF
+    END ASSOCIATE
+        
+  END SUBROUTINE GetStorage_ForNodeLayer
+  
+
+  ! -------------------------------------------------------------
   ! --- GET AQUIFER PARAMETERS WITHOUT AppGW OBJECT
   ! -------------------------------------------------------------
   SUBROUTINE GetAquiferParameters_FromFile(Logger,cGWFileName,cWorkingDirectory,AppGrid,Stratigraphy,TimeStep,rKh,rKv,rAquitardKv,rSs,rSy,iStat)
@@ -2879,16 +2925,30 @@ CONTAINS
   
     
   ! -------------------------------------------------------------
+  ! --- GET BOUNDARY FLOW AT A NODE WITH DEFINED B.C. TYPE AND INDEX AT A LAYER
+  ! --- Note: This method is used by Simulation_MM
+  ! -------------------------------------------------------------
+  FUNCTION GetBoundaryFlowAtNodeLayerIndex(AppGW,iBCType,iNode,iLayer,iIndex) RESULT(rFlow)
+    CLASS(AppGWType),INTENT(IN) :: AppGW
+    INTEGER,INTENT(IN)          :: iBCType,iNode,iLayer,iIndex
+    REAL(8)                     :: rFlow
+    
+    CALL AppGW%AppBC%GetBoundaryFlowAtNodeLayerIndex(iBCType,iNode,iLayer,iIndex,rFlow)
+    
+  END FUNCTION GetBoundaryFlowAtNodeLayerIndex
+  
+    
+  ! -------------------------------------------------------------
   ! --- GET BOUNDARY FLOW AT A NODE WITH DEFINED B.C. AT A LAYER
   ! -------------------------------------------------------------
-  SUBROUTINE GetBoundaryFlowAtNodeLayer(AppGW,iBCType,iNode,iLayer,rFlow)
+  FUNCTION GetBoundaryFlowAtNodeLayer(AppGW,iBCType,iNode,iLayer) RESULT(rFlow)
     CLASS(AppGWType),INTENT(IN) :: AppGW
     INTEGER,INTENT(IN)          :: iBCType,iNode,iLayer
-    REAL(8),INTENT(OUT)         :: rFlow
+    REAL(8)                     :: rFlow
     
     CALL AppGW%AppBC%GetBoundaryFlowAtNodeLayer(iBCType,iNode,iLayer,rFlow)
     
-  END SUBROUTINE GetBoundaryFlowAtNodeLayer
+  END FUNCTION GetBoundaryFlowAtNodeLayer
   
     
   ! -------------------------------------------------------------
@@ -3607,20 +3667,32 @@ CONTAINS
     INTEGER,INTENT(OUT)                      :: iStat
     
     !Local variables
-    INTEGER,PARAMETER   :: iReadCols(13) = [2,3,4,5,6,7,8,9,10,11,12,13,14]
-    INTEGER             :: iDimActual,iNTimeSteps
+    INTEGER             :: iDimActual,iNTimeSteps,iNCols,indx
+    INTEGER,ALLOCATABLE :: iReadCols(:)
     REAL(8),ALLOCATABLE :: rValues(:,:)
+    
+    !Number of columns available in the Budget file (includes Time column)
+    CALL Budget%GetNDataColumns(1,iNCols,iStat)
+    IF (iStat .NE. 0) RETURN
+    
+    !BACKWARD COMPATIBILITY: 
+    ! 17 columns: Original number of columns
+    ! 18 columns: GW Return Flow column is added
+    ALLOCATE (iReadCols(iNCols-4))  !Remove Time, Percolation, Discrepancy and Cumulative Subsidence columns
+    iReadCols = [(indx,indx=2,iNCols-3)]
     
     !Get simulation time steps and allocate array to read data
     iNTimeSteps = Budget%GetNTimeSteps()
-    ALLOCATE (rValues(14,iNTimeSteps)) !Adding 1 to the first dimension for Time column; it will be removed later
+    ALLOCATE (rValues(SIZE(iReadCols)+1,iNTimeSteps)) !Adding 1 to the first dimension for Time column; it will be removed later
     
     !Read data
     CALL Budget%ReadData(iSubregionIndex,iReadCols,'1MON',cBeginDate,cEndDate,0d0,0d0,0d0,1d0,1d0,rFactVL,iDimActual,rValues,iStat)
     IF (iStat .NE. 0) RETURN
     
     !Store values in return argument
-    ALLOCATE (rFlows(12,iDimActual) , cFlowNames(12))
+    ALLOCATE (rFlows(iNCols-5,iDimActual) , cFlowNames(iNCols-5))
+    !Original budget columns
+    IF (iNCols .EQ. 17) THEN
     rFlows(1,:)  = rValues(2,1:iDimActual) - rValues(3,1:iDimActual)   !Change in storage
     rFlows(2,:)  = rValues(4,1:iDimActual)                             !Deep Percolation       
     rFlows(3,:)  = rValues(5,1:iDimActual)                             !Gain from Stream       
@@ -3648,6 +3720,39 @@ CONTAINS
     cFlowNames(10) = 'Pumping'                
     cFlowNames(11) = 'Outflow to Root Zone'   
     cFlowNames(12) = 'Net Subsurface Inflow'    
+    
+    !Groundwater Return Flow column is included
+    ELSE 
+        rFlows(1,:)  =  rValues(2,1:iDimActual) - rValues(3,1:iDimActual)   !Change in storage
+        rFlows(2,:)  =  rValues(4,1:iDimActual)                             !Deep Percolation       
+        rFlows(3,:)  =  rValues(5,1:iDimActual)                             !Gain from Stream       
+        rFlows(4,:)  =  rValues(6,1:iDimActual)                             !Recharge               
+        rFlows(5,:)  =  rValues(7,1:iDimActual)                             !Gain from Lake         
+        rFlows(6,:)  =  rValues(8,1:iDimActual)                             !Boundary Inflow        
+        rFlows(7,:)  =  rValues(9,1:iDimActual)                             !Subsidence             
+        rFlows(8,:)  =  rValues(10,1:iDimActual)                            !Subsurface Irrigation  
+        rFlows(9,:)  = -rValues(11,1:iDimActual)                            !Tile Drain Outflow     
+        rFlows(10,:) = -rValues(12,1:iDimActual)                            !Pumping   
+        rFlows(11,:) = -rValues(13,1:iDimActual)                            !GW return flow
+        rFlows(12,:) = -rValues(14,1:iDimActual)                            !Outflow to Root Zone   
+        rFlows(13,:) =  rValues(15,1:iDimActual)                            !Net Subsurface Inflow 
+        
+        !Flow names
+        cFlowNames     = ''
+        cFlowNames(1)  = 'Change in Storage'      
+        cFlowNames(2)  = 'Deep Percolation'       
+        cFlowNames(3)  = 'Gain from Stream'       
+        cFlowNames(4)  = 'Recharge'               
+        cFlowNames(5)  = 'Gain from Lake'         
+        cFlowNames(6)  = 'Boundary Inflow'        
+        cFlowNames(7)  = 'Subsidence'             
+        cFlowNames(8)  = 'Subsurface Irrigation'  
+        cFlowNames(9)  = 'Tile Drain Outflow'     
+        cFlowNames(10) = 'Pumping'  
+        cFlowNames(11) = 'Groundwater Return Flows'
+        cFlowNames(12) = 'Outflow to Root Zone'   
+        cFlowNames(13) = 'Net Subsurface Inflow'   
+    END IF
     
   END SUBROUTINE GetBudget_MonthlyFlows_GivenFile
 
@@ -3787,13 +3892,14 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- SET BOUNDARY CONDITION 
   ! -------------------------------------------------------------
-  SUBROUTINE SetBC(AppGW,iNode,iLayer,iBCType,iNodeIDs,iStat,rFlow,rHead,rMaxBCFlow,rConductance,rConstrainingHeadBC)
+  SUBROUTINE SetBC(AppGW,iNode,iLayer,iBCType,iNodeIDs,iStat,iBCIndex,rFlow,rHead,rMaxBCFlow,rConductance,rConstrainingHeadBC)
     CLASS(AppGWType)            :: AppGW
     INTEGER,INTENT(IN)          :: iNode,iLayer,iBCType,iNodeIDs(:)
     INTEGER,INTENT(OUT)         :: iStat
+    INTEGER,OPTIONAL,INTENT(IN) :: iBCIndex
     REAL(8),OPTIONAL,INTENT(IN) :: rFlow,rHead,rMaxBCFlow,rConductance,rConstrainingHeadBC
     
-    CALL AppGW%AppBC%SetBC(iNode,iLayer,iBCType,iNodeIDs,iStat,rFlow,rHead,rMaxBCFlow,rConductance,rConstrainingHeadBC) 
+    CALL AppGW%AppBC%SetBC(iNode,iLayer,iBCType,iNodeIDs,iStat,iBCIndex,rFlow,rHead,rMaxBCFlow,rConductance,rConstrainingHeadBC) 
     IF (iStat .NE. 0) RETURN
     
     !Update flag to check if BC data is defined
@@ -3814,6 +3920,19 @@ CONTAINS
     AppGW%State%Vz = Vz
 
   END SUBROUTINE SetVelocities
+  
+  ! -------------------------------------------------------------
+  ! --- GET VELOCITIES AT NODES-ucb
+  ! -------------------------------------------------------------
+  SUBROUTINE GetVelocities(AppGW,Vx,Vy,Vz)
+    CLASS(AppGWType),INTENT(IN) :: AppGW
+    REAL(8),INTENT(OUT)         :: Vx(:,:),Vy(:,:),Vz(:,:)
+    
+    Vx = AppGW%State%Vx 
+    Vy = AppGW%State%Vy
+    Vz = AppGW%State%Vz 
+
+  END SUBROUTINE GetVelocities
   
   
   ! -------------------------------------------------------------
@@ -3868,6 +3987,38 @@ CONTAINS
 ! ******************************************************************
 ! ******************************************************************
 
+  ! -------------------------------------------------------------
+  ! --- RE-PRINT INITIAL VALUES (WHEN MODEL IS RESTARTED WITH A RESTART FILE)
+  ! --- Note: Assumes Initial values are already updated with data read from Restart file
+  ! -------------------------------------------------------------
+  SUBROUTINE ReprintInitialValues(AppGW,AppGrid,Stratigraphy,cGWParamFileName,StrmConnectivity,TimeStep,NTIME,iStat)
+    CLASS(AppGWType),INTENT(INOUT)    :: AppGW
+    TYPE(AppGridType),INTENT(IN)      :: AppGrid
+    TYPE(StratigraphyType),INTENT(IN) :: Stratigraphy
+    CHARACTER(LEN=*),INTENT(IN)       :: cGWParamFileName
+    COMPLEX,INTENT(IN)                :: StrmConnectivity(:)
+    TYPE(TimeStepType),INTENT(IN)     :: TimeStep
+    INTEGER,INTENT(IN)                :: NTIME
+    INTEGER,INTENT(OUT)               :: iStat
+    
+    !Reprint initial values
+    CALL AppGW%GWHyd%ReprintInitialValues(AppGrid            , &
+                                          Stratigraphy       , &
+                                          cGWParamFileName   , &
+                                          AppGW%FactHead     , &
+                                          AppGW%FactVelocity , &
+                                          AppGW%UnitHead     , &
+                                          AppGW%UnitFlow     , &
+                                          AppGW%UnitVelocity , &
+                                          StrmConnectivity   , &
+                                          TimeStep           , &
+                                          NTIME              , &
+                                          AppGW%State%Head   , &
+                                          iStat              )
+
+  END SUBROUTINE ReprintInitialValues
+  
+  
   ! -------------------------------------------------------------
   ! --- PRINT OUT RESTART DATA
   ! -------------------------------------------------------------
@@ -4422,17 +4573,17 @@ CONTAINS
       
     !Make sure time units are valid if time tracking simulation
     IF (TimeStep%TrackTime) THEN
-        IF (IsTimeIntervalValid(cTimeUnit_Kh) .EQ. 0) THEN
+        IF (.NOT. IsTimeIntervalValid(cTimeUnit_Kh)) THEN
             CALL Logger%SetLastMessage('Time unit for aquifer horizontal hydraulic conductivity is not valid!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
-        IF (IsTimeIntervalValid(cTimeUnit_AquitardV) .EQ. 0) THEN
+        IF (.NOT. IsTimeIntervalValid(cTimeUnit_AquitardV)) THEN
             CALL Logger%SetLastMessage('Time unit for aquitard vertical conductivity is not valid!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
-        IF (IsTimeIntervalValid(cTimeUnit_Kv) .EQ. 0) THEN
+        IF (.NOT. IsTimeIntervalValid(cTimeUnit_Kv)) THEN
             CALL Logger%SetLastMessage('Time unit for aquifer vertical hydraulic conductivity is not valid!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
@@ -4804,17 +4955,17 @@ CONTAINS
       
     !Make sure time units are valid if time tracking simulation
     IF (TrackTime) THEN
-        IF (IsTimeIntervalValid(cTimeUnit_Kh) .EQ. 0) THEN
+        IF (.NOT. IsTimeIntervalValid(cTimeUnit_Kh)) THEN
             CALL Logger%SetLastMessage('Time unit for aquifer horizontal hydraulic conductivity in over-write file is not valid!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
-        IF (IsTimeIntervalValid(cTimeUnit_AquitardV) .EQ. 0) THEN
+        IF (.NOT. IsTimeIntervalValid(cTimeUnit_AquitardV)) THEN
             CALL Logger%SetLastMessage('Time unit for aquitard vertical conductivity in over-write file is not valid!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
         END IF
-        IF (IsTimeIntervalValid(cTimeUnit_Kv) .EQ. 0) THEN
+        IF (.NOT. IsTimeIntervalValid(cTimeUnit_Kv)) THEN
             CALL Logger%SetLastMessage('Time unit for aquifer vertical hydraulic conductivity in over-write file is not valid!',f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
@@ -5110,9 +5261,16 @@ CONTAINS
     TYPE(AppGridType),INTENT(IN)      :: AppGrid
     TYPE(StratigraphyType),INTENT(IN) :: Stratigraphy
     
+    !Local variables
+    REAL(8) :: rStor(AppGrid%NNodes,Stratigraphy%NLayers), &
+               rdStor(AppGrid%NNodes,Stratigraphy%NLayers)
+    
     CALL ComputeRegionalStorage(AppGrid,Stratigraphy,AppGW)
     
-    IF (AppGW%lSubsidence_Defined) CALL AppGW%AppSubsidence%UpdateSubsidence(AppGrid,Stratigraphy,AppGW%State%Head,AppGW%State%Head_P)
+    IF (AppGW%lSubsidence_Defined) THEN
+        CALL AppGW%GetNodalStorages(AppGrid,Stratigraphy,rStor,rdStor)
+        CALL AppGW%AppSubsidence%UpdateSubsidence(AppGrid,Stratigraphy,AppGW%State%Head,AppGW%State%Head_P,rStor)
+    END IF
 
   END SUBROUTINE UpdateStorage
   

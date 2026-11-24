@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2025  
+!  Copyright (C) 2005-2026  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -154,7 +154,7 @@ CONTAINS
     TYPE(AppGridType),INTENT(IN)          :: AppGrid         !Not used in this version! Only included to comply with the interface definition.
     TYPE(StratigraphyType),INTENT(IN)     :: Stratigraphy
     LOGICAL,INTENT(IN)                    :: IsRoutedStreams
-    TYPE(StrmGWConnectorType),INTENT(OUT) :: StrmGWConnector
+    TYPE(StrmGWConnectorType),INTENT(OUT):: StrmGWConnector
     TYPE(StrmLakeConnectorType)           :: StrmLakeConnector
     INTEGER,INTENT(OUT)                   :: iStat
     
@@ -466,7 +466,7 @@ CONTAINS
     TYPE(TimeStepType),INTENT(IN)         :: TimeStep
     INTEGER,INTENT(IN)                    :: NTIME,iLakeIDs(:)
     TYPE(StrmLakeConnectorType)           :: StrmLakeConnector
-    TYPE(StrmGWConnectorType),INTENT(OUT) :: StrmGWConnector
+    TYPE(StrmGWConnectorType),INTENT(OUT):: StrmGWConnector
     INTEGER,INTENT(OUT)                   :: iStat
     
     !Local variables
@@ -828,7 +828,7 @@ CONTAINS
     TYPE(AppGridType),INTENT(IN)          :: AppGrid
     TYPE(StratigraphyType),INTENT(IN)     :: Stratigraphy
     INTEGER,INTENT(IN)                    :: iGWNodeIDs(:)
-    TYPE(StrmGWConnectorType),INTENT(OUT) :: StrmGWConnector
+    TYPE(StrmGWConnectorType),INTENT(OUT):: StrmGWConnector
     TYPE(StrmLakeConnectorType)           :: StrmLakeConnector
     TYPE(AppStream_v40_Type)              :: AppStream
     INTEGER,INTENT(OUT)                   :: iStat
@@ -1016,12 +1016,8 @@ CONTAINS
     AppStream%TimeUnitRatingTableFlow = ADJUSTL(StripTextUntilCharacter(ALine,f_cInlineCommentChar))
     
     !Make sure that time unit of rating tables is recognized
-    IF (IsTimeIntervalValid(TRIM(AppStream%TimeUnitRatingTableFlow)) .EQ. 0) THEN
-        IF (ASSOCIATED(AppStream%Logger)) THEN
-            CALL AppStream%Logger%SetLastMessage('Time unit for the stream rating tables ('//TRIM(AppStream%TimeUnitRatingTableFlow)//') is not recognized!',f_iFatal,ThisProcedure)
-        ELSE
-            CALL AppStream%Logger%SetLastMessage('Time unit for the stream rating tables ('//TRIM(AppStream%TimeUnitRatingTableFlow)//') is not recognized!',f_iFatal,ThisProcedure)
-        END IF
+    IF (.NOT. IsTimeIntervalValid(TRIM(AppStream%TimeUnitRatingTableFlow))) THEN
+        CALL AppStream%Logger%SetLastMessage('Time unit for the stream rating tables ('//TRIM(AppStream%TimeUnitRatingTableFlow)//') is not recognized!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
     END IF

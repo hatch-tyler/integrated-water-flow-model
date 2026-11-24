@@ -35,6 +35,7 @@ MODULE heclib_c_binding
   PUBLIC :: hec_zset, hec_zquery
   PUBLIC :: hec_zpathnameGetPart, hec_zpathnameForm
   PUBLIC :: hec_yearMonthDayToJulian, hec_julianToYearMonthDay
+  PUBLIC :: hec_incrementTime
 
   ! Public helper functions
   PUBLIC :: f_to_c_string, c_to_f_string
@@ -274,6 +275,20 @@ MODULE heclib_c_binding
       INTEGER(C_INT), INTENT(OUT) :: month
       INTEGER(C_INT), INTENT(OUT) :: day
     END SUBROUTINE hec_julianToYearMonthDay
+
+    ! int incrementTime(int intervalSeconds, int numberPeriods, int julianStart, int secondsStart,
+    !                   int *julianEnd, int *secondsEnd)
+    INTEGER(C_INT) FUNCTION hec_incrementTime(intervalSeconds, numberPeriods, julianStart, secondsStart, &
+                                              julianEnd, secondsEnd) &
+                   BIND(C, NAME='incrementTime')
+      IMPORT :: C_INT
+      INTEGER(C_INT), VALUE       :: intervalSeconds
+      INTEGER(C_INT), VALUE       :: numberPeriods
+      INTEGER(C_INT), VALUE       :: julianStart
+      INTEGER(C_INT), VALUE       :: secondsStart
+      INTEGER(C_INT), INTENT(OUT) :: julianEnd
+      INTEGER(C_INT), INTENT(OUT) :: secondsEnd
+    END FUNCTION hec_incrementTime
 
     !--------------------------------------------------------------
     ! C Standard Library Functions

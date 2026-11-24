@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2025  
+!  Copyright (C) 2005-2026  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -35,7 +35,7 @@ MODULE Package_ComponentConnectors
                                           Supply_SetIrigFracsRead                 , &
                                           Supply_SetSupplySpecs                   , &
                                           Supply_CheckSupplyDestinationConnection , &
-                                          Supply_ResetIrigFracs
+                                          Supply_ResetIrigFracs                   
   IMPLICIT NONE
   
   

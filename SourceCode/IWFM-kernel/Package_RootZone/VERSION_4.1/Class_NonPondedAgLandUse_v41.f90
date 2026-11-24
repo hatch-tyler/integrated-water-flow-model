@@ -1,6 +1,6 @@
 !***********************************************************************
 !  Integrated Water Flow Model (IWFM)
-!  Copyright (C) 2005-2025  
+!  Copyright (C) 2005-2026  
 !  State of California, Department of Water Resources 
 !
 !  This program is free software; you can redistribute it and/or
@@ -42,7 +42,8 @@ MODULE Class_NonPondedAgLandUse_v41
   USE IOInterface                   , ONLY: GenericFileType                      , &
                                             RealTSDataInFileType                 , &
                                             IntTSDataInFileType                  , &
-                                            f_iUNKNOWN                           
+                                            f_iUNKNOWN                           , &
+                                            f_IO_SuccessfulRead
   USE Package_Misc                  , ONLY: SolverDataType                       , &
                                             f_iFlowDest_GWElement                
   USE Package_Budget                , ONLY: BudgetType                           , &
@@ -56,6 +57,7 @@ MODULE Class_NonPondedAgLandUse_v41
   USE Package_PrecipitationET       , ONLY: ETType
   USE Util_Package_RootZone         , ONLY: WaterSupplyType                      , &
                                             ReadLandUseAreasForTimePeriod        , &
+                                            ReadLandUseAreasForTimePeriod_All    , &
                                             ReadRealData                         , &
                                             ReadPointerData                      , &
                                             InitColumnPointerData_ForElements    , &
@@ -120,19 +122,20 @@ MODULE Class_NonPondedAgLandUse_v41
   ! -------------------------------------------------------------
   ! --- NON PONDED AG LAND DATABASE TYPE
   ! -------------------------------------------------------------
-  INTEGER,PARAMETER :: LenCropCode = 2  !Length of crop codes
+  INTEGER,PARAMETER :: f_iLenCropCode = 2  !Length of crop codes
   TYPE NonPondedAgLandUse_v41_Type
       TYPE(MessageLoggerType),POINTER        :: Logger                      => NULL()                   !Pointer to the message logger
       INTEGER                                :: NCrops                      = 0                         !Number of non-ponded crops
       INTEGER                                :: iDemandFromMoist            = f_iDemandFromMoistAtBegin !Moisture that will be used to decide when to compute ag water demand
       TYPE(NonPondedAg_v41_Type)             :: Crops                                                   !Non-ponded ag land data for each (crop,element) combination
-      CHARACTER(LEN=LenCropCode),ALLOCATABLE :: CropCodes(:)                                            !Non-ponded crop codes
+      CHARACTER(LEN=f_iLenCropCode),ALLOCATABLE :: CropCodes(:)                                            !Non-ponded crop codes
       INTEGER                                :: NBudgetCrops                = 0                         !Number of non-ponded crops for budget output
       INTEGER,ALLOCATABLE                    :: iBudgetCrops(:)                                         !Indices of non-ponded crops for budget output
-      REAL(8),ALLOCATABLE                    :: MaxRootDepth(:)                                         !Maximum root depth
+      REAL(8),ALLOCATABLE                       :: MaxRootDepth(:)                                         !Maximum root depth at each (crop)
       INTEGER,ALLOCATABLE                    :: iColRootDepthFrac(:)                                    !Column number in the root depth fractions data file for each (crop)
       REAL(8),ALLOCATABLE                    :: RootDepth_P(:)                                          !Rooting depth used for the previous time step for each (crop)
       REAL(8),ALLOCATABLE                    :: RootDepth(:)                                            !Rooting depth used for the current time step for each (crop)
+      REAL(8),ALLOCATABLE                       :: rSpatialRootDepthFractions(:,:)                         !Fractions defined at each (crop,element) combination to turn rooting depths into a spatially varying values
       INTEGER,ALLOCATABLE                    :: iColAgDemand(:,:)                                       !Pointer to ag water demand file for each (crop,element) combination
       REAL(8),ALLOCATABLE                    :: RegionETPot(:,:)                                        !Regional potential ET for each (crop,region) combination
       TYPE(RootDepthFracDataFileType)        :: RootDepthFracDataFile                                   !Data file for the fraction of max. rooting depth as time-series data 
@@ -150,7 +153,10 @@ MODULE Class_NonPondedAgLandUse_v41
       PROCEDURE,PASS   :: New                         
       PROCEDURE,PASS   :: Kill                        
       PROCEDURE,PASS   :: GetNCrops
-      PROCEDURE,NOPASS :: GetAreasForTimePeriod
+      PROCEDURE,NOPASS :: GetAreasForTimePeriod_FileNotOpen
+      PROCEDURE,PASS   :: GetAreasForTimePeriod_FileOpen
+      PROCEDURE,NOPASS :: GetAreasForTimePeriod_All_FileNotOpen
+      PROCEDURE,PASS   :: GetAreasForTimePeriod_All_FileOpen
       PROCEDURE,PASS   :: GetMaxAndMinNetReturnFlowFrac
       PROCEDURE,PASS   :: GetBudget_TSData
       PROCEDURE,PASS   :: SetAreas                    
@@ -162,6 +168,10 @@ MODULE Class_NonPondedAgLandUse_v41
       PROCEDURE,PASS   :: Simulate                    
       PROCEDURE,PASS   :: ComputeETFromGW_Max => NonPondedAgLandUse_ComputeETFromGW_Max
       PROCEDURE,PASS   :: RewindTSInputFilesToTimeStamp
+      GENERIC          :: GetAreasForTimePeriod           => GetAreasForTimePeriod_FileNotOpen       , &
+                                                             GetAreasForTimePeriod_FileOpen
+      GENERIC          :: GetAreasForTimePeriod_All       => GetAreasForTimePeriod_All_FileNotOpen   , &
+                                                             GetAreasForTimePeriod_All_FileOpen
   END TYPE NonPondedAgLandUse_v41_Type
    
 
@@ -190,15 +200,16 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- NEW NON-PONDED AG LAND USE DATA
   ! -------------------------------------------------------------
-  SUBROUTINE New(AgLand,Logger,IsForInquiry,cProjectNameForDSS,cFileName,cWorkingDirectory,FactCN,AppGrid,iElemIDs,TimeStep,NTimeSteps,cVersion,iStat,pAgLWUseBudRawFile_New,pAgRootZoneBudRawFile_New,iColCropCoeff)
+  SUBROUTINE New(AgLand,Logger,IsForInquiry,cProjectNameForDSS,cFileName,cWorkingDirectory,lReadInitialAbstraction,rFactCN,AppGrid,iElemIDs,TimeStep,iNTimeSteps,cVersion,iStat,pAgLWUseBudRawFile_New,pAgRootZoneBudRawFile_New,iColCropCoeff)
     CLASS(NonPondedAgLandUse_v41_Type)                              :: AgLand
     TYPE(MessageLoggerType),POINTER,INTENT(IN)                      :: Logger
     LOGICAL,INTENT(IN)                                              :: IsForInquiry
     CHARACTER(LEN=*),INTENT(IN)                                     :: cProjectNameForDSS,cFileName,cWorkingDirectory
-    REAL(8),INTENT(IN)                                              :: FACTCN
+    LOGICAL,INTENT(IN)                                              :: lReadInitialAbstraction
+    REAL(8),INTENT(IN)                                              :: rFactCN
     TYPE(AppGridType),INTENT(IN)                                    :: AppGrid
     TYPE(TimeStepType),INTENT(IN)                                   :: TimeStep
-    INTEGER,INTENT(IN)                                              :: NTimeSteps,iElemIDs(AppGrid%NElements)
+    INTEGER,INTENT(IN)                                              :: iNTimeSteps,iElemIDs(AppGrid%NElements)
     CHARACTER(LEN=*),INTENT(IN)                                     :: cVersion
     INTEGER,INTENT(OUT)                                             :: iStat
     PROCEDURE(AgLWUseBudRawFile_New),OPTIONAL,POINTER,INTENT(IN)    :: pAgLWUseBudRawFile_New
@@ -207,16 +218,16 @@ CONTAINS
     
     !Local variables
     CHARACTER(LEN=ModNameLen+3)                      :: ThisProcedure = ModName // 'New'
-    CHARACTER                                        :: ALine*1000,cBudgetCropCode*LenCropCode
+    CHARACTER                                        :: cALine*1000,cBudgetCropCode*f_iLenCropCode
     CHARACTER(LEN=f_iMaxLocationNameLen),ALLOCATABLE :: cRegionNames(:)
-    CHARACTER(LEN=f_iMaxLocationNameLen)             :: SubRegionNames(AppGrid%NSubregions+1)
+    CHARACTER(LEN=f_iMaxLocationNameLen)             :: cSubRegionNames(AppGrid%NSubregions+1)
     TYPE(GenericFileType)                            :: CropDataFile
-    REAL(8)                                          :: FACT,DummyFactor(1),SubRegionArea(AppGrid%NSubregions+1)
-    REAL(8),ALLOCATABLE                              :: DummyRealArray(:,:),RegionAreas(:)
-    INTEGER                                          :: ErrorCode,indxElem,indxCrop,NCrops,iLen,indxCropP,NBudgetCrops,NElements, &
-                                                        NBudgetRegions,NRegions,indxRegion,iElem,ID
-    INTEGER,ALLOCATABLE                              :: DummyIntArray(:,:)
-    LOGICAL                                          :: lCropFound,TrackTime,lProcessed(AppGrid%NElements)
+    REAL(8)                                          :: rFACT,rDummyFactor(1),rSubRegionArea(AppGrid%NSubregions+1)
+    REAL(8),ALLOCATABLE                              :: rDummyRealArray(:,:),rRegionAreas(:),rDummyArrayCheck(:)
+    INTEGER                                          :: iErrorCode,indxElem,indxCrop,iNCrops,iLen,indxCropP,iNBudgetCrops,iNElements, &
+                                                        iNBudgetRegions,iNRegions,indxRegion,iElem,ID,iReadInitialAbstraction
+    INTEGER,ALLOCATABLE                              :: iDummyIntArray(:,:)
+    LOGICAL                                          :: lCropFound,lTrackTime,lProcessed(AppGrid%NElements)
     CHARACTER(:),ALLOCATABLE                         :: cAbsPathFileName
     
     !Set Logger
@@ -229,21 +240,21 @@ CONTAINS
     IF (cFileName .EQ. '') RETURN
 
     !Initialize
-    NElements                 = AppGrid%NElements
-    NRegions                  = AppGrid%NSubregions
-    TrackTime                 = TimeStep%TrackTime
-    SubRegionArea(1:NRegions) = AppGrid%GetSubregionArea()
-    SubRegionArea(NRegions+1) = SUM(SubRegionArea(1:NRegions))
-    SubRegionNames            = ''  ;  SubRegionNames(1:NRegions) = AppGrid%GetSubregionNames()
-    SubRegionNames(NRegions+1)= 'ENTIRE MODEL AREA'
+    iNElements                   = AppGrid%NElements
+    iNRegions                    = AppGrid%NSubregions
+    lTrackTime                   = TimeStep%TrackTime
+    rSubRegionArea(1:iNRegions)  = AppGrid%GetSubregionArea()
+    rSubRegionArea(iNRegions+1)  = SUM(rSubRegionArea(1:iNRegions))
+    cSubRegionNames              = ''  ;  cSubRegionNames(1:iNRegions) = AppGrid%GetSubregionNames()
+    cSubRegionNames(iNRegions+1) = 'ENTIRE MODEL AREA'
     
     !Open file
     CALL CropDataFile%New(FileName=ADJUSTL(cFileName),InputFile=.TRUE.,IsTSFile=.FALSE.,iStat=iStat)
     IF (iStat .EQ. -1) RETURN
 
     !Number of crops
-    CALL CropDataFile%ReadData(NCrops,iStat)  ;  IF (iStat .EQ. -1) RETURN
-    AgLand%NCrops = NCrops
+    CALL CropDataFile%ReadData(iNCrops,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    AgLand%NCrops = iNCrops
     
     !Moisture to be used for water demand calculations
     CALL CropDataFile%ReadData(AgLand%iDemandFromMoist,iStat)  ;  IF (iStat .EQ. -1) RETURN
@@ -257,32 +268,33 @@ CONTAINS
     END IF
     
     !Allocate memory
-    CALL AgLand%Crops%New(NCrops,NElements,iStat)
-    ALLOCATE (AgLand%Crops%iColIrigPeriod(NCrops,NElements)    , &    
-              AgLand%Crops%iColMinSoilM(NCrops,NElements)      , &    
-              AgLand%Crops%iColTargetSoilM(NCrops,NElements)   , &    
-              AgLand%Crops%iColReturnFrac(NCrops,NElements)    , &    
-              AgLand%Crops%iColReuseFrac(NCrops,NElements)     , &    
-              AgLand%Crops%iColLeachFrac(NCrops,NElements)     , &    
-              AgLand%Crops%MinSoilM(NCrops,NElements)          , &    
-              AgLand%Crops%ReturnFlow(NCrops,NElements)        , &    
-              AgLand%Crops%IrigInfilt(NCrops,NElements)        , &    
-              AgLand%Crops%Reuse(NCrops,NElements)             , &    
-              AgLand%Crops%ETAW(NCrops,NElements)              , &    
-              AgLand%Crops%ETP(NCrops,NElements)               , &    
-              AgLand%Crops%ETOth(NCrops,NElements)             , &    
-              AgLand%Crops%DemandRaw(NCrops,NElements)         , &    
-              AgLand%Crops%Demand(NCrops,NElements)            , &    
-              AgLand%Crops%ElemDemandFrac(NCrops,NElements)    , &    
-              AgLand%Crops%ElemDemandFrac_Ag(NCrops,NElements) , &
-              AgLand%CropCodes(NCrops)                         , &
-              AgLand%MaxRootDepth(NCrops)                      , &
-              AgLand%iColRootDepthFrac(NCrops)                 , &
-              AgLand%RootDepth_P(NCrops)                       , &
-              AgLand%RootDepth(NCrops)                         , &
-              AgLand%RegionETPot(NCrops,NRegions)              , &
-              STAT=ErrorCode                                   )
-    IF (ErrorCode+iStat .NE. 0) THEN
+    CALL AgLand%Crops%New(iNCrops,iNElements,iStat)
+    ALLOCATE (AgLand%Crops%iColIrigPeriod(iNCrops,iNElements)       , &    
+              AgLand%Crops%iColMinSoilM(iNCrops,iNElements)         , &    
+              AgLand%Crops%iColTargetSoilM(iNCrops,iNElements)      , &    
+              AgLand%Crops%iColReturnFrac(iNCrops,iNElements)       , &    
+              AgLand%Crops%iColReuseFrac(iNCrops,iNElements)        , &    
+              AgLand%Crops%iColLeachFrac(iNCrops,iNElements)        , &    
+              AgLand%Crops%MinSoilM(iNCrops,iNElements)             , &    
+              AgLand%Crops%ReturnFlow(iNCrops,iNElements)           , &    
+              AgLand%Crops%IrigInfilt(iNCrops,iNElements)           , &    
+              AgLand%Crops%Reuse(iNCrops,iNElements)                , &    
+              AgLand%Crops%ETAW(iNCrops,iNElements)                 , &    
+              AgLand%Crops%ETP(iNCrops,iNElements)                  , &    
+              AgLand%Crops%ETOth(iNCrops,iNElements)                , &    
+              AgLand%Crops%DemandRaw(iNCrops,iNElements)            , &    
+              AgLand%Crops%Demand(iNCrops,iNElements)               , &    
+              AgLand%Crops%ElemDemandFrac(iNCrops,iNElements)       , &    
+              AgLand%Crops%ElemDemandFrac_Ag(iNCrops,iNElements)    , &
+              AgLand%CropCodes(iNCrops)                             , &
+              AgLand%MaxRootDepth(iNCrops)                          , &
+              AgLand%iColRootDepthFrac(iNCrops)                     , &
+              AgLand%RootDepth_P(iNCrops)                           , &
+              AgLand%RootDepth(iNCrops)                             , &
+              AgLand%rSpatialRootDepthFractions(iNCrops,iNElements) , &
+              AgLand%RegionETPot(iNCrops,iNRegions)                 , &
+              STAT=iErrorCode                                       )
+    IF (iErrorCode+iStat .NE. 0) THEN
         CALL AgLand%Logger%SetLastMessage('Error in allocating memory for non-ponded agricultural data!',f_iFatal,ThisProcedure)
         iStat = -1
         RETURN
@@ -314,16 +326,16 @@ CONTAINS
     
     !Read crop codes
     AgLand%CropCodes = ''
-    DO indxCrop=1,NCrops
-      CALL CropDataFile%ReadData(ALine,iStat)  ;  IF (iStat .EQ. -1) RETURN
-      ALine = StripTextUntilCharacter(ALine,f_cInlineCommentChar) 
-      CALL CleanSpecialCharacters(ALine)
-      ALine = ADJUSTL(ALine)
-      iLen = LEN_TRIM(ALine)
+    DO indxCrop=1,iNCrops
+      CALL CropDataFile%ReadData(cALine,iStat)  ;  IF (iStat .EQ. -1) RETURN
+      cALine = StripTextUntilCharacter(cALine,f_cInlineCommentChar) 
+      CALL CleanSpecialCharacters(cALine)
+      cALine = ADJUSTL(cALine)
+      iLen = LEN_TRIM(cALine)
       IF (iLen .EQ. 1) THEN
-        AgLand%CropCodes(indxCrop)(2:2) = TRIM(ALine)
+        AgLand%CropCodes(indxCrop)(2:2) = TRIM(cALine)
       ELSEIF (iLen .EQ. 2) THEN
-        AgLand%CropCodes(indxCrop) = TRIM(Aline)
+        AgLand%CropCodes(indxCrop) = TRIM(cAline)
       ELSE
         CALL AgLand%Logger%SetLastMessage('Too many or too few characters for crop code of crop ' // TRIM(IntToText(indxCrop)) // '!',f_iFatal,ThisProcedure)
         iStat = -1
@@ -340,38 +352,38 @@ CONTAINS
     END DO
     
     !Land use data file
-    CALL CropDataFile%ReadData(ALine,iStat)  ;  IF (iStat .EQ. -1) RETURN  
-    ALine = StripTextUntilCharacter(ALine,f_cInlineCommentChar) 
-    CALL CleanSpecialCharacters(ALine)
-    CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(ALine)),cWorkingDirectory,cAbsPathFileName)
+    CALL CropDataFile%ReadData(cALine,iStat)  ;  IF (iStat .EQ. -1) RETURN  
+    cALine = StripTextUntilCharacter(cALine,f_cInlineCommentChar) 
+    CALL CleanSpecialCharacters(cALine)
+    CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(cALine)),cWorkingDirectory,cAbsPathFileName)
     IF (.NOT. IsForInquiry) THEN
-        CALL AgLand%LandUseDataFile%New(cAbsPathFileName,cWorkingDirectory,'Non-ponded ag. area file',NElements,NCrops,TrackTime,iStat)
+        CALL AgLand%LandUseDataFile%New(cAbsPathFileName,cWorkingDirectory,'Non-ponded ag. area file',iNElements,iNCrops,lTrackTime,iStat)
         IF (iStat .EQ. -1) RETURN
     END IF
     
     !Crops for budget output
-    CALL CropDataFile%ReadData(NBudgetCrops,iStat)  ;  IF (iStat .EQ. -1) RETURN
-    AgLand%NBudgetCrops = NBudgetCrops
-    IF (NBudgetCrops .GT. 0) THEN
+    CALL CropDataFile%ReadData(iNBudgetCrops,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    AgLand%NBudgetCrops = iNBudgetCrops
+    IF (iNBudgetCrops .GT. 0) THEN
       !Number of budget regions
-      NBudgetRegions = (AppGrid%NSubregions+1) * NBudgetCrops
+      iNBudgetRegions = (AppGrid%NSubregions+1) * iNBudgetCrops
       
       !Allocate memory
-      ALLOCATE (AgLand%iBudgetCrops(NBudgetCrops)   ,  &
-                cRegionNames(NBudgetRegions)        ,  &
-                RegionAreas(NBudgetRegions)         ,  &
-                STAT=ErrorCode                      )
-      IF (ErrorCode .NE. 0) THEN
+      ALLOCATE (AgLand%iBudgetCrops(iNBudgetCrops)   ,  &
+                cRegionNames(iNBudgetRegions)        ,  &
+                rRegionAreas(iNBudgetRegions)        ,  &
+                STAT=iErrorCode                      )
+      IF (iErrorCode .NE. 0) THEN
           CALL AgLand%Logger%SetLastMessage('Error in allocating memory for non-ponded crops budget output data!',f_iFatal,ThisProcedure)
           iStat = -1
           RETURN
       END IF
       
       !Find the indices for budget-print-out crops
-      DO indxCrop=1,NBudgetCrops
-        CALL CropDataFile%ReadData(ALine,iStat)  ;  IF (iStat .EQ. -1) RETURN  ;  cBudgetCropCode = ADJUSTL(StripTextUntilCharacter(ALine,f_cInlineCommentChar))  ;  CALL CleanSpecialCharacters(cBudgetCropCode)
+      DO indxCrop=1,iNBudgetCrops
+        CALL CropDataFile%ReadData(cALine,iStat)  ;  IF (iStat .EQ. -1) RETURN  ;  cBudgetCropCode = ADJUSTL(StripTextUntilCharacter(cALine,f_cInlineCommentChar))  ;  CALL CleanSpecialCharacters(cBudgetCropCode)
         lCropFound = .FALSE.
-        DO indxCropP=1,NCrops
+        DO indxCropP=1,iNCrops
           IF (UpperCase(cBudgetCropCode) .EQ. UpperCase(AgLand%CropCodes(indxCropP))) THEN
             AgLand%iBudgetCrops(indxCrop) = indxCropP
             lCropFound                    = .TRUE.
@@ -389,25 +401,25 @@ CONTAINS
       CALL ShellSort(AgLand%iBudgetCrops)
       
       !Region names and areas
-      DO indxCrop=1,NBudgetCrops
+      DO indxCrop=1,iNBudgetCrops
         indxCropP = AgLand%iBudgetCrops(indxCrop)
-        DO indxRegion=1,NRegions+1
-          cRegionNames((indxRegion-1)*NBudgetCrops+indxCrop) = TRIM(SubRegionNames(indxRegion)) // '_' // TRIM(UpperCase(AgLand%CropCodes(indxCropP)))
-          RegionAreas((indxRegion-1)*NBudgetCrops+indxCrop)  = SubregionArea(indxRegion)
+        DO indxRegion=1,iNRegions+1
+          cRegionNames((indxRegion-1)*iNBudgetCrops+indxCrop) = TRIM(cSubRegionNames(indxRegion)) // '_' // TRIM(UpperCase(AgLand%CropCodes(indxCropP)))
+          rRegionAreas((indxRegion-1)*iNBudgetCrops+indxCrop) = rSubregionArea(indxRegion)
         END DO
       END DO
       
     END IF
     
     !Land and water use budget
-    CALL CropDataFile%ReadData(ALine,iStat)  ;  IF (iStat .EQ. -1) RETURN  ;  ALine = StripTextUntilCharacter(ALine,f_cInlineCommentChar)  ;  CALL CleanSpecialCharacters(ALine)
-    IF (NBudgetCrops .GT. 0) THEN
-        IF (ALine .NE. '') THEN
-            CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(ALine)),cWorkingDirectory,cAbsPathFileName)
+    CALL CropDataFile%ReadData(cALine,iStat)  ;  IF (iStat .EQ. -1) RETURN  ;  cALine = StripTextUntilCharacter(cALine,f_cInlineCommentChar)  ;  CALL CleanSpecialCharacters(cALine)
+    IF (iNBudgetCrops .GT. 0) THEN
+        IF (cALine .NE. '') THEN
+            CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(cALine)),cWorkingDirectory,cAbsPathFileName)
             IF (PRESENT(pAgLWUseBudRawFile_New)) THEN
-                CALL pAgLWUseBudRawFile_New(IsForInquiry,cProjectNameForDSS,cAbsPathFileName,TimeStep,NTimeSteps,NBudgetRegions,RegionAreas,cRegionNames,'land and water use budget for specific non-ponded crops',cVersion,AgLand%LWUseBudRawFile,iStat,Logger)
+                CALL pAgLWUseBudRawFile_New(IsForInquiry,cProjectNameForDSS,cAbsPathFileName,TimeStep,iNTimeSteps,iNBudgetRegions,rRegionAreas,cRegionNames,'land and water use budget for specific non-ponded crops',cVersion,AgLand%LWUseBudRawFile,iStat,Logger)
             ELSE
-                CALL AgLWUseBudRawFile_New(IsForInquiry,cProjectNameForDSS,cAbsPathFileName,TimeStep,NTimeSteps,NBudgetRegions,RegionAreas,cRegionNames,'land and water use budget for specific non-ponded crops',cVersion,AgLand%LWUseBudRawFile,iStat,Logger)
+                CALL AgLWUseBudRawFile_New(IsForInquiry,cProjectNameForDSS,cAbsPathFileName,TimeStep,iNTimeSteps,iNBudgetRegions,rRegionAreas,cRegionNames,'land and water use budget for specific non-ponded crops',cVersion,AgLand%LWUseBudRawFile,iStat,Logger)
             END IF
             IF (iStat .EQ. -1) RETURN
             AgLand%lLWUseBudRawFile_Defined = .TRUE.
@@ -415,14 +427,14 @@ CONTAINS
     END IF
     
     !Root zone budget
-    CALL CropDataFile%ReadData(ALine,iStat)  ;  IF (iStat .EQ. -1) RETURN  ;  ALine = StripTextUntilCharacter(ALine,f_cInlineCommentChar)  ;  CALL CleanSpecialCharacters(ALine)
-    IF (NBudgetCrops .GT. 0) THEN
-        IF (ALine .NE. '') THEN
-            CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(ALine)),cWorkingDirectory,cAbsPathFileName)
+    CALL CropDataFile%ReadData(cALine,iStat)  ;  IF (iStat .EQ. -1) RETURN  ;  cALine = StripTextUntilCharacter(cALine,f_cInlineCommentChar)  ;  CALL CleanSpecialCharacters(cALine)
+    IF (iNBudgetCrops .GT. 0) THEN
+        IF (cALine .NE. '') THEN
+            CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(cALine)),cWorkingDirectory,cAbsPathFileName)
             IF (PRESENT(pAgRootZoneBudRawFile_New)) THEN
-                CALL pAgRootZoneBudRawFile_New(IsForInquiry,cProjectNameForDSS,cAbsPathFileName,TimeStep,NTimeSteps,NBudgetRegions,RegionAreas,cRegionNames,'root zone budget for specific non-ponded crops',cVersion,AgLand%RootZoneBudRawFile,iStat,Logger)
+                CALL pAgRootZoneBudRawFile_New(IsForInquiry,cProjectNameForDSS,cAbsPathFileName,TimeStep,iNTimeSteps,iNBudgetRegions,rRegionAreas,cRegionNames,'root zone budget for specific non-ponded crops',cVersion,AgLand%RootZoneBudRawFile,iStat,Logger)
             ELSE
-                CALL AgRootZoneBudRawFile_New(IsForInquiry,cProjectNameForDSS,cAbsPathFileName,TimeStep,NTimeSteps,NBudgetRegions,RegionAreas,cRegionNames,'root zone budget for specific non-ponded crops',cVersion,AgLand%RootZoneBudRawFile,iStat,Logger)
+                CALL AgRootZoneBudRawFile_New(IsForInquiry,cProjectNameForDSS,cAbsPathFileName,TimeStep,iNTimeSteps,iNBudgetRegions,rRegionAreas,cRegionNames,'root zone budget for specific non-ponded crops',cVersion,AgLand%RootZoneBudRawFile,iStat,Logger)
             END IF
             IF (iStat .EQ. -1) RETURN
             AgLand%lRootZoneBudRawFile_Defined = .TRUE.
@@ -430,16 +442,16 @@ CONTAINS
     END IF
 
     !Rooting depths
-    CALL CropDataFile%ReadData(ALine,iStat)  ;  IF (iStat .EQ. -1) RETURN  ;  ALine = StripTextUntilCharacter(ALine,f_cInlineCommentChar)  ;  CALL CleanSpecialCharacters(ALine)
-    CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(ALine)),cWorkingDirectory,cAbsPathFileName)
+    CALL CropDataFile%ReadData(cALine,iStat)  ;  IF (iStat .EQ. -1) RETURN  ;  cALine = StripTextUntilCharacter(cALine,f_cInlineCommentChar)  ;  CALL CleanSpecialCharacters(cALine)
+    CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(cALine)),cWorkingDirectory,cAbsPathFileName)
     IF (.NOT. IsForInquiry) THEN
-        CALL AgLand%RootDepthFracDataFile%New(AgLand%Logger,cAbsPathFileName,cWorkingDirectory,TrackTime,iStat)  ;  IF (iStat .EQ. -1) RETURN
+        CALL AgLand%RootDepthFracDataFile%New(AgLand%Logger,cAbsPathFileName,cWorkingDirectory,lTrackTime,iStat)  ;  IF (iStat .EQ. -1) RETURN
     END IF
-    CALL CropDataFile%ReadData(FACT,iStat)  ;  IF (iStat .EQ. -1) RETURN
-    CALL AllocArray(DummyRealArray,NCrops,3,ThisProcedure,iStat)  ;  IF (iStat .EQ. -1) RETURN
-    CALL CropDataFile%ReadData(DummyRealArray,iStat)  ;  IF (iStat .EQ. -1) RETURN
-    AgLand%MaxRootDepth      = DummyRealArray(:,2)*FACT
-    AgLand%iColRootDepthFrac = INT(DummyRealArray(:,3))
+    CALL CropDataFile%ReadData(rFACT,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    CALL AllocArray(rDummyRealArray,iNCrops,3,ThisProcedure,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    CALL CropDataFile%ReadData(rDummyRealArray,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    AgLand%MaxRootDepth      = rDummyRealArray(:,2)*rFACT
+    AgLand%iColRootDepthFrac = INT(rDummyRealArray(:,3))
 
     !Make sure there are enough data columns in the root depth fractions data file
     IF (.NOT. IsForInquiry) THEN
@@ -448,10 +460,11 @@ CONTAINS
     END IF
 
     !Curve numbers
-    CALL ReadRealData(CropDataFile,'curve numbers for non-ponded crops','elements',NElements,NCrops+1,iElemIDs,DummyRealArray,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    CALL ReadRealData(CropDataFile,'Curve numbers for non-ponded crops','elements',iNElements,iNCrops+1,iElemIDs,rDummyRealArray,iStat)  ;  IF (iStat .EQ. -1) RETURN
     lProcessed = .FALSE.
-    DO indxElem=1,NElements
-        iElem = INT(DummyRealArray(indxElem,1))
+    DO indxElem=1,iNElements
+        iElem = INT(rDummyRealArray(indxElem,1))
+        !Make sure data for element is not entered more than once
         IF (lProcessed(iElem)) THEN
             ID = iElemIDs(iElem)
             CALL AgLand%Logger%SetLastMessage('Curve numbers for non-ponded crops at element '//TRIM(IntToText(ID))//' are defined more than once!',f_iFatal,ThisProcedure)
@@ -459,36 +472,76 @@ CONTAINS
             RETURN
         END IF
         lProcessed(iElem)          = .TRUE.
-        AgLand%Crops%SMax(:,iElem) = (1000.0/DummyRealArray(indxElem,2:)-10.0) * FACTCN
+        !Make sure curve numbers are between 0 and 100
+        IF (ANY(rDummyRealArray(indxElem,2:) .LT. 0.0) .OR. ANY(rDummyRealArray(indxElem,2:) .GT. 100.0)) THEN
+            ID = iElemIDs(iElem)
+            CALL AgLand%Logger%SetLastMessage('One or both curve numbers for non-ponded crops at element '//TRIM(IntToText(ID))//' are less than 0.0 or greater 100.0!',f_iFatal,ThisProcedure)
+            iStat = -1
+            RETURN
+        END IF       
+        AgLand%Crops%SMax(:,iElem) = (1000.0/rDummyRealArray(indxElem,2:)-10.0) * rFactCN
     END DO
       
-    !ETc/ETo pointers
-    CALL ReadPointerData(CropDataFile,'evapotranspiration column pointers for non-ponded crops','elements',NElements,NCrops+1,iElemIDs,DummyIntArray,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    !Initial abstraction (only read if required; also do a backward compatibility check)
+    IF (lReadInitialAbstraction) THEN
+        !BACKWARD COMPATIBILITY: Check if the dataset actually exists by reading a line and checking if it is the initial abstraction read flag)
+        CALL CropDataFile%ReadData(cALine,iStat)  ; IF (iStat .NE. 0) RETURN
+        cALine = StripTextUntilCharacter(cALine,'/')  
+        CALL CleanSpecialCharacters(cALine) 
+        cALine = ADJUSTL(cALine)
+        ALLOCATE (rDummyArrayCheck(1+iNCrops))
+        READ (cALine(1:LEN_TRIM(cALine)),*,IOSTAT=iErrorCode) rDummyArrayCheck
+        !Initial abstraction dataset is not provided at all (first data should be a single integer flag and above read should fail when initial abstraction data set is provided)
+        IF (iErrorCode .EQ. 0) THEN
+            CALL CropDataFile%BackspaceFile()
+        ELSE
+            !Initial abstraction dataset is provided
+            READ (cALine,*) iReadInitialAbstraction
+            IF (iReadInitialAbstraction .EQ. 1) THEN
+                CALL ReadRealData(CropDataFile,'initial abstraction parameters for non-ponded crops','elements',iNElements,iNCrops+1,iElemIDs,rDummyRealArray,iStat)  ;  IF (iStat .EQ. -1) RETURN
     lProcessed = .FALSE.
-    DO indxElem=1,NElements
-        iElem = DummyIntArray(indxElem,1)
+                DO indxElem=1,iNElements
+                    iElem = INT(rDummyRealArray(indxElem,1))
+                    IF (lProcessed(iElem)) THEN
+                        ID = iElemIDs(iElem)
+                        CALL AgLand%Logger%SetLastMessage('Initial abstraction parameters for non-ponded crops at element '//TRIM(IntToText(ID))//' are defined more than once!',f_iFatal,ThisProcedure)
+                        iStat = -1
+                        RETURN
+                    END IF
+                    lProcessed(iElem)                         = .TRUE.
+                    AgLand%Crops%rInitialAbstraction(:,iElem) = rDummyRealArray(indxElem,2:)
+                END DO
+            END IF    
+        END IF
+    END IF
+      
+    !ETc/ETo pointers
+    CALL ReadPointerData(CropDataFile,'evapotranspiration column pointers for non-ponded crops','elements',iNElements,iNCrops+1,iElemIDs,iDummyIntArray,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    lProcessed = .FALSE.
+    DO indxElem=1,iNElements
+        iElem = iDummyIntArray(indxElem,1)
         IF (lProcessed(iElem)) THEN
             ID = iElemIDs(iElem)
             CALL AgLand%Logger%SetLastMessage('Evapotranspration column pointers for non-ponded crops at element '//TRIM(IntToText(ID))//' are defined more than once!',f_iFatal,ThisProcedure)
             iStat = -1
         END IF
         lProcessed(iElem)             = .TRUE.
-        AgLand%Crops%iColETc(:,iElem) = DummyIntArray(indxElem,2:)    
+        AgLand%Crops%iColETc(:,iElem) = iDummyIntArray(indxElem,2:)    
     END DO
 
     !If requested, read crop coefficient data pointer
     IF (PRESENT(iColCropCoeff)) THEN
-        ALLOCATE (iColCropCoeff(NCrops,NElements))
-        CALL InitColumnPointerData_ForElements(CropDataFile,'crop coefficient column pointers for non-ponded crops',NCrops,iElemIDs,iColCropCoeff,iStat)
+        ALLOCATE (iColCropCoeff(iNCrops,iNElements))
+        CALL InitColumnPointerData_ForElements(CropDataFile,'crop coefficient column pointers for non-ponded crops',iNCrops,iElemIDs,iColCropCoeff,iStat)
         IF (iStat .NE. 0) RETURN
     END IF
     
     !Agricultural water demand pointers
-    ALLOCATE (AgLand%iColAgDemand(NCrops,NElements))
-    CALL ReadPointerData(CropDataFile,'water supply requirement column pointers for non-ponded crops','elements',NElements,NCrops+1,iElemIDs,DummyIntArray,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    ALLOCATE (AgLand%iColAgDemand(iNCrops,iNElements))
+    CALL ReadPointerData(CropDataFile,'water supply requirement column pointers for non-ponded crops','elements',iNElements,iNCrops+1,iElemIDs,iDummyIntArray,iStat)  ;  IF (iStat .EQ. -1) RETURN
     lProcessed = .FALSE.
-    DO indxElem=1,NElements
-        iElem = DummyIntArray(indxElem,1)
+    DO indxElem=1,iNElements
+        iElem = iDummyIntArray(indxElem,1)
         IF (lProcessed(iElem)) THEN
             ID = iElemIDs(iElem)
             CALL AgLand%Logger%SetLastMessage('Water supply requirement column pointers for non-ponded crops at element '//TRIM(IntToText(ID))//' are defined more than once!',f_iFatal,ThisProcedure)
@@ -496,14 +549,14 @@ CONTAINS
             RETURN
         END IF
         lProcessed(iElem)            = .TRUE.
-        AgLand%iColAgDemand(:,iElem) = DummyIntArray(indxElem,2:)
+        AgLand%iColAgDemand(:,iElem) = iDummyIntArray(indxElem,2:)
     END DO
 
     !Irrigation period pointers
-    CALL ReadPointerData(CropDataFile,'irrigation period column pointers for non-ponded crops','elements',NElements,NCrops+1,iElemIDs,DummyIntArray,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    CALL ReadPointerData(CropDataFile,'irrigation period column pointers for non-ponded crops','elements',iNElements,iNCrops+1,iElemIDs,iDummyIntArray,iStat)  ;  IF (iStat .EQ. -1) RETURN
     lProcessed = .FALSE.
-    DO indxElem=1,NElements
-        iElem = DummyIntArray(indxElem,1)
+    DO indxElem=1,iNElements
+        iElem = iDummyIntArray(indxElem,1)
         IF (lProcessed(iElem)) THEN
             ID = iElemIDs(iElem)
             CALL AgLand%Logger%SetLastMessage('Irrigation period column pointers for non-ponded crops at element '//TRIM(IntToText(ID))//' are defined more than once!',f_iFatal,ThisProcedure)
@@ -511,7 +564,7 @@ CONTAINS
             RETURN
         END IF
         lProcessed(iElem)                    = .TRUE.
-        AgLand%Crops%iColIrigPeriod(:,iElem) = DummyIntArray(indxElem,2:)
+        AgLand%Crops%iColIrigPeriod(:,iElem) = iDummyIntArray(indxElem,2:)
     END DO
     IF (MINVAL(AgLand%Crops%iColIrigPeriod) .LT. 1) THEN
         MessageArray(1) = 'Irrigation period column number for non-ponded crops' 
@@ -522,17 +575,17 @@ CONTAINS
     END IF
        
     !Minimum soil moisture pointers
-    CALL CropDataFile%ReadData(ALine,iStat)  ;  IF (iStat .EQ. -1) RETURN
-    ALine = StripTextUntilCharacter(ALine,f_cInlineCommentChar) 
-    CALL CleanSpecialCharacters(ALine)
-    CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(ALine)),cWorkingDirectory,cAbsPathFileName)
+    CALL CropDataFile%ReadData(cALine,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    cALine = StripTextUntilCharacter(cALine,f_cInlineCommentChar) 
+    CALL CleanSpecialCharacters(cALine)
+    CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(cALine)),cWorkingDirectory,cAbsPathFileName)
     IF (.NOT. IsForInquiry) THEN
-        CALL AgLand%MinSoilMFile%Init(cAbsPathFileName,cWorkingDirectory,'Irrigation trigger soil moisture data file',TrackTime,1,.FALSE.,DummyFactor,iStat=iStat)  ;  IF (iStat .EQ. -1) RETURN
+        CALL AgLand%MinSoilMFile%Init(cAbsPathFileName,cWorkingDirectory,'Irrigation trigger soil moisture data file',lTrackTime,1,.FALSE.,rDummyFactor,iStat=iStat)  ;  IF (iStat .EQ. -1) RETURN
     END IF
-    CALL ReadPointerData(CropDataFile,'minimum soil moisture column pointers for non-ponded crops','elements',NElements,NCrops+1,iElemIDs,DummyIntArray,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    CALL ReadPointerData(CropDataFile,'minimum soil moisture column pointers for non-ponded crops','elements',iNElements,iNCrops+1,iElemIDs,iDummyIntArray,iStat)  ;  IF (iStat .EQ. -1) RETURN
     lProcessed = .FALSE.
-    DO indxElem=1,NElements
-        iElem = DummyIntArray(indxElem,1)
+    DO indxElem=1,iNElements
+        iElem = iDummyIntArray(indxElem,1)
         IF (lProcessed(iElem)) THEN
             ID = iElemIDs(iElem)
             CALL AgLand%Logger%SetLastMessage('Minimum soil moisture column pointers for non-ponded crops at element '//TRIM(IntToText(ID))//' are defined more than once!',f_iFatal,ThisProcedure)
@@ -540,7 +593,7 @@ CONTAINS
             RETURN
         END IF
         lProcessed(iElem)                  = .TRUE.
-        AgLand%Crops%iColMinSoilM(:,iElem) = DummyIntArray(indxElem,2:)
+        AgLand%Crops%iColMinSoilM(:,iElem) = iDummyIntArray(indxElem,2:) 
     END DO
     IF (.NOT. IsForInquiry) THEN
         IF (MAXVAL(AgLand%Crops%iColMinSoilM) .GT. AgLand%MinSoilMFile%iSize) THEN
@@ -560,18 +613,18 @@ CONTAINS
     END IF
     
     !Target soil moisture during irrigation pointers
-    CALL CropDataFile%ReadData(ALine,iStat)  ;  IF (iStat .EQ. -1) RETURN
-    ALine = StripTextUntilCharacter(ALine,f_cInlineCommentChar) 
-    CALL CleanSpecialCharacters(ALine)
-    IF (ALine .NE. '') THEN
-        CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(ALine)),cWorkingDirectory,cAbsPathFileName)
+    CALL CropDataFile%ReadData(cALine,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    cALine = StripTextUntilCharacter(cALine,f_cInlineCommentChar) 
+    CALL CleanSpecialCharacters(cALine)
+    IF (cALine .NE. '') THEN
+        CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(cALine)),cWorkingDirectory,cAbsPathFileName)
         IF (.NOT. IsForInquiry) THEN
-            CALL AgLand%TargetSoilMFile%Init(cAbsPathFileName,cWorkingDirectory,'irrigation target soil moisture file',TrackTime,1,.FALSE.,DummyFactor,iStat=iStat)  ;  IF (iStat .EQ. -1) RETURN
+            CALL AgLand%TargetSoilMFile%Init(cAbsPathFileName,cWorkingDirectory,'irrigation target soil moisture file',lTrackTime,1,.FALSE.,rDummyFactor,iStat=iStat)  ;  IF (iStat .EQ. -1) RETURN
         END IF
-        CALL ReadPointerData(CropDataFile,'irrigation target soil moisture column pointers for non-ponded crops','elements',NElements,NCrops+1,iElemIDs,DummyIntArray,iStat)  ;  IF (iStat .EQ. -1) RETURN
+        CALL ReadPointerData(CropDataFile,'irrigation target soil moisture column pointers for non-ponded crops','elements',iNElements,iNCrops+1,iElemIDs,iDummyIntArray,iStat)  ;  IF (iStat .EQ. -1) RETURN
         lProcessed = .FALSE.
-        DO indxElem=1,NElements
-            iElem = DummyIntArray(indxElem,1)
+        DO indxElem=1,iNElements
+            iElem = iDummyIntArray(indxElem,1)
             IF (lProcessed(iElem)) THEN
                 ID = iElemIDs(iElem)
                 CALL AgLand%Logger%SetLastMessage('Irrigation target soil moisture column pointers for non-ponded crops at element '//TRIM(IntToText(ID))//' are defined more than once!',f_iFatal,ThisProcedure)
@@ -579,7 +632,7 @@ CONTAINS
                 RETURN
             END IF
             lProcessed(iElem)                     = .TRUE.
-            AgLand%Crops%iColTargetSoilM(:,iElem) = DummyIntArray(indxElem,2:) 
+            AgLand%Crops%iColTargetSoilM(:,iElem) = iDummyIntArray(indxElem,2:) 
         END DO
     ELSE
         ALLOCATE (AgLand%TargetSoilMFile%rValues(1))
@@ -604,10 +657,10 @@ CONTAINS
     END IF
 
     !Irrigation water return flow fraction pointers
-    CALL ReadPointerData(CropDataFile,'return flow factor column pointers for non-ponded crops','elements',NElements,NCrops+1,iElemIDs,DummyIntArray,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    CALL ReadPointerData(CropDataFile,'return flow factor column pointers for non-ponded crops','elements',iNElements,iNCrops+1,iElemIDs,iDummyIntArray,iStat)  ;  IF (iStat .EQ. -1) RETURN
     lProcessed = .FALSE.
-    DO indxElem=1,NElements
-        iElem = DummyIntArray(indxElem,1)
+    DO indxElem=1,iNElements
+        iElem = iDummyIntArray(indxElem,1)
         IF (lProcessed(iElem)) THEN
             ID = iElemIDs(iElem)
             CALL AgLand%Logger%SetLastMessage('Return flow fraction column pointers for non-ponded crops at element '//TRIM(IntToText(ID))//' are defined more than once!',f_iFatal,ThisProcedure)
@@ -615,14 +668,14 @@ CONTAINS
             RETURN
         END IF
         lProcessed(iElem)                    = .TRUE.
-        AgLand%Crops%iColReturnFrac(:,iElem) = DummyIntArray(indxElem,2:) 
+        AgLand%Crops%iColReturnFrac(:,iElem) = iDummyIntArray(indxElem,2:) 
     END DO
     
     !Irrigation water re-use factor pointers
-    CALL ReadPointerData(CropDataFile,'re-use factor column pointers for non-ponded crops','elements',NElements,NCrops+1,iElemIDs,DummyIntArray,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    CALL ReadPointerData(CropDataFile,'re-use factor column pointers for non-ponded crops','elements',iNElements,iNCrops+1,iElemIDs,iDummyIntArray,iStat)  ;  IF (iStat .EQ. -1) RETURN
     lProcessed = .FALSE.
-    DO indxElem=1,NElements
-        iElem = DummyIntArray(indxElem,1)
+    DO indxElem=1,iNElements
+        iElem = iDummyIntArray(indxElem,1)
         IF (lProcessed(iElem)) THEN
             ID = iElemIDs(iElem)
             CALL AgLand%Logger%SetLastMessage('Re-use flow fraction column pointers for non-ponded crops at element '//TRIM(IntToText(ID))//' are defined more than once!',f_iFatal,ThisProcedure)
@@ -630,22 +683,22 @@ CONTAINS
             RETURN
         END IF
         lProcessed(iElem)                   = .TRUE.
-        AgLand%Crops%iColReuseFrac(:,iElem) = DummyIntArray(indxElem,2:) 
+        AgLand%Crops%iColReuseFrac(:,iElem) = iDummyIntArray(indxElem,2:) 
     END DO
     
     !Minimum perc fractions column pointers
-    CALL CropDataFile%ReadData(ALine,iStat)  ;  IF (iStat .EQ. -1) RETURN
-    ALine = StripTextUntilCharacter(ALine,f_cInlineCommentChar) 
-    CALL CleanSpecialCharacters(ALine)
-    IF (ALine .NE. '') THEN
-        CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(ALine)),cWorkingDirectory,cAbsPathFileName)
+    CALL CropDataFile%ReadData(cALine,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    cALine = StripTextUntilCharacter(cALine,f_cInlineCommentChar) 
+    CALL CleanSpecialCharacters(cALine)
+    IF (cALine .NE. '') THEN
+        CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(cALine)),cWorkingDirectory,cAbsPathFileName)
         IF (.NOT. IsForInquiry) THEN
-            CALL AgLand%LeachFracFile%Init(cAbsPathFileName,cWorkingDirectory,'leaching factors file',TrackTime,1,.FALSE.,DummyFactor,iStat=iStat)  ;  IF (iStat .EQ. -1) RETURN
+            CALL AgLand%LeachFracFile%Init(cAbsPathFileName,cWorkingDirectory,'leaching factors file',lTrackTime,1,.FALSE.,rDummyFactor,iStat=iStat)  ;  IF (iStat .EQ. -1) RETURN
         END IF
-        CALL ReadPointerData(CropDataFile,'minimum percolation column pointers for non-ponded crops','elements',NElements,NCrops+1,iElemIDs,DummyIntArray,iStat)  ;  IF (iStat .EQ. -1) RETURN
+        CALL ReadPointerData(CropDataFile,'minimum percolation column pointers for non-ponded crops','elements',iNElements,iNCrops+1,iElemIDs,iDummyIntArray,iStat)  ;  IF (iStat .EQ. -1) RETURN
         lProcessed = .FALSE.
-        DO indxElem=1,NElements
-            iElem = DummyIntArray(indxElem,1)
+        DO indxElem=1,iNElements
+            iElem = iDummyIntArray(indxElem,1)
             IF (lProcessed(iElem)) THEN
                 ID = iElemIDs(iElem)
                 CALL AgLand%Logger%SetLastMessage('Minimum percolation column pointers for non-ponded crops at element '//TRIM(IntToText(ID))//' are defined more than once!',f_iFatal,ThisProcedure)
@@ -653,7 +706,7 @@ CONTAINS
                 RETURN
             END IF
             lProcessed(iElem)                   = .TRUE.
-            AgLand%Crops%iColLeachFrac(:,iElem) = DummyIntArray(indxElem,2:) 
+            AgLand%Crops%iColLeachFrac(:,iElem) = iDummyIntArray(indxElem,2:) 
         END DO
     ELSE
         ALLOCATE (AgLand%LeachFracFile%rValues(1))
@@ -678,17 +731,17 @@ CONTAINS
     END IF
     
     !Initial conditions
-    CALL ReadRealData(CropDataFile,'initial conditions for non-ponded crops','elements',NElements,NCrops+2,iElemIDs,DummyRealArray,iStat)  ;  IF (iStat .EQ. -1) RETURN
-    IF (MINVAL(DummyRealArray(:,2)) .LT. 0.0   .OR.  &
-        MAXVAL(DummyRealArray(:,2)) .GT. 1.0         ) THEN
+    CALL ReadRealData(CropDataFile,'initial conditions for non-ponded crops','elements',iNElements,iNCrops+2,iElemIDs,rDummyRealArray,iStat)  ;  IF (iStat .EQ. -1) RETURN
+    IF (MINVAL(rDummyRealArray(:,2)) .LT. 0.0   .OR.  &
+        MAXVAL(rDummyRealArray(:,2)) .GT. 1.0         ) THEN
         MessageArray(1) = 'Some fractions of initial soil moisture due to precipitation is less '
         MessageArray(2) = 'than 0.0 or greater than 1.0 for non-ponded agricultural crops!'
         CALL AgLand%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)      
         iStat = -1
         RETURN
     END IF 
-    IF (MINVAL(DummyRealArray(:,3:)) .LT. 0.0   .OR.  &
-        MAXVAL(DummyRealArray(:,3:)) .GT. 1.0          ) THEN
+    IF (MINVAL(rDummyRealArray(:,3:)) .LT. 0.0   .OR.  &
+        MAXVAL(rDummyRealArray(:,3:)) .GT. 1.0          ) THEN
         MessageArray(1) = 'Some or all initial root zone moisture contents are less than'
         MessageArray(2) = '0.0 or greater than 1.0 for non-ponded agricultural crops!'
         CALL AgLand%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)      
@@ -696,8 +749,8 @@ CONTAINS
         RETURN
     END IF 
     lProcessed = .FALSE.    
-    DO indxElem=1,NElements
-        iElem = INT(DummyRealArray(indxElem,1))
+    DO indxElem=1,iNElements
+        iElem = INT(rDummyRealArray(indxElem,1))
         IF (lProcessed(iElem)) THEN
             ID = iElemIDs(iElem)
             CALL AgLand%Logger%SetLastMessage('Initial conditions for non-ponded crops at element '//TRIM(IntToText(ID))//' are defined more than once!',f_iFatal,ThisProcedure)
@@ -705,8 +758,8 @@ CONTAINS
             RETURN
         END IF
         lProcessed(iElem)                  = .TRUE.
-        AgLand%Crops%SoilM_Precip(:,iElem) = DummyRealArray(indxElem,2) * DummyRealArray(indxElem,3:)
-        AgLand%Crops%SoilM_AW(:,iElem)     = DummyRealArray(indxElem,3:) - AgLand%Crops%SoilM_Precip(:,iElem)
+        AgLand%Crops%SoilM_Precip(:,iElem) = rDummyRealArray(indxElem,2) * rDummyRealArray(indxElem,3:)
+        AgLand%Crops%SoilM_AW(:,iElem)     = rDummyRealArray(indxElem,3:) - AgLand%Crops%SoilM_Precip(:,iElem)
     END DO
     
     !Assign current-timestep moistures to previous-timestep moistures
@@ -715,11 +768,39 @@ CONTAINS
     AgLand%Crops%SoilM_AW_P_BeforeUpdate     = AgLand%Crops%SoilM_AW
     AgLand%Crops%SoilM_AW_P                  = AgLand%Crops%SoilM_AW
     
+    !Optional root depth scaling factors for each (crop,element) combination
+    ! Check if this data is even available, if not keep the root depths as is
+    DEALLOCATE (rDummyRealArray , STAT=iErrorCode)
+    ALLOCATE (rDummyRealArray(iNElements,iNCrops+1))
+    CALL CropDataFile%ReadData(rDummyRealArray,iErrorCode)
+    IF (iErrorCode .EQ. 0) THEN
+        !Process spatial scaling factors
+        lProcessed = .FALSE.
+        DO indxElem=1,iNElements
+            ID    = INT(rDummyRealArray(indxElem,1))
+            iElem = LocateInList(ID,iElemIDs)
+            IF (iElem .EQ. 0) THEN
+                CALL AgLand%Logger%SetLastMessage('Element ID '// TRIM(IntToText(ID)) // ' listed for root depth spatial scaling factors for non-ponded crops is not in the model!',f_iFatal,ThisProcedure)
+                iStat = -1
+                RETURN
+            END IF
+            IF (lProcessed(iElem)) THEN
+                CALL AgLand%Logger%SetLastMessage('Root depth spatial distribution factors for non-ponded crops at element '//TRIM(IntToText(ID))//' are defined more than once!',f_iFatal,ThisProcedure)
+                iStat = -1
+                RETURN
+            END IF
+            lProcessed(iElem)                          = .TRUE.
+            AgLand%rSpatialRootDepthFractions(:,iElem) = rDummyRealArray(indxElem,2:)
+        END DO
+    ELSE
+        AgLand%rSpatialRootDepthFractions = 1.0
+    END IF
+    
     !Close file
     CALL CropDataFile%Kill()
     
     !Clear memory
-    DEALLOCATE (DummyRealArray , DummyIntArray , cRegionNames , RegionAreas , STAT=ErrorCode)
+    DEALLOCATE (rDummyRealArray , iDummyIntArray , cRegionNames , rRegionAreas , STAT=iErrorCode)
     
   END SUBROUTINE New
 
@@ -771,6 +852,7 @@ CONTAINS
                 AgLand%iColRootDepthFrac        , &
                 AgLand%RootDepth_P              , &
                 AgLand%RootDepth                , &
+                AgLand%rSpatialRootDepthFractions , &
                 AgLand%iColAgDemand             , &
                 STAT = ErrorCode                )
     
@@ -881,7 +963,7 @@ CONTAINS
         CALL ReuseFracFile%ReadTSData(TimeStep,'Reuse fractions data',FileReadCode_Reuse,iStat)          ;  IF (iStat .EQ. -1) RETURN
         
         !If new data is read, find min and max
-        IF (FileReadCode_Return.EQ.0  .OR.  FileReadCode_Reuse.EQ.0) THEN
+        IF (FileReadCode_Return.EQ.f_IO_SuccessfulRead  .OR.  FileReadCode_Reuse.EQ.f_IO_SuccessfulRead) THEN
             DO indxElem=1,SIZE(AgLand%Crops%SMax,DIM=2)
                 DO indxCrop=1,SIZE(AgLand%Crops%SMax,DIM=1)
                     rRT      = ReturnFracFile%rValues(AgLand%Crops%iColReturnFrac(indxCrop,indxElem))
@@ -916,10 +998,10 @@ CONTAINS
   
 
   ! -------------------------------------------------------------
-  ! --- GET AREAS OF A SPECIFIED CROP FOR AT ALL ELEMENTS FOR A TIME PERIOD
+  ! --- GET AREAS OF A SPECIFIED CROP FOR AT ALL ELEMENTS FOR A TIME PERIOD WHEN FILE IS NOT OPEN
   ! --- Note: This method is not meant to be called during a Simulation
   ! -------------------------------------------------------------
-  SUBROUTINE GetAreasForTimePeriod(cMainFileName,cWorkingDirectory,cBeginDate,cEndDate,TimeStep,AppGrid,iCrop,rAreas,iStat)
+  SUBROUTINE GetAreasForTimePeriod_FileNotOpen(cMainFileName,cWorkingDirectory,cBeginDate,cEndDate,TimeStep,AppGrid,iCrop,rAreas,iStat)
     CHARACTER(LEN=*),INTENT(IN)   :: cMainFileName,cWorkingDirectory,cBeginDate,cEndDate
     TYPE(TimeStepType),INTENT(IN) :: TimeStep
     TYPE(AppGridType),INTENT(IN)  :: AppGrid
@@ -958,11 +1040,108 @@ CONTAINS
     CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(cALine)),cWorkingDirectory,cAreaFileName)
     
     !Retrieve areas
-    CALL ReadLandUseAreasForTimePeriod(cAreaFileName,cWorkingDirectory,cBeginDate,cEndDate,TimeStep,AppGrid,iNCrops,iCrop,rAreas,iStat)
+    CALL ReadLandUseAreasForTimePeriod(cAreaFileName,cWorkingDirectory,'Non-ponded ag. area file',cBeginDate,cEndDate,TimeStep,AppGrid,iNCrops,iCrop,rAreas,iStat)
 
 10  CALL MainFile%Kill()
     
-  END SUBROUTINE GetAreasForTimePeriod
+  END SUBROUTINE GetAreasForTimePeriod_FileNotOpen
+  
+  
+  ! -------------------------------------------------------------
+  ! --- GET AREAS OF A SPECIFIED CROP FOR AT ALL ELEMENTS FOR A TIME PERIOD WHEN THE AREA FILE IS ALREADY OPEN
+  ! --- Note: This method is not meant to be called during a Simulation
+  ! -------------------------------------------------------------
+  SUBROUTINE GetAreasForTimePeriod_FileOpen(AgLand,cBeginDate,cEndDate,TimeStep,AppGrid,iCrop,rAreas,iStat)
+    CLASS(NonPondedAgLandUse_v41_Type),INTENT(INOUT) :: AgLand
+    CHARACTER(LEN=*),INTENT(IN)                      :: cBeginDate,cEndDate
+    TYPE(TimeStepType),INTENT(IN)                    :: TimeStep
+    TYPE(AppGridType),INTENT(IN)                     :: AppGrid
+    INTEGER,INTENT(IN)                               :: iCrop
+    REAL(8),INTENT(OUT)                              :: rAreas(:,:)  !For each (element,time)
+    INTEGER,INTENT(OUT)                              :: iStat
+    
+    !Retrieve areas
+    CALL ReadLandUseAreasForTimePeriod(AgLand%LandUseDataFile,'Non-ponded ag. area file',cBeginDate,cEndDate,TimeStep,AppGrid,iCrop,rAreas,iStat)
+    
+  END SUBROUTINE GetAreasForTimePeriod_FileOpen
+
+  
+  ! -------------------------------------------------------------
+  ! --- GET AREAS OF ALL CROPA AT ALL ELEMENTS FOR A TIME PERIOD WHEN FILE IS NOT OPEN
+  ! --- Note: This method is not meant to be called during a Simulation
+  ! -------------------------------------------------------------
+  SUBROUTINE GetAreasForTimePeriod_All_FileNotOpen(cMainFileName,cWorkingDirectory,cBeginDate,cEndDate,TimeStep,iNTimes,AppGrid,rAreas,iStat)
+    CHARACTER(LEN=*),INTENT(IN)     :: cMainFileName,cWorkingDirectory,cBeginDate,cEndDate
+    TYPE(TimeStepType),INTENT(IN)   :: TimeStep
+    INTEGER,INTENT(IN)              :: iNTimes
+    TYPE(AppGridType),INTENT(IN)    :: AppGrid
+    REAL(8),ALLOCATABLE,INTENT(OUT) :: rAreas(:,:,:)  !For each (element,landuse,time)
+    INTEGER,INTENT(OUT)             :: iStat
+    
+    !Local variables
+    INTEGER                  :: iNCrops,indx
+    CHARACTER                :: cALine*500
+    TYPE(GenericFileType)    :: MainFile
+    CHARACTER(:),ALLOCATABLE :: cAreaFileName
+   
+    !Return if no file name is specified
+    IF (cMainFileName .EQ. '') THEN
+        ALLOCATE(rAreas(0,0,0))
+        iStat = 0
+        GOTO 10
+    END IF
+    
+    !Open main file
+    CALL MainFile%New(FileName=TRIM(cMainFileName),InputFile=.TRUE.,IsTSFile=.FALSE.,iStat=iStat)
+    IF (iStat .NE. 0) GOTO 10
+    
+    !Skip unnecssary data
+    CALL MainFile%ReadData(iNCrops,iStat)  ;  IF (iStat .NE. 0) GOTO 10
+    DO indx=1,iNCrops+1
+        CALL MainFile%ReadData(cALine,iStat)  
+        IF (iStat .NE. 0) GOTO 10
+    END DO
+    
+    !Read area filename
+    CALL MainFile%ReadData(cALine,iStat)  
+    cALine = StripTextUntilCharacter(cALine,'/') 
+    CALL CleanSpecialCharacters(cALine)
+    CALL EstablishAbsolutePathFileName(TRIM(ADJUSTL(cALine)),cWorkingDirectory,cAreaFileName)
+    
+    !Allocate array
+    ALLOCATE (rAreas(AppGrid%NElements,iNCrops,iNTimes))
+    
+    !Retrieve areas
+    CALL ReadLandUseAreasForTimePeriod_All(cAreaFileName,cWorkingDirectory,'Non-ponded ag. area file',cBeginDate,cEndDate,TimeStep,AppGrid,rAreas,iStat)
+
+10  CALL MainFile%Kill()
+    
+  END SUBROUTINE GetAreasForTimePeriod_All_FileNotOpen
+  
+  
+  ! -------------------------------------------------------------
+  ! --- GET AREAS OF ALL CROPS FOR SPECIFIC LANDUSE CATEGORY AT ALL ELEMENTS FOR A TIME PERIOD WHEN THE AREA FILE IS ALREADY OPEN
+  ! --- Note: This method is not meant to be called during a Simulation
+  ! -------------------------------------------------------------
+  SUBROUTINE GetAreasForTimePeriod_All_FileOpen(AgLand,cBeginDate,cEndDate,TimeStep,iNTimes,AppGrid,rAreas,iStat)
+    CLASS(NonPondedAgLandUse_v41_Type),INTENT(INOUT) :: AgLand
+    CHARACTER(LEN=*),INTENT(IN)                      :: cBeginDate,cEndDate
+    TYPE(TimeStepType),INTENT(IN)                    :: TimeStep
+    INTEGER,INTENT(IN)                               :: iNTimes
+    TYPE(AppGridType),INTENT(IN)                     :: AppGrid
+    REAL(8),ALLOCATABLE,INTENT(OUT)                  :: rAreas(:,:,:)  !For each (element,landuse,time)
+    INTEGER,INTENT(OUT)                              :: iStat
+    
+    !Allocate array
+    ALLOCATE (rAreas(AppGrid%NElements,AgLand%NCrops,iNTimes))
+    
+    !Retrieve areas
+    CALL ReadLandUseAreasForTimePeriod_All(AgLand%LandUseDataFile,'Non-ponded ag. area file',cBeginDate,cEndDate,TimeStep,AppGrid,rAreas,iStat)
+    
+  END SUBROUTINE GetAreasForTimePeriod_All_FileOpen
+
+  
+
 
   
   
@@ -1004,11 +1183,18 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- READ RESTART DATA
   ! -------------------------------------------------------------
-  SUBROUTINE ReadRestartData(NonPondedAg,InFile,iStat)
+  SUBROUTINE ReadRestartData(NonPondedAg,InFile,lConvertMoistToDepth,iStat)
     CLASS(NonPondedAgLandUse_v41_Type) :: NonPondedAg
     TYPE(GenericFileType)              :: InFile
+    LOGICAL,INTENT(IN)                 :: lConvertMoistToDepth
     INTEGER,INTENT(OUT)                :: iStat
     
+    !Local variables
+    INTEGER :: indx
+    REAL(8) :: rElemRootDepths_P(NonPondedAg%NCrops) , &
+               rElemRootDepths(NonPondedAg%NCrops)
+    
+    !Read
     CALL InFile%ReadData(NonPondedAg%RootDepth_P,iStat)           ;  IF (iStat .EQ. -1) RETURN
     CALL InFile%ReadData(NonPondedAg%RootDepth,iStat)             ;  IF (iStat .EQ. -1) RETURN
     CALL InFile%ReadData(NonPondedAg%Crops%Runoff,iStat)          ;  IF (iStat .EQ. -1) RETURN
@@ -1020,7 +1206,21 @@ CONTAINS
     CALL InFile%ReadData(NonPondedAg%Crops%SoilM_AW_P,iStat)      ;  IF (iStat .EQ. -1) RETURN
     CALL InFile%ReadData(NonPondedAg%Crops%SoilM_AW,iStat)        ;  IF (iStat .EQ. -1) RETURN
     CALL InFile%ReadData(NonPondedAg%Crops%SoilM_Oth_P,iStat)     ;  IF (iStat .EQ. -1) RETURN
-    CALL InFile%ReadData(NonPondedAg%Crops%SoilM_Oth,iStat)  
+    CALL InFile%ReadData(NonPondedAg%Crops%SoilM_Oth,iStat)       ;  IF (iStat .EQ. -1) RETURN
+    
+    !Convert moisture contents to depths, if requested
+    IF (lConvertMoistToDepth) THEN
+        DO indx=1,SIZE(NonPondedAg%Crops%Area,DIM=2)
+            rElemRootDepths_P                        = NonPondedAg%RootDepth_P * NonPondedAg%rSpatialRootDepthFractions(:,indx)
+            rElemRootDepths                          = NonPondedAg%RootDepth   * NonPondedAg%rSpatialRootDepthFractions(:,indx)
+            NonPondedAg%Crops%SoilM_Precip_P(:,indx) = NonPondedAg%Crops%SoilM_Precip_P(:,indx) * rElemRootDepths_P
+            NonPondedAg%Crops%SoilM_AW_P(:,indx)     = NonPondedAg%Crops%SoilM_AW_P(:,indx)     * rElemRootDepths_P   
+            NonPondedAg%Crops%SoilM_Oth_P(:,indx)    = NonPondedAg%Crops%SoilM_Oth_P(:,indx)    * rElemRootDepths_P  
+            NonPondedAg%Crops%SoilM_Precip(:,indx)   = NonPondedAg%Crops%SoilM_Precip(:,indx)   * rElemRootDepths 
+            NonPondedAg%Crops%SoilM_AW(:,indx)       = NonPondedAg%Crops%SoilM_AW(:,indx)       * rElemRootDepths   
+            NonPondedAg%Crops%SoilM_Oth(:,indx)      = NonPondedAg%Crops%SoilM_Oth(:,indx)      * rElemRootDepths
+        END DO
+    END IF
     
   END SUBROUTINE ReadRestartData
   
@@ -1070,11 +1270,7 @@ CONTAINS
     CALL AgLand%LandUseDataFile%ReadTSData('Non-ponded crop areas',TimeStep,rElemAreas,iElemIDs,iStat)
     IF (iStat .EQ. -1) RETURN
     IF (AgLand%LandUseDataFile%lUpdated) THEN
-        !$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE(indxElem) SCHEDULE(STATIC,160)
-        DO indxElem=1,NElements
-            AgLand%Crops%Area(:,indxElem) = AgLand%LandUseDataFile%rValues(indxElem,2:)
-        END DO
-        !$OMP END PARALLEL DO
+        AgLand%Crops%Area = AgLand%LandUseDataFile%GetAreas(NElements,NCrops)
     END IF
        
     !Min. soil moisture data as irrigation trigger
@@ -1185,18 +1381,38 @@ CONTAINS
     CLASS(NonPondedAgLandUse_v41_Type),INTENT(IN) :: NonPondedAg
     TYPE(GenericFileType)                         :: OutFile
     
+    !Local variables
+    INTEGER                                                                  :: indx,iNElements
+    REAL(8),DIMENSION(NonPondedAg%NCrops,SIZE(NonPondedAg%Crops%Area,DIM=2)) :: SoilM_Precip,SoilM_Precip_P,SoilM_AW,SoilM_AW_P,SoilM_Oth,SoilM_Oth_P
+    REAL(8)                                                                  :: rElemRootDepths_P(NonPondedAg%NCrops),rElemRootDepths(NonPondedAg%NCrops)
+    !Initialize
+    iNElements = SIZE(NonPondedAg%Crops%Area,DIM=2)
+    
+    !Convert moisture depths to contents
+    DO indx=1,iNElements
+        rElemRootDepths_P      = NonPondedAg%RootDepth_P * NonPondedAg%rSpatialRootDepthFractions(:,indx)
+        rElemRootDepths        = NonPondedAg%RootDepth   * NonPondedAg%rSpatialRootDepthFractions(:,indx)
+        SoilM_Precip_P(:,indx) = NonPondedAg%Crops%SoilM_Precip_P(:,indx) / rElemRootDepths_P
+        SoilM_AW_P(:,indx)     = NonPondedAg%Crops%SoilM_AW_P(:,indx)     / rElemRootDepths_P
+        SoilM_Oth_P(:,indx)    = NonPondedAg%Crops%SoilM_Oth_P(:,indx)    / rElemRootDepths_P
+        SoilM_Precip(:,indx)   = NonPondedAg%Crops%SoilM_Precip(:,indx)   / rElemRootDepths
+        SoilM_AW(:,indx)       = NonPondedAg%Crops%SoilM_AW(:,indx)       / rElemRootDepths
+        SoilM_Oth(:,indx)      = NonPondedAg%Crops%SoilM_Oth(:,indx)      / rElemRootDepths
+    END DO
+    
+    !Print
     CALL OutFile%WriteData(NonPondedAg%RootDepth_P)
     CALL OutFile%WriteData(NonPondedAg%RootDepth)
     CALL OutFile%WriteData(NonPondedAg%Crops%Runoff)
     CALL OutFile%WriteData(NonPondedAg%Crops%ReturnFlow)
     CALL OutFile%WriteData(NonPondedAg%Crops%Area_P)
     CALL OutFile%WriteData(NonPondedAg%Crops%Area)
-    CALL OutFile%WriteData(NonPondedAg%Crops%SoilM_Precip_P)
-    CALL OutFile%WriteData(NonPondedAg%Crops%SoilM_Precip)
-    CALL OutFile%WriteData(NonPondedAg%Crops%SoilM_AW_P)
-    CALL OutFile%WriteData(NonPondedAg%Crops%SoilM_AW)
-    CALL OutFile%WriteData(NonPondedAg%Crops%SoilM_Oth_P)
-    CALL OutFile%WriteData(NonPondedAg%Crops%SoilM_Oth)
+    CALL OutFile%WriteData(SoilM_Precip_P)
+    CALL OutFile%WriteData(SoilM_Precip)
+    CALL OutFile%WriteData(SoilM_AW_P)
+    CALL OutFile%WriteData(SoilM_AW)
+    CALL OutFile%WriteData(SoilM_Oth_P)
+    CALL OutFile%WriteData(SoilM_Oth)
     
   END SUBROUTINE PrintRestartData
   
@@ -1212,7 +1428,7 @@ CONTAINS
     
     !Local variables
     INTEGER                                                             :: NBudgetCrops,indxLast,indxCrop,indxElem,iCrop
-    REAL(8),DIMENSION(AppGrid%NElements)                                :: ElemValue
+    REAL(8),DIMENSION(AppGrid%NElements)                                :: ElemValues
     REAL(8),DIMENSION(AppGrid%NElements,NonPondedAg%NBudgetCrops)       :: DemandFrac,Area
     REAL(8),DIMENSION((AppGrid%NSubregions+1)*NonPondedAg%NBudgetCrops) :: RPump,RDeli,RRunoff,RLUArea,RGenMoistInflow
     
@@ -1233,17 +1449,17 @@ CONTAINS
         END DO
         DO indxCrop=1,NBudgetCrops
             iCrop                                           = NonPondedAg%iBudgetCrops(indxCrop)
-            ElemValue                                       = ElemSupply%Pumping_Ag * DemandFrac(:,indxCrop)
-            RPump(indxCrop:indxLast:NBudgetCrops)           = AppGrid%AccumElemValuesToSubregions(ElemValue)
+            ElemValues                                      = ElemSupply%Pumping_Ag * DemandFrac(:,indxCrop)
+            RPump(indxCrop:indxLast:NBudgetCrops)           = AppGrid%AccumElemValuesToSubregions(ElemValues)
             RPump(indxLast+indxCrop)                        = SUM(RPump(indxCrop:indxLast:NBudgetCrops))
-            ElemValue                                       = ElemSupply%Diversion_Ag * DemandFrac(:,indxCrop)
-            RDeli(indxCrop:indxLast:NBudgetCrops)           = AppGrid%AccumElemValuesToSubregions(ElemValue)
+            ElemValues                                      = ElemSupply%Diversion_Ag * DemandFrac(:,indxCrop)
+            RDeli(indxCrop:indxLast:NBudgetCrops)           = AppGrid%AccumElemValuesToSubregions(ElemValues)
             RDeli(indxLast+indxCrop)                        = SUM(RDeli(indxCrop:indxLast:NBudgetCrops))
-            ElemValue                                       = (ElemGenericMoist * NonPondedAg%RootDepth(iCrop) - NonPondedAg%Crops%GMExcess(indxCrop,:)) * Area(:,indxCrop)
-            RGenMoistInflow(indxCrop:indxLast:NBudgetCrops) = AppGrid%AccumElemValuesToSubregions(ElemValue)
+            ElemValues                                      = (ElemGenericMoist * NonPondedAg%RootDepth(iCrop) * NonPondedAg%rSpatialRootDepthFractions(iCrop,:) - NonPondedAg%Crops%GMExcess(indxCrop,:)) * Area(:,indxCrop)
+            RGenMoistInflow(indxCrop:indxLast:NBudgetCrops) = AppGrid%AccumElemValuesToSubregions(ElemValues)
             RGenMoistInflow(indxLast+indxCrop)              = SUM(RGenMoistInflow(indxCrop:indxLast:NBudgetCrops))
-            ElemValue                                       = ElemSupply%UpstrmRunoff * DemandFrac(:,indxCrop)
-            RRunoff(indxCrop:indxLast:NBudgetCrops)         = AppGrid%AccumElemValuesToSubregions(ElemValue)
+            ElemValues                                      = ElemSupply%UpstrmRunoff * DemandFrac(:,indxCrop)
+            RRunoff(indxCrop:indxLast:NBudgetCrops)         = AppGrid%AccumElemValuesToSubregions(ElemValues)
             RRunoff(indxLast+indxCrop)                      = SUM(RRunoff(indxCrop:indxLast:NBudgetCrops))
             RLUArea(indxCrop:indxLast:NBudgetCrops)         = AppGrid%AccumElemValuesToSubregions(Area(:,indxCrop))
             RLUArea(indxLast+indxCrop)                      = SUM(RLUArea(indxCrop:indxLast:NBudgetCrops))
@@ -1499,8 +1715,8 @@ CONTAINS
                 END IF
                 
                 !Initialize
-                RootDepth   = NonPondedAg%RootDepth(indxCrop)
-                RootDepth_P = NonPondedAg%RootDepth_P(indxCrop)
+                RootDepth   = NonPondedAg%RootDepth(indxCrop)   * NonPondedAg%rSpatialRootDepthFractions(indxCrop,indxElem)
+                RootDepth_P = NonPondedAg%RootDepth_P(indxCrop) * NonPondedAg%rSpatialRootDepthFractions(indxCrop,indxElem)
                 IF (RootDepth .GT. RootDepth_P) THEN
                     RootDepthFrac = 1d0
                 ELSE
@@ -1533,6 +1749,7 @@ CONTAINS
                 
                 !Simulate
                 CALL NonPondedLUMoistureRouter(PrecipD                                ,  &
+                                               pCrops%rInitialAbstraction(indxCrop,indxElem) ,  &
                                                pCrops%SMax(indxCrop,indxElem)         ,  &
                                                rSoilM_P                               ,  &
                                                ETc_effect                             ,  & 
@@ -1735,8 +1952,8 @@ CONTAINS
             IF (IrigPeriod(NonPondedAg%Crops%iColIrigPeriod(indxCrop,indxElem)) .EQ. f_iNoIrigPeriod) CYCLE
             
             !Initialize variables for crop
-            RootDepth   = NonPondedAg%RootDepth(indxCrop)
-            RootDepth_P = NonPondedAg%RootDepth_P(indxCrop)
+            RootDepth   = NonPondedAg%RootDepth(indxCrop)   * NonPondedAg%rSpatialRootDepthFractions(indxCrop,indxElem)
+            RootDepth_P = NonPondedAg%RootDepth_P(indxCrop) * NonPondedAg%rSpatialRootDepthFractions(indxCrop,indxElem)
             GM          = GMElem * RootDepth
             ETc_effect  = ETc(indxCrop)*DeltaT - MIN(ETc(indxCrop)*DeltaT , NonPondedAg%Crops%ETFromGW_Max(indxCrop,indxElem))
             IF (RootDepth .GT. RootDepth_P) THEN
@@ -1755,6 +1972,7 @@ CONTAINS
                   
                 CASE (f_iDemandFromMoistAtEnd)
                     CALL NonPondedLUMoistureRouter(PrecipD                                            ,  &
+                                                   NonPondedAg%Crops%rInitialAbstraction(indxCrop,indxElem) ,  &
                                                    NonPondedAg%Crops%SMax(indxCrop,indxElem)          ,  &
                                                    SoilM_P                                            ,  &
                                                    ETc_effect                                         ,  & 
@@ -1808,6 +2026,7 @@ CONTAINS
           
             !Compute demand
             CALL NonPondedCropDemand(PrecipDepth                                                                           ,  &
+                                     NonPondedAg%Crops%rInitialAbstraction(indxCrop,indxElem)                              ,  &
                                      NonPondedAg%Crops%SMax(indxCrop,indxElem)                                             ,  &
                                      GM                                                                                    ,  &
                                      ReturnFrac(NonPondedAg%Crops%iColReturnFrac(indxCrop,indxElem))                       ,  &
@@ -1876,7 +2095,16 @@ CONTAINS
     CLASS(NonPondedAgLandUse_v41_Type) :: AgLand
     REAL(8),INTENT(IN)                 :: DepthToGW(:),Sy(:),CapillaryRise(:)
     
-    CALL ComputeETFromGW_Max(DepthToGW,Sy,AgLand%RootDepth,CapillaryRise,AgLand%Crops%Area,AgLand%Crops%ETFromGW_Max)
+    !Local variables
+    INTEGER :: indxElem
+    REAL(8) :: rRootDepth(AgLand%NCrops,SIZE(AgLand%rSpatialRootDepthFractions,DIM=2))
+    
+    !Initialize
+    DO indxElem=1,SIZE(rRootDepth,DIM=2)
+        rRootDepth(:,indxElem) = AgLand%RootDepth * AgLand%rSpatialRootDepthFractions(:,indxElem)
+    END DO
+    
+    CALL ComputeETFromGW_Max(DepthToGW,Sy,rRootDepth,CapillaryRise,AgLand%Crops%Area,AgLand%Crops%ETFromGW_Max)
     
   END SUBROUTINE NonPondedAgLandUse_ComputeETFromGW_Max
   
@@ -1894,7 +2122,7 @@ CONTAINS
     !Local variables
     CHARACTER(LEN=ModNameLen+21) :: ThisProcedure = ModName // 'SoilMContent_To_Depth'
     INTEGER                      :: indxElem,NCrops,indxCrop
-    REAL(8)                      :: RootDepth(NonPondedAgLand%NCrops),TP
+    REAL(8)                      :: RootDepth(NonPondedAgLand%NCrops,NElements),TP,rDiff
     
     !Initialize
     iStat = 0
@@ -1904,7 +2132,9 @@ CONTAINS
     
     !Initialize
     NCrops    = NonPondedAgLand%NCrops
-    RootDepth = NonPondedAgLand%RootDepth
+    DO indxElem=1,NElements
+        RootDepth(:,indxElem) = NonPondedAgLand%RootDepth * NonPondedAgLand%rSpatialRootDepthFractions(:,indxElem)
+    END DO
     
     !Check if initial conditions are greater than total porosity, if not convert conetnts to depths and equate SoilM_P to SoilM
     ASSOCIATE (pCrops => NonPondedAgLand%Crops) 
@@ -1912,21 +2142,18 @@ CONTAINS
         TP = TotalPorosity(indxElem)
                  
         DO indxCrop=1,NCrops
-            IF (pCrops%SoilM_Precip(indxCrop,indxElem) + pCrops%SoilM_AW(indxCrop,indxElem) + pCrops%SoilM_Oth(indxCrop,indxElem) .GT. TP) THEN
-                IF (ASSOCIATED(NonPondedAgLand%Logger)) THEN
-                    CALL NonPondedAgLand%Logger%SetLastMessage('Initial moisture content for crop ' // TRIM(NonPondedAgLand%CropCodes(indxCrop)) // ' at element ' // TRIM(IntToText(iElemIDs(indxElem))) // ' is greater than total porosity!',f_iFatal,ThisProcedure)
-                ELSE
-                    CALL NonPondedAgLand%Logger%SetLastMessage('Initial moisture content for crop ' // TRIM(NonPondedAgLand%CropCodes(indxCrop)) // ' at element ' // TRIM(IntToText(iElemIDs(indxElem))) // ' is greater than total porosity!',f_iFatal,ThisProcedure)
-                END IF
+            rDiff = pCrops%SoilM_Precip(indxCrop,indxElem) + pCrops%SoilM_AW(indxCrop,indxElem) + pCrops%SoilM_Oth(indxCrop,indxElem) - TP
+            IF (rDiff .GT. 1D-12) THEN !Secure against roundoff errors
+                CALL NonPondedAgLand%Logger%SetLastMessage('Initial moisture content for crop ' // TRIM(NonPondedAgLand%CropCodes(indxCrop)) // ' at element ' // TRIM(IntToText(iElemIDs(indxElem))) // ' is greater than total porosity!',f_iFatal,ThisProcedure)
                 iStat = -1
                 RETURN
             END IF
         END DO
-        pCrops%SoilM_Precip(:,indxElem)   = pCrops%SoilM_Precip(:,indxElem) * RootDepth
+        pCrops%SoilM_Precip(:,indxElem)   = pCrops%SoilM_Precip(:,indxElem) * RootDepth(:,indxElem)
         pCrops%SoilM_Precip_P(:,indxElem) = pCrops%SoilM_Precip(:,indxElem)
-        pCrops%SoilM_AW(:,indxElem)       = pCrops%SoilM_AW(:,indxElem) * RootDepth
+        pCrops%SoilM_AW(:,indxElem)       = pCrops%SoilM_AW(:,indxElem) * RootDepth(:,indxElem)
         pCrops%SoilM_AW_P(:,indxElem)     = pCrops%SoilM_AW(:,indxElem)
-        pCrops%SoilM_Oth(:,indxElem)      = pCrops%SoilM_Oth(:,indxElem) * RootDepth
+        pCrops%SoilM_Oth(:,indxElem)      = pCrops%SoilM_Oth(:,indxElem) * RootDepth(:,indxElem)
         pCrops%SoilM_Oth_P(:,indxElem)    = pCrops%SoilM_Oth(:,indxElem)
    
       END DO 
