@@ -982,10 +982,6 @@ CONTAINS
             DZ     = rInterbedThick / (2d0*REAL(NN,8)-1d0)
             KVADZ  = KVA / DZ
             DZDT   = DZ
-            A1     = 0.0
-            B1     = 0.0
-            C1     = 0.0
-            R1     = 0.0
 
             PreCompactHead = AppSubsidence%PreCompactHead(indx_S)
             h1             = AppSubsidence%HSUB(indx_S)  
@@ -1125,10 +1121,6 @@ CONTAINS
             DZ     = rInterbedThick / (2d0*REAL(NN,8)-1d0)
             KVADZ  = KVA / DZ
             DZDT   = DZ
-            A1     = 0.0
-            B1     = 0.0
-            C1     = 0.0
-            R1     = 0.0
 !
             PreCompactHead = AppSubsidence%PreCompactHead(indx_S)
             h1             = AppSubsidence%HSUB(indx_S)  
