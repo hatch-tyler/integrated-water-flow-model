@@ -38,9 +38,31 @@
     kernel whenever the parallel/DLL targets are also built, which
     causes the serial Simulation exe to inherit a live OpenMP runtime.
 
+.PARAMETER FortranCompiler
+    Select a specific Intel Fortran compiler (ifx) instead of the newest
+    system oneAPI install. Use this to match the compiler DWR used for an
+    official release (listed on the CNRA data portal per release, e.g.
+    IWFM 2026.0.1848 = ifx 2026.1.1); different ifx versions give results
+    that differ at round-off level. Accepts:
+      - a system oneAPI version folder name, e.g. "2025.3"
+        (resolved under "C:\Program Files (x86)\Intel\oneAPI\compiler")
+      - a path to ifx.exe
+      - an install directory: a oneAPI compiler version folder, or a
+        conda prefix (conda install -p <dir> -c conda-forge
+        ifx_impl_win-64=<version>), which keeps ifx in Library\bin
+    The C compiler (icx) still comes from the newest system oneAPI; it
+    builds only the C dependencies (HDF5, heclib, zlib).
+    Unless -BuildDir is also given, the build directory defaults to
+    "build-ifx-<version>" so each compiler keeps its own CMake cache.
+    Executables still go to Bin\.
+
 .EXAMPLE
     .\Build-IWFM.ps1
     Builds all targets in Release mode.
+
+.EXAMPLE
+    .\Build-IWFM.ps1 -FortranCompiler C:\Users\me\ifx-2026.1.1
+    Builds with ifx 2026.1.1 from a conda prefix, in build-ifx-2026.1.1\.
 
 .EXAMPLE
     .\Build-IWFM.ps1 -Parallel
@@ -106,7 +128,11 @@ param(
 
     [switch]$UsePrebuiltDeps,
 
-    [string]$DepsDir = "deps"
+    [string]$DepsDir = "deps",
+
+    # Specific ifx to use (version folder name, ifx.exe path, or install
+    # dir incl. conda prefix). Empty = newest system oneAPI. See help.
+    [string]$FortranCompiler = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -130,6 +156,74 @@ Write-Host ""
 Write-Host "  Integrated Water Flow Model" -ForegroundColor White
 Write-Host "  Build System v2025.0" -ForegroundColor Gray
 Write-Host ""
+
+function Select-FortranCompiler {
+    # Resolve -FortranCompiler to an ifx.exe and put its bin/lib/include
+    # directories ahead of the system oneAPI ones.
+    param([string]$Spec, [string]$OneAPIRoot)
+
+    $ifx = $null
+    if ($Spec -match '^\d{4}\.\d+(\.\d+)?$') {
+        $cand = Join-Path $OneAPIRoot "compiler\$Spec\bin\ifx.exe"
+        if (Test-Path $cand) { $ifx = $cand }
+        else {
+            $have = (Get-ChildItem -Path "$OneAPIRoot\compiler" -Directory |
+                     Where-Object { $_.Name -match '^\d+\.\d+' } | ForEach-Object Name) -join ', '
+            throw "ifx $Spec not found under $OneAPIRoot\compiler (installed: $have). Pass a path to another install instead."
+        }
+    } elseif (Test-Path $Spec -PathType Leaf) {
+        $ifx = (Resolve-Path $Spec).Path
+    } elseif (Test-Path $Spec -PathType Container) {
+        foreach ($rel in @("bin\ifx.exe", "Library\bin\ifx.exe")) {
+            $cand = Join-Path $Spec $rel
+            if (Test-Path $cand) { $ifx = (Resolve-Path $cand).Path; break }
+        }
+        if (-not $ifx) { throw "No ifx.exe in $Spec\bin or $Spec\Library\bin" }
+    } else {
+        throw "-FortranCompiler '$Spec' is not an installed version, an ifx.exe path, or a directory"
+    }
+
+    $binDir = Split-Path -Parent $ifx
+    $root   = Split-Path -Parent $binDir          # <ver> (system) or <prefix>\Library (conda)
+    $libDir = Join-Path $root "lib"
+
+    # Intrinsic modules (iso_c_binding.modintr, ...) live in
+    # opt\compiler\include[\intel64]: under <ver>\ for a system install,
+    # under the prefix root (one level above Library\) for conda.
+    $incDirs = @()
+    foreach ($base in @($root, (Split-Path -Parent $root))) {
+        $inc = Join-Path $base "opt\compiler\include"
+        if (Test-Path (Join-Path $inc "intel64\iso_c_binding.modintr")) {
+            $incDirs = @((Join-Path $inc "intel64"), $inc)
+            break
+        }
+    }
+    if (-not $incDirs) {
+        throw "Intrinsic Fortran modules (opt\compiler\include\intel64\iso_c_binding.modintr) not found for $ifx"
+    }
+
+    $script:IFX = $ifx
+    $env:PATH    = "$binDir;$env:PATH"
+    $env:LIB     = "$libDir;$env:LIB"
+    $env:INCLUDE = (($incDirs -join ';') + ";$env:INCLUDE")
+}
+
+function Assert-CacheCompiler {
+    # Refuse to reuse a build directory configured with a different ifx:
+    # Invoke-Build only configures when there is no cache, so the old
+    # compiler would otherwise be used silently.
+    $cache = Join-Path $BuildPath "CMakeCache.txt"
+    if (-not (Test-Path $cache)) { return }
+    $line = Select-String -Path $cache -Pattern '^CMAKE_Fortran_COMPILER:[A-Z]+=(.*)$' | Select-Object -First 1
+    if (-not $line) { return }
+    $cached = [System.IO.Path]::GetFullPath($line.Matches[0].Groups[1].Value.Trim())
+    $wanted = [System.IO.Path]::GetFullPath($script:IFX)
+    if ($cached -ine $wanted) {
+        throw ("Build directory '$BuildPath' was configured with`n    $cached`n" +
+               "  but this run selects`n    $wanted`n" +
+               "  Use a different -BuildDir, or run -Action Clean on that directory first.")
+    }
+}
 
 function Initialize-BuildEnvironment {
     Write-Host "Initializing build environment..." -ForegroundColor Yellow
@@ -210,11 +304,28 @@ function Initialize-BuildEnvironment {
     $env:LIB = "$script:IntelLibPath;$env:LIB"
     $env:PATH = "$script:MSVCBinPath;$script:IntelBinPath;$env:PATH"
 
+    # Optional: a specific Fortran compiler (overrides the system ifx).
+    if ($FortranCompiler) {
+        Select-FortranCompiler -Spec $FortranCompiler -OneAPIRoot $OneAPIRoot
+    }
+
+    # Report the exact ifx version (ifx prints its banner on stderr)
+    $script:IFXVersion = ""
+    $banner = cmd /c "`"$script:IFX`" /QV 2>&1" | Select-String -Pattern 'Version\s+(\d+\.\d+(\.\d+)?)' | Select-Object -First 1
+    if ($banner) { $script:IFXVersion = $banner.Matches[0].Groups[1].Value }
+
+    # A non-default compiler gets its own build directory (own CMake cache)
+    # unless the caller chose one explicitly.
+    if ($FortranCompiler -and -not $PSBoundParameters.ContainsKey('BuildDir') -and $script:IFXVersion) {
+        $script:BuildPath = Join-Path $SourceDir "build-ifx-$script:IFXVersion"
+    }
+
     Write-Host "  Visual Studio: $script:VSInstallPath" -ForegroundColor Gray
-    Write-Host "  Intel Compiler: $($IntelCompilerDir.Name)" -ForegroundColor Gray
+    Write-Host "  Intel Compiler: $($IntelCompilerDir.Name) (system oneAPI; icx)" -ForegroundColor Gray
     Write-Host "  MSVC Tools: $($MSVCToolsDir.Name)" -ForegroundColor Gray
-    Write-Host "  ifx: $script:IFX" -ForegroundColor Gray
+    Write-Host "  ifx: $script:IFX (version $script:IFXVersion)" -ForegroundColor Gray
     Write-Host "  icx: $script:ICX" -ForegroundColor Gray
+    Write-Host "  Build dir: $script:BuildPath" -ForegroundColor Gray
     Write-Host "Environment ready." -ForegroundColor Green
     Write-Host ""
 }
@@ -349,23 +460,30 @@ function Invoke-Build {
         Pop-Location
     }
 
-    # Copy OpenMP runtime DLL for parallel builds
-    if ($Parallel -and (Test-Path $BinDir)) {
-        $ifxPath = Get-Command ifx -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source
-        if ($ifxPath) {
-            $compilerBinDir = Split-Path $ifxPath -Parent
-            $ompDll = Join-Path $compilerBinDir "libiomp5md.dll"
-            if (-not (Test-Path $ompDll)) {
-                # Try parent bin directory
-                $ompDll = Join-Path (Split-Path $compilerBinDir -Parent) "bin\libiomp5md.dll"
+    # Copy the OpenMP runtime next to the OpenMP consumers (Simulation_PLL,
+    # IWFM_C_x64.dll). Use the SELECTED compiler's runtime, not whatever ifx
+    # is first on PATH. A system oneAPI ships Intel's libiomp5md.dll; the
+    # conda-forge ifx links LLVM's libomp.dll (its libiomp5md.lib is an
+    # alias), so copy whichever of the two the compiler provides.
+    $wantsOmp = $Parallel -or ($Target -eq "all") -or ($Target -eq "IWFM_C_DLL") -or ($Target -eq "Simulation_Parallel")
+    if ($wantsOmp -and (Test-Path $BinDir)) {
+        $compilerBinDir = Split-Path $script:IFX -Parent
+        $copied = @()
+        foreach ($name in @("libiomp5md.dll", "libomp.dll")) {
+            foreach ($dir in @($compilerBinDir, (Join-Path (Split-Path $compilerBinDir -Parent) "bin"))) {
+                $ompDll = Join-Path $dir $name
+                if (Test-Path $ompDll) {
+                    Copy-Item $ompDll -Destination $BinDir -Force
+                    $copied += $name
+                    break
+                }
             }
-            if (Test-Path $ompDll) {
-                Copy-Item $ompDll -Destination $BinDir -Force
-                Write-Host "  Copied libiomp5md.dll to Bin/" -ForegroundColor Green
-            } else {
-                Write-Host "  WARNING: libiomp5md.dll not found near compiler" -ForegroundColor Yellow
-                Write-Host "  Parallel executable may fail at runtime without this DLL" -ForegroundColor Yellow
-            }
+        }
+        if ($copied) {
+            Write-Host "  Copied OpenMP runtime to Bin/: $($copied -join ', ')" -ForegroundColor Green
+        } else {
+            Write-Host "  WARNING: no OpenMP runtime DLL found next to $script:IFX" -ForegroundColor Yellow
+            Write-Host "  IWFM_C_x64.dll / Simulation_PLL may fail to load without it" -ForegroundColor Yellow
         }
     }
 
@@ -482,6 +600,7 @@ function Invoke-Package {
 # Main execution
 try {
     Initialize-BuildEnvironment
+    if ($Action -ne "Clean") { Assert-CacheCompiler }
 
     switch ($Action) {
         "Clean" {

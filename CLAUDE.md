@@ -38,6 +38,11 @@ Coarray multi-model (`Simulation_MM`) requires Intel compilers. See `BUILD.md` f
 .\build-iwfm.ps1 -Action Clean
 .\build-iwfm.ps1 -Action Build
 
+# Build with a specific ifx (system version folder, ifx.exe path, or conda prefix).
+# Uses its own build dir (build-ifx-<version>). Use the compiler DWR used for the
+# official release to reproduce its results exactly (2026.0.1848 = ifx 2026.1.1):
+.\build-iwfm.ps1 -FortranCompiler C:\path\to\ifx-2026.1.1
+
 # Other actions: Configure, Test, Package, All
 # Additional targets: Simulation_Parallel, Simulation_MM, IWFM_C_DLL, IWFM2OBS, CalcTypeHyd
 
@@ -275,6 +280,7 @@ All Fortran `.mod` files go to `${CMAKE_BINARY_DIR}/modules`.
 
 ### Key Compiler Flags
 
+- `/standard-semantics` must come BEFORE `/assume:norealloc_lhs /assume:noieee_compares`; it expands to `/assume` options that would otherwise override them (changes results and slows Simulation ~60%)
 - `/fp:consistent` / `-fp-model=consistent` — Reproducible floating point
 - `/assume:norealloc_lhs` / `-assume norealloc_lhs` — Disable LHS automatic reallocation
 - `/heap-arrays:900` / `-heap-arrays=900` — applied **only to the DLL

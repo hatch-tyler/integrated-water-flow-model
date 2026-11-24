@@ -64,8 +64,12 @@ message(STATUS "Configuring heclib (HEC-DSS 7) via FetchContent...")
 
 FetchContent_Declare(heclib
     GIT_REPOSITORY https://github.com/HydrologicEngineeringCenter/hec-dss.git
-    GIT_TAG        main
-    GIT_SHALLOW    TRUE
+    # Pinned for reproducible builds. Tracking 'main' let a re-configure
+    # silently move existing build trees to a newer heclib. This commit is
+    # the one verified 2026-11-24 to reproduce the official IWFM 2026.0.1848
+    # results (with ifx 2026.1.1). Change deliberately and re-verify.
+    # (A commit hash cannot be fetched shallowly, so GIT_SHALLOW is omitted.)
+    GIT_TAG        f14554de39a0bfe9c5c0b150e5fd66cfb78d289c  # "added readonly flag option for hecdss open (#366)"
 )
 
 # We intentionally use FetchContent_Populate instead of FetchContent_MakeAvailable
