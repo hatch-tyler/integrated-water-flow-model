@@ -1,0 +1,93 @@
+schema_version: 1
+
+context:
+  version: "2026.0.1848"
+  hdf5_version: "1.14.3"
+
+package:
+  name: libiwfm
+  version: ${{ version }}
+
+source:
+  # TODO: a tagged release of the source; the sha256 is a placeholder.
+  - url: https://github.com/hatch-tyler/integrated-water-flow-model/archive/refs/tags/v${{ version }}.tar.gz
+    sha256: 0000000000000000000000000000000000000000000000000000000000000000
+  # HDF5 is built inside this recipe and linked statically: IWFM uses the
+  # HDF5 Fortran API, whose module files must come from the same Fortran
+  # compiler (conda-forge's hdf5 Fortran modules are built with gfortran on
+  # Linux and are not available for ifx on Windows).
+  - url: https://github.com/HDFGroup/hdf5/archive/refs/tags/hdf5-${{ hdf5_version | replace(".", "_") }}.tar.gz
+    sha256: df5ee33c74d5efb59738075ef96f4201588e1f1eeb233f047ac7fd1072dee1f6
+    target_directory: hdf5
+
+build:
+  number: 0
+  skip:
+    - osx  # ifx is not available on macOS
+  script:
+    - if: win
+      then:
+        - cmake -S . -B build -G Ninja %CMAKE_ARGS% -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=%LIBRARY_PREFIX% -DCMAKE_Fortran_COMPILER=ifx -DIWFM_MONOLITHIC_BUILD=ON -DIWFM_SHARED_RUNTIME=ON -DIWFM_USE_SYSTEM_HECLIB=ON -DIWFM_HDF5_SOURCE_DIR=%SRC_DIR%\hdf5 -DIWFM_BUILD_SIMULATION=OFF -DIWFM_BUILD_PREPROCESSOR=OFF -DIWFM_BUILD_BUDGET=OFF -DIWFM_BUILD_ZBUDGET=OFF -DIWFM_BUILD_TESTS=OFF -DIWFM_BUILD_DLL=ON
+        - if errorlevel 1 exit 1
+        - cmake --build build --parallel %CPU_COUNT%
+        - if errorlevel 1 exit 1
+        - cmake --install build --component library
+      else:
+        - cmake -S . -B build -G Ninja $CMAKE_ARGS -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$PREFIX -DCMAKE_Fortran_COMPILER=ifx -DIWFM_MONOLITHIC_BUILD=ON -DIWFM_SHARED_RUNTIME=ON -DIWFM_USE_SYSTEM_HECLIB=ON -DIWFM_HDF5_SOURCE_DIR=$SRC_DIR/hdf5 -DIWFM_BUILD_SIMULATION=OFF -DIWFM_BUILD_PREPROCESSOR=OFF -DIWFM_BUILD_BUDGET=OFF -DIWFM_BUILD_ZBUDGET=OFF -DIWFM_BUILD_TESTS=OFF -DIWFM_BUILD_DLL=ON
+        - cmake --build build --parallel $CPU_COUNT
+        - cmake --install build --component library
+
+requirements:
+  build:
+    - ${{ compiler('c') }}
+    - ${{ stdlib('c') }}
+    - ${{ compiler('fortran') }}
+    - cmake
+    - ninja
+  host:
+    - heclib
+    - llvm-openmp
+    - intel-fortran-rt ==${{ fortran_compiler_version }}
+    - intel-cmplr-lib-rt ==${{ fortran_compiler_version }}
+  run:
+    # libifcoremd/libifcore and libmmd/libimf; the ifx compiler package does
+    # not add these through run_exports
+    - ${{ pin_compatible('intel-fortran-rt') }}
+    - ${{ pin_compatible('intel-cmplr-lib-rt') }}
+  # heclib and llvm-openmp come in through their run_exports. None of the
+  # runtimes is copied into this package.
+
+tests:
+  - package_contents:
+      files:
+        - if: win
+          then: Library/bin/IWFM_C_x64.dll
+          else: lib/libiwfm_c.so
+  - files:
+      recipe:
+        - test_library.py
+    requirements:
+      run:
+        - python
+    script:
+      - python test_library.py
+
+about:
+  homepage: https://water.ca.gov/Library/Modeling-and-Analysis/Modeling-Platforms/Integrated-Water-Flow-Model
+  repository: https://github.com/hatch-tyler/integrated-water-flow-model
+  license: GPL-2.0-or-later AND BSD-3-Clause
+  license_file:
+    - LICENSE
+    - hdf5/COPYING
+  summary: Shared library (C API) of the Integrated Water Flow Model (IWFM)
+  description: |
+    IWFM is a water resources management and planning model developed by the
+    California Department of Water Resources that simulates groundwater,
+    surface water, stream-groundwater interaction and land surface processes.
+    This package provides IWFM's C-callable shared library (IWFM_C_x64.dll on
+    Windows, libiwfm_c.so on Linux), used by the pywfm Python package. HDF5
+    (BSD-3-Clause) is linked into it statically.
+
+extra:
+  recipe-maintainers:
+    - hatch-tyler
