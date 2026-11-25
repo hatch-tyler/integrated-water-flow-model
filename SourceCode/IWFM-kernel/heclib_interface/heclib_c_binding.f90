@@ -36,6 +36,7 @@ MODULE heclib_c_binding
   PUBLIC :: hec_zpathnameGetPart, hec_zpathnameForm
   PUBLIC :: hec_yearMonthDayToJulian, hec_julianToYearMonthDay
   PUBLIC :: hec_incrementTime, hec_dateToJulian, hec_timeStringToSeconds, hec_julianToDate
+  PUBLIC :: hec_ztsOffset, hec_ztsOffsetAdjustToStandard
 
   ! Public helper functions
   PUBLIC :: f_to_c_string, c_to_f_string
@@ -289,6 +290,24 @@ MODULE heclib_c_binding
       INTEGER(C_INT), INTENT(OUT) :: julianEnd
       INTEGER(C_INT), INTENT(OUT) :: secondsEnd
     END FUNCTION hec_incrementTime
+
+    ! int ztsOffset(int intervalSeconds, int julian, int seconds)
+    INTEGER(C_INT) FUNCTION hec_ztsOffset(intervalSeconds, julian, seconds) &
+                   BIND(C, NAME='ztsOffset')
+      IMPORT :: C_INT
+      INTEGER(C_INT), VALUE :: intervalSeconds
+      INTEGER(C_INT), VALUE :: julian
+      INTEGER(C_INT), VALUE :: seconds
+    END FUNCTION hec_ztsOffset
+
+    ! int ztsOffsetAdjustToStandard(int intervalSeconds, int *julian, int *seconds)
+    INTEGER(C_INT) FUNCTION hec_ztsOffsetAdjustToStandard(intervalSeconds, julian, seconds) &
+                   BIND(C, NAME='ztsOffsetAdjustToStandard')
+      IMPORT :: C_INT
+      INTEGER(C_INT), VALUE         :: intervalSeconds
+      INTEGER(C_INT), INTENT(INOUT) :: julian
+      INTEGER(C_INT), INTENT(INOUT) :: seconds
+    END FUNCTION hec_ztsOffsetAdjustToStandard
 
     ! int dateToJulian(const char *dateString)
     INTEGER(C_INT) FUNCTION hec_dateToJulian(dateString) BIND(C, NAME='dateToJulian')

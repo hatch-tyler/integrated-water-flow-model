@@ -505,23 +505,45 @@ CONTAINS
   END SUBROUTINE ZGINTL
 
   !--------------------------------------------------------------
-  ! ZOFSET - Calculate time offset
+  ! ZOFSET - Time offset from the standard time of an interval
   ! Args: JulianDate, Minutes, Interval, Flag, Offset
   !--------------------------------------------------------------
   SUBROUTINE ZOFSET(IJULDAY, ITIME, INTL, IFLAG, IOFSET)
+    !Legacy HECLIB contract (as relied on by Class_DSSFileType):
+    !  - IOFSET is the offset, in minutes, of IJULDAY/ITIME from the standard
+    !    (end-of-period) time of interval INTL (minutes)
+    !  - IFLAG = 1 also moves IJULDAY/ITIME forward to that standard time, e.g.
+    !    01OCT 2400 with a 1MON interval becomes 31OCT 2400; times already on
+    !    a standard time are unchanged
+    !  - the end of a day is 2400 (ITIME = 1440) of that day, not 0000 of the next
     INTEGER, INTENT(INOUT) :: IJULDAY
     INTEGER, INTENT(INOUT) :: ITIME
     INTEGER, INTENT(IN) :: INTL
     INTEGER, INTENT(IN) :: IFLAG
     INTEGER, INTENT(OUT) :: IOFSET
 
-    ! Placeholder implementation
-    ! The offset is the number of minutes from the standard time boundary
-    IF (INTL > 0) THEN
-      IOFSET = MOD(ITIME, INTL)
+    INTEGER(C_INT) :: iJul, iSec, iOffset
+
+    IOFSET = 0
+    IF (INTL .LE. 0) RETURN
+
+    iJul = INT(IJULDAY, C_INT)
+    iSec = INT(ITIME, C_INT) * 60_C_INT
+
+    IF (IFLAG .EQ. 1) THEN
+      iOffset = hec_ztsOffsetAdjustToStandard(INT(INTL, C_INT) * 60_C_INT, iJul, iSec)
+      IF (iOffset .LT. 0) RETURN   !Not a standard interval; leave the time as is
+      IF (iSec .EQ. 0) THEN
+        iJul = iJul - 1_C_INT
+        iSec = 86400_C_INT
+      END IF
+      IJULDAY = iJul
+      ITIME   = iSec / 60_C_INT
     ELSE
-      IOFSET = 0
+      iOffset = hec_ztsOffset(INT(INTL, C_INT) * 60_C_INT, iJul, iSec)
+      IF (iOffset .LT. 0) RETURN
     END IF
+    IOFSET = iOffset / 60_C_INT
 
   END SUBROUTINE ZOFSET
 
