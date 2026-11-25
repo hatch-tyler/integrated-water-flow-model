@@ -33,13 +33,22 @@ import shutil
 import sys
 
 REPO = pathlib.Path(__file__).resolve().parent
-DLL_PATH = REPO / "Bin" / "IWFM_C_x64.dll"
+# IWFM_DLL overrides the DLL to test, e.g. one installed by the libiwfm
+# conda package (run with that environment's Python so its runtime
+# libraries are found).
+DLL_PATH = pathlib.Path(os.environ.get("IWFM_DLL", REPO / "Bin" / "IWFM_C_x64.dll"))
 DEFAULT_SAMPLE = (REPO / ".." / "iwfm-2026.0.1848" / "SampleModel").resolve()
 
 
 def load_dll():
     if not DLL_PATH.exists():
         sys.exit(f"DLL not found: {DLL_PATH}. Run build-iwfm.ps1 first.")
+    os.add_dll_directory(str(DLL_PATH.parent))  # heclib, runtimes beside it
+    # The Intel Fortran runtime (libifcoremd) loads libmmd.dll in a way that
+    # ignores add_dll_directory; load it first when it sits beside the DLL
+    # (conda's libiwfm package, run without activating the environment).
+    if (DLL_PATH.parent / "libmmd.dll").exists():
+        ctypes.WinDLL(str(DLL_PATH.parent / "libmmd.dll"))
     lib = ctypes.WinDLL(str(DLL_PATH))
 
     int_p = ctypes.POINTER(ctypes.c_int)

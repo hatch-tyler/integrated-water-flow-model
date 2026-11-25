@@ -11,8 +11,9 @@
 
 include_guard(GLOBAL)
 
-# Verify zlib is available
-if(NOT TARGET ZLIB::ZLIBSTATIC)
+# Verify zlib is available (system HDF5 links it; the ExternalProject build
+# below does not use it)
+if(IWFM_USE_SYSTEM_HDF5 AND NOT TARGET ZLIB::ZLIBSTATIC)
     message(FATAL_ERROR "IWFMFetchZlib.cmake must be included before IWFMFetchHDF5.cmake")
 endif()
 
@@ -21,6 +22,12 @@ endif()
 # =============================================================================
 option(IWFM_USE_SYSTEM_HDF5 "Use system-installed HDF5" OFF)
 set(IWFM_HDF5_VERSION "1.14.3" CACHE STRING "HDF5 version to fetch")
+# Build HDF5 from an already unpacked source tree instead of downloading it
+# (package builds, which have no network access during the build).
+set(IWFM_HDF5_SOURCE_DIR "" CACHE PATH "Local HDF5 source tree (skips the download)")
+# Extra -D arguments for the HDF5 configure step, e.g. toolchain settings a
+# package build passes to the main project that HDF5 also needs.
+set(IWFM_HDF5_EXTRA_CMAKE_ARGS "" CACHE STRING "Extra CMake arguments for the HDF5 build")
 
 # =============================================================================
 # Option 1: System HDF5
@@ -134,6 +141,26 @@ else()
     endif()
 endif()
 
+# Start from the environment's FFLAGS/CFLAGS, as the main project does
+# (CMake reads them into CMAKE_<LANG>_FLAGS). Package builds rely on this:
+# conda's ifx activation, for example, puts the include path of ifx's
+# intrinsic modules (ISO_C_BINDING...) in FFLAGS. Both are empty in a normal
+# build, which then gets exactly the flags above. Quotes are dropped and
+# backslashes made forward slashes so the flags survive being passed on the
+# HDF5 configure command line.
+foreach(_lang Fortran C)
+    if(_lang STREQUAL "Fortran")
+        set(_env_flags "$ENV{FFLAGS}")
+        set(_var HDF5_FORTRAN_FLAGS)
+    else()
+        set(_env_flags "$ENV{CFLAGS}")
+        set(_var HDF5_C_FLAGS)
+    endif()
+    string(REPLACE "\"" "" _env_flags "${_env_flags}")
+    string(REPLACE "\\" "/" _env_flags "${_env_flags}")
+    string(STRIP "${_env_flags} ${${_var}}" ${_var})
+endforeach()
+
 # Ensure HDF5 is built with optimization in Release mode.
 # CMake's default CMAKE_C_FLAGS_RELEASE (/O2 /DNDEBUG) and
 # CMAKE_Fortran_FLAGS_RELEASE (/O2) should apply, but we set them
@@ -185,10 +212,11 @@ set(hdf5_cmake_args
     -DHDF5_BUILD_HL_FORTRAN:BOOL=OFF
     -DBUILD_TESTING:BOOL=OFF
 
-    # Compression support - let HDF5 build its own internal zlib
-    # This avoids complex cross-project zlib sharing issues
-    -DHDF5_ENABLE_Z_LIB_SUPPORT:BOOL=ON
-    -DZLIB_USE_EXTERNAL:BOOL=OFF
+    # No compression filters. IWFM writes uncompressed (chunked) datasets.
+    # The builds that reproduce the official results already had deflate
+    # disabled (HDF5 found no zlib); this makes that explicit so a zlib that
+    # happens to be on the system is not picked up.
+    -DHDF5_ENABLE_Z_LIB_SUPPORT:BOOL=OFF
     -DHDF5_ENABLE_SZIP_SUPPORT:BOOL=OFF
 
     # Disable parallel HDF5 (MPI)
@@ -204,10 +232,21 @@ set(hdf5_cmake_args
 
 # Windows: Use static CRT to match IWFM's /MT runtime
 # This avoids linker errors like "unresolved external symbol __imp_fdopen"
+# (IWFM_SHARED_RUNTIME: the DLL C runtime, /MD, and /libs:dll for Fortran;
+# CMake maps CMAKE_MSVC_RUNTIME_LIBRARY to both for ifx.)
 if(WIN32)
-    list(APPEND hdf5_cmake_args
-        -DCMAKE_MSVC_RUNTIME_LIBRARY:STRING=MultiThreaded
-    )
+    if(IWFM_SHARED_RUNTIME)
+        list(APPEND hdf5_cmake_args
+            -DCMAKE_MSVC_RUNTIME_LIBRARY:STRING=MultiThreadedDLL
+        )
+    else()
+        list(APPEND hdf5_cmake_args
+            -DCMAKE_MSVC_RUNTIME_LIBRARY:STRING=MultiThreaded
+        )
+    endif()
+endif()
+if(IWFM_HDF5_EXTRA_CMAKE_ARGS)
+    list(APPEND hdf5_cmake_args ${IWFM_HDF5_EXTRA_CMAKE_ARGS})
 endif()
 
 # Windows with Intel icx: __float128 is not supported
@@ -276,8 +315,14 @@ endif()
 # =============================================================================
 # ExternalProject_Add
 # =============================================================================
+if(IWFM_HDF5_SOURCE_DIR)
+    set(_hdf5_source_args SOURCE_DIR "${IWFM_HDF5_SOURCE_DIR}" DOWNLOAD_COMMAND "")
+    message(STATUS "  HDF5 source: ${IWFM_HDF5_SOURCE_DIR} (no download)")
+else()
+    set(_hdf5_source_args URL ${HDF5_URL})
+endif()
 ExternalProject_Add(HDF5_External
-    URL ${HDF5_URL}
+    ${_hdf5_source_args}
     PATCH_COMMAND ${HDF5_PATCH_COMMAND}
     CMAKE_ARGS ${hdf5_cmake_args}
     CMAKE_CACHE_ARGS ${hdf5_cache_args}

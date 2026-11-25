@@ -27,7 +27,11 @@ set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static libraries" FORCE)
 # =============================================================================
 
 # 1. Zlib (for heclib compression)
-include(IWFMFetchZlib)
+# zlib is only linked into a heclib built here; an installed heclib brings
+# its own, and the HDF5 build does not use it.
+if(NOT IWFM_USE_SYSTEM_HECLIB OR IWFM_USE_SYSTEM_HDF5)
+    include(IWFMFetchZlib)
+endif()
 
 # 2. HDF5 (with Fortran bindings via ExternalProject)
 # Note: HDF5 builds its own internal zlib to avoid cross-project linking issues

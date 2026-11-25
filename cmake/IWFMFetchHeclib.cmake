@@ -11,8 +11,8 @@
 include_guard(GLOBAL)
 include(FetchContent)
 
-# Verify zlib is available
-if(NOT TARGET ZLIB::ZLIBSTATIC)
+# Verify zlib is available (the static builds below link it into heclib)
+if(NOT IWFM_USE_SYSTEM_HECLIB AND NOT TARGET ZLIB::ZLIBSTATIC)
     message(FATAL_ERROR "IWFMFetchZlib.cmake must be included before IWFMFetchHeclib.cmake")
 endif()
 
@@ -26,6 +26,17 @@ option(IWFM_USE_SYSTEM_HECLIB "Use pre-built heclib from source tree" OFF)
 # =============================================================================
 if(IWFM_USE_SYSTEM_HECLIB)
     message(STATUS "Using pre-built heclib...")
+
+    # An installed heclib package (e.g. conda-forge heclib) provides a CMake
+    # package with the shared library and its headers.
+    find_package(heclib CONFIG QUIET)
+    if(TARGET heclib::heclib)
+        add_library(HECLIB::HECLIB ALIAS heclib::heclib)
+        get_target_property(_heclib_inc heclib::heclib INTERFACE_INCLUDE_DIRECTORIES)
+        set(HECLIB_INCLUDE_DIR "${_heclib_inc}" CACHE PATH "HECLIB headers" FORCE)
+        message(STATUS "  heclib: ${heclib_DIR} (CMake package)")
+        return()
+    endif()
 
     # Require HECLIB_ROOT to point to pre-built heclib (from build-deps.ps1)
     if(DEFINED HECLIB_ROOT AND EXISTS "${HECLIB_ROOT}/lib/heclib.lib")

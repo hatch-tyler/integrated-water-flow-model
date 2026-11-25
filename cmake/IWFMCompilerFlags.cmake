@@ -99,12 +99,22 @@ if(IWFM_USING_INTEL)
         # /libs:static - link Intel Fortran runtime statically
         # /MT - link C runtime statically (Release)
         # /MTd - link C runtime statically (Debug)
-        target_compile_options(iwfm_compiler_flags INTERFACE
-            /libs:static
-            /threads
-            $<$<CONFIG:Release>:/MT>
-            $<$<CONFIG:Debug>:/MTd>
-        )
+        # IWFM_SHARED_RUNTIME: the DLL forms instead (/libs:dll, /MD).
+        if(IWFM_SHARED_RUNTIME)
+            target_compile_options(iwfm_compiler_flags INTERFACE
+                /libs:dll
+                /threads
+                $<$<CONFIG:Release>:/MD>
+                $<$<CONFIG:Debug>:/MDd>
+            )
+        else()
+            target_compile_options(iwfm_compiler_flags INTERFACE
+                /libs:static
+                /threads
+                $<$<CONFIG:Release>:/MT>
+                $<$<CONFIG:Debug>:/MTd>
+            )
+        endif()
 
         # Disable specific diagnostics
         target_compile_options(iwfm_compiler_flags INTERFACE
@@ -180,13 +190,19 @@ if(IWFM_USING_INTEL)
         )
 
         # Static linking - use static runtime libraries
-        target_compile_options(iwfm_compiler_flags INTERFACE
-            -static-intel
-            -qopenmp-link=static
-        )
-        target_link_options(iwfm_compiler_flags INTERFACE
-            -static-intel
-        )
+        # (IWFM_SHARED_RUNTIME: link libifcore, libimf and OpenMP dynamically)
+        if(IWFM_SHARED_RUNTIME)
+            target_compile_options(iwfm_compiler_flags INTERFACE -shared-intel)
+            target_link_options(iwfm_compiler_flags INTERFACE -shared-intel)
+        else()
+            target_compile_options(iwfm_compiler_flags INTERFACE
+                -static-intel
+                -qopenmp-link=static
+            )
+            target_link_options(iwfm_compiler_flags INTERFACE
+                -static-intel
+            )
+        endif()
 
 
         # Disable specific diagnostics

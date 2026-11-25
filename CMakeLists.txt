@@ -30,8 +30,18 @@ if(POLICY CMP0135)
 endif()
 cmake_policy(SET CMP0091 NEW)  # MSVC runtime library flags
 
-# Use static runtime library for all targets (avoids DLL dependencies)
-set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+# Runtime libraries. By default the C runtime (/MT) and the Intel Fortran and
+# OpenMP runtimes are linked statically, so the release binaries need no
+# runtime DLLs. Package builds (conda) set IWFM_SHARED_RUNTIME=ON to link them
+# dynamically instead: the runtimes then come from their own packages
+# (intel-fortran-rt, llvm-openmp, vc14_runtime) rather than being copied into
+# IWFM's binaries.
+option(IWFM_SHARED_RUNTIME "Link the C, Fortran and OpenMP runtimes dynamically" OFF)
+if(IWFM_SHARED_RUNTIME)
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+else()
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
 
 # Build type default
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)

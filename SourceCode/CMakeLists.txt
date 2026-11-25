@@ -183,10 +183,12 @@ if(IWFM_MONOLITHIC_BUILD AND IWFM_NEED_DEPENDENCIES)
             )
         endif()
 
+        # COMPONENT library: package builds install just this
+        # (cmake --install <build> --component library)
         install(TARGETS IWFM_C_DLL
-            RUNTIME DESTINATION bin
-            LIBRARY DESTINATION lib
-            ARCHIVE DESTINATION lib
+            RUNTIME DESTINATION bin COMPONENT library
+            LIBRARY DESTINATION lib COMPONENT library
+            ARCHIVE DESTINATION lib COMPONENT library
         )
     endif()
 
@@ -474,10 +476,12 @@ if(IWFM_BUILD_DLL)
         )
     endif()
 
+    # COMPONENT library: package builds install just this
+    # (cmake --install <build> --component library)
     install(TARGETS IWFM_C_DLL
-        RUNTIME DESTINATION bin
-        LIBRARY DESTINATION lib
-        ARCHIVE DESTINATION lib
+        RUNTIME DESTINATION bin COMPONENT library
+        LIBRARY DESTINATION lib COMPONENT library
+        ARCHIVE DESTINATION lib COMPONENT library
     )
 endif()
 
