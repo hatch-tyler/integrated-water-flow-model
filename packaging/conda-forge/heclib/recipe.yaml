@@ -1,0 +1,90 @@
+schema_version: 1
+
+context:
+  version: "7.JA.7"
+  # upstream tags look like 7-JA-7 (DSS version 7, release JA, build 7)
+  tag: ${{ version | replace(".", "-") }}
+
+package:
+  name: heclib
+  version: ${{ version }}
+
+source:
+  url: https://github.com/HydrologicEngineeringCenter/hec-dss/archive/refs/tags/${{ tag }}.tar.gz
+  sha256: 468f5be712c230e4cf8845d55b48f96d8544ad8dcc7df14df2e4e911ee40317a
+
+build:
+  number: 0
+  skip:
+    - osx  # not yet built or tested on macOS
+  script:
+    # Upstream's top-level CMakeLists.txt downloads zlib and test data at
+    # configure time; the recipe's CMakeLists.txt builds the same sources
+    # against the environment's zlib instead.
+    - if: win
+      then:
+        - cmake -S %RECIPE_DIR% -B build -G Ninja %CMAKE_ARGS% -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=%LIBRARY_PREFIX% -DHECDSS_SOURCE_DIR=%SRC_DIR%
+        - if errorlevel 1 exit 1
+        - cmake --build build --parallel %CPU_COUNT%
+        - if errorlevel 1 exit 1
+        - cmake --install build
+      else:
+        - cmake -S $RECIPE_DIR -B build -G Ninja $CMAKE_ARGS -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$PREFIX -DHECDSS_SOURCE_DIR=$SRC_DIR
+        - cmake --build build --parallel $CPU_COUNT
+        - cmake --install build
+
+requirements:
+  build:
+    - ${{ compiler('c') }}
+    - ${{ stdlib('c') }}
+    - cmake
+    - ninja
+  host:
+    - zlib
+  run_exports:
+    # DSS has no ABI versioning; releases (7-IU, 7-JA, ...) may change it.
+    - ${{ pin_subpackage('heclib', upper_bound='x.x') }}
+
+tests:
+  - package_contents:
+      lib:
+        - heclib
+      include:
+        - heclib/heclib.h
+        - heclib/hecdss7.h
+        - heclib/hecdss.h
+      files:
+        - if: win
+          then: Library/lib/cmake/heclib/heclibConfig.cmake
+          else: lib/cmake/heclib/heclibConfig.cmake
+  - files:
+      recipe:
+        - test/roundtrip.c
+    requirements:
+      build:
+        - ${{ compiler('c') }}
+    script:
+      - if: win
+        then:
+          - cl /nologo /I%LIBRARY_INC%\heclib test\roundtrip.c /link %LIBRARY_LIB%\heclib.lib
+          - roundtrip.exe
+        else:
+          - $CC -I$PREFIX/include/heclib test/roundtrip.c -L$PREFIX/lib -lheclib -Wl,-rpath,$PREFIX/lib -o roundtrip
+          - ./roundtrip
+
+about:
+  homepage: https://www.hec.usace.army.mil/software/hec-dss/
+  repository: https://github.com/HydrologicEngineeringCenter/hec-dss
+  license: MIT
+  license_file: LICENSE.md
+  summary: HEC-DSS version 7 C library (heclib) for reading and writing DSS files
+  description: |
+    heclib is the C library of the U.S. Army Corps of Engineers Hydrologic
+    Engineering Center Data Storage System (HEC-DSS) version 7. This package
+    builds it as a shared library exporting the full heclib API (zopen,
+    ztsStore, ztsRetrieve, ...) together with the hecdss C API, with headers
+    under include/heclib and a CMake package (heclib::heclib).
+
+extra:
+  recipe-maintainers:
+    - hatch-tyler
