@@ -62,7 +62,7 @@ The easiest way to build on Windows is using the provided PowerShell script:
 
 ```powershell
 # Navigate to IWFM source directory
-cd C:\path\to\iwfm-2025.0.1747\src
+cd C:\path\to\iwfm-2026.0.1848\src
 
 # Build all targets (automatically sets up Intel oneAPI environment)
 .\Build-IWFM.ps1
@@ -110,7 +110,7 @@ cd C:\path\to\iwfm-2025.0.1747\src
 ```powershell
 # 1. Open Intel oneAPI Command Prompt (or run setvars.bat)
 # 2. Navigate to IWFM source directory
-cd C:\path\to\iwfm-2025.0.1747\src
+cd C:\path\to\iwfm-2026.0.1848\src
 
 # 3. Create and enter build directory
 mkdir build
@@ -133,7 +133,7 @@ dir ..\Bin\*.exe
 source /opt/intel/oneapi/setvars.sh
 
 # 2. Navigate to IWFM source directory
-cd /path/to/iwfm-2025.0.1747/src
+cd /path/to/iwfm-2026.0.1848/src
 
 # 3. Create and enter build directory
 mkdir build && cd build
@@ -159,7 +159,7 @@ sudo apt install gfortran gcc cmake ninja-build  # Debian/Ubuntu
 sudo dnf install gcc-gfortran gcc cmake ninja-build  # Fedora/RHEL
 
 # 2. Navigate to IWFM source directory
-cd /path/to/iwfm-2025.0.1747/src
+cd /path/to/iwfm-2026.0.1848/src
 
 # 3. Create and enter build directory
 mkdir build && cd build
@@ -252,7 +252,7 @@ Ninja provides the fastest build times and handles Fortran module dependencies w
 # Or manually set up the environment:
 & "C:\Program Files (x86)\Intel\oneAPI\setvars.bat"
 
-cd C:\path\to\iwfm-2025.0.1747\src
+cd C:\path\to\iwfm-2026.0.1848\src
 mkdir build
 cd build
 
@@ -287,7 +287,7 @@ Visual Studio provides an IDE experience with debugging support.
 
 ```powershell
 # From Intel oneAPI Command Prompt
-cd C:\path\to\iwfm-2025.0.1747\src
+cd C:\path\to\iwfm-2026.0.1848\src
 mkdir build
 cd build
 
@@ -317,7 +317,7 @@ start IWFM.sln
 # Load Intel environment
 source /opt/intel/oneapi/setvars.sh
 
-cd /path/to/iwfm-2025.0.1747/src
+cd /path/to/iwfm-2026.0.1848/src
 mkdir build && cd build
 
 # Configure with Ninja (recommended)
@@ -332,7 +332,7 @@ cmake --build .
 #### Using gfortran
 
 ```bash
-cd /path/to/iwfm-2025.0.1747/src
+cd /path/to/iwfm-2026.0.1848/src
 mkdir build && cd build
 
 # Configure
@@ -379,7 +379,7 @@ docker run --rm -v $(pwd)/Bin:/src/Bin iwfm-builder
 # Install dependencies
 brew install cmake ninja gcc
 
-cd /path/to/iwfm-2025.0.1747/src
+cd /path/to/iwfm-2026.0.1848/src
 mkdir build && cd build
 
 # Configure with gfortran
@@ -764,36 +764,36 @@ IWFM provides Docker containers for both building and running simulations.
 | Container | Image | Size | Purpose |
 |-----------|-------|------|---------|
 | Build Environment | `iwfm-build:latest` | ~5 GB | Development with Intel compilers |
-| Runtime | `iwfm-runtime:2025.0` | ~100 MB | Running model simulations |
+| Runtime | `iwfm-runtime:2026.0` | ~100 MB | Running model simulations |
 
 ### Building the Runtime Container
 
 ```bash
 cd src
-docker build -t iwfm-runtime:2025.0 -f docker/Dockerfile.runtime .
+docker build -t iwfm-runtime:2026.0 -f docker/Dockerfile.runtime .
 ```
 
 ### Running Simulations
 
 ```bash
 # Show version info
-docker run --rm iwfm-runtime:2025.0
+docker run --rm iwfm-runtime:2026.0
 
 # Run PreProcessor
 docker run --rm -v /path/to/model/PreProcessor:/data \
-    iwfm-runtime:2025.0 iwfm-preprocessor PreProcessor_MAIN.IN
+    iwfm-runtime:2026.0 iwfm-preprocessor PreProcessor_MAIN.IN
 
 # Run Simulation
 docker run --rm -v /path/to/model/Simulation:/data \
-    iwfm-runtime:2025.0 iwfm-simulation Simulation_MAIN.IN
+    iwfm-runtime:2026.0 iwfm-simulation Simulation_MAIN.IN
 
 # Run Budget
 docker run --rm -v /path/to/model/Budget:/data \
-    iwfm-runtime:2025.0 iwfm-budget Budget.in
+    iwfm-runtime:2026.0 iwfm-budget Budget.in
 
 # Run ZBudget
 docker run --rm -v /path/to/model/ZBudget:/data \
-    iwfm-runtime:2025.0 iwfm-zbudget ZBudget.in
+    iwfm-runtime:2026.0 iwfm-zbudget ZBudget.in
 ```
 
 ### Using Docker Compose
@@ -852,7 +852,7 @@ src/
 Edit `CMakeLists.txt` line 12-15:
 ```cmake
 project(IWFM
-    VERSION 2025.0.1747    # <- Update version here
+    VERSION 2026.0.1848    # <- Update version here
     DESCRIPTION "Integrated Water Flow Model"
     LANGUAGES Fortran C
 )

@@ -17,7 +17,7 @@ FROM intel/oneapi-hpckit:2025.3.0-0-devel-ubuntu22.04
 LABEL maintainer="IWFMtechsupport@water.ca.gov" \
       org.opencontainers.image.title="IWFM Build Environment" \
       org.opencontainers.image.description="Intel oneAPI build environment for IWFM" \
-      org.opencontainers.image.version="2025.0.1747" \
+      org.opencontainers.image.version="2026.0.1848" \
       org.opencontainers.image.vendor="California Department of Water Resources"
 
 # Prevent interactive prompts during package installation

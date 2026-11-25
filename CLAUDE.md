@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-IWFM (Integrated Water Flow Model) is a hydrological simulation software developed by the California Department of Water Resources. Version 2025.0.1747 (kernel 2025.0.107). Written in modern Fortran (F90/F2003), licensed GPL v2.
+IWFM (Integrated Water Flow Model) is a hydrological simulation software developed by the California Department of Water Resources. Version 2026.0.1848 (kernel 2026.0.264). Written in modern Fortran (F90/F2003), licensed GPL v2.
 
 ## Requirements
 
@@ -307,8 +307,8 @@ Log files created in working directory: `SimulationMessages.out`, `PreprocessorM
 Two container types: full build environment (`docker/Dockerfile`, ~5 GB with Intel oneAPI) and minimal runtime (`docker/Dockerfile.runtime`, ~310 MB multi-stage).
 
 ```bash
-docker build -t iwfm-runtime:2025.0 -f docker/Dockerfile.runtime .
-docker run --rm -v /path/to/model/Simulation:/data iwfm-runtime:2025.0 iwfm-simulation Simulation_MAIN.IN
+docker build -t iwfm-runtime:2026.0 -f docker/Dockerfile.runtime .
+docker run --rm -v /path/to/model/Simulation:/data iwfm-runtime:2026.0 iwfm-simulation Simulation_MAIN.IN
 ```
 
 Runtime commands: `iwfm-preprocessor`, `iwfm-simulation`, `iwfm-budget`, `iwfm-zbudget`, `iwfm-iwfm2obs`, `iwfm-calctyphyd`. Full pipeline via `docker compose` — see `docker/README.md`.

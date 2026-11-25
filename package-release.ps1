@@ -1,5 +1,6 @@
-$staging = "C:\Users\hatch\OneDrive\Desktop\iwfm-2025.0.1747\src\release-staging"
-$binDir = "C:\Users\hatch\OneDrive\Desktop\iwfm-2025.0.1747\src\Bin"
+# Zips binaries already in Bin\ (build-all-release.ps1 builds and packages).
+$staging = Join-Path $PSScriptRoot "release-staging"
+$binDir = Join-Path $PSScriptRoot "Bin"
 
 New-Item -ItemType Directory -Force -Path $staging | Out-Null
 
@@ -43,10 +44,10 @@ function Package-Files($fileList, $zipName) {
 }
 
 Write-Host "Packaging Windows Release..." -ForegroundColor Cyan
-Package-Files $releaseFiles "IWFM-2025.0.1747-Windows-x64-Release.zip"
+Package-Files $releaseFiles "IWFM-2026.0.1848-Windows-x64-Release.zip"
 
 Write-Host "Packaging Windows Debug..." -ForegroundColor Cyan
-Package-Files $debugFiles "IWFM-2025.0.1747-Windows-x64-Debug.zip"
+Package-Files $debugFiles "IWFM-2026.0.1848-Windows-x64-Debug.zip"
 
 Write-Host ""
 Write-Host "Done. Archives in: $staging" -ForegroundColor Yellow

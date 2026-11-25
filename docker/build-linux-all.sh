@@ -1,7 +1,13 @@
 #!/bin/bash
 # Build all IWFM Linux targets in both Release and Debug
 # Runs inside the Intel oneAPI Docker container
+#
+# FC selects the Fortran compiler (default: the image's ifx). Release builds
+# must use the compiler DWR used for the official release, or results differ
+# at round-off level: for 2026.0.1848, ifx 2026.1.1, e.g.
+#   FC=/opt/ifx2611/bin/ifx bash docker/build-linux-all.sh
 set -e
+FC=${FC:-ifx}
 
 SRCDIR=/src
 BINDIR=/src/Bin
@@ -9,7 +15,7 @@ STAGINGDIR=/src/release-staging
 
 COMMON_ARGS=(
     -G Ninja
-    -DCMAKE_Fortran_COMPILER=ifx
+    -DCMAKE_Fortran_COMPILER=$FC
     -DCMAKE_C_COMPILER=icx
     -DIWFM_MONOLITHIC_BUILD=ON
     -DIWFM_BUILD_IWFM2OBS=ON
@@ -43,7 +49,7 @@ build_config() {
 }
 
 echo "=== Intel Compiler Versions ==="
-ifx --version
+$FC --version
 icx --version
 
 # Build Release
@@ -52,7 +58,7 @@ build_config Release
 # Package Release
 echo "Packaging Release..."
 mkdir -p "$STAGINGDIR"
-RELEASE_TAR="$STAGINGDIR/IWFM-2025.0.1747-Linux-x64-Release.tar.gz"
+RELEASE_TAR="$STAGINGDIR/IWFM-2026.0.1848-Linux-x64-Release.tar.gz"
 cd "$BINDIR"
 tar czf "$RELEASE_TAR" \
     Simulation PreProcessor Simulation_PLL \
@@ -65,7 +71,7 @@ build_config Debug
 
 # Package Debug
 echo "Packaging Debug..."
-DEBUG_TAR="$STAGINGDIR/IWFM-2025.0.1747-Linux-x64-Debug.tar.gz"
+DEBUG_TAR="$STAGINGDIR/IWFM-2026.0.1848-Linux-x64-Debug.tar.gz"
 cd "$BINDIR"
 tar czf "$DEBUG_TAR" \
     Simulation_d PreProcessor_d Simulation_PLL_d \

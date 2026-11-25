@@ -40,7 +40,7 @@ cd docker
 docker compose build iwfm-runtime
 
 # Or using docker directly
-docker build -t iwfm-runtime:2025.0 -f docker/Dockerfile.runtime .
+docker build -t iwfm-runtime:2026.0 -f docker/Dockerfile.runtime .
 ```
 
 ### Run a Simulation
@@ -50,7 +50,7 @@ docker build -t iwfm-runtime:2025.0 -f docker/Dockerfile.runtime .
 MODEL_DIR=/path/to/your/model docker compose run --rm iwfm-simulation
 
 # Or using docker directly
-docker run --rm -v /path/to/your/model:/data iwfm-runtime:2025.0 \
+docker run --rm -v /path/to/your/model:/data iwfm-runtime:2026.0 \
     iwfm-simulation Simulation_MAIN.IN
 ```
 
@@ -72,7 +72,7 @@ The runtime container includes these executables:
 ### 1. Show Version Information
 
 ```bash
-docker run --rm iwfm-runtime:2025.0
+docker run --rm iwfm-runtime:2026.0
 ```
 
 ### 2. Run PreProcessor
@@ -80,7 +80,7 @@ docker run --rm iwfm-runtime:2025.0
 ```bash
 docker run --rm \
     -v /path/to/model/PreProcessor:/data \
-    iwfm-runtime:2025.0 \
+    iwfm-runtime:2026.0 \
     iwfm-preprocessor PreProcessor_MAIN.IN
 ```
 
@@ -89,7 +89,7 @@ docker run --rm \
 ```bash
 docker run --rm \
     -v /path/to/model/Simulation:/data \
-    iwfm-runtime:2025.0 \
+    iwfm-runtime:2026.0 \
     iwfm-simulation Simulation_MAIN.IN
 ```
 
@@ -98,7 +98,7 @@ docker run --rm \
 ```bash
 docker run --rm \
     -v /path/to/model/Budget:/data \
-    iwfm-runtime:2025.0 \
+    iwfm-runtime:2026.0 \
     iwfm-budget Budget.in
 ```
 
@@ -107,7 +107,7 @@ docker run --rm \
 ```bash
 docker run --rm \
     -v /path/to/model/ZBudget:/data \
-    iwfm-runtime:2025.0 \
+    iwfm-runtime:2026.0 \
     iwfm-zbudget ZBudget.in
 ```
 
@@ -116,7 +116,7 @@ docker run --rm \
 ```bash
 docker run --rm \
     -v /path/to/model/PostProcessing:/data \
-    iwfm-runtime:2025.0 \
+    iwfm-runtime:2026.0 \
     iwfm-iwfm2obs iwfm2obs.in
 ```
 
@@ -125,7 +125,7 @@ docker run --rm \
 ```bash
 docker run --rm \
     -v /path/to/model/PostProcessing:/data \
-    iwfm-runtime:2025.0 \
+    iwfm-runtime:2026.0 \
     iwfm-calctyphyd CalcTypeHyd.in
 ```
 
@@ -138,7 +138,7 @@ MODEL_DIR=/path/to/complete/model docker compose run --rm iwfm-pipeline
 # Or manually
 docker run --rm \
     -v /path/to/model:/model \
-    iwfm-runtime:2025.0 \
+    iwfm-runtime:2026.0 \
     /bin/sh -c "
         cd /model/PreProcessor && iwfm-preprocessor PreProcessor_MAIN.IN &&
         cd /model/Simulation && iwfm-simulation Simulation_MAIN.IN &&
@@ -152,7 +152,7 @@ docker run --rm \
 ```bash
 docker run --rm -it \
     -v /path/to/model:/data \
-    iwfm-runtime:2025.0 \
+    iwfm-runtime:2026.0 \
     /bin/sh
 ```
 
@@ -199,7 +199,7 @@ MODEL_DIR=/home/user/my_model INPUT_FILE=my_simulation.in \
 ### Standard Build
 
 ```bash
-docker build -t iwfm-runtime:2025.0 -f docker/Dockerfile.runtime .
+docker build -t iwfm-runtime:2026.0 -f docker/Dockerfile.runtime .
 ```
 
 ### Build with Custom Tag
@@ -218,10 +218,10 @@ The Dockerfile uses a multi-stage build:
 
 ```bash
 # Tag for Docker Hub
-docker tag iwfm-runtime:2025.0 username/iwfm-runtime:2025.0
+docker tag iwfm-runtime:2026.0 username/iwfm-runtime:2026.0
 
 # Push
-docker push username/iwfm-runtime:2025.0
+docker push username/iwfm-runtime:2026.0
 ```
 
 ## Development Build Environment
@@ -276,7 +276,7 @@ chmod -R a+rX /path/to/model
 
 Or run as root (not recommended for production):
 ```bash
-docker run --rm -u root -v /path/to/model:/data iwfm-runtime:2025.0 ...
+docker run --rm -u root -v /path/to/model:/data iwfm-runtime:2026.0 ...
 ```
 
 ### Missing Input Files
@@ -285,7 +285,7 @@ Ensure the input file path is correct relative to the mounted directory:
 
 ```bash
 # Check what's mounted
-docker run --rm -v /path/to/model:/data iwfm-runtime:2025.0 ls -la /data
+docker run --rm -v /path/to/model:/data iwfm-runtime:2026.0 ls -la /data
 ```
 
 ### Memory Issues
@@ -293,7 +293,7 @@ docker run --rm -v /path/to/model:/data iwfm-runtime:2025.0 ls -la /data
 For large models, increase Docker memory limits:
 
 ```bash
-docker run --rm -m 8g -v /path/to/model:/data iwfm-runtime:2025.0 \
+docker run --rm -m 8g -v /path/to/model:/data iwfm-runtime:2026.0 \
     iwfm-simulation Simulation_MAIN.IN
 ```
 
@@ -303,7 +303,7 @@ Output files are written to the mounted directory. They persist after the contai
 
 ```bash
 # Run simulation
-docker run --rm -v /path/to/model:/data iwfm-runtime:2025.0 \
+docker run --rm -v /path/to/model:/data iwfm-runtime:2026.0 \
     iwfm-simulation Simulation_MAIN.IN
 
 # Check output files
@@ -331,7 +331,7 @@ Note: The runtime image includes Intel runtime libraries (libirng, libimf, libsv
 
 To verify image size:
 ```bash
-docker images iwfm-runtime:2025.0
+docker images iwfm-runtime:2026.0
 ```
 
 ## Container Labels
@@ -343,14 +343,14 @@ The containers use OCI (Open Container Initiative) standard labels for metadata:
 | `maintainer` | IWFMtechsupport@water.ca.gov | Technical support contact |
 | `org.opencontainers.image.title` | IWFM Runtime / IWFM Build Environment | Container name |
 | `org.opencontainers.image.description` | (varies) | Container purpose |
-| `org.opencontainers.image.version` | 2025.0.1747 | IWFM version |
+| `org.opencontainers.image.version` | 2026.0.1848 | IWFM version |
 | `org.opencontainers.image.vendor` | California Department of Water Resources | Organization |
 | `org.opencontainers.image.licenses` | GPL-2.0 | Software license |
 
 These labels follow the [OCI Image Format Specification](https://github.com/opencontainers/image-spec/blob/main/annotations.md) and can be inspected with:
 
 ```bash
-docker inspect iwfm-runtime:2025.0 --format='{{json .Config.Labels}}' | jq
+docker inspect iwfm-runtime:2026.0 --format='{{json .Config.Labels}}' | jq
 ```
 
 ## Support

@@ -154,7 +154,7 @@ Write-Host "  _| |_\  /\  / |    | |  | |" -ForegroundColor Cyan
 Write-Host " |_____/\/  \/|_|    |_|  |_|" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "  Integrated Water Flow Model" -ForegroundColor White
-Write-Host "  Build System v2025.0" -ForegroundColor Gray
+Write-Host "  Build System v2026.0" -ForegroundColor Gray
 Write-Host ""
 
 function Select-FortranCompiler {

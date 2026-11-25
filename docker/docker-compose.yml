@@ -74,7 +74,7 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile.runtime
-    image: iwfm-runtime:2025.0
+    image: iwfm-runtime:2026.0
     container_name: iwfm-runtime
     volumes:
       - ${MODEL_DIR:-.}:/data
@@ -86,7 +86,7 @@ services:
   # PreProcessor - Run IWFM PreProcessor on mounted model
   # ===========================================================================
   iwfm-preprocessor:
-    image: iwfm-runtime:2025.0
+    image: iwfm-runtime:2026.0
     volumes:
       - ${MODEL_DIR:-../samplemodel/PreProcessor}:/data
     working_dir: /data
@@ -98,7 +98,7 @@ services:
   # Simulation - Run IWFM Simulation on mounted model
   # ===========================================================================
   iwfm-simulation:
-    image: iwfm-runtime:2025.0
+    image: iwfm-runtime:2026.0
     volumes:
       - ${MODEL_DIR:-../samplemodel/Simulation}:/data
     working_dir: /data
@@ -110,7 +110,7 @@ services:
   # Budget - Run IWFM Budget post-processor
   # ===========================================================================
   iwfm-budget:
-    image: iwfm-runtime:2025.0
+    image: iwfm-runtime:2026.0
     volumes:
       - ${MODEL_DIR:-../samplemodel/Budget}:/data
     working_dir: /data
@@ -122,7 +122,7 @@ services:
   # ZBudget - Run IWFM ZBudget post-processor
   # ===========================================================================
   iwfm-zbudget:
-    image: iwfm-runtime:2025.0
+    image: iwfm-runtime:2026.0
     volumes:
       - ${MODEL_DIR:-../samplemodel/ZBudget}:/data
     working_dir: /data
@@ -134,7 +134,7 @@ services:
   # IWFM2OBS - Hydrograph to PEST SMP converter with multi-layer target
   # ===========================================================================
   iwfm-iwfm2obs:
-    image: iwfm-runtime:2025.0
+    image: iwfm-runtime:2026.0
     volumes:
       - ${MODEL_DIR:-.}:/data
     working_dir: /data
@@ -146,7 +146,7 @@ services:
   # CalcTypeHyd - Cluster type hydrograph computation
   # ===========================================================================
   iwfm-calctyphyd:
-    image: iwfm-runtime:2025.0
+    image: iwfm-runtime:2026.0
     volumes:
       - ${MODEL_DIR:-.}:/data
     working_dir: /data
@@ -158,7 +158,7 @@ services:
   # Full Pipeline - Run complete model workflow
   # ===========================================================================
   iwfm-pipeline:
-    image: iwfm-runtime:2025.0
+    image: iwfm-runtime:2026.0
     volumes:
       - ${MODEL_DIR:-../samplemodel}:/model
     working_dir: /model

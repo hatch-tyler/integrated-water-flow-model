@@ -10,7 +10,7 @@ cmake_minimum_required(VERSION 3.20)
 
 # Project definition with Fortran and C enabled
 project(IWFM
-    VERSION 2025.0.1747
+    VERSION 2026.0.1848
     DESCRIPTION "Integrated Water Flow Model"
     LANGUAGES Fortran C
 )

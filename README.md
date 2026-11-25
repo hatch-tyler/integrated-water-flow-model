@@ -6,14 +6,22 @@ A finite-element hydrological simulation model for conjunctive management of gro
 
 IWFM simulates the flow of water through an integrated hydrologic system -- groundwater, streams, lakes, root zone, and unsaturated zone -- under historical or projected conditions. Developed by the California Department of Water Resources (DWR), it is used for water resources planning, groundwater sustainability analysis, and regulatory compliance across California.
 
-This repository is a fork of the official IWFM release (upstream source: <https://data.cnra.ca.gov/dataset/iwfm>). Active development happens on the `2025.0.1747.rev` branch; the `2025.0.1747` branch tracks the unmodified upstream import. Relative to upstream, this fork adds a cross-platform CMake build, additional post-processors, a multi-instance C-callable DLL, modern Fortran cleanup, and pre-built binary [releases](https://github.com/hatch-tyler/integrated-water-flow-model/releases). See [What's in this fork](#whats-in-this-fork) below.
+This repository is a fork of the official IWFM release (upstream source: <https://data.cnra.ca.gov/dataset/iwfm>). Active development happens on the `2026.0.1848.rev` branch; the `2026.0.1848` branch tracks the unmodified upstream import. Relative to upstream, this fork adds a cross-platform CMake build, additional post-processors, a multi-instance C-callable DLL, modern Fortran cleanup, and pre-built binary [releases](https://github.com/hatch-tyler/integrated-water-flow-model/releases). See [What's in this fork](#whats-in-this-fork) below.
 
-Version **2025.0.1747** (kernel 2025.0.107), latest binary release [`v2025.0.1747-rev3`](https://github.com/hatch-tyler/integrated-water-flow-model/releases/tag/v2025.0.1747-rev3). Written in modern Fortran (F90/F2003).
+Version **2026.0.1848** (kernel 2026.0.264); binaries on [GitHub Releases](https://github.com/hatch-tyler/integrated-water-flow-model/releases). Written in modern Fortran (F90/F2003).
 
 ## What's in this fork
 
-Changes relative to the upstream IWFM 2025.0.1747 release, in descending user impact:
+Changes relative to the upstream IWFM 2026.0.1848 release, in descending user impact:
 
+- **Reproduces the official results** — built with ifx 2026.1.1 (the compiler DWR used for 2026.0.1848), Simulation output is byte-identical to the official 2026.0.1848 executable on the release sample model (Windows and Linux) and on C2VSimFG v1.5 (Windows), apart from the intentional stream hydrograph unit label (`AC-FT/MON` where upstream truncates the input at the `/` to `AC-FT`). Other ifx versions differ at round-off level.
+- **Bug fixes that change results for affected models** (results differ from the official release only where the upstream bug applies):
+  - *Parametric-grid conversion factors* (subsidence v5.0, unsaturated zone): upstream read past the end of the factor array, silently disabling v5.0 subsidence (final subsidence off by up to 0.22 ft on the sample) and failing at start-up for the unsaturated zone.
+  - *Subsidence v5.0 Newton Jacobian*: the derivative of the interbed exchange flow omitted the interbed-head response. Fixing it cuts Newton iterations by about 30% and lets runs converge at tolerances where they previously failed; results move within the convergence tolerance (heads within 3e-4 ft on the sample) and threshold events such as diversion shortages can flip in some years. Subsidence v4.0 models are unaffected.
+- **Faster simulation, identical results** — the unsaturated-zone moisture solver, ET lookups and matrix assembly do less work per Newton iteration; outputs are byte-identical.
+- **Errors reported correctly** — the actual model error (e.g. a convergence failure) is shown and logged in `SimulationMessages.out` / `PreprocessorMessages.out`, not a stale earlier message.
+- **HEC-DSS 7** — the fork links HEC-DSS 7 and reads DSS-7 files only. Convert DSS-6 input files (such as the `TSDATA_IN.DSS` shipped with upstream sample models) with HEC-DSSVue before use.
+- **Windows-authored models run unchanged on Linux** — `\` path separators in input files are translated at every file open.
 - **Multi-instance DLL with handle-based API** — up to 64 concurrent model instances per process; every `IW_Model_*` export takes `iModelID` as its first argument. **Breaking change** for callers of the upstream DLL — see [Using IWFM as a library](#using-iwfm-as-a-library).
 - **Cross-platform CMake build** — Windows PowerShell driver (`build-iwfm.ps1`), Linux Docker images, and automatic dependency fetch (HDF5, HEC-DSS 7, zlib). See [BUILD.md](BUILD.md).
 - **Additional post-processors** in the standard release: `IWFM2OBS` (PEST hydrograph converter), `CalcTypeHyd` (cluster type hydrograph), and `ResultsExtract` (generalized hydrograph extractor with native HDF5 input support).
@@ -43,7 +51,7 @@ cmake --build .
 
 Dependencies (HDF5, HEC-DSS 7, zlib) are fetched and built automatically on first configure. Output binaries go to `Bin/`.
 
-Or skip the build entirely: pre-built Windows and Linux binaries for each release are available on [GitHub Releases](https://github.com/hatch-tyler/integrated-water-flow-model/releases). Latest: **v2025.0.1747-rev3**.
+Or skip the build entirely: pre-built Windows and Linux binaries for each release are available on [GitHub Releases](https://github.com/hatch-tyler/integrated-water-flow-model/releases).
 
 ## Build Targets
 
@@ -83,15 +91,15 @@ Two repo-root scripts exercise the DLL ABI from Python and double as templates f
 ## Requirements
 
 - **CMake** 3.20+
-- **Fortran compiler:** Intel ifx (recommended) or GNU gfortran 9+
+- **Fortran compiler:** Intel ifx (recommended; ifx 2026.1.1 reproduces the official 2026.0.1848 results exactly, see `build-iwfm.ps1 -FortranCompiler`) or GNU gfortran 9+
 - **C compiler:** Intel icx, MSVC, GCC, or Clang
 - **Build tool:** Ninja (recommended), Make, or Visual Studio
 
 ## Docker
 
 ```bash
-docker build -t iwfm-runtime:2025.0 -f docker/Dockerfile.runtime .
-docker run --rm -v /path/to/model:/data iwfm-runtime:2025.0 iwfm-simulation Simulation_MAIN.IN
+docker build -t iwfm-runtime:2026.0 -f docker/Dockerfile.runtime .
+docker run --rm -v /path/to/model:/data iwfm-runtime:2026.0 iwfm-simulation Simulation_MAIN.IN
 ```
 
 ## Fast inquiry-mode loads (pywfm / C-DLL users)
