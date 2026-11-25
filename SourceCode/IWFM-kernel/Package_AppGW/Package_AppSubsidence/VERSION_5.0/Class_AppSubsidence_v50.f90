@@ -1072,7 +1072,7 @@ CONTAINS
     REAL(8)                                        :: rGWHead,rInterbedThick,PreCompactHead,rTopElev,rBottomElev,KVA,DZ,KVADZ,        &
                                                       DZDT,h1,SKMA,h1OLD,rNEQ,ElasticSC,InelasticSC,rUpdateValues(1),rStor,rStorPos,  &
                                                       rUpdateRHS(SIZE(GWHead)),rScaleFactor,rFlow,rConductance,rdStor,rdStorPos,rDiff,&
-                                                      rGradient,rdFlow
+                                                      rGradient,rdFlow,rX1,rdh1dh,rdFlowdh
     REAL(8),DIMENSION(AppSubsidence%iNSubLayerMax) :: A1,B1,C1,R1
     
     !Initialize
@@ -1167,13 +1167,25 @@ CONTAINS
             B1(NN) = -2d0*KVADZ - DZDT*SKMA
             R1(NN) = DZDT*( -SKMA*PreCompactHead + ElasticSC*(PreCompactHead - h1OLD))
 !
-            CALL TRIDIAGONAL(A1,B1,C1,R1,AppSubsidence%HSUB(indx_S:indx_L),NN)
-            
+            !Solve, also obtaining dh1/dGWHead for the Jacobian. With a single
+            !sub-layer (NN=1) the first-row coupling term is overwritten above, so
+            !h1 does not depend on GWHead.
+            IF (NN .GT. 1) THEN
+                CALL TRIDIAGONAL_WithSensitivity(A1,B1,C1,R1,AppSubsidence%HSUB(indx_S:indx_L),NN,rX1)
+                rdh1dh = -2d0 * KVADZ * rX1
+            ELSE
+                CALL TRIDIAGONAL(A1,B1,C1,R1,AppSubsidence%HSUB(indx_S:indx_L),NN)
+                rdh1dh = 0d0
+            END IF
+
             !Calculate Newton terms
             rNEQ         = AppSubsidence%rNEQ(indxNode,indxLayer)
             h1           = AppSubsidence%HSUB(indx_S)
             rConductance = 4d0 * KVADZ * rNEQ
             rFlow        = rConductance * (rGWHead-h1)  !ALREADY MULTIPLIED BY 2 TO ACCOUNT FOR BOTH HALVES OF INTERBED
+            !d(rFlow)/d(GWHead): the interbed head h1 responds to GWHead, so the
+            !derivative is smaller than rConductance
+            rdFlowdh     = rConductance * (1d0 - rdh1dh)
             !Limit outflow from aquifer with storage (+ flow means outflow from gw)
             IF (rFlow .GT. 0.0) THEN
                 rStor = rStorage(indxNode,indxLayer)
@@ -1183,13 +1195,13 @@ CONTAINS
                     rDiff     = rStorPos - rFlow
                     rFlow     = MIN(rStorPos , rFlow)
                     rdStorPos = 0.5d0 * rdStor * (1d0+rStor/SQRT(rStor*rStor+f_rSmoothMaxP))
-                    rdFlow    = rConductance
+                    rdFlow    = rdFlowdh
                     rGradient = rdStorPos - 0.5d0 * (1d0 + rDiff/SQRT(rDiff*rDiff+f_rSmoothMaxP)) * (rdStorPos-rdFlow)
                 ELSE
-                    rGradient = rConductance
+                    rGradient = rdFlowdh
                 END IF
             ELSE
-                rGradient = rConductance
+                rGradient = rdFlowdh
             END IF
             
             !R.H.S. function
@@ -1339,6 +1351,45 @@ CONTAINS
   END SUBROUTINE AppSubsidence_v50_AdvanceState
   
   
+  ! -------------------------------------------------------------
+  ! --- TRIDIAGONAL SOLVER THAT ALSO RETURNS THE SENSITIVITY OF H(1)
+  ! --- Solves M*H = R exactly as TRIDIAGONAL does (same operations, so H
+  ! --- is bit-for-bit identical) and, sharing the elimination, also solves
+  ! --- M*X = e1 and returns X(1) = (M^-1)(1,1). Since only R(1) depends on
+  ! --- the aquifer head h (through -2*KVADZ*h), dH(1)/dh = -2*KVADZ*X(1).
+  ! --- A is overwritten (used as work space for e1 and X).
+  ! -------------------------------------------------------------
+  SUBROUTINE TRIDIAGONAL_WithSensitivity(A,B,C,R,H,NN,rX1)
+    INTEGER :: NN
+    REAL(8) :: A(NN),B(NN),C(NN),R(NN),H(NN),rX1
+
+    !Local variables
+    INTEGER :: I
+    REAL(8) :: W,rEPrev
+
+    !Forward elimination (A(I) is replaced by the eliminated e1 component)
+    rEPrev = 1d0
+    A(1)   = 1d0
+    DO I=2,NN
+        W      = A(I) / B(I-1)
+        B(I)   = B(I) - W*C(I-1)
+        R(I)   = R(I) - W*R(I-1)
+        rEPrev = -W*rEPrev
+        A(I)   = rEPrev
+    END DO
+
+    !Back substitution for H (as in TRIDIAGONAL) and X (stored in A)
+    H(NN) = R(NN) / B(NN)
+    A(NN) = A(NN) / B(NN)
+    DO I=NN-1,1,-1
+        H(I) = (R(I)-C(I)*H(I+1)) / B(I)
+        A(I) = (A(I)-C(I)*A(I+1)) / B(I)
+    END DO
+    rX1 = A(1)
+
+  END SUBROUTINE TRIDIAGONAL_WithSensitivity
+
+
   ! -------------------------------------------------------------
   ! --- TIDIAGONAL SOLVER
   ! -------------------------------------------------------------
