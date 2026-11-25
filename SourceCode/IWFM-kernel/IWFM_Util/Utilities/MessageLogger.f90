@@ -144,7 +144,10 @@ MODULE MessageLogger
       INTEGER                  :: iFatalCount             = 0
       LOGICAL                  :: lForceInfoWarnToScreen  = .TRUE.
       LOGICAL                  :: lTimestamp              = .FALSE.
+      INTEGER(8)               :: iLastMessageSeq         = 0        !Sequence number of cLastMessage across all loggers (0 = none)
+      LOGICAL                  :: lOwnsLogFile            = .TRUE.   !.FALSE. when writing into another logger's file (see UseLogFileOf); then Kill does not close it
   CONTAINS
+      PROCEDURE,PASS :: UseLogFileOf          => Logger_UseLogFileOf
       PROCEDURE,PASS :: Init                  => Logger_Init
       PROCEDURE,PASS :: Kill                  => Logger_Kill
       PROCEDURE,PASS :: SetLogFileName        => Logger_SetLogFileName
@@ -184,6 +187,15 @@ MODULE MessageLogger
   ! is a stepping stone toward that goal.
   ! -------------------------------------------------------------
   TYPE(MessageLoggerType),SAVE,TARGET :: DefaultLogger
+
+  ! The most recent "last message" set on ANY logger. Model components set their
+  ! errors on their model's own logger, while programs and the DLL report through
+  ! the module-level LogLastMessage/GetLastMessage wrappers; those report this
+  ! message when it is newer than DefaultLogger's own (see BringLatestMessageToDefault).
+  INTEGER(8),SAVE          :: iGlobalMessageSeq           = 0
+  INTEGER,SAVE             :: iGlobalLastMessageType      = f_iInfo
+  CHARACTER(LEN=5000),SAVE :: cGlobalLastMessage          = ''
+  CHARACTER(LEN=200),SAVE  :: cGlobalLastMessageProcedure = ''
 
 
   ! -------------------------------------------------------------
@@ -348,8 +360,11 @@ CONTAINS
     INTEGER                  :: iErrorCode
     TYPE(MessageLoggerType)  :: DummyLogger
 
-    CLOSE (this%iUnitN , IOSTAT=iErrorCode)
+    !Close the log file only if this logger opened it (see UseLogFileOf)
+    IF (this%lOwnsLogFile) CLOSE (this%iUnitN , IOSTAT=iErrorCode)
     IF (ALLOCATED(this%cName)) DEALLOCATE(this%cName , STAT=iErrorCode)
+    this%lOwnsLogFile          = DummyLogger%lOwnsLogFile
+    this%iLastMessageSeq       = DummyLogger%iLastMessageSeq
     this%iUnitN                = DummyLogger%iUnitN
     this%iFlagEchoProgress     = DummyLogger%iFlagEchoProgress
     this%iMessageDestination   = DummyLogger%iMessageDestination
@@ -365,6 +380,37 @@ CONTAINS
     this%lTimestamp            = DummyLogger%lTimestamp
 
   END SUBROUTINE Logger_Kill
+
+
+  ! -------------------------------------------------------------
+  ! --- WRITE INTO ANOTHER LOGGER'S LOG FILE
+  ! --- A model's own logger otherwise opens the default 'Message.log'
+  ! --- on first use, splitting messages away from the program's log
+  ! --- (e.g. SimulationMessages.out). If Source has no file yet, this
+  ! --- logger is left unchanged (it opens its own file lazily, as before).
+  ! -------------------------------------------------------------
+  SUBROUTINE Logger_UseLogFileOf(this,Source)
+    CLASS(MessageLoggerType),INTENT(INOUT) :: this
+    CLASS(MessageLoggerType),INTENT(IN)    :: Source
+
+    !Local variables
+    INTEGER :: iErrorCode
+
+    IF (Source%iUnitN .EQ. f_iLogFile_NOT_Defined) RETURN
+    IF (this%iUnitN .EQ. Source%iUnitN) RETURN
+
+    !Release a file this logger opened itself
+    IF (this%iUnitN .NE. f_iLogFile_NOT_Defined  .AND.  this%lOwnsLogFile) CLOSE (this%iUnitN , IOSTAT=iErrorCode)
+
+    this%iUnitN = Source%iUnitN
+    IF (ALLOCATED(this%cName)) DEALLOCATE (this%cName , STAT=iErrorCode)
+    IF (ALLOCATED(Source%cName)) THEN
+        ALLOCATE (CHARACTER(LEN(Source%cName)) :: this%cName)
+        this%cName = Source%cName
+    END IF
+    this%lOwnsLogFile = .FALSE.
+
+  END SUBROUTINE Logger_UseLogFileOf
 
 
   ! -------------------------------------------------------------
@@ -479,7 +525,35 @@ CONTAINS
     !Error level
     this%iLastMessageType = iErrorLevel
 
+    !Record as the most recent message across all loggers
+    !$OMP CRITICAL(IWFM_LAST_MESSAGE)
+    iGlobalMessageSeq           = iGlobalMessageSeq + 1
+    this%iLastMessageSeq        = iGlobalMessageSeq
+    iGlobalLastMessageType      = iErrorLevel
+    cGlobalLastMessage          = this%cLastMessage
+    cGlobalLastMessageProcedure = this%cLastMessageProcedure
+    !$OMP END CRITICAL(IWFM_LAST_MESSAGE)
+
   END SUBROUTINE Logger_SetLastMessage_Array
+
+
+  ! -------------------------------------------------------------
+  ! --- MAKE DefaultLogger HOLD THE MOST RECENT MESSAGE OF ANY LOGGER
+  ! --- Errors raised inside a model are set on that model's logger; the
+  ! --- module-level LogLastMessage/GetLastMessage report DefaultLogger.
+  ! -------------------------------------------------------------
+  SUBROUTINE BringLatestMessageToDefault()
+
+    !$OMP CRITICAL(IWFM_LAST_MESSAGE)
+    IF (iGlobalMessageSeq .GT. DefaultLogger%iLastMessageSeq) THEN
+        DefaultLogger%cLastMessage          = cGlobalLastMessage
+        DefaultLogger%cLastMessageProcedure = cGlobalLastMessageProcedure
+        DefaultLogger%iLastMessageType      = iGlobalLastMessageType
+        DefaultLogger%iLastMessageSeq       = iGlobalMessageSeq
+    END IF
+    !$OMP END CRITICAL(IWFM_LAST_MESSAGE)
+
+  END SUBROUTINE BringLatestMessageToDefault
 
 
   ! -------------------------------------------------------------
@@ -1028,6 +1102,7 @@ CONTAINS
   SUBROUTINE GetLastMessage(cMessage)
     CHARACTER(LEN=*),INTENT(OUT) :: cMessage
 
+    CALL BringLatestMessageToDefault()
     CALL DefaultLogger%GetLastMessage(cMessage)
 
   END SUBROUTINE GetLastMessage
@@ -1126,6 +1201,9 @@ CONTAINS
   SUBROUTINE LogLastMessage(iDestination,cAdvance)
     INTEGER,OPTIONAL,INTENT(IN)          :: iDestination
     CHARACTER(LEN=*),OPTIONAL,INTENT(IN) :: cAdvance
+
+    !Report the most recent message, wherever it was set
+    CALL BringLatestMessageToDefault()
 
     IF (PRESENT(iDestination) .AND. PRESENT(cAdvance)) THEN
         CALL DefaultLogger%LogLastMessage(iDestination,cAdvance)

@@ -638,6 +638,7 @@ CONTAINS
     !Initialize
     iStat = 0
 
+    CALL Model%Logger%UseLogFileOf(DefaultLogger)   !Write model messages into the program's log file (not a separate Message.log)
     !Pre-processor working directory
     CALL GetFileDirectory(cPPFileName,Model%cPPWorkingDirectory)
     
@@ -757,6 +758,7 @@ CONTAINS
     !Initialize
     iStat = 0
 
+    CALL Model%Logger%UseLogFileOf(DefaultLogger)   !Write model messages into the program's log file (not a separate Message.log)
     !Check if all required files are supplied
     DO indx=1,SIZE(RequiredFiles)
         FileID = RequiredFiles(indx)
@@ -911,6 +913,7 @@ CONTAINS
     !Initialize
     iStat = 0
 
+    CALL Model%Logger%UseLogFileOf(DefaultLogger)   !Write model messages into the program's log file (not a separate Message.log)
     !Are WSAs simulated
     IF (LEN_TRIM(cWSAFileName) .EQ. 0) THEN
         lWSA = .FALSE.
@@ -1321,6 +1324,7 @@ CONTAINS
     !Initialize
     iStat = 0
 
+    CALL Model%Logger%UseLogFileOf(DefaultLogger)   !Write model messages into the program's log file (not a separate Message.log)
     !Set the flag to check if this is for model inquiry or not
     Model%lIsForInquiry = lForInquiry
 
@@ -1677,6 +1681,7 @@ CONTAINS
     !Initialize
     iStat = 0
     
+    CALL Model%Logger%UseLogFileOf(DefaultLogger)   !Write model messages into the program's log file (not a separate Message.log)
     !Set the flag to check if this is for model inquiry or not
     Model%lIsForInquiry = lForInquiry
     
