@@ -174,6 +174,8 @@ MODULE Class_AppGW
       TYPE(GWStateType)             :: State                                   !Data type that stores the state of the groundwater
       REAL(8),ALLOCATABLE           :: ElemTransmissivity(:,:)                 !Element transmissivity at each (element,layer) combination computed using AppGW%State%Head
       INTEGER,ALLOCATABLE           :: iHFlowCOEFFIndex(:,:,:,:)               !Matrix COEFF storage index for each (connection,vertex,element,layer) updated by ApplyHorizontalFlows; -1 = not yet looked up (sparsity is fixed, so looked up once)
+      INTEGER,ALLOCATABLE           :: iVFlowCOEFFIndex(:,:,:)                 !Matrix COEFF storage index for each (entry,node,layer) updated by ApplyVerticalFlows: 1-2 = row of node (node, node below), 3-4 = row of node below (node, node below); looked up once
+      INTEGER,ALLOCATABLE           :: iStorCOEFFIndex(:)                      !Matrix COEFF storage index of the diagonal of each gw node updated by ApplyChangeInStorage; looked up once
       REAL(8),ALLOCATABLE           :: RegionalStorage(:)                      !Subregional gw storage at the current time step (computed only when gw budget output is required)
       REAL(8),ALLOCATABLE           :: RegionalStorage_P(:)                    !Subregional gw storage at the previous N-R iteration for each (node), counting all the nodes for all the layers
       REAL(8),ALLOCATABLE           :: rGWReturnFlow(:)                        !GW return flow at each (node) where head above ground surface is turned into surface flow; this computed for top active layer at each node only
@@ -853,6 +855,8 @@ CONTAINS
                 AppGW%lComputeGWReturnFlowAtNode , &
                 STAT=iErrorCode                  )
     DEALLOCATE (AppGW%iHFlowCOEFFIndex , STAT=iErrorCode)
+    DEALLOCATE (AppGW%iVFlowCOEFFIndex , STAT=iErrorCode)
+    DEALLOCATE (AppGW%iStorCOEFFIndex  , STAT=iErrorCode)
 
     !Kill gw node data
     CALL AppGW%Nodes%Kill()
@@ -5155,7 +5159,7 @@ CONTAINS
     
     !Effect of vertical flows
     IF (Stratigraphy%NLayers .GT. 1)  &
-        CALL ApplyVerticalFlows(Stratigraphy,NNodes,AppGW%Nodes%LeakageV,AppGW%State,Matrix)
+        CALL ApplyVerticalFlows(Stratigraphy,NNodes,AppGW%Nodes%LeakageV,AppGW%State,Matrix,AppGW%iVFlowCOEFFIndex)
     
     !Simulate pumping/recharge
     IF (AppGW%lPumping_Defined)  &
@@ -6000,9 +6004,9 @@ CONTAINS
   SUBROUTINE ApplyChangeInStorage(NNodes,Stratigraphy,AppGW,Matrix)  
     INTEGER,INTENT(IN)                :: NNodes
     Type(StratigraphyType),INTENT(IN) :: Stratigraphy
-    TYPE(AppGWType),INTENT(IN)        :: AppGW
+    TYPE(AppGWType),INTENT(INOUT)     :: AppGW     !INOUT only for the iStorCOEFFIndex cache
     TYPE(MatrixType)                  :: Matrix
-    
+
     !Local variables
     INTEGER           :: indxLayer,indxNode,iNodeIDs(1),iGWNode
     REAL(8)           :: Storativity(NNodes,Stratigraphy%NLayers),rStorChange(NNodes,Stratigraphy%NLayers),  &
@@ -6012,9 +6016,18 @@ CONTAINS
     !Compute nodal storativity and storage change
     DO indxLayer=1,Stratigraphy%NLayers
         CALL GetChangeInStorageAtLayer(AppGW,indxLayer,NNodes,Stratigraphy,rStorChange(:,indxLayer),Storativity(:,indxLayer))
-    END DO    
-    
-    !$OMP PARALLEL DO COLLAPSE(2) DEFAULT(SHARED) PRIVATE(indxLayer,indxNode,iGWNode,iNodeIDs,rUpdateValues) 
+    END DO
+
+    !Matrix storage index of each node's diagonal (sparsity is fixed, so look up once)
+    IF (.NOT. ALLOCATED(AppGW%iStorCOEFFIndex)) THEN
+        ALLOCATE (AppGW%iStorCOEFFIndex(NNodes*Stratigraphy%NLayers))
+        DO iGWNode=1,NNodes*Stratigraphy%NLayers
+            iNodeIDs(1) = iGWNode
+            CALL Matrix%GetCOEFFIndices_SingleComp(f_iGWComp,iGWNode,1,iNodeIDs,AppGW%iStorCOEFFIndex(iGWNode:iGWNode))
+        END DO
+    END IF
+
+    !$OMP PARALLEL DO COLLAPSE(2) DEFAULT(SHARED) PRIVATE(indxLayer,indxNode,iGWNode,rUpdateValues)
     DO indxLayer=1,Stratigraphy%NLayers
         DO indxNode=1,NNodes            
             !GW Node
@@ -6031,9 +6044,8 @@ CONTAINS
             rUpdateRHS(iGWNode) = rStorChange(indxNode,indxLayer)
             
             !Coefficient matrix
-            iNodeIDs(1)      = iGWNode
             rUpdateValues(1) = Storativity(indxNode,indxLayer)
-            CALL Matrix%UpdateCOEFF_SingleComp(f_iGWComp,iGWNode,1,iNodeIDs,rUpdateValues)
+            CALL Matrix%UpdateCOEFF_ByIndex(1,AppGW%iStorCOEFFIndex(iGWNode:iGWNode),rUpdateValues)
 
         END DO
     END DO
@@ -6098,12 +6110,13 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- COMPUTE CONTRIBUTION OF VERTICAL FLOWS TO MATRIX EQUATION
   ! -------------------------------------------------------------
-  SUBROUTINE ApplyVerticalFlows(Stratigraphy,NNodes,LeakageV,State,Matrix)
+  SUBROUTINE ApplyVerticalFlows(Stratigraphy,NNodes,LeakageV,State,Matrix,iVFlowCOEFFIndex)
     TYPE(StratigraphyType),INTENT(IN) :: Stratigraphy
     INTEGER,INTENT(IN)                :: NNodes
     REAL(8),INTENT(IN)                :: LeakageV(:,:)
     TYPE(GWStateType),INTENT(IN)      :: State
     TYPE(MatrixType)                  :: Matrix
+    INTEGER,ALLOCATABLE,INTENT(INOUT) :: iVFlowCOEFFIndex(:,:,:)   !Cached matrix storage indices (looked up on first call; sparsity is fixed)
     
     !Local variables
     INTEGER           :: indxLayer,indxNode,iBase,iNodeIDs(2),iActiveLayerBelow(NNodes),iLayerBelow,   &
@@ -6114,13 +6127,31 @@ CONTAINS
     
     !Initialize
     rUpdateRHS = 0.0
-    
+
+    !Matrix storage indices of the entries updated below (sparsity is fixed, so look up once)
+    IF (.NOT. ALLOCATED(iVFlowCOEFFIndex)) THEN
+        ALLOCATE (iVFlowCOEFFIndex(4,NNodes,Stratigraphy%NLayers-1))
+        iVFlowCOEFFIndex = 0
+        DO indxLayer=1,Stratigraphy%NLayers-1
+            iActiveLayerBelow = Stratigraphy%GetAllActiveLayerBelow(indxLayer)
+            DO indxNode=1,NNodes
+                IF (.NOT. Stratigraphy%ActiveNode(indxNode,indxLayer)) CYCLE
+                iLayerBelow = iActiveLayerBelow(indxNode)
+                IF (iLayerBelow .LE. 0) CYCLE
+                iNodeIDs(1) = (indxLayer-1)*NNodes + indxNode
+                iNodeIDs(2) = (iLayerBelow-1)*NNodes + indxNode
+                CALL Matrix%GetCOEFFIndices_SingleComp(f_iGWComp,iNodeIDs(1),2,iNodeIDs,iVFlowCOEFFIndex(1:2,indxNode,indxLayer))
+                CALL Matrix%GetCOEFFIndices_SingleComp(f_iGWComp,iNodeIDs(2),2,iNodeIDs,iVFlowCOEFFIndex(3:4,indxNode,indxLayer))
+            END DO
+        END DO
+    END IF
+
     DO indxLayer=1,Stratigraphy%NLayers-1
         iActiveLayerBelow = Stratigraphy%GetAllActiveLayerBelow(indxLayer)
         CALL VerticalFlow_ComputeAtNodesLayer(indxLayer,NNodes,Stratigraphy,State%Head,LeakageV,VerticalFlow)
         CALL VerticalFlow_ComputeDerivativesAtNodesLayer(indxLayer,NNodes,Stratigraphy,State%Head,LeakageV,VerticalFlow,rdVertFlow_dH,rdVertFlow_dHb)
         iBase             = (indxLayer-1) * NNodes
-        !$OMP PARALLEL DO DEFAULT(PRIVATE) SHARED(indxLayer,NNodes,iBase,Stratigraphy,iActiveLayerBelow,VerticalFlow,rdVertFlow_dH,rdVertFlow_dHb,Matrix,iCompIDs,rUpdateRHS) 
+        !$OMP PARALLEL DO DEFAULT(PRIVATE) SHARED(indxLayer,NNodes,iBase,Stratigraphy,iActiveLayerBelow,VerticalFlow,rdVertFlow_dH,rdVertFlow_dHb,Matrix,iCompIDs,rUpdateRHS,iVFlowCOEFFIndex)
         DO indxNode=1,NNodes
             !Indices for node in consideration
             iGWNode   = iBase + indxNode
@@ -6133,19 +6164,15 @@ CONTAINS
             IF (iLayerBelow .LE. 0) CYCLE
             iGWNode_Below = (iLayerBelow-1)*NNodes + indxNode
             
-            !Node numbers 
-            iNodeIDs(1) = iGWNode
-            iNodeIDs(2) = iGWNode_Below
-            
-            !Update row of COEFF matrix for current node
+            !Update row of COEFF matrix for current node (connections: node, node below)
             rUpdateCOEFF_Keep(1) = -rdVertFlow_dH(indxNode)
             rUpdateCOEFF_Keep(2) = -rdVertFlow_dHb(indxNode)
             rUpdateCOEFF         = rUpdateCOEFF_Keep
-            CALL Matrix%UpdateCOEFF_SingleComp(f_iGWComp,iGWNode,2,iNodeIDs,rUpdateCOEFF)
-            
+            CALL Matrix%UpdateCOEFF_ByIndex(2,iVFlowCOEFFIndex(1:2,indxNode,indxLayer),rUpdateCOEFF)
+
             !Update row of COEFF matrix for node below current node
             rUpdateCOEFF = -rUpdateCOEFF_Keep
-            CALL Matrix%UpdateCOEFF_SingleComp(f_iGWComp,iGWNode_Below,2,iNodeIDs,rUpdateCOEFF)
+            CALL Matrix%UpdateCOEFF_ByIndex(2,iVFlowCOEFFIndex(3:4,indxNode,indxLayer),rUpdateCOEFF)
 
             !R.H.S. values
             rUpdateRHS(iGWNode)       = rUpdateRHS(iGWNode)       - VerticalFlow(indxNode)
