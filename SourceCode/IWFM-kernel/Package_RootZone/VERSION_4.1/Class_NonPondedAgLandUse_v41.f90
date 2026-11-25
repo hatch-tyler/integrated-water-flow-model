@@ -125,6 +125,9 @@ MODULE Class_NonPondedAgLandUse_v41
   INTEGER,PARAMETER :: f_iLenCropCode = 2  !Length of crop codes
   TYPE NonPondedAgLandUse_v41_Type
       TYPE(MessageLoggerType),POINTER        :: Logger                      => NULL()                   !Pointer to the message logger
+      REAL(8),ALLOCATABLE                    :: rETcCache(:,:)              !ETData%GetValues result per (crop,element) used by Simulate; valid while iETcCacheKey = ETData%iReadCount
+      INTEGER                                :: iETcCacheKey = -1           !ETData%iReadCount when rETcCache was filled (-1 = empty)
+      LOGICAL                                :: lETcCacheKc  = .FALSE.      !Whether rETcCache includes crop coefficients
       INTEGER                                :: NCrops                      = 0                         !Number of non-ponded crops
       INTEGER                                :: iDemandFromMoist            = f_iDemandFromMoistAtBegin !Moisture that will be used to decide when to compute ag water demand
       TYPE(NonPondedAg_v41_Type)             :: Crops                                                   !Non-ponded ag land data for each (crop,element) combination
@@ -824,6 +827,7 @@ CONTAINS
     CLASS(NonPondedAgLandUse_v41_Type) :: AgLand
     
     !Local variables
+    INTEGER :: iErr_ETc
     INTEGER                           :: ErrorCode
     TYPE(NonPondedAgLandUse_v41_Type) :: Dummy
     
@@ -864,6 +868,8 @@ CONTAINS
     CALL AgLand%LeachFracFile%Close()
     CALL AgLand%LWUseBudRawFile%Kill()
     CALL AgLand%RootZoneBudRawFile%Kill()
+    
+    DEALLOCATE (AgLand%rETcCache , STAT=iErr_ETc)
     
     !Assign default values to components
     SELECT TYPE (AgLand)
@@ -1675,6 +1681,22 @@ CONTAINS
         CALL NonPondedAg%Logger%EchoProgress('Simulating flows at non-ponded agricultural crop lands')
     END IF
     
+    !ET values (and crop coefficients) change only when ETData is re-read for a new
+    !time step, but Simulate runs every Newton iteration: refresh the cache only then.
+    IF (.NOT. ALLOCATED(NonPondedAg%rETcCache)  .OR.  NonPondedAg%iETcCacheKey .NE. ETData%iReadCount  .OR.  (NonPondedAg%lETcCacheKc .NEQV. PRESENT(iColCropCoeff))) THEN
+        IF (.NOT. ALLOCATED(NonPondedAg%rETcCache)) ALLOCATE (NonPondedAg%rETcCache(SIZE(NonPondedAg%Crops%iColETc,DIM=1),AppGrid%NElements))
+        DO indxElem=1,AppGrid%NElements
+            IF (lLakeElem(indxElem)) CYCLE
+            IF (PRESENT(iColCropCoeff)) THEN
+                NonPondedAg%rETcCache(:,indxElem) = ETData%GetValues(NonPondedAg%Crops%iColETc(:,indxElem),iColCropCoeff(:,indxElem))
+            ELSE
+                NonPondedAg%rETcCache(:,indxElem) = ETData%GetValues(NonPondedAg%Crops%iColETc(:,indxElem))
+            END IF
+        END DO
+        NonPondedAg%iETcCacheKey = ETData%iReadCount
+        NonPondedAg%lETcCacheKc  = PRESENT(iColCropCoeff)
+    END IF
+
     !Simulate
     ASSOCIATE (pCrops => NonPondedAg%Crops)
         !$OMP PARALLEL DEFAULT(PRIVATE) SHARED(AppGrid,lLakeElem,SoilsData,ETData,Precip,GenericMoisture,DeltaT,  &
@@ -1688,11 +1710,7 @@ CONTAINS
             HydCond       = SoilsData(indxElem)%HydCond
             Lambda        = SoilsData(indxElem)%Lambda
             KunsatMethod  = SoilsData(indxElem)%KunsatMethod
-            IF (PRESENT(iColCropCoeff)) THEN
-                ETc       = ETData%GetValues(pCrops%iColETc(:,indxElem),iColCropCoeff(:,indxElem))
-            ELSE
-                ETc       = ETData%GetValues(pCrops%iColETc(:,indxElem))
-            END IF
+            ETc           = NonPondedAg%rETcCache(:,indxElem)   != ETData%GetValues(pCrops%iColETc(:,indxElem)[,iColCropCoeff(:,indxElem)])
             GMElem        = GenericMoisture(1,indxElem) * DeltaT
             PrecipD       = Precip(indxElem) * DeltaT
             DO indxCrop=1,NonPondedAg%NCrops

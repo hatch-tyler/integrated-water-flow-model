@@ -62,6 +62,7 @@ MODULE Package_PrecipitationET
   TYPE,EXTENDS(AtmosphericDataType) :: ETType
       LOGICAL                    :: lCropCoeffFile_Defined = .FALSE.
       TYPE(RealTSDataInFileType) :: CropCoeffFile
+      INTEGER                    :: iReadCount             = 0       !Incremented by every ReadTSData call; lets users cache values derived from GetValues until the data are re-read
   CONTAINS
       PROCEDURE,PASS :: New                                     => ETType_New
       PROCEDURE,PASS :: Kill                                    => ETType_Kill
@@ -290,6 +291,9 @@ CONTAINS
     INTEGER :: iFileReadCode
     
     ASSOCIATE (pETData => AtmosphericData)
+        !Values may change: invalidate any cached copies
+        pETData%iReadCount = pETData%iReadCount + 1
+
         !Read ET data
         CALL pETData%AtmosphericDataType%ReadTSData(TimeStep,lCheckForNegativity,iStat)
         IF (iStat .NE. 0) RETURN

@@ -94,6 +94,9 @@ MODULE Class_NativeRiparianLandUse_v41
   ! -------------------------------------------------------------
   TYPE NativeRiparianLandUse_v41_Type
       TYPE(MessageLoggerType),POINTER           :: Logger                   => NULL()   !Pointer to the message logger
+      REAL(8),ALLOCATABLE                       :: rETcCache(:,:)           !ETData%GetValues result per (veg,element) used by Simulate; valid while iETcCacheKey = ETData%iReadCount
+      INTEGER                                   :: iETcCacheKey             = -1       !ETData%iReadCount when rETcCache was filled (-1 = empty)
+      LOGICAL                                   :: lETcCacheKc              = .FALSE.  !Whether rETcCache includes crop/habitat coefficients
       INTEGER                                   :: iNNative                 = 0        !Number of native veg categories
       INTEGER                                   :: iNRiparian               = 0        !Number of riparian veg categories
       INTEGER                                   :: iNNVRV                   = 0        !Total number of native nad riparian vegetation
@@ -483,7 +486,9 @@ CONTAINS
     
     !Kill the element-to-stream connection
     CALL NVRVLand%RVETFromStrm%Kill()
-    
+
+    DEALLOCATE (NVRVLand%rETcCache , STAT=iErrorCode)
+
     !Assign default values to components
     SELECT TYPE (NVRVLand)
         TYPE IS (NativeRiparianLandUse_v41_Type)
@@ -1082,8 +1087,24 @@ CONTAINS
     
     !Riparian ET from streams
     rRiparianETStrm = 0.0
-    IF (NVRVLand%lRVETFromStrm_Simulated) CALL NVRVLand%RVETFromStrm%GetActualET_AtElements(rRiparianETStrm) 
-    
+    IF (NVRVLand%lRVETFromStrm_Simulated) CALL NVRVLand%RVETFromStrm%GetActualET_AtElements(rRiparianETStrm)
+
+    !ET values (and crop/habitat coefficients) change only when ETData is re-read for a
+    !new time step, but Simulate runs every Newton iteration: refresh the cache only then.
+    IF (.NOT. ALLOCATED(NVRVLand%rETcCache)  .OR.  NVRVLand%iETcCacheKey .NE. ETData%iReadCount  .OR.  (NVRVLand%lETcCacheKc .NEQV. PRESENT(iColCropCoeff_NVRV))) THEN
+        IF (.NOT. ALLOCATED(NVRVLand%rETcCache)) ALLOCATE (NVRVLand%rETcCache(SIZE(NVRVLand%NVRV%iColETc,DIM=1),AppGrid%NElements))
+        DO indxElem=1,AppGrid%NElements
+            IF (lLakeElem(indxElem)) CYCLE
+            IF (PRESENT(iColCropCoeff_NVRV)) THEN
+                NVRVLand%rETcCache(:,indxElem) = ETData%GetValues(NVRVLand%NVRV%iColETc(:,indxElem),iColCropCoeff_NVRV(:,indxElem))
+            ELSE
+                NVRVLand%rETcCache(:,indxElem) = ETData%GetValues(NVRVLand%NVRV%iColETc(:,indxElem))
+            END IF
+        END DO
+        NVRVLand%iETcCacheKey = ETData%iReadCount
+        NVRVLand%lETcCacheKc  = PRESENT(iColCropCoeff_NVRV)
+    END IF
+
     !$OMP PARALLEL DEFAULT(PRIVATE) SHARED(AppGrid,NVRVLand,lLakeElem,ETData,SoilsData,DeltaT,Precip,iStat,GenericMoisture,  &
     !$OMP                                  ElemSupply,ElemsToGW,SolverData,rRiparianETStrm,iNNVRV,iColCropCoeff_NVRV)   
     !$OMP DO SCHEDULE(NONMONOTONIC:DYNAMIC,96)
@@ -1113,11 +1134,7 @@ CONTAINS
         rHydCond       = SoilsData(indxElem)%HydCond
         rLambda        = SoilsData(indxElem)%Lambda
         iKunsatMethod  = SoilsData(indxElem)%KunsatMethod
-        IF (PRESENT(iColCropCoeff_NVRV)) THEN
-            rETc       = ETData%GetValues(NVRVLand%NVRV%iColETc(:,indxElem),iColCropCoeff_NVRV(:,indxElem)) 
-        ELSE
-            rETc       = ETData%GetValues(NVRVLand%NVRV%iColETc(:,indxElem)) 
-        END IF
+        rETc           = NVRVLand%rETcCache(:,indxElem)   != ETData%GetValues(NVRVLand%NVRV%iColETc(:,indxElem)[,iColCropCoeff_NVRV(:,indxElem)])
         rPrecipD       = Precip(indxElem) * DeltaT
 
         DO indxVeg=1,iNNVRV

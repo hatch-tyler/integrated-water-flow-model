@@ -173,6 +173,7 @@ MODULE Class_AppGW
       TYPE(GWNodeType)              :: Nodes                                   !Groundwater data at each (node,layer) combination
       TYPE(GWStateType)             :: State                                   !Data type that stores the state of the groundwater
       REAL(8),ALLOCATABLE           :: ElemTransmissivity(:,:)                 !Element transmissivity at each (element,layer) combination computed using AppGW%State%Head
+      INTEGER,ALLOCATABLE           :: iHFlowCOEFFIndex(:,:,:,:)               !Matrix COEFF storage index for each (connection,vertex,element,layer) updated by ApplyHorizontalFlows; -1 = not yet looked up (sparsity is fixed, so looked up once)
       REAL(8),ALLOCATABLE           :: RegionalStorage(:)                      !Subregional gw storage at the current time step (computed only when gw budget output is required)
       REAL(8),ALLOCATABLE           :: RegionalStorage_P(:)                    !Subregional gw storage at the previous N-R iteration for each (node), counting all the nodes for all the layers
       REAL(8),ALLOCATABLE           :: rGWReturnFlow(:)                        !GW return flow at each (node) where head above ground surface is turned into surface flow; this computed for top active layer at each node only
@@ -851,7 +852,8 @@ CONTAINS
                 AppGW%rGWReturnFlow              , &
                 AppGW%lComputeGWReturnFlowAtNode , &
                 STAT=iErrorCode                  )
-    
+    DEALLOCATE (AppGW%iHFlowCOEFFIndex , STAT=iErrorCode)
+
     !Kill gw node data
     CALL AppGW%Nodes%Kill()
     
@@ -5807,10 +5809,10 @@ CONTAINS
   ! -------------------------------------------------------------
   ! --- COMPUTE CONTRIBUTION OF HORIZONTAL FLOWS TO MATRIX EQUATION
   ! -------------------------------------------------------------
-  SUBROUTINE ApplyHorizontalFlows(AppGrid,Stratigraphy,AppGW,Matrix)  
+  SUBROUTINE ApplyHorizontalFlows(AppGrid,Stratigraphy,AppGW,Matrix)
     TYPE(AppGridType),INTENT(IN)      :: AppGrid
     TYPE(StratigraphyType),INTENT(IN) :: Stratigraphy
-    TYPE(AppGWType),INTENT(IN)        :: AppGW
+    TYPE(AppGWType),INTENT(INOUT)     :: AppGW     !INOUT only for the iHFlowCOEFFIndex cache
     TYPE(MatrixType)                  :: Matrix
     
     !Local variables
@@ -5820,13 +5822,20 @@ CONTAINS
                          rFlow(4),rHeadArray(4),rUpdateRHS(AppGrid%NNodes*Stratigraphy%NLayers),      &
                          Integral_DELShpI_DELShpJ(6),rBottomElevs(4),rExp,rSaturatedThick,rFactor,    &
                          rExpPlusOne,rUpdateCOEFF_Add(4),rSaturatedThick_I,rExp_I,rExpDiv_I,rFactor_I
-    INTEGER,PARAMETER :: iCompIDs(4) = [f_iGWComp , f_iGWComp , f_iGWComp , f_iGWComp] 
+    INTEGER,PARAMETER :: iCompIDs(4) = [f_iGWComp , f_iGWComp , f_iGWComp , f_iGWComp]
     REAL(8),PARAMETER :: f_rHugeNumber = 1d100
-    
+
     !Initialize
     NNodes     = AppGrid%NNodes
     rUpdateRHS = 0.0
-    
+
+    !COEFF storage indices of the element-vertex connections are looked up once
+    !(the matrix sparsity pattern does not change during the simulation)
+    IF (.NOT. ALLOCATED(AppGW%iHFlowCOEFFIndex)) THEN
+        ALLOCATE (AppGW%iHFlowCOEFFIndex(4,4,AppGrid%NElements,Stratigraphy%NLayers))
+        AppGW%iHFlowCOEFFIndex = -1
+    END IF
+
     LAYER_LOOP:  &
     !*********
     DO indxLayer=1,Stratigraphy%NLayers
@@ -5924,16 +5933,19 @@ CONTAINS
                 rUpdateRHS(iGWNode) = rUpdateRHS(iGWNode) + SUM(rFlow)
                 rUpdateCOEFF(1)     = SUM(rUpdateCOEFF_Add) 
   
-                !Update Jacobian
-                CALL Matrix%UpdateCOEFF_SingleComp(f_iGWComp,iGWNode,NVertex,iNodes(1:NVertex),rUpdateCOEFF(1:NVertex))
-                
+                !Update Jacobian (same additions as UpdateCOEFF_SingleComp, at cached storage indices)
+                ASSOCIATE (pIndex => AppGW%iHFlowCOEFFIndex(:,indxVertex_I,indxElem,indxLayer))
+                    IF (pIndex(1) .LT. 0) CALL Matrix%GetCOEFFIndices_SingleComp(f_iGWComp,iGWNode,NVertex,iNodes(1:NVertex),pIndex(1:NVertex))
+                    CALL Matrix%UpdateCOEFF_ByIndex(NVertex,pIndex(1:NVertex),rUpdateCOEFF(1:NVertex))
+                END ASSOCIATE
+
             END DO OUTER_VERTEX_LOOP
         END DO ELEMENT_LOOP
     END DO LAYER_LOOP
-    
+
     !Update RHS vector
     CALL Matrix%UpdateRHS(f_iGWComp,1,rUpdateRHS)
-    
+
   END SUBROUTINE ApplyHorizontalFlows
 
     

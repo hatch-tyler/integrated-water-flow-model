@@ -142,6 +142,8 @@ MODULE Package_Matrix
       PROCEDURE,PASS         :: ResetToZero
       PROCEDURE,PASS         :: UpdateCOEFF
       PROCEDURE,PASS         :: UpdateCOEFF_SingleComp
+      PROCEDURE,PASS         :: GetCOEFFIndices_SingleComp
+      PROCEDURE,PASS         :: UpdateCOEFF_ByIndex
       PROCEDURE,PASS         :: PrintCOEFF_In_MatrixForm
       PROCEDURE,PASS,PRIVATE :: UpdateRHS_Random
       PROCEDURE,PASS,PRIVATE :: UpdateRHS_StartAtRow
@@ -1874,7 +1876,59 @@ CONTAINS
     END DO
 
   END SUBROUTINE UpdateCOEFF_SingleComp
-  
+
+
+  ! -------------------------------------------------------------
+  ! --- FIND THE COEFF STORAGE INDEX OF EACH CONNECTION OF A ROW
+  ! --- (same component). The sparsity pattern is fixed once the matrix
+  ! --- is set up, so callers that update the same row/connections every
+  ! --- iteration can look the indices up once and then use
+  ! --- UpdateCOEFF_ByIndex. iIndices(k) = 0 if a connection is not stored.
+  ! -------------------------------------------------------------
+  SUBROUTINE GetCOEFFIndices_SingleComp(Matrix,iCompID,iNodeID,nConn,iNodeIDs_Connect,iIndices)
+    CLASS(MatrixType),INTENT(IN) :: Matrix
+    INTEGER,INTENT(IN)           :: iCompID,iNodeID,nConn,iNodeIDs_Connect(nConn)
+    INTEGER,INTENT(OUT)          :: iIndices(nConn)
+
+    !Local variables
+    INTEGER :: iOffset,iGlobalNodeID,iGlobalConn,indx,indxConn
+
+    iOffset       = Matrix%iCompGlobalNodeStart(LocateInList(iCompID, Matrix%iComps)) - 1
+    iGlobalNodeID = iNodeID + iOffset
+    iIndices      = 0
+    DO indxConn=1,nConn
+        iGlobalConn = iNodeIDs_Connect(indxConn) + iOffset
+        DO indx=Matrix%NJD(iGlobalNodeID),Matrix%NJD(iGlobalNodeID+1)-1
+            IF (Matrix%JND(indx) .EQ. iGlobalConn) THEN
+                iIndices(indxConn) = indx
+                EXIT
+            END IF
+        END DO
+    END DO
+
+  END SUBROUTINE GetCOEFFIndices_SingleComp
+
+
+  ! -------------------------------------------------------------
+  ! --- ADD VALUES TO COEFF AT PRE-COMPUTED STORAGE INDICES
+  ! --- Equivalent to UpdateCOEFF_SingleComp for distinct connections
+  ! --- (each stored entry receives the same single addition).
+  ! -------------------------------------------------------------
+  SUBROUTINE UpdateCOEFF_ByIndex(Matrix,nConn,iIndices,rUpdateValues)
+    CLASS(MatrixType)  :: Matrix
+    INTEGER,INTENT(IN) :: nConn,iIndices(nConn)
+    REAL(8),INTENT(IN) :: rUpdateValues(nConn)
+
+    !Local variables
+    INTEGER :: indxConn,indx
+
+    DO indxConn=1,nConn
+        indx = iIndices(indxConn)
+        IF (indx .GT. 0) Matrix%COEFF(indx) = Matrix%COEFF(indx) + rUpdateValues(indxConn)
+    END DO
+
+  END SUBROUTINE UpdateCOEFF_ByIndex
+
   
   ! -------------------------------------------------------------
   ! --- PRINT OUT COEFF ARRAY IN 2-D MATRIX FORM
