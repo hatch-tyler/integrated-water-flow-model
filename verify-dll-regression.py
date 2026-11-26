@@ -18,12 +18,17 @@ That folder is the official release sample prepared for the fork:
   - Simulation\\TSDATA_IN.DSS is the DSS-7 conversion of the shipped DSS-6
     file (original kept as TSDATA_IN_dss6.DSS); the fork links only HEC-DSS 7.
   - Simulation\\Simulation_MAIN.IN is a copy of Simulation_Monthly_MAIN.IN.
-  - Results_baseline was produced by this DLL built with ifx 2026.1.1, the
-    compiler DWR used for the official 2026.0.1848 release
-    (build-iwfm.ps1 -FortranCompiler <ifx 2026.1.1>). Its text outputs are
-    byte-identical to the official Simulation_x64.exe results except the
-    intentional StrmHyd.out unit label. A DLL built with another ifx
-    version differs at round-off level and will FAIL byte-for-byte.
+  - Results_baseline was produced by this DLL (commit fc04f09) built with
+    ifx 2026.1.1, the compiler DWR used for the official 2026.0.1848
+    release (build-iwfm.ps1 -FortranCompiler <ifx 2026.1.1>), and is
+    byte-identical to the fork's Simulation_x64.exe results. A DLL built
+    with another ifx version differs at round-off level and will FAIL
+    byte-for-byte.
+  - Results_baseline_official holds the earlier baseline, byte-identical to
+    the official Simulation_x64.exe results except the intentional
+    StrmHyd.out unit label. Since fc04f09 (ILUT preconditioner kept across
+    Newton-Raphson iterations) the fork differs from it within the solver
+    tolerance.
 """
 
 import ctypes
