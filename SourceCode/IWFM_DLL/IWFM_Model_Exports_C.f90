@@ -26,7 +26,8 @@ MODULE IWFM_Model_Exports
                                           C_DOUBLE                                 , &
                                           C_CHAR
   USE MessageLogger               , ONLY: DefaultLogger                            , &
-                                          f_iWarn
+                                          f_iWarn                                  , &
+                                          f_iFatal
   USE GeneralUtilities            , ONLY: FirstLocation                            , &
                                           GetFileDirectory                         , &
                                           String_Copy_C_F                          , &
@@ -522,6 +523,143 @@ CONTAINS
     iStat = 0
     
   END SUBROUTINE IW_Model_GetElemPumpIDs
+
+
+  ! -------------------------------------------------------------
+  ! --- GET ACTUAL PUMPING AT ALL WELLS OR ELEMENT PUMPS FOR THE CURRENT TIME STEP
+  ! --- iPumpType: supply type ID of wells or element pumps
+  ! ---            (IW_GetSupplyTypeID_Well, IW_GetSupplyTypeID_ElemPump)
+  ! --- rPumping : negative for pumping, positive for recharge
+  ! --- Call after the time step is simulated; available only for a model
+  ! --- instantiated for simulation
+  ! -------------------------------------------------------------
+  SUBROUTINE IW_Model_GetPumpingActual(iModelID,iPumpType,iNPumps,rPumping,iStat) BIND(C,NAME='IW_Model_GetPumpingActual')
+    !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetPumpingActual
+    INTEGER(C_INT),INTENT(IN)  :: iModelID,iPumpType,iNPumps
+    REAL(C_DOUBLE),INTENT(OUT) :: rPumping(iNPumps)
+    INTEGER(C_INT),INTENT(OUT) :: iStat
+
+    CALL GetPumping_C(iModelID,iPumpType,.FALSE.,iNPumps,rPumping,iStat)
+
+  END SUBROUTINE IW_Model_GetPumpingActual
+
+
+  ! -------------------------------------------------------------
+  ! --- GET REQUIRED PUMPING AT ALL WELLS OR ELEMENT PUMPS FOR THE CURRENT TIME STEP
+  ! --- The pumping after supply adjustment, before reductions for
+  ! --- insufficient water in the aquifer: the values a pumping data file
+  ! --- must specify to reproduce the time step without supply adjustment.
+  ! --- Arguments as for IW_Model_GetPumpingActual.
+  ! -------------------------------------------------------------
+  SUBROUTINE IW_Model_GetPumpingRequired(iModelID,iPumpType,iNPumps,rPumping,iStat) BIND(C,NAME='IW_Model_GetPumpingRequired')
+    !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetPumpingRequired
+    INTEGER(C_INT),INTENT(IN)  :: iModelID,iPumpType,iNPumps
+    REAL(C_DOUBLE),INTENT(OUT) :: rPumping(iNPumps)
+    INTEGER(C_INT),INTENT(OUT) :: iStat
+
+    CALL GetPumping_C(iModelID,iPumpType,.TRUE.,iNPumps,rPumping,iStat)
+
+  END SUBROUTINE IW_Model_GetPumpingRequired
+
+
+  ! -------------------------------------------------------------
+  ! --- SHARED BODY OF IW_Model_GetPumpingActual AND IW_Model_GetPumpingRequired
+  ! -------------------------------------------------------------
+  SUBROUTINE GetPumping_C(iModelID,iPumpType,lRequired,iNPumps,rPumping,iStat)
+    INTEGER(C_INT),INTENT(IN)  :: iModelID,iPumpType,iNPumps
+    LOGICAL,INTENT(IN)         :: lRequired
+    REAL(C_DOUBLE),INTENT(OUT) :: rPumping(iNPumps)
+    INTEGER(C_INT),INTENT(OUT) :: iStat
+
+    !Local variables
+    REAL(8),ALLOCATABLE :: rPumping_Local(:)
+
+    !Make sure we have an active model
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
+        iStat = -1
+        RETURN
+    END IF
+
+    CALL pMdl%GetPumping(iPumpType,lRequired,rPumping_Local,iStat)
+    IF (iStat .NE. 0) RETURN
+    IF (SIZE(rPumping_Local) .NE. iNPumps) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Number of pumps does not match the model!',f_iFatal,cModName)
+        iStat = -1
+        RETURN
+    END IF
+    rPumping = rPumping_Local
+
+  END SUBROUTINE GetPumping_C
+
+
+  ! -------------------------------------------------------------
+  ! --- GET THE NUMBER OF COLUMNS OF THE DIVERSION DATA FILE
+  ! --- (0 if there is none; available only for a model instantiated for simulation)
+  ! -------------------------------------------------------------
+  SUBROUTINE IW_Model_GetStrmDiversionDataNColumns(iModelID,iNCols,iStat) BIND(C,NAME='IW_Model_GetStrmDiversionDataNColumns')
+    !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetStrmDiversionDataNColumns
+    INTEGER(C_INT),INTENT(IN)  :: iModelID
+    INTEGER(C_INT),INTENT(OUT) :: iNCols,iStat
+
+    !Local variables
+    REAL(8),ALLOCATABLE :: rValues(:)
+
+    !Make sure we have an active model
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
+        iStat = -1
+        RETURN
+    END IF
+
+    iNCols = 0
+    CALL pMdl%GetStrmDiversionDataValues(rValues,iStat)
+    IF (iStat .EQ. 0) iNCols = SIZE(rValues)
+
+  END SUBROUTINE IW_Model_GetStrmDiversionDataNColumns
+
+
+  ! -------------------------------------------------------------
+  ! --- GET THE VALUES OF ALL COLUMNS OF THE DIVERSION DATA FILE FOR THE CURRENT TIME STEP
+  ! --- In model units per simulation time step, as the model uses them: after
+  ! --- the file's conversion factor and the conversion of rates to the
+  ! --- simulation time step. Call after the time series data are read.
+  ! -------------------------------------------------------------
+  SUBROUTINE IW_Model_GetStrmDiversionDataValues(iModelID,iNCols,rValues,iStat) BIND(C,NAME='IW_Model_GetStrmDiversionDataValues')
+    !DEC$ ATTRIBUTES STDCALL, DLLEXPORT :: IW_Model_GetStrmDiversionDataValues
+    INTEGER(C_INT),INTENT(IN)  :: iModelID,iNCols
+    REAL(C_DOUBLE),INTENT(OUT) :: rValues(iNCols)
+    INTEGER(C_INT),INTENT(OUT) :: iStat
+
+    !Local variables
+    REAL(8),ALLOCATABLE :: rValues_Local(:)
+
+    !Make sure we have an active model
+    TYPE(ModelType),POINTER :: pMdl
+    pMdl => GetModelByID(iModelID)
+
+    IF (.NOT. ASSOCIATED(pMdl)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Model ID does not reference an active model!',f_iWarn,cModName)
+        iStat = -1
+        RETURN
+    END IF
+
+    CALL pMdl%GetStrmDiversionDataValues(rValues_Local,iStat)
+    IF (iStat .NE. 0) RETURN
+    IF (SIZE(rValues_Local) .NE. iNCols) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Number of columns does not match the diversion data file!',f_iFatal,cModName)
+        iStat = -1
+        RETURN
+    END IF
+    rValues = rValues_Local
+
+  END SUBROUTINE IW_Model_GetStrmDiversionDataValues
   
    
   ! -------------------------------------------------------------
@@ -1196,10 +1334,10 @@ CONTAINS
     CALL pMdl%GetBudget_AnnualCumGWStorChange(iSubregionIndex,cBeginDate_F,cEndDate_F,lForCalendarYear,rFactVL,rStorChange,iWaterYears_Local,iStat)
     IF (iStat .NE. 0) RETURN
     
-    !Copy data to return arguments
-    iNTimes_Out                     = SIZE(iWaterYears_Local)
-    iWaterYears(1:iNTimes_Out)      = iWaterYears_Local
-    rCumGWStorChange(1:iNTimes_Out) = rStorChange
+    !Copy data to return arguments (the kernel can return fewer values than years)
+    iNTimes_Out                     = MIN(SIZE(iWaterYears_Local) , SIZE(rStorChange))
+    iWaterYears(1:iNTimes_Out)      = iWaterYears_Local(1:iNTimes_Out)
+    rCumGWStorChange(1:iNTimes_Out) = rStorChange(1:iNTimes_Out)
     
   END SUBROUTINE IW_Model_GetBudget_AnnualCumGWStorChange
   
@@ -1247,10 +1385,10 @@ CONTAINS
     CALL pMdl%GetBudget_AnnualCumGWStorChange(iSubregionIndex,cBeginDate_F,cEndDate_F,lForCalendarYear,rFactVL,rStorChange,iOutputYears_Local,iStat)
     IF (iStat .NE. 0) RETURN
     
-    !Copy data to return arguments
-    iNTimes_Out                     = SIZE(iOutputYears_Local)
-    iOutputYears(1:iNTimes_Out)     = iOutputYears_Local
-    rCumGWStorChange(1:iNTimes_Out) = rStorChange
+    !Copy data to return arguments (the kernel can return fewer values than years)
+    iNTimes_Out                     = MIN(SIZE(iOutputYears_Local) , SIZE(rStorChange))
+    iOutputYears(1:iNTimes_Out)     = iOutputYears_Local(1:iNTimes_Out)
+    rCumGWStorChange(1:iNTimes_Out) = rStorChange(1:iNTimes_Out)
     
   END SUBROUTINE IW_Model_GetBudget_AnnualCumGWStorChange_1
   
@@ -1683,10 +1821,10 @@ CONTAINS
     CALL pMdl%GetZBudget_AnnualCumGWStorChange(iZoneID,iZExtent,iElems,iLayers,iZoneIDs,cBeginDate_F,cEndDate_F,lForCalendarYear,rFactVL,rStorChange,iOutputYears_Local,iStat) 
     IF (iStat .NE. 0) RETURN
     
-    !Copy data to return arguments
-    iNTimes_Out                     = SIZE(iOutputYears_Local)
-    iOutputYears(1:iNTimes_Out)     = iOutputYears_Local
-    rCumGWStorChange(1:iNTimes_Out) = rStorChange
+    !Copy data to return arguments (the kernel can return fewer values than years)
+    iNTimes_Out                     = MIN(SIZE(iOutputYears_Local) , SIZE(rStorChange))
+    iOutputYears(1:iNTimes_Out)     = iOutputYears_Local(1:iNTimes_Out)
+    rCumGWStorChange(1:iNTimes_Out) = rStorChange(1:iNTimes_Out)
     
   END SUBROUTINE IW_Model_GetZBudget_AnnualCumGWStorChange
   
@@ -1734,10 +1872,10 @@ CONTAINS
     CALL pMdl%GetZBudget_AnnualCumGWStorChange(iZoneID,iZExtent,iElems,iLayers,iZoneIDs,cBeginDate_F,cEndDate_F,lForCalendarYear,rFactVL,rStorChange,iOutputYears_Local,iStat) 
     IF (iStat .NE. 0) RETURN
     
-    !Copy data to return arguments
-    iNTimes_Out                     = SIZE(iOutputYears_Local)
-    iOutputYears(1:iNTimes_Out)     = iOutputYears_Local
-    rCumGWStorChange(1:iNTimes_Out) = rStorChange
+    !Copy data to return arguments (the kernel can return fewer values than years)
+    iNTimes_Out                     = MIN(SIZE(iOutputYears_Local) , SIZE(rStorChange))
+    iOutputYears(1:iNTimes_Out)     = iOutputYears_Local(1:iNTimes_Out)
+    rCumGWStorChange(1:iNTimes_Out) = rStorChange(1:iNTimes_Out)
     
   END SUBROUTINE IW_Model_GetZBudget_AnnualCumGWStorChange_1
   

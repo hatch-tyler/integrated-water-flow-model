@@ -280,6 +280,7 @@ MODULE Class_AppGW
       PROCEDURE,PASS   :: GetNodalPumpRequired
       PROCEDURE,PASS   :: GetElementPumpActual      !Total pumping (element pumping + well pumping) at all elements
       PROCEDURE,PASS   :: GetPumpActual             !Pumping for a given type (element or well) at all elements or wells        
+      PROCEDURE,PASS   :: GetPumpRequired           !Required pumping (after supply adjustment) for a given type at all elements or wells
       PROCEDURE,PASS   :: GetActualPumpingAtElementLayerNode      
       PROCEDURE,PASS   :: GetPumpElement
       PROCEDURE,PASS   :: GetPumpPurpose
@@ -3428,6 +3429,19 @@ CONTAINS
     CALL AppGW%AppPumping%GetPumpActual(iPumpType,PumpActual)
     
   END SUBROUTINE GetPumpActual
+  
+
+  ! -------------------------------------------------------------
+  ! --- GET REQUIRED PUMPING FOR PUMPING TYPE (AFTER SUPPLY ADJUSTMENT)
+  ! -------------------------------------------------------------
+  SUBROUTINE GetPumpRequired(AppGW,iPumpType,PumpRequired)
+    CLASS(AppGWType),INTENT(IN)     :: AppGW
+    INTEGER,INTENT(IN)              :: iPumpType
+    REAL(8),ALLOCATABLE,INTENT(OUT) :: PumpRequired(:)
+
+    CALL AppGW%AppPumping%GetPumpRequired(iPumpType,PumpRequired)
+
+  END SUBROUTINE GetPumpRequired
   
 
   ! -------------------------------------------------------------

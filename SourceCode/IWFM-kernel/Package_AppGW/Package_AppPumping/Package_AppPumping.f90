@@ -140,6 +140,7 @@ MODULE Package_AppPumping
       PROCEDURE,PASS :: GetSupply    
       PROCEDURE,PASS :: GetSupplySpecs
       PROCEDURE,PASS :: GetPumpActual                
+      PROCEDURE,PASS :: GetPumpRequired
       PROCEDURE,PASS :: GetSupplyAdjustData          
       PROCEDURE,PASS :: GetSubregionalPumping        
       PROCEDURE,PASS :: GetSubregionalRecharge       
@@ -1025,6 +1026,51 @@ CONTAINS
     END SELECT
     
   END SUBROUTINE GetPumpActual
+
+  
+  ! -------------------------------------------------------------
+  ! --- GET REQUIRED PUMPING
+  ! --- Pumping as specified in the pumping data file (negative for
+  ! --- pumping, positive for recharge) after any supply adjustment,
+  ! --- before the reductions for insufficient water in the aquifer
+  ! -------------------------------------------------------------
+  SUBROUTINE GetPumpRequired(AppPumping,iPumpType,PumpRequired)
+    CLASS(AppPumpingType),INTENT(IN) :: AppPumping
+    INTEGER,INTENT(IN)               :: iPumpType
+    REAL(8),ALLOCATABLE,INTENT(OUT)  :: PumpRequired(:)
+
+    !Local variables
+    INTEGER :: ErrorCode,indxPump
+
+    !Allocate memory
+    DEALLOCATE (PumpRequired , STAT=ErrorCode)
+
+    SELECT CASE (iPumpType)
+      CASE (f_iPump_Well)
+        ALLOCATE (PumpRequired(AppPumping%NWells))
+        DO indxPump=1,AppPumping%NWells
+            IF (AppPumping%Wells(indxPump)%PumpRead .GT. 0.0) THEN
+                PumpRequired(indxPump) = AppPumping%Wells(indxPump)%PumpRead
+            ELSE
+                PumpRequired(indxPump) = -AppPumping%Wells(indxPump)%SupplyRequired
+            END IF
+        END DO
+
+      CASE (f_iPump_ElemPump)
+        ALLOCATE (PumpRequired(AppPumping%NElemPumps))
+        DO indxPump=1,AppPumping%NElemPumps
+            IF (AppPumping%ElemPumps(indxPump)%PumpRead .GT. 0.0) THEN
+                PumpRequired(indxPump) = AppPumping%ElemPumps(indxPump)%PumpRead
+            ELSE
+                PumpRequired(indxPump) = -AppPumping%ElemPumps(indxPump)%SupplyRequired
+            END IF
+        END DO
+
+      CASE DEFAULT
+        ALLOCATE (PumpRequired(0))
+    END SELECT
+
+  END SUBROUTINE GetPumpRequired
 
   
   

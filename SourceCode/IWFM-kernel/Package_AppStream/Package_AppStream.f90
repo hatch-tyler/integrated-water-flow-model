@@ -146,6 +146,7 @@ MODULE Package_AppStream
       PROCEDURE,PASS   :: GetDeliveryAtDiversion
       PROCEDURE,PASS   :: GetDiversionsForDeliveries
       PROCEDURE,PASS   :: GetRequiredDiversions_AtSomeDiversions
+      PROCEDURE,PASS   :: GetDiversionDataValues
       PROCEDURE,PASS   :: GetActualDiversions_AtSomeDiversions
       PROCEDURE,PASS   :: GetActualDiversions_AtSomeNodes
       PROCEDURE,PASS   :: GetDiversionsExportNodes
@@ -897,6 +898,22 @@ CONTAINS
     CALL AppStream%Me%GetRequiredDiversions_AtSomeDiversions(iDivers,rDivers,iStat)
     
   END SUBROUTINE GetRequiredDiversions_AtSomeDiversions
+
+
+  ! -------------------------------------------------------------
+  ! --- GET THE VALUES OF ALL COLUMNS OF THE DIVERSION DATA FILE FOR THE CURRENT TIME STEP
+  ! -------------------------------------------------------------
+  SUBROUTINE GetDiversionDataValues(AppStream,rValues)
+    CLASS(AppStreamType),INTENT(IN) :: AppStream
+    REAL(8),ALLOCATABLE,INTENT(OUT) :: rValues(:)
+
+    IF (ALLOCATED(AppStream%Me)) THEN
+        CALL AppStream%Me%GetDiversionDataValues(rValues)
+    ELSE
+        ALLOCATE (rValues(0))
+    END IF
+
+  END SUBROUTINE GetDiversionDataValues
   
   
   ! -------------------------------------------------------------

@@ -386,6 +386,7 @@ MODULE Package_Model
       PROCEDURE,PASS   :: GetWellElems
       PROCEDURE,PASS   :: GetNElemPumps
       PROCEDURE,PASS   :: GetElemPumpIDs
+      PROCEDURE,PASS   :: GetPumping
       PROCEDURE,PASS   :: GetNodalGWPumping_Actual
       PROCEDURE,PASS   :: GetNodalGWPumping_Required
       PROCEDURE,PASS   :: GetSWShedPercolationFlows
@@ -464,6 +465,7 @@ MODULE Package_Model
       PROCEDURE,PASS   :: GetStrmNetBypassInflows
       PROCEDURE,PASS   :: GetStrmBypassInflows
       PROCEDURE,PASS   :: GetStrmRequiredDiversions_AtSomeDiversions
+      PROCEDURE,PASS   :: GetStrmDiversionDataValues
       PROCEDURE,PASS   :: GetStrmActualDiversions_AtSomeDiversions
       PROCEDURE,PASS   :: GetStrmWSAs
       PROCEDURE,PASS   :: GetNLakes
@@ -3091,7 +3093,6 @@ CONTAINS
     INTEGER                           :: iDay,iMonth,iYear,iJulianDate,iDeltaT_InMinutes,iYearBegin,iYearEnd,iNYears,indx,iErrorCode  
     REAL(8)                           :: rDummy
     CHARACTER(LEN=f_iTimeStampLength) :: cBeginDate_Local,cEndDate_Local,cAdjustedBeginDate,cAdjustedEndDate
-    TYPE(AppGWType)                   :: AppGW
     REAL(8),ALLOCATABLE               :: rDates(:)
 
     !Adjust beginning date so that we start from Oct
@@ -3175,7 +3176,7 @@ CONTAINS
     
     !Otherwise...
     !Get the data
-    CALL AppGW%GetBudget_CumGWStorChange(iSubregionIndex,cAdjustedBeginDate,cAdjustedEndDate,'1YEAR',rFactVL,rDates,rCumGWStorChange,iStat)
+    CALL Model%AppGW%GetBudget_CumGWStorChange(iSubregionIndex,cAdjustedBeginDate,cAdjustedEndDate,'1YEAR',rFactVL,rDates,rCumGWStorChange,iStat)
     
     !Clear memory
     DEALLOCATE (rDates , STAT=iErrorCode)
@@ -4606,6 +4607,45 @@ CONTAINS
   
    
   ! -------------------------------------------------------------
+  ! --- GET PUMPING AT ALL WELLS OR ELEMENT PUMPS FOR THE CURRENT TIME STEP
+  ! --- lRequired = .TRUE.:  pumping required after supply adjustment, as
+  ! ---                      specified in a pumping data file (negative for
+  ! ---                      pumping, positive for recharge)
+  ! --- lRequired = .FALSE.: actual pumping, after reductions for
+  ! ---                      insufficient water in the aquifer
+  ! -------------------------------------------------------------
+  SUBROUTINE GetPumping(Model,iPumpType,lRequired,rPumping,iStat)
+    CLASS(ModelType),TARGET            :: Model
+    INTEGER,INTENT(IN)                 :: iPumpType
+    LOGICAL,INTENT(IN)                 :: lRequired
+    REAL(8),ALLOCATABLE,INTENT(OUT)    :: rPumping(:)
+    INTEGER,INTENT(OUT)                :: iStat
+
+    !Local variables
+    CHARACTER(LEN=ModNameLen+10) :: ThisProcedure = ModName // 'GetPumping'
+
+    iStat = 0
+    IF (Model%lModel_ForInquiry_Defined) THEN
+        CALL Model%Logger%SetLastMessage('Pumping is only available from a model instantiated for simulation!',f_iFatal,ThisProcedure)
+        iStat = -1
+        RETURN
+    END IF
+    IF (iPumpType.NE.f_iPump_Well  .AND.  iPumpType.NE.f_iPump_ElemPump) THEN
+        CALL Model%Logger%SetLastMessage('Pumping type must be a well or an element pump!',f_iFatal,ThisProcedure)
+        iStat = -1
+        RETURN
+    END IF
+
+    IF (lRequired) THEN
+        CALL Model%AppGW%GetPumpRequired(iPumpType,rPumping)
+    ELSE
+        CALL Model%AppGW%GetPumpActual(iPumpType,rPumping)
+    END IF
+
+  END SUBROUTINE GetPumping
+  
+   
+  ! -------------------------------------------------------------
   ! --- GET ACTUAL NODAL PUMPING
   ! -------------------------------------------------------------
   PURE SUBROUTINE GetNodalGWPumping_Actual(Model,NodalPumpActual)
@@ -5556,6 +5596,30 @@ CONTAINS
     CALL Model%AppStream%GetRequiredDiversions_AtSomeDiversions(iDivs,rDivs,iStat)
 
   END SUBROUTINE GetStrmRequiredDiversions_AtSomeDiversions
+
+
+  ! -------------------------------------------------------------
+  ! --- GET THE VALUES OF ALL COLUMNS OF THE DIVERSION DATA FILE FOR THE CURRENT TIME STEP
+  ! --- (as used by the model: in model units per simulation time step)
+  ! -------------------------------------------------------------
+  SUBROUTINE GetStrmDiversionDataValues(Model,rValues,iStat)
+    CLASS(ModelType),TARGET         :: Model
+    REAL(8),ALLOCATABLE,INTENT(OUT) :: rValues(:)
+    INTEGER,INTENT(OUT)             :: iStat
+
+    !Local variables
+    CHARACTER(LEN=ModNameLen+26),PARAMETER :: ThisProcedure = ModName // 'GetStrmDiversionDataValues'
+
+    iStat = 0
+    IF (Model%lModel_ForInquiry_Defined) THEN
+        CALL Model%Logger%SetLastMessage('Diversion data values are only available from a model instantiated for simulation!',f_iFatal,ThisProcedure)
+        ALLOCATE (rValues(0))
+        iStat = -1
+        RETURN
+    END IF
+    CALL Model%AppStream%GetDiversionDataValues(rValues)
+
+  END SUBROUTINE GetStrmDiversionDataValues
   
   
   ! -------------------------------------------------------------

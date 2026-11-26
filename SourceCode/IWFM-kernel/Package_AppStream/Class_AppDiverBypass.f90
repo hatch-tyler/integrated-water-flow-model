@@ -143,6 +143,7 @@ MODULE Class_AppDiverBypass
     PROCEDURE,PASS :: GetBypassNonRecoverableLossFactor
     PROCEDURE,PASS :: GetStrmBypassInflows
     PROCEDURE,PASS :: GetRequiredDiversions_AtSomeDiversions
+    PROCEDURE,PASS :: GetDiversionDataValues
     PROCEDURE,PASS :: GetActualDiversions_AtSomeDiversions
     PROCEDURE,PASS :: GetDiversionsExportNodes
     PROCEDURE,PASS :: GetDeliveryAtDiversion
@@ -751,6 +752,25 @@ CONTAINS
     rDivers = AppDiverBypass%Diver(iDivers)%DiverRequired
     
   END SUBROUTINE GetRequiredDiversions_AtSomeDiversions
+
+
+  ! -------------------------------------------------------------
+  ! --- GET THE VALUES OF ALL COLUMNS OF THE DIVERSION DATA FILE FOR THE CURRENT TIME STEP
+  ! --- (after conversion to model units per simulation time step; size 0
+  ! --- if there is no diversion data file)
+  ! -------------------------------------------------------------
+  SUBROUTINE GetDiversionDataValues(AppDiverBypass,rValues)
+    CLASS(AppDiverBypassType),INTENT(IN) :: AppDiverBypass
+    REAL(8),ALLOCATABLE,INTENT(OUT)      :: rValues(:)
+
+    IF (ALLOCATED(AppDiverBypass%DiverFile%rValues)) THEN
+        ALLOCATE (rValues(SIZE(AppDiverBypass%DiverFile%rValues)))
+        rValues = AppDiverBypass%DiverFile%rValues
+    ELSE
+        ALLOCATE (rValues(0))
+    END IF
+
+  END SUBROUTINE GetDiversionDataValues
   
   
   ! -------------------------------------------------------------
