@@ -14,7 +14,8 @@ Version **2026.0.1848** (kernel 2026.0.264); binaries on [GitHub Releases](https
 
 Changes relative to the upstream IWFM 2026.0.1848 release, in descending user impact:
 
-- **Reproduces the official results** — built with ifx 2026.1.1 (the compiler DWR used for 2026.0.1848), Simulation output is byte-identical to the official 2026.0.1848 executable on the release sample model (Windows and Linux) and on C2VSimFG v1.5 (Windows), apart from the intentional stream hydrograph unit label (`AC-FT/MON` where upstream truncates the input at the `/` to `AC-FT`). Other ifx versions differ at round-off level.
+- **Matches the official results within the convergence tolerance** — built with ifx 2026.1.1 (the compiler DWR used for 2026.0.1848), and apart from the changes listed below, Simulation output was byte-identical to the official 2026.0.1848 executable on the release sample model (Windows and Linux) and on C2VSimFG v1.5 (Windows), except the intentional stream hydrograph unit label (`AC-FT/MON` where upstream truncates the input at the `/` to `AC-FT`). Other ifx versions differ at round-off level.
+- **Faster matrix solver, results within the solver tolerance** — the PGMRES solver (`MSOLVE` = 2) keeps its ILUT preconditioner across Newton-Raphson iterations instead of recomputing it every iteration, and recomputes it when GMRES slows down. Runs are 7% (serial) to 11% (`Simulation_PLL`) faster on C2VSimFG. GMRES still converges to the same tolerance, but the solution within it differs slightly: heads within 0.004 ft on a 2-year C2VSimFG run and 2e-4 ft on the sample, budgets within a relative 1e-5. As with any change of this size, threshold events such as diversion shortages can flip in some time steps (two months on the monthly sample). The SOR solver (`MSOLVE` = 1) is unchanged.
 - **Bug fixes that change results for affected models** (results differ from the official release only where the upstream bug applies):
   - *Parametric-grid conversion factors* (subsidence v5.0, unsaturated zone): upstream read past the end of the factor array, silently disabling v5.0 subsidence (final subsidence off by up to 0.22 ft on the sample) and failing at start-up for the unsaturated zone.
   - *Subsidence v5.0 Newton Jacobian*: the derivative of the interbed exchange flow omitted the interbed-head response. Fixing it cuts Newton iterations by about 30% and lets runs converge at tolerances where they previously failed; results move within the convergence tolerance (heads within 3e-4 ft on the sample) and threshold events such as diversion shortages can flip in some years. Subsidence v4.0 models are unaffected.
@@ -91,7 +92,7 @@ Two repo-root scripts exercise the DLL ABI from Python and double as templates f
 ## Requirements
 
 - **CMake** 3.20+
-- **Fortran compiler:** Intel ifx (recommended; ifx 2026.1.1 reproduces the official 2026.0.1848 results exactly, see `build-iwfm.ps1 -FortranCompiler`) or GNU gfortran 9+
+- **Fortran compiler:** Intel ifx (recommended; ifx 2026.1.1 is the compiler of the official 2026.0.1848 release and reproduces the fork's verified results, other versions differ at round-off level; see `build-iwfm.ps1 -FortranCompiler`) or GNU gfortran 9+
 - **C compiler:** Intel icx, MSVC, GCC, or Clang
 - **Build tool:** Ninja (recommended), Make, or Visual Studio
 

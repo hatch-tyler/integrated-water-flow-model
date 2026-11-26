@@ -105,6 +105,13 @@ MODULE Package_Matrix
       INTEGER,ALLOCATABLE                    :: JND_CRS(:)                             !Pre-allocated CRS column indices (reused across NR iterations)
       REAL(8),ALLOCATABLE                    :: COEFF_CRS(:)                           !Pre-allocated CRS coefficients (reused across NR iterations)
       INTEGER                                :: nCRS_NNZ = 0                           !Actual number of non-zeros in CRS arrays
+      !ILUT preconditioner kept across Newton-Raphson iterations (PGMRES)
+      REAL(8),ALLOCATABLE                    :: COEFFLU(:)                             !ILUT factors
+      INTEGER,ALLOCATABLE                    :: JLU(:)                                 !ILUT factor column indices and row pointers
+      INTEGER,ALLOCATABLE                    :: JU(:)                                  !Location of the diagonal of U in COEFFLU/JLU, for each row
+      LOGICAL                                :: lILUT_Valid           = .FALSE.        !Factors exist for this matrix's dimensions
+      INTEGER                                :: iGMRESIters_AtFactor  = 0              !GMRES iterations of the solve that computed the factors
+      INTEGER                                :: iGMRESIters_Last      = 0              !GMRES iterations of the latest solve
       !Per-thread reduction arrays for SOR_OMP (allocated once, reused across iterations)
       REAL(8),ALLOCATABLE                    :: DIFF_L2_Thread(:)
       REAL(8),ALLOCATABLE                    :: ADIFFMAX_Thread(:)
@@ -229,10 +236,14 @@ CONTAINS
                 Matrix%RHSL2                , &
                 Matrix%ConnectivityList     , &
                 STAT=ErrorCode              )
+    DEALLOCATE (Matrix%COEFFLU , Matrix%JLU , Matrix%JU , STAT=ErrorCode)
     
     !Set the attributes to their default values
     Matrix%lConnectivityFlattened = Dummy%lConnectivityFlattened
     Matrix%nComps                 = Dummy%nComps
+    Matrix%lILUT_Valid            = Dummy%lILUT_Valid
+    Matrix%iGMRESIters_AtFactor   = Dummy%iGMRESIters_AtFactor
+    Matrix%iGMRESIters_Last       = Dummy%iGMRESIters_Last
     
     
   END SUBROUTINE Kill
@@ -1255,6 +1266,7 @@ CONTAINS
                 CALL ConvertToCRSFormat_Reuse(Matrix)
                 
                 CALL PGMRES(Matrix                          , &
+                            NewtonRaphsonIter               , &
                             iStrmNodeIDs                    , &
                             iLakeIDs                        , &
                             iGWNodeIDs                      , &
@@ -1577,20 +1589,41 @@ CONTAINS
   ! more reliable the code is. Efficiency may also be much improved.     *
   ! Note that lfil=n and tol=0.0 in ILUT  will yield the same factors as *
   ! Gaussian elimination without pivoting.                               *
-  SUBROUTINE PGMRES(Matrix,iStrmNodeIDs,iLakeIDs,iGWNodeIDs,N,iDimCOEFF,NJD,JND,RHS_L2,COEFF,MXITER,Toler,iStat)
+  !
+  ! The ILUT preconditioner is kept across Newton-Raphson iterations. The
+  ! matrix changes little from one iteration to the next, and with fresh
+  ! factors GMRES typically converges in a few iterations, so computing the
+  ! factors is the larger cost (one ILUT costs about as much as 15 GMRES
+  ! iterations on C2VSimFG). The factors are recomputed
+  !   - at the first Newton-Raphson iteration of every solve (time step and
+  !     supply adjustment iteration),
+  !   - when the previous solve needed more than f_iILUT_RefactorFactor times
+  !     (plus f_iILUT_RefactorSlack) the GMRES iterations of the solve that
+  !     computed them, and
+  !   - when GMRES with the kept factors does not converge within
+  !     f_iILUT_StaleMaxFactor times (plus f_iILUT_StaleMaxSlack) those
+  !     iterations; GMRES then continues from that solution with new factors.
+  ! GMRES converges to the same tolerance either way, but a different
+  ! preconditioner gives a slightly different solution within it, so results
+  ! differ from always recomputing the factors within the solver tolerance.
+  SUBROUTINE PGMRES(Matrix,NewtonRaphsonIter,iStrmNodeIDs,iLakeIDs,iGWNodeIDs,N,iDimCOEFF,NJD,JND,RHS_L2,COEFF,MXITER,Toler,iStat)
     TYPE(MatrixType)            :: Matrix
-    INTEGER,INTENT(IN)          :: iStrmNodeIDs(:),iLakeIDs(:),iGWNodeIDs(:),N,iDimCOEFF,MXITER,NJD(N+1),JND(iDimCOEFF)
+    INTEGER,INTENT(IN)          :: NewtonRaphsonIter,iStrmNodeIDs(:),iLakeIDs(:),iGWNodeIDs(:),N,iDimCOEFF,MXITER,NJD(N+1),JND(iDimCOEFF)
     REAL(8),INTENT(IN)          :: COEFF(iDimCOEFF),RHS_L2,Toler     
     INTEGER,INTENT(OUT)         :: iStat
     
     !Local variables
     CHARACTER(LEN=ModNameLen+6) :: ThisProcedure=ModName // 'PGMRES'
+    INTEGER,PARAMETER           :: f_iILUT_RefactorFactor = 1  , &
+                                   f_iILUT_RefactorSlack  = 8  , &
+                                   f_iILUT_StaleMaxFactor = 1  , &
+                                   f_iILUT_StaleMaxSlack  = 12
     INTEGER                     :: iGlobalVar,iCompID,iCompVar,iNNodes,indxLayer,indxS,indxL,ID, &
                                    iNLayers,indxComp
-    INTEGER,ALLOCATABLE         :: JLU(:)
-    REAL(8),ALLOCATABLE         :: COEFFLU(:),W(:)
+    REAL(8),ALLOCATABLE         :: W(:)
     REAL(8)                     :: DROPTOL, RES, FPAR(16)
-    INTEGER                     :: LFIL, IM, IWK, IERR, Iter,IPAR(16),JU(N),IW(3*N)  
+    INTEGER                     :: LFIL, IM, IWK, IERR, Iter,IPAR(16),IW(3*N)
+    LOGICAL                     :: lFactor
     
     !Initialize
     iStat = 0
@@ -1620,11 +1653,30 @@ CONTAINS
     END IF
     FPAR(2)     = EPSILON(0d0)                           ! MACHINE PRECISION
 
-    ALLOCATE(COEFFLU(IWK), JLU(IWK), W(IPAR(4)))
+    ALLOCATE(W(IPAR(4)))
 
-!   CALL SPARSKIT IMPLEMENTATION OF ILUT IN THE FILE pgmres.f
-    CALL ILUT(N, COEFF, JND, NJD, LFIL, DROPTOL, COEFFLU, JLU, JU, IWK, W, IW, IERR)
-    SELECT CASE (IERR)
+    !(Re)allocate the kept ILUT factors if the matrix dimensions changed
+    IF (ALLOCATED(Matrix%JU)) THEN
+        IF (SIZE(Matrix%JU).NE.N  .OR.  SIZE(Matrix%COEFFLU).NE.IWK) THEN
+            DEALLOCATE(Matrix%COEFFLU, Matrix%JLU, Matrix%JU)
+            Matrix%lILUT_Valid = .FALSE.
+        END IF
+    END IF
+    IF (.NOT. ALLOCATED(Matrix%JU)) ALLOCATE(Matrix%COEFFLU(IWK), Matrix%JLU(IWK), Matrix%JU(N))
+
+    !Compute new factors, or try the kept ones first
+    lFactor = NewtonRaphsonIter .EQ. 1                                                                                     &
+              .OR. .NOT. Matrix%lILUT_Valid                                                                                &
+              .OR. Matrix%iGMRESIters_Last .GT. f_iILUT_RefactorFactor*Matrix%iGMRESIters_AtFactor + f_iILUT_RefactorSlack
+    IF (.NOT. lFactor) IPAR(6) = MIN(MXITER , f_iILUT_StaleMaxFactor*Matrix%iGMRESIters_AtFactor + f_iILUT_StaleMaxSlack)
+
+    Attempt_Loop:  &
+    DO
+      IF (lFactor) THEN
+        Matrix%lILUT_Valid = .FALSE.
+!       CALL SPARSKIT IMPLEMENTATION OF ILUT IN THE FILE pgmres.f
+        CALL ILUT(N, COEFF, JND, NJD, LFIL, DROPTOL, Matrix%COEFFLU, Matrix%JLU, Matrix%JU, IWK, W, IW, IERR)
+        SELECT CASE (IERR)
         CASE (-1)
             MessageArray(1) = 'Bad coefficent matrix! Execution cannot proceed.'
             MessageArray(2) = 'Please check input data.'
@@ -1674,11 +1726,13 @@ CONTAINS
             CALL Matrix%Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
             iStat = -1
             RETURN
-    END SELECT
+        END SELECT
+        Matrix%lILUT_Valid = .TRUE.
+      END IF
 
-    Iter = 0                                           ! INITIALIZE THE NUMBER OF ITERATIONS
+      Iter = 0                                         ! INITIALIZE THE NUMBER OF ITERATIONS
 
-    DO
+      DO
         CALL GMRES(N, Matrix%RHS, Matrix%HDelta, IPAR, FPAR, W)                ! CALL SPARSKIT IMPLEMENTATION OF GMRES(M) IN THE FILE iters.f
 
         IF (IPAR(7) .NE. Iter) THEN
@@ -1691,9 +1745,12 @@ CONTAINS
         IF (IPAR(1).EQ.1) THEN
             CALL AMUX(N, W(IPAR(8):), W(IPAR(9):), COEFF, JND, NJD)  !MATRIX-VECTOR MULTIPLICATION
         ELSE IF (IPAR(1).EQ.3 .OR. IPAR(1).EQ.5) THEN
-            CALL LUSOL(N,W(IPAR(8)),W(IPAR(9)),COEFFLU,JLU,JU)         !LU SOLVE
+            CALL LUSOL(N,W(IPAR(8)),W(IPAR(9)),Matrix%COEFFLU,Matrix%JLU,Matrix%JU)         !LU SOLVE
         ELSE IF (IPAR(1).LT.0) THEN
-            IF (IPAR(1).EQ.-1) THEN
+            IF (IPAR(1).EQ.-1  .AND.  .NOT.lFactor) THEN
+                !Kept factors are too stale: repeat the solve with new ones
+                EXIT
+            ELSE IF (IPAR(1).EQ.-1) THEN
                 MessageArray(1) = 'Convergence problem in the solution of equation system using PGMRES(M).'
                 WRITE(MessageArray(2),'(A,I8)')     'Iteration =', Iter
                 WRITE (MessageArray(3),'(A,E12.3)') 'Residual  =', RES
@@ -1723,9 +1780,23 @@ CONTAINS
            !WRITE(*,*) 'GMRES Iteration: ', Iter, ' : Residual: ', RES, ' : ||x|| : ', DNRM2(N, U, 1)
            EXIT
         END IF
-    END DO
+      END DO
 
-    DEALLOCATE(COEFFLU, JLU, W)
+      !Kept factors did not converge in time: continue from the solution so far with new factors
+      IF (IPAR(1).EQ.-1  .AND.  .NOT.lFactor) THEN
+          IPAR(1)       = 0
+          IPAR(6)       = MXITER
+          lFactor       = .TRUE.
+          CYCLE Attempt_Loop
+      END IF
+      EXIT Attempt_Loop
+    END DO Attempt_Loop
+
+    !Iteration counts that decide when the factors are recomputed
+    Matrix%iGMRESIters_Last = Iter
+    IF (lFactor) Matrix%iGMRESIters_AtFactor = Iter
+
+    DEALLOCATE(W)
 
   END SUBROUTINE PGMRES
   

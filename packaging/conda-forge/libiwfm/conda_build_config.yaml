@@ -1,5 +1,5 @@
 # ifx on both platforms. 2026.1.1 is the compiler DWR built the official
-# IWFM 2026.0.1848 release with; it reproduces the official results exactly.
+# IWFM 2026.0.1848 release with; other versions differ at round-off level.
 fortran_compiler:
   - ifx
 fortran_compiler_version:
