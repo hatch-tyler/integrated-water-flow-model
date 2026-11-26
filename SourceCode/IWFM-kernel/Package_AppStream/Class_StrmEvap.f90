@@ -70,6 +70,7 @@ MODULE Class_StrmEvap
       REAL(8),ALLOCATABLE        :: rEvap(:)                     !Potential stream evaporation at each (node)
   CONTAINS
       PROCEDURE,PASS :: New
+      PROCEDURE,PASS :: Kill
       PROCEDURE,PASS :: ReadTSData
   END TYPE StrmEvapType
 
@@ -247,10 +248,40 @@ CONTAINS
     END IF
     
   END SUBROUTINE New
-  
-  
-  
-  
+
+
+
+
+! ******************************************************************
+! ******************************************************************
+! ******************************************************************
+! ***
+! *** DESTRUCTOR
+! ***
+! ******************************************************************
+! ******************************************************************
+! ******************************************************************
+
+  ! -------------------------------------------------------------
+  ! --- KILL STREAM EVAPORATION DATA (CLOSES THE SURFACE AREA FILE)
+  ! -------------------------------------------------------------
+  SUBROUTINE Kill(StrmEvap)
+    CLASS(StrmEvapType) :: StrmEvap
+
+    !Local variables
+    INTEGER :: ErrorCode
+
+    IF (StrmEvap%lAreaFile_Defined) CALL StrmEvap%StrmAreaFile%Close()
+    DEALLOCATE (StrmEvap%iAreaCol , StrmEvap%iEvapCol , StrmEvap%rEvap , STAT=ErrorCode)
+    StrmEvap%lComputeEvap      = .FALSE.
+    StrmEvap%lAreaFile_Defined = .FALSE.
+    StrmEvap%rAreaFactor       = 1d0
+
+  END SUBROUTINE Kill
+
+
+
+
 ! ******************************************************************
 ! ******************************************************************
 ! ******************************************************************

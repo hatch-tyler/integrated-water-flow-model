@@ -555,6 +555,7 @@ CONTAINS
     CALL AppStream%AppDiverBypass%Kill()
     CALL AppStream%StrmNodeBudget%Kill()
     CALL AppStream%StrmHyd%Kill()
+    CALL AppStream%StrmEvap%Kill()
     IF (AppStream%StrmReachBudRawFile_Defined) CALL AppStream%StrmReachBudRawFile%Kill()            
     
     !Kill specific implementation of AppStream 

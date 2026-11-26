@@ -1127,7 +1127,7 @@ CONTAINS
     END IF
   
     !Get the values
-    CALL RootZone_v40_GetBudget_MonthlyFlows_GivenFile(pBudget,iBudgetType,iLUType,iSubregionIndex,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat) 
+    CALL RootZone_v40_GetBudget_MonthlyFlows_GivenFile(pBudget,iBudgetType,iLUType,iSubregionIndex,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat,RootZone%Logger) 
     
   END SUBROUTINE RootZone_v40_GetBudget_MonthlyFlows_GivenRootZone
 
@@ -1182,15 +1182,11 @@ CONTAINS
             CASE (f_iLandUse_NonPondedAg) 
                 IF (PRESENT(Logger)) THEN
                     CALL Logger%SetLastMessage('Non-ponded-crop-specific Land & Water Use Budget cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
-                ELSE
-                    CALL Logger%SetLastMessage('Non-ponded-crop-specific Land & Water Use Budget cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
                 END IF
                 iStat = -1
                 RETURN
             CASE (f_iLandUse_Rice)
                 IF (PRESENT(Logger)) THEN
-                    CALL Logger%SetLastMessage('Land & Water Use Budget for rice cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
-                ELSE
                     CALL Logger%SetLastMessage('Land & Water Use Budget for rice cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
                 END IF
                 iStat = -1
@@ -1198,16 +1194,18 @@ CONTAINS
             CASE (f_iLandUse_Refuge)
                 IF (PRESENT(Logger)) THEN
                     CALL Logger%SetLastMessage('Land & Water Use Budget for refuges cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
-                ELSE
-                    CALL Logger%SetLastMessage('Land & Water Use Budget for refuges cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
                 END IF
                 iStat = -1
                 RETURN
             CASE (f_iLandUse_NVRV)
                 IF (PRESENT(Logger)) THEN
                     CALL Logger%SetLastMessage('Land & Water Use Budget does not exist for native and riparian vegetation!',f_iFatal,ThisProcedure)
-                ELSE
-                    CALL Logger%SetLastMessage('Land & Water Use Budget does not exist for native and riparian vegetation!',f_iFatal,ThisProcedure)
+                END IF
+                iStat = -1
+                RETURN
+            CASE DEFAULT
+                IF (PRESENT(Logger)) THEN
+                    CALL Logger%SetLastMessage('Land & Water Use Budget is not available for the selected land use type!',f_iFatal,ThisProcedure)
                 END IF
                 iStat = -1
                 RETURN
@@ -1306,15 +1304,11 @@ CONTAINS
             CASE (f_iLandUse_NonPondedAg) 
                 IF (PRESENT(Logger)) THEN
                     CALL Logger%SetLastMessage('Non-ponded-crop-specific Root Zone Budget cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
-                ELSE
-                    CALL Logger%SetLastMessage('Non-ponded-crop-specific Root Zone Budget cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
                 END IF
                 iStat = -1
                 RETURN
             CASE (f_iLandUse_Rice)
                 IF (PRESENT(Logger)) THEN
-                    CALL Logger%SetLastMessage('Root Zone Budget for rice cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
-                ELSE
                     CALL Logger%SetLastMessage('Root Zone Budget for rice cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
                 END IF
                 iStat = -1
@@ -1322,8 +1316,12 @@ CONTAINS
             CASE (f_iLandUse_Refuge)
                 IF (PRESENT(Logger)) THEN
                     CALL Logger%SetLastMessage('Root Zone Budget for refuges cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
-                ELSE
-                    CALL Logger%SetLastMessage('Root Zone Budget for refuges cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
+                END IF
+                iStat = -1
+                RETURN
+            CASE DEFAULT
+                IF (PRESENT(Logger)) THEN
+                    CALL Logger%SetLastMessage('Root Zone Budget is not available for the selected land use type!',f_iFatal,ThisProcedure)
                 END IF
                 iStat = -1
                 RETURN
@@ -1369,7 +1367,7 @@ CONTAINS
     END IF
   
     !Get the values
-    CALL RootZone_v40_GetBudget_AnnualFlows_GivenFile(pBudget,iBudgetType,iLUType,iSubregionIndex,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat) 
+    CALL RootZone_v40_GetBudget_AnnualFlows_GivenFile(pBudget,iBudgetType,iLUType,iSubregionIndex,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat,RootZone%Logger) 
     
   END SUBROUTINE RootZone_v40_GetBudget_AnnualFlows_GivenRootZone
 
@@ -1424,15 +1422,11 @@ CONTAINS
             CASE (f_iLandUse_NonPondedAg) 
                 IF (PRESENT(Logger)) THEN
                     CALL Logger%SetLastMessage('Non-ponded-crop-specific Land & Water Use Budget cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
-                ELSE
-                    CALL Logger%SetLastMessage('Non-ponded-crop-specific Land & Water Use Budget cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
                 END IF
                 iStat = -1
                 RETURN
             CASE (f_iLandUse_Rice)
                 IF (PRESENT(Logger)) THEN
-                    CALL Logger%SetLastMessage('Land & Water Use Budget for rice cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
-                ELSE
                     CALL Logger%SetLastMessage('Land & Water Use Budget for rice cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
                 END IF
                 iStat = -1
@@ -1440,16 +1434,18 @@ CONTAINS
             CASE (f_iLandUse_Refuge)
                 IF (PRESENT(Logger)) THEN
                     CALL Logger%SetLastMessage('Land & Water Use Budget for refuges cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
-                ELSE
-                    CALL Logger%SetLastMessage('Land & Water Use Budget for refuges cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
                 END IF
                 iStat = -1
                 RETURN
             CASE (f_iLandUse_NVRV)
                 IF (PRESENT(Logger)) THEN
                     CALL Logger%SetLastMessage('Land & Water Use Budget does not exist for native and riparian vegetation!',f_iFatal,ThisProcedure)
-                ELSE
-                    CALL Logger%SetLastMessage('Land & Water Use Budget does not exist for native and riparian vegetation!',f_iFatal,ThisProcedure)
+                END IF
+                iStat = -1
+                RETURN
+            CASE DEFAULT
+                IF (PRESENT(Logger)) THEN
+                    CALL Logger%SetLastMessage('Land & Water Use Budget is not available for the selected land use type!',f_iFatal,ThisProcedure)
                 END IF
                 iStat = -1
                 RETURN
@@ -1548,15 +1544,11 @@ CONTAINS
             CASE (f_iLandUse_NonPondedAg) 
                 IF (PRESENT(Logger)) THEN
                     CALL Logger%SetLastMessage('Non-ponded-crop-specific Root Zone Budget cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
-                ELSE
-                    CALL Logger%SetLastMessage('Non-ponded-crop-specific Root Zone Budget cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
                 END IF
                 iStat = -1
                 RETURN
             CASE (f_iLandUse_Rice)
                 IF (PRESENT(Logger)) THEN
-                    CALL Logger%SetLastMessage('Root Zone Budget for rice cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
-                ELSE
                     CALL Logger%SetLastMessage('Root Zone Budget for rice cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
                 END IF
                 iStat = -1
@@ -1564,8 +1556,12 @@ CONTAINS
             CASE (f_iLandUse_Refuge)
                 IF (PRESENT(Logger)) THEN
                     CALL Logger%SetLastMessage('Root Zone Budget for refuges cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
-                ELSE
-                    CALL Logger%SetLastMessage('Root Zone Budget for refuges cannot be retrived from the specified budget file!',f_iFatal,ThisProcedure)
+                END IF
+                iStat = -1
+                RETURN
+            CASE DEFAULT
+                IF (PRESENT(Logger)) THEN
+                    CALL Logger%SetLastMessage('Root Zone Budget is not available for the selected land use type!',f_iFatal,ThisProcedure)
                 END IF
                 iStat = -1
                 RETURN
@@ -2632,8 +2628,6 @@ CONTAINS
               CALL Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
           ELSE
               IF (PRESENT(Logger)) THEN
-            CALL Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
-        ELSE
             CALL Logger%SetLastMessage(MessageArray(1:2),f_iFatal,ThisProcedure)
         END IF
           END IF

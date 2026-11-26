@@ -532,7 +532,7 @@ CONTAINS
     END SELECT
 
     !Get monthly data
-    CALL RootZone%Me%GetBudget_MonthlyFlows_GivenFile(Budget,iBudgetType,iLUType,iSubregionIndex,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
+    CALL RootZone%Me%GetBudget_MonthlyFlows_GivenFile(Budget,iBudgetType,iLUType,iSubregionIndex,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat,Logger)
     
     !Clear memory
     DEALLOCATE (RootZone%Me , cVersion , STAT=iErrorCode)
@@ -705,7 +705,7 @@ CONTAINS
     END SELECT
 
     !Get monthly data
-    CALL RootZone%Me%GetBudget_AnnualFlows_GivenFile(Budget,iBudgetType,iLUType,iSubregionIndex,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
+    CALL RootZone%Me%GetBudget_AnnualFlows_GivenFile(Budget,iBudgetType,iLUType,iSubregionIndex,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat,Logger)
     
     !Clear memory
     DEALLOCATE (RootZone%Me , cVersion , STAT=iErrorCode)
@@ -1011,12 +1011,12 @@ CONTAINS
     INTEGER,INTENT(OUT)                      :: iStat
     
     IF (ALLOCATED(RootZone%Me)) THEN
-        CALL RootZone%Me%GetZBudget_MonthlyFlows_GivenRootZone(iZBudgetType,iLUType,iZoneID,iZExtent,iElems,iLayers,iZoneIDs,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
+        CALL RootZone%Me%GetZBudget_AnnualFlows_GivenRootZone(iZBudgetType,iLUType,iZoneID,iZExtent,iElems,iLayers,iZoneIDs,cBeginDate,cEndDate,rFactVL,rFlows,cFlowNames,iStat)
     ELSE
         iStat = 0
         ALLOCATE (rFlows(0,0) , cFlowNames(0))
     END IF
-    
+
   END SUBROUTINE GetZBudget_AnnualFlows_GivenRootZone
     
   

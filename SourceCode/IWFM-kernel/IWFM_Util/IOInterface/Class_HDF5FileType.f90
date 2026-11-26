@@ -772,9 +772,15 @@ CONTAINS
     END IF
     ThisFile%Datasets(iDatasetNo)%iDataPointer_File = iTimeOffset
     
-    !Select partial data on file
+    !Select partial data on file; never more columns than Data holds (HDF5
+    !would write past it), and nothing to read if Data is empty
     iOffset = [0 , iTimeOffset]
-    iBlock  = [ThisFile%Datasets(iDatasetNo)%nColumns , MIN(SIZE(Data,DIM=2),ThisFile%nTime-iTimeOffset)]
+    iBlock  = [MIN(ThisFile%Datasets(iDatasetNo)%nColumns,SIZE(Data,DIM=1)) , MIN(SIZE(Data,DIM=2),ThisFile%nTime-iTimeOffset)]
+    IF (ANY(iBlock .LE. 0)) THEN
+        ThisFile%Datasets(iDatasetNo)%iDataPointer_File = MIN(iTimeOffset + SIZE(Data,DIM=2) , ThisFile%nTime)
+        Stat = 0
+        RETURN
+    END IF
     CALL H5SSELECT_HYPERSLAB_F(ThisFile%Datasets(iDatasetNo)%iDataSpaceID,H5S_SELECT_SET_F,iOffset,iCount,ErrorCode1,iStride,iBlock)
     
     !Create memory data space
@@ -1021,8 +1027,15 @@ CONTAINS
     INTEGER,ALLOCATABLE,TARGET :: iIntArray(:,:)
     REAL(8),ALLOCATABLE,TARGET :: rRealArray(:,:)
     TYPE(C_PTR)                :: pData
-    
-    !Read data   
+
+    !Nothing to read into (HDF5 would write past an empty array)
+    IF (SIZE(Data) .EQ. 0) THEN
+        ThisFile%Datasets(iDatasetNo)%iDataPointer_File = 0
+        Stat = 0
+        RETURN
+    END IF
+
+    !Read data
     SELECT TYPE(Data)
         TYPE IS (REAL(8))
             ALLOCATE (rRealArray , MOLD=Data)

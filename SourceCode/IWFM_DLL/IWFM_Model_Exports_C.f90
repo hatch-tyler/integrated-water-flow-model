@@ -1064,6 +1064,13 @@ CONTAINS
     CALL pMdl%GetBudget_MonthlyAverageFlows(iBudgetType,iLocationIndex,iLUType,iSWShedBudType,cBeginDate_F,cEndDate_F,rFactVL,rFlows_Local,rSDFlows_Local,cFlowNames_Local,iStat)
     IF (iStat .NE. 0) RETURN
     
+    !Make sure the results fit in the return arguments (writing past them corrupts the caller's memory)
+    IF (SIZE(rFlows_Local,DIM=1).GT.iNFlows_In .OR. SIZE(rFlows_Local,DIM=2).NE.12 .OR. SIZE(cFlowNames_Local).GT.iNFlows_In) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Monthly average flows do not fit in the arrays provided!',f_iFatal,cModName)
+        iStat = -1
+        RETURN
+    END IF
+    
     !Transfer flows to return arguments
     iNFlows_Out = SIZE(rFlows_Local,DIM=1)
     DO indxMon=1,12
@@ -1126,6 +1133,13 @@ CONTAINS
     !Get full budget
     CALL pMdl%GetBudget_AnnualFlows(iBudgetType,iLocationIndex,iLUType,iSWShedBudType,cBeginDate_F,cEndDate_F,lForCalendarYear,rFactVL,rFlows_Local,cFlowNames_Local,iWaterYears_Local,iStat)
     IF (iStat .NE. 0) RETURN
+    
+    !Make sure the results fit in the return arguments (writing past them corrupts the caller's memory)
+    IF (SIZE(rFlows_Local,DIM=1).GT.iNFlows_In .OR. SIZE(rFlows_Local,DIM=2).GT.iNTimes_In .OR. SIZE(cFlowNames_Local).GT.iNFlows_In .OR. SIZE(iWaterYears_Local).LT.SIZE(rFlows_Local,DIM=2)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Annual flows do not fit in the arrays provided or do not match the output years!',f_iFatal,cModName)
+        iStat = -1
+        RETURN
+    END IF
     
     !Transfer flows and water years to return arguments
     iNFlows_Out = SIZE(rFlows_Local,DIM=1)
@@ -1194,6 +1208,13 @@ CONTAINS
     !Get full budget
     CALL pMdl%GetBudget_AnnualFlows(iBudgetType,iLocationIndex,iLUType,iSWShedBudType,cBeginDate_F,cEndDate_F,lForCalendarYear,rFactVL,rFlows_Local,cFlowNames_Local,iOutputYears_Local,iStat)
     IF (iStat .NE. 0) RETURN
+    
+    !Make sure the results fit in the return arguments (writing past them corrupts the caller's memory)
+    IF (SIZE(rFlows_Local,DIM=1).GT.iNFlows_In .OR. SIZE(rFlows_Local,DIM=2).GT.iNTimes_In .OR. SIZE(cFlowNames_Local).GT.iNFlows_In .OR. SIZE(iOutputYears_Local).LT.SIZE(rFlows_Local,DIM=2)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Annual flows do not fit in the arrays provided or do not match the output years!',f_iFatal,cModName)
+        iStat = -1
+        RETURN
+    END IF
     
     !Transfer flows and water years to return arguments
     iNFlows_Out = SIZE(rFlows_Local,DIM=1)
@@ -1567,6 +1588,15 @@ CONTAINS
     !Get full budget
     CALL pMdl%GetZBudget_MonthlyAverageFlows(iZBudgetType,iZoneID,iLUType,iZExtent,iElems,iLayers,iZoneIDs,cBeginDate_F,cEndDate_F,rFactVL,rFlows_Local,rSDFlows_Local,cFlowNames_Local,iStat)
     
+    IF (iStat .NE. 0) RETURN
+    
+    !Make sure the results fit in the return arguments (writing past them corrupts the caller's memory)
+    IF (SIZE(rFlows_Local,DIM=1).GT.iNFlows_In .OR. SIZE(rFlows_Local,DIM=2).NE.12 .OR. SIZE(cFlowNames_Local).GT.iNFlows_In) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Monthly average flows do not fit in the arrays provided!',f_iFatal,cModName)
+        iStat = -1
+        RETURN
+    END IF
+    
     !Transfer flows to return arguments
     iNFlows_Out = SIZE(rFlows_Local,DIM=1)
     DO indxMon=1,12
@@ -1621,6 +1651,15 @@ CONTAINS
     
     !Get full budget
     CALL pMdl%GetZBudget_AnnualFlows(iZBudgetType,iZoneID,iLUType,iZExtent,iElems,iLayers,iZoneIDs,cBeginDate_F,cEndDate_F,lForCalendarYear,rFactVL,rFlows_Local,cFlowNames_Local,iOutputYears_Local,iStat)
+    
+    IF (iStat .NE. 0) RETURN
+    
+    !Make sure the results fit in the return arguments (writing past them corrupts the caller's memory)
+    IF (SIZE(rFlows_Local,DIM=1).GT.iNFlows_In .OR. SIZE(rFlows_Local,DIM=2).GT.iNTimes_In .OR. SIZE(cFlowNames_Local).GT.iNFlows_In .OR. SIZE(iOutputYears_Local).LT.SIZE(rFlows_Local,DIM=2)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Annual flows do not fit in the arrays provided or do not match the output years!',f_iFatal,cModName)
+        iStat = -1
+        RETURN
+    END IF
     
     !Transfer flows and ouput years to return arguments
     iNFlows_Out = SIZE(rFlows_Local,DIM=1)
@@ -1681,6 +1720,15 @@ CONTAINS
     
     !Get full budget
     CALL pMdl%GetZBudget_AnnualFlows(iZBudgetType,iZoneID,iLUType,iZExtent,iElems,iLayers,iZoneIDs,cBeginDate_F,cEndDate_F,lForCalendarYear,rFactVL,rFlows_Local,cFlowNames_Local,iOutputYears_Local,iStat)
+    
+    IF (iStat .NE. 0) RETURN
+    
+    !Make sure the results fit in the return arguments (writing past them corrupts the caller's memory)
+    IF (SIZE(rFlows_Local,DIM=1).GT.iNFlows_In .OR. SIZE(rFlows_Local,DIM=2).GT.iNTimes_In .OR. SIZE(cFlowNames_Local).GT.iNFlows_In .OR. SIZE(iOutputYears_Local).LT.SIZE(rFlows_Local,DIM=2)) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Annual flows do not fit in the arrays provided or do not match the output years!',f_iFatal,cModName)
+        iStat = -1
+        RETURN
+    END IF
     
     !Transfer flows and ouput years to return arguments
     iNFlows_Out = SIZE(rFlows_Local,DIM=1)
@@ -2416,7 +2464,14 @@ CONTAINS
     !Get data
     CALL pMdl%GetHydrograph(iHydType,iHydIndex,iLayer,rFactLT,rFactVL,cBeginDate_F,cEndDate_F,cInterval_F,iDataUnitType,rDates_Local,rValues_Local,iStat)
     IF (iStat .NE. 0) RETURN
-    
+
+    !Make sure the results fit in the return arguments (writing past them corrupts the caller's memory)
+    IF (SIZE(rDates_Local) .GT. iNTimes_In) THEN
+        CALL DefaultLogger%SetLastMessage_ThreadSafe('Hydrograph does not fit in the arrays provided!',f_iFatal,cModName)
+        iStat = -1
+        RETURN
+    END IF
+
     !Copy local data to return arguments; also convert Julian date to Excel-style Julian date
     iNTimes_Out                  = SIZE(rDates_Local)
     rOutputDates(1:iNTimes_Out)  = rDates_Local - REAL(2415020d0,C_DOUBLE)

@@ -1661,7 +1661,8 @@ CONTAINS
                 
             CASE DEFAULT
                     IF (PRESENT(Logger)) CALL Logger%SetLastMessage('Land&Water Use ZBudget is not available for the selected land use type!',f_iFatal,ThisProcedure)
-                DEALLOCATE (rFlows , cFlowNames , STAT=ErrorCode)
+                DEALLOCATE (rFlows , STAT=ErrorCode)     !Separately: a failed deallocation of one would leave the other allocated
+                DEALLOCATE (cFlowNames , STAT=ErrorCode)
                 ALLOCATE (rFlows(0,0) , cFlowNames(0))
                 iStat = -1
                 RETURN
@@ -1789,7 +1790,8 @@ CONTAINS
                 
             CASE DEFAULT
                     IF (PRESENT(Logger)) CALL Logger%SetLastMessage('Root Zone ZBudget is not available for the selected land use type!',f_iFatal,ThisProcedure)
-                DEALLOCATE (rFlows , cFlowNames , STAT=ErrorCode)
+                DEALLOCATE (rFlows , STAT=ErrorCode)     !Separately: a failed deallocation of one would leave the other allocated
+                DEALLOCATE (cFlowNames , STAT=ErrorCode)
                 ALLOCATE (rFlows(0,0) , cFlowNames(0))
                 iStat = -1
                 RETURN
@@ -1892,7 +1894,8 @@ CONTAINS
                 
             CASE DEFAULT
                     IF (PRESENT(Logger)) CALL Logger%SetLastMessage('Land&Water Use ZBudget is not available for the selected land use type!',f_iFatal,ThisProcedure)
-                DEALLOCATE (rFlows , cFlowNames , STAT=ErrorCode)
+                DEALLOCATE (rFlows , STAT=ErrorCode)     !Separately: a failed deallocation of one would leave the other allocated
+                DEALLOCATE (cFlowNames , STAT=ErrorCode)
                 ALLOCATE (rFlows(0,0) , cFlowNames(0))
                 iStat = -1
                 RETURN
@@ -2020,7 +2023,8 @@ CONTAINS
                 
             CASE DEFAULT
                     IF (PRESENT(Logger)) CALL Logger%SetLastMessage('Root Zone ZBudget is not available for the selected land use type!',f_iFatal,ThisProcedure)
-                DEALLOCATE (rFlows , cFlowNames , STAT=ErrorCode)
+                DEALLOCATE (rFlows , STAT=ErrorCode)     !Separately: a failed deallocation of one would leave the other allocated
+                DEALLOCATE (cFlowNames , STAT=ErrorCode)
                 ALLOCATE (rFlows(0,0) , cFlowNames(0))
                 iStat = -1
                 RETURN
