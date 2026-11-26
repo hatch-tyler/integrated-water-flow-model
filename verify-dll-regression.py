@@ -34,6 +34,7 @@ That folder is the official release sample prepared for the fork:
 import ctypes
 import os
 import pathlib
+import threading
 import shutil
 import sys
 
@@ -191,7 +192,21 @@ def main():
     print(f"Sample model: {sample_root}")
     print(f"DLL:          {DLL_PATH}")
 
-    run_via_dll(sample_root)
+    # The DLL runs on the caller's stack and is compiled without heap-arrays
+    # (IWFM_DLL_HEAP_ARRAYS=OFF), so give it a stack like the executables'
+    # 256 MB: 255 MB is the largest CPython allows a thread on Windows.
+    errors = []
+    def target():
+        try:
+            run_via_dll(sample_root)
+        except BaseException as exc:
+            errors.append(exc)
+    threading.stack_size(255 * 1024 * 1024)
+    worker = threading.Thread(target=target)
+    worker.start()
+    worker.join()
+    if errors:
+        raise errors[0]
     ok = compare_results(sample_root)
 
     if ok:

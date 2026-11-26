@@ -635,12 +635,11 @@ source /opt/intel/oneapi/setvars.sh
 
 **Cause:** IWFM uses automatic (stack-allocated) arrays with runtime dimensions. For large models (30,000+ nodes), these arrays can exceed the stack limit.
 
-**Solution:** The CMake configuration includes `/heap-arrays:900` (Windows) or `-heap-arrays=900` (Linux) to allocate arrays larger than 900KB on the heap instead of the stack. This is handled automatically in the current build configuration.
+**Solution:** The executables reserve a 256 MB stack through the linker (`/STACK:256000000` on Windows). On Linux the linker setting is ignored and the main thread gets the shell's limit, so run large models after `ulimit -s unlimited` (or a large value).
 
-If you experience stack overflow with a custom build, ensure your compiler flags include:
-- Intel Windows: `/heap-arrays:900`
-- Intel Linux: `-heap-arrays=900`
-- gfortran: `-fmax-stack-var-size=921600`
+The DLL uses the calling thread's stack, so the caller must provide a large one: pywfm runs every library call on a 255 MB thread. For callers that can't, configure with `-DIWFM_DLL_HEAP_ARRAYS=ON`, which compiles the DLL with `/heap-arrays:900` (Windows) or `-heap-arrays 900` (Linux), the official `IWFM_C_DLL_Heap.vfproj` setting, to put arrays over 900 KB on the heap. That makes C2VSimFG about 7x slower through the DLL.
+
+gfortran builds: `-fmax-stack-var-size=921600`.
 
 ### Clean Rebuild
 

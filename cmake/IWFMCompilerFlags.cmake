@@ -361,10 +361,15 @@ endfunction()
 # Function: Add DLL-specific Flags to a Target
 # =============================================================================
 function(iwfm_add_dll_flags target)
-    # DLL targets need heap-arrays to avoid stack overflow when called from
-    # external processes with limited stack size. EXE targets use the 256MB
-    # stack set via /STACK linker flag instead (3x faster than heap-arrays).
-    if(IWFM_USING_INTEL)
+    # The library runs on the caller's thread stack; its own /STACK setting
+    # has no effect. By default it is compiled like the executables, without
+    # heap-arrays, so the caller must provide a large stack: pywfm runs every
+    # library call on a 255 MB thread (the executables reserve 256,000,000
+    # bytes). heap-arrays (IWFM_DLL_HEAP_ARRAYS=ON, the official
+    # IWFM_C_DLL_Heap.vfproj setting) puts arrays over 900 KB on the heap for
+    # callers with small stacks, but makes C2VSimFG ~7x slower through the
+    # library.
+    if(IWFM_USING_INTEL AND IWFM_DLL_HEAP_ARRAYS)
         if(WIN32)
             target_compile_options(${target} PRIVATE /heap-arrays:900)
         else()
