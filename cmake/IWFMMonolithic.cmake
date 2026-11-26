@@ -90,12 +90,14 @@ endfunction()
 # Function: Add a monolithic shared library (DLL) target
 # =============================================================================
 # Usage:
-#   iwfm_add_monolithic_dll(IWFM_C_DLL
+#   iwfm_add_monolithic_dll(IWFM_C_DLL [HEAP]
 #       SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/IWFM_DLL/IWFM_Model_Exports_C.f90 ...
 #   )
 #
+# HEAP compiles the library with heap-arrays (see iwfm_add_dll_flags).
+#
 function(iwfm_add_monolithic_dll TARGET_NAME)
-    cmake_parse_arguments(MONO "" "" "SOURCES" ${ARGN})
+    cmake_parse_arguments(MONO "HEAP" "" "SOURCES" ${ARGN})
 
     # DLL always uses FULL scope
     set(_all_sources ${IWFM_ALL_COMMON_SOURCES} ${MONO_SOURCES})
@@ -113,8 +115,12 @@ function(iwfm_add_monolithic_dll TARGET_NAME)
     # Enable OpenMP for kernel sources
     iwfm_add_openmp_flags(${TARGET_NAME})
 
-    # Apply DLL-specific flags (heap-arrays)
-    iwfm_add_dll_flags(${TARGET_NAME})
+    # Apply DLL-specific flags (heap-arrays for HEAP)
+    if(MONO_HEAP)
+        iwfm_add_dll_flags(${TARGET_NAME} HEAP)
+    else()
+        iwfm_add_dll_flags(${TARGET_NAME})
+    endif()
 
     # Apply the ifx ICE workaround
     if(IWFM_USING_INTEL AND WIN32)

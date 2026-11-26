@@ -361,15 +361,18 @@ endfunction()
 # Function: Add DLL-specific Flags to a Target
 # =============================================================================
 function(iwfm_add_dll_flags target)
+    # Usage: iwfm_add_dll_flags(<target> [HEAP])
+    #
     # The library runs on the caller's thread stack; its own /STACK setting
-    # has no effect. By default it is compiled like the executables, without
+    # has no effect. IWFM_C_DLL is compiled like the executables, without
     # heap-arrays, so the caller must provide a large stack: pywfm runs every
     # library call on a 255 MB thread (the executables reserve 256,000,000
-    # bytes). heap-arrays (IWFM_DLL_HEAP_ARRAYS=ON, the official
-    # IWFM_C_DLL_Heap.vfproj setting) puts arrays over 900 KB on the heap for
-    # callers with small stacks, but makes C2VSimFG ~7x slower through the
-    # library.
-    if(IWFM_USING_INTEL AND IWFM_DLL_HEAP_ARRAYS)
+    # bytes). HEAP (IWFM_C_DLL_Heap, the official IWFM_C_DLL_Heap.vfproj
+    # setting) adds heap-arrays 900, which puts arrays over 900 KB on the
+    # heap for callers with small stacks but makes C2VSimFG ~7x slower
+    # through the library.
+    cmake_parse_arguments(DLL "HEAP" "" "" ${ARGN})
+    if(IWFM_USING_INTEL AND DLL_HEAP)
         if(WIN32)
             target_compile_options(${target} PRIVATE /heap-arrays:900)
         else()

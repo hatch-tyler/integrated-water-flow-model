@@ -99,7 +99,7 @@ A standalone DSS diagnostic test exists at `SourceCode/tests/test_dss_read.f90` 
 | `IWFM_BUILD_BUDGET` | ON | Budget post-processor |
 | `IWFM_BUILD_ZBUDGET` | ON | ZBudget post-processor |
 | `IWFM_BUILD_DLL` | ON | C-callable shared library |
-| `IWFM_DLL_HEAP_ARRAYS` | OFF | Compile the DLL with heap-arrays 900 for callers with small stacks (much slower) |
+| `IWFM_BUILD_DLL_HEAP` | ON | Also build `IWFM_C_Heap_x64.dll` / `libiwfm_c_heap.so` with heap-arrays 900 for callers with small stacks (much slower; monolithic builds only) |
 | `IWFM_BUILD_PARALLEL` | OFF | OpenMP parallel simulation |
 | `IWFM_BUILD_COARRAY` | OFF | Coarray multi-model (Intel only) |
 | `IWFM_BUILD_IWFM2OBS` | OFF | PEST hydrograph converter |
@@ -215,7 +215,7 @@ Packages with versions:
 - **HDF5 `__float128` error** (Windows + Intel icx) — CMake config auto-patches this. If it appears, ensure using the latest CMake configuration.
 - **Linker errors `__imp_fdopen`, `__imp_read`** (Windows) — CRT mismatch. CMake sets `CMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded` for static CRT (`/MT`).
 - **"sortfiles.c conflicting types"** (heclib) — K&R style C code. CMake config excludes problematic source files automatically.
-- **Stack overflow with large models** (C2VSimFG 30K+ nodes) — Executables reserve 256 MB through the linker; on Linux that is ignored, so use `ulimit -s unlimited`. The DLL runs on the caller's stack: pywfm provides a 255 MB thread; other callers with small stacks need `-DIWFM_DLL_HEAP_ARRAYS=ON` (about 7x slower on C2VSimFG).
+- **Stack overflow with large models** (C2VSimFG 30K+ nodes) — Executables reserve 256 MB through the linker; on Linux that is ignored, so use `ulimit -s unlimited`. The DLL runs on the caller's stack: pywfm provides a 255 MB thread; other callers with small stacks should use `IWFM_C_Heap_x64.dll` / `libiwfm_c_heap.so` (about 7x slower on C2VSimFG).
 - **System HDF5 module mismatch** — System HDF5 must be compiled with the same Fortran compiler as IWFM for `.mod` file compatibility.
 - **First build is slow** (~5-10 min) — HDF5 is compiled from source on first build. Subsequent builds reuse it. Use `build-deps.ps1` then `build-iwfm.ps1 -UsePrebuiltDeps` for faster rebuilds.
 
@@ -284,12 +284,12 @@ All Fortran `.mod` files go to `${CMAKE_BINARY_DIR}/modules`.
 - `/standard-semantics` must come BEFORE `/assume:norealloc_lhs /assume:noieee_compares`; it expands to `/assume` options that would otherwise override them (changes results and slows Simulation ~60%)
 - `/fp:consistent` / `-fp-model=consistent` — Reproducible floating point
 - `/assume:norealloc_lhs` / `-assume norealloc_lhs` — Disable LHS automatic reallocation
-- `/heap-arrays:900` / `-heap-arrays 900` — not used by default. With
-  `-DIWFM_DLL_HEAP_ARRAYS=ON` it is applied to the DLL target only (the
-  official `IWFM_DLL/IWFM_C_DLL_Heap.vfproj` setting), for callers whose
-  threads have small stacks; it makes the DLL several times slower. By
-  default the DLL is compiled like the executables and needs a large caller
-  stack (pywfm runs library calls on a 255 MB thread).
+- `/heap-arrays:900` / `-heap-arrays 900` — applied only to the
+  `IWFM_C_DLL_Heap` target (`IWFM_C_Heap_x64.dll`, the official
+  `IWFM_DLL/IWFM_C_DLL_Heap.vfproj` setting), for callers whose threads have
+  small stacks; it makes the library several times slower. `IWFM_C_DLL`
+  (`IWFM_C_x64.dll`) is compiled like the executables and needs a large
+  caller stack (pywfm runs library calls on a 255 MB thread).
 - `-std=legacy` (gfortran only) — Allows obsolete features in solver code (PAUSE, ASSIGN)
 - 256MB stack configured via linker flags (`/STACK:256000000` on
   Windows, `-z,stacksize=256000000` on Linux)

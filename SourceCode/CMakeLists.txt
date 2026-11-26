@@ -163,33 +163,50 @@ if(IWFM_MONOLITHIC_BUILD AND IWFM_NEED_DEPENDENCIES)
     # -----------------------------------------------------------------
     # IWFM C DLL / Shared Library
     # -----------------------------------------------------------------
+    # IWFM_C_DLL needs a large caller stack; IWFM_C_DLL_Heap (heap-arrays)
+    # works on small stacks but is much slower. See iwfm_add_dll_flags.
     if(IWFM_BUILD_DLL)
-        iwfm_add_monolithic_dll(IWFM_C_DLL
-            SOURCES
-                ${CMAKE_CURRENT_SOURCE_DIR}/IWFM_DLL/IWFM_Model_Exports_C.f90
-                ${CMAKE_CURRENT_SOURCE_DIR}/IWFM_DLL/IWFM_Budget_Exports_C.f90
-                ${CMAKE_CURRENT_SOURCE_DIR}/IWFM_DLL/IWFM_ZBudget_Exports_C.f90
-                ${CMAKE_CURRENT_SOURCE_DIR}/IWFM_DLL/IWFM_Misc_Exports_C.f90
-        )
-
-        if(WIN32)
-            set_target_properties(IWFM_C_DLL PROPERTIES
-                OUTPUT_NAME "IWFM_C_x64$<$<CONFIG:Debug>:_D>"
-                WINDOWS_EXPORT_ALL_SYMBOLS ON
-            )
-        else()
-            set_target_properties(IWFM_C_DLL PROPERTIES
-                OUTPUT_NAME "iwfm_c$<$<CONFIG:Debug>:_d>"
-            )
+        set(_dll_targets IWFM_C_DLL)
+        if(IWFM_BUILD_DLL_HEAP)
+            list(APPEND _dll_targets IWFM_C_DLL_Heap)
         endif()
+        foreach(_dll IN LISTS _dll_targets)
+            if(_dll STREQUAL "IWFM_C_DLL_Heap")
+                set(_heap HEAP)
+                set(_win_name "IWFM_C_Heap_x64")
+                set(_unix_name "iwfm_c_heap")
+            else()
+                set(_heap "")
+                set(_win_name "IWFM_C_x64")
+                set(_unix_name "iwfm_c")
+            endif()
+            iwfm_add_monolithic_dll(${_dll} ${_heap}
+                SOURCES
+                    ${CMAKE_CURRENT_SOURCE_DIR}/IWFM_DLL/IWFM_Model_Exports_C.f90
+                    ${CMAKE_CURRENT_SOURCE_DIR}/IWFM_DLL/IWFM_Budget_Exports_C.f90
+                    ${CMAKE_CURRENT_SOURCE_DIR}/IWFM_DLL/IWFM_ZBudget_Exports_C.f90
+                    ${CMAKE_CURRENT_SOURCE_DIR}/IWFM_DLL/IWFM_Misc_Exports_C.f90
+            )
 
-        # COMPONENT library: package builds install just this
-        # (cmake --install <build> --component library)
-        install(TARGETS IWFM_C_DLL
-            RUNTIME DESTINATION bin COMPONENT library
-            LIBRARY DESTINATION lib COMPONENT library
-            ARCHIVE DESTINATION lib COMPONENT library
-        )
+            if(WIN32)
+                set_target_properties(${_dll} PROPERTIES
+                    OUTPUT_NAME "${_win_name}$<$<CONFIG:Debug>:_D>"
+                    WINDOWS_EXPORT_ALL_SYMBOLS ON
+                )
+            else()
+                set_target_properties(${_dll} PROPERTIES
+                    OUTPUT_NAME "${_unix_name}$<$<CONFIG:Debug>:_d>"
+                )
+            endif()
+
+            # COMPONENT library: package builds install just this
+            # (cmake --install <build> --component library)
+            install(TARGETS ${_dll}
+                RUNTIME DESTINATION bin COMPONENT library
+                LIBRARY DESTINATION lib COMPONENT library
+                ARCHIVE DESTINATION lib COMPONENT library
+            )
+        endforeach()
     endif()
 
     # -----------------------------------------------------------------
@@ -461,6 +478,11 @@ if(IWFM_BUILD_DLL)
     )
     target_link_libraries(IWFM_C_DLL PRIVATE "$<LINK_LIBRARY:WHOLE_ARCHIVE,iwfm_model>")
     iwfm_add_dll_flags(IWFM_C_DLL)
+    # The kernel is compiled once without heap-arrays here, so a heap-arrays
+    # DLL needs its own copy of the kernel: only the monolithic build has one.
+    if(IWFM_BUILD_DLL_HEAP)
+        message(STATUS "IWFM_C_DLL_Heap is only built in monolithic builds")
+    endif()
     if(UNIX)
         iwfm_link_hdf5(IWFM_C_DLL)
     endif()

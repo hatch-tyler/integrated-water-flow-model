@@ -193,7 +193,7 @@ def main():
     print(f"DLL:          {DLL_PATH}")
 
     # The DLL runs on the caller's stack and is compiled without heap-arrays
-    # (IWFM_DLL_HEAP_ARRAYS=OFF), so give it a stack like the executables'
+    # (IWFM_C_x64.dll, not IWFM_C_Heap_x64.dll), so give it a stack like the executables'
     # 256 MB: 255 MB is the largest CPython allows a thread on Windows.
     errors = []
     def target():

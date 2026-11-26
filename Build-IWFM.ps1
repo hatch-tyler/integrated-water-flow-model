@@ -16,7 +16,7 @@
     - All: Build and package
 
 .PARAMETER Target
-    Specific target to build (Simulation, PreProcessor, Budget, ZBudget, IWFM_C_DLL).
+    Specific target to build (Simulation, PreProcessor, Budget, ZBudget, IWFM_C_DLL, IWFM_C_DLL_Heap).
 
 .PARAMETER BuildType
     Build configuration (Release, Debug, RelWithDebInfo). Default: Release
@@ -95,7 +95,7 @@ param(
     [ValidateSet("Build", "Clean", "Configure", "Test", "Package", "All")]
     [string]$Action = "Build",
 
-    [ValidateSet("Simulation", "Simulation_Parallel", "Simulation_MM", "PreProcessor", "Budget", "ZBudget", "IWFM_C_DLL", "IWFM2OBS", "CalcTypeHyd", "ResultsExtract", "test_dss_read", "test_inquiry_load", "all")]
+    [ValidateSet("Simulation", "Simulation_Parallel", "Simulation_MM", "PreProcessor", "Budget", "ZBudget", "IWFM_C_DLL", "IWFM_C_DLL_Heap", "IWFM2OBS", "CalcTypeHyd", "ResultsExtract", "test_dss_read", "test_inquiry_load", "all")]
     [string]$Target = "all",
 
     [ValidateSet("Release", "Debug", "RelWithDebInfo")]
@@ -465,7 +465,7 @@ function Invoke-Build {
     # is first on PATH. A system oneAPI ships Intel's libiomp5md.dll; the
     # conda-forge ifx links LLVM's libomp.dll (its libiomp5md.lib is an
     # alias), so copy whichever of the two the compiler provides.
-    $wantsOmp = $Parallel -or ($Target -eq "all") -or ($Target -eq "IWFM_C_DLL") -or ($Target -eq "Simulation_Parallel")
+    $wantsOmp = $Parallel -or ($Target -eq "all") -or ($Target -like "IWFM_C_DLL*") -or ($Target -eq "Simulation_Parallel")
     if ($wantsOmp -and (Test-Path $BinDir)) {
         $compilerBinDir = Split-Path $script:IFX -Parent
         $copied = @()
@@ -500,6 +500,7 @@ function Invoke-Build {
             "Budget" = "Budget_x64*.exe"
             "ZBudget" = "ZBudget_x64*.exe"
             "IWFM_C_DLL" = "IWFM_C_x64*.dll"
+            "IWFM_C_DLL_Heap" = "IWFM_C_Heap_x64*.dll"
             "IWFM2OBS" = "IWFM2OBS_x64*.exe"
             "CalcTypeHyd" = "CalcTypeHyd_x64*.exe"
             "ResultsExtract" = "ResultsExtract_x64*.exe"

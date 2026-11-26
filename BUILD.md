@@ -186,6 +186,7 @@ cmake --build .
 | `IWFM_BUILD_BUDGET` | ON | Build Budget post-processor |
 | `IWFM_BUILD_ZBUDGET` | ON | Build ZBudget post-processor |
 | `IWFM_BUILD_DLL` | ON | Build IWFM C-interface DLL/shared library |
+| `IWFM_BUILD_DLL_HEAP` | ON | Also build the heap-arrays DLL for callers with small stacks (much slower) |
 | `IWFM_BUILD_PARALLEL` | OFF | Build OpenMP parallel simulation |
 | `IWFM_BUILD_COARRAY` | OFF | Build Coarray Fortran multi-model (Intel only) |
 
@@ -637,7 +638,7 @@ source /opt/intel/oneapi/setvars.sh
 
 **Solution:** The executables reserve a 256 MB stack through the linker (`/STACK:256000000` on Windows). On Linux the linker setting is ignored and the main thread gets the shell's limit, so run large models after `ulimit -s unlimited` (or a large value).
 
-The DLL uses the calling thread's stack, so the caller must provide a large one: pywfm runs every library call on a 255 MB thread. For callers that can't, configure with `-DIWFM_DLL_HEAP_ARRAYS=ON`, which compiles the DLL with `/heap-arrays:900` (Windows) or `-heap-arrays 900` (Linux), the official `IWFM_C_DLL_Heap.vfproj` setting, to put arrays over 900 KB on the heap. That makes C2VSimFG about 7x slower through the DLL.
+The DLL uses the calling thread's stack, so the caller must provide a large one: pywfm runs every library call on a 255 MB thread. For callers that can't, the build also makes `IWFM_C_Heap_x64.dll` (`libiwfm_c_heap.so` on Linux), compiled with `/heap-arrays:900` (Windows) or `-heap-arrays 900` (Linux), the official `IWFM_C_DLL_Heap.vfproj` setting, to put arrays over 900 KB on the heap. It exports the same procedures and gives the same results, but runs C2VSimFG about 7x slower. Configure with `-DIWFM_BUILD_DLL_HEAP=OFF` to skip it; it is built only in monolithic builds.
 
 gfortran builds: `-fmax-stack-var-size=921600`.
 
@@ -699,7 +700,8 @@ cmake .. -G Ninja -DCMAKE_BUILD_TYPE=Release 2>&1 | grep -E "(HDF5|heclib|zlib|I
 | `Bin/PreProcessor_x64.exe` | Pre-processor |
 | `Bin/Budget_x64.exe` | Budget post-processor |
 | `Bin/ZBudget_x64.exe` | Zone budget post-processor |
-| `Bin/IWFM_C_x64.dll` | C-callable DLL |
+| `Bin/IWFM_C_x64.dll` | C-callable DLL (needs a large caller stack) |
+| `Bin/IWFM_C_Heap_x64.dll` | C-callable DLL with heap-arrays, for small stacks (slower) |
 
 ### Linux/macOS
 
@@ -712,7 +714,8 @@ cmake .. -G Ninja -DCMAKE_BUILD_TYPE=Release 2>&1 | grep -E "(HDF5|heclib|zlib|I
 | `Bin/PreProcessor` | Pre-processor |
 | `Bin/Budget` | Budget post-processor |
 | `Bin/ZBudget` | Zone budget post-processor |
-| `Bin/libiwfm_c.so` | C-callable shared library |
+| `Bin/libiwfm_c.so` | C-callable shared library (needs a large caller stack) |
+| `Bin/libiwfm_c_heap.so` | C-callable shared library with heap-arrays, for small stacks (slower) |
 
 ---
 
