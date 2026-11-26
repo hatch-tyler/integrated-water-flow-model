@@ -1610,8 +1610,11 @@ CONTAINS
     
     !Local variables
     TYPE(GenericFileType) :: vGWMainFile
-    INTEGER               :: iNData,indx,iNNodes,iDummy
+    INTEGER               :: iNData,indx,iNNodes,iDummy,iLineNumberToRewindTo,iGWReturnFlowDataFlag, &
+                             iErrorCode1,iErrorCode2
+    REAL(8)               :: rFactor
     CHARACTER             :: ALine*10
+    CHARACTER,ALLOCATABLE :: cCountLines(:)*50
     
     !Open main gw file
     CALL vGWMainFile%New(cGWMainFileName,InputFile=.TRUE.,IsTSFile=.FALSE.,Descriptor='gw main input file',iStat=iStat)
@@ -1665,8 +1668,26 @@ CONTAINS
         IF (iStat .NE. 0) RETURN
     END DO
     
+    !Skip gw return flow data (IFLAGRF and, if it is 1, a destination for each node), if provided;
+    !detected as in New: older files go straight to the initial conditions
+    iNNodes               = SIZE(iNodeIDs)
+    iLineNumberToRewindTo = vGWMainFile%GetLineNumber()
+    CALL vGWMainFile%ReadData(iGWReturnFlowDataFlag,iErrorCode1)
+    IF (iGWReturnFlowDataFlag .EQ. 1) CALL vGWMainFile%ReadData(cCountLines,iErrorCode2)
+    CALL vGWMainFile%ReadData(rFactor,iErrorCode1)
+    CALL vGWMainFile%ReadData(cCountLines,iErrorCode2)
+    CALL vGWMainFile%GotoLine(iLineNumberToRewindTo,iStat)  ;  IF (iStat .NE. 0) RETURN
+    IF (iErrorCode1+iErrorCode2 .EQ. 0) THEN
+        CALL vGWMainFile%ReadData(iGWReturnFlowDataFlag,iStat)  ;  IF (iStat .NE. 0) RETURN
+        IF (iGWReturnFlowDataFlag .EQ. 1) THEN
+            DO indx=1,iNNodes
+                CALL vGWMainFile%ReadData(ALine,iStat)
+                IF (iStat .NE. 0) RETURN
+            END DO
+        END IF
+    END IF
+
     !Now, we are at initial conditions
-    iNNodes = SIZE(iNodeIDs)
     CALL ReadInitialHeads(Logger,vGWMainFile,iNNodes,iNodeIDs,Stratigraphy,rGWHeadsIC,iStat)
     
     !Close file
