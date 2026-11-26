@@ -21,7 +21,6 @@
 !  For tecnical support, e-mail: IWFMtechsupport@water.ca.gov 
 !***********************************************************************
 MODULE UnsatZoneOps
-  USE GeneralUtilities   , ONLY: FEXP
   USE Package_Misc       , ONLY: f_rSmoothMaxP
   USE RainfallRunoff     , ONLY: SCSMethod_HELP
   USE Class_Soil         , ONLY: f_iCampbell        , &
@@ -844,4 +843,30 @@ CONTAINS
        
   END SUBROUTINE MixedIterMethod
   
+
+  ! -------------------------------------------------------------
+  ! --- FAST EXP FUNCTION
+  ! --- Same expression as GeneralUtilities::FEXP (Schraudolph, 1999).
+  ! --- A module-local copy so the compiler can inline it into the soil
+  ! --- moisture solver, which calls it billions of times on large models;
+  ! --- a call into another module is not inlined without IPO.
+  ! -------------------------------------------------------------
+  PURE FUNCTION FEXP(rArg) RESULT(rExp)
+    REAL(8),INTENT(IN) :: rArg
+    REAL(8)            :: rExp
+
+    !Local variables
+    INTEGER(8) :: i8
+
+    IF (rArg .LT. -500d0) THEN
+        rExp = 0d0
+    ELSEIF (rArg .GT. 500d0) THEN
+        rExp = HUGE(0d0)
+    ELSE
+        i8   = INT(6497320848556798_8 * rArg + 4607182418800017408_8, 8)
+        rExp = TRANSFER(i8, rExp)
+    END IF
+
+  END FUNCTION FEXP
+
 END MODULE
