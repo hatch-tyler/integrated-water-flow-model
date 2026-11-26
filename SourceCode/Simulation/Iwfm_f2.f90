@@ -32,6 +32,7 @@ PROGRAM IWFM_F2
                                 Get_Main_File
   USE Package_Model     , ONLY: ModelType
   USE IWFM_Version      , ONLY: IWFMVersion
+  USE GeneralUtilities  , ONLY: NThreadsSetByUser
   IMPLICIT NONE
 
 
@@ -43,7 +44,7 @@ PROGRAM IWFM_F2
   !Set parallel thread environment
   !$ iBlockTime = KMP_GET_BLOCKTIME()
   !$ CALL KMP_SET_BLOCKTIME(0)                                !Let therads sleep right away
-  !$ CALL OMP_SET_NUM_THREADS(MIN(OMP_GET_NUM_PROCS() , 16))  !Set number of threads to minimum of 16 or number of available processors
+  !$ IF (.NOT. NThreadsSetByUser()) CALL OMP_SET_NUM_THREADS(MIN(OMP_GET_NUM_PROCS() , 16))  !Unless OMP_NUM_THREADS is set: minimum of 16 and the number of processors
   !$ CALL OMP_SET_MAX_ACTIVE_LEVELS(2)                        !Maximum 2 levels of nested paralellization
   !$ CALL KMP_SET_STACKSIZE_S(16777216)                       !Set thread stack size to 16MB
 

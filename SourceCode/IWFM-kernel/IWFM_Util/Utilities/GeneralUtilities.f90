@@ -82,7 +82,8 @@ MODULE GeneralUtilities
             ConvertID_To_Index            , &
             PrepareIDIndex                , &
             LookupIDInIndex               , &
-            FEXP
+            FEXP                          , &
+            NThreadsSetByUser
 
 
   !Data type for a generic string
@@ -2179,6 +2180,23 @@ CONTAINS
     END IF
     
   END FUNCTION FEXP
+  
+  
+  ! -------------------------------------------------------------
+  ! --- CHECK IF THE USER SET THE NUMBER OF OPENMP THREADS
+  ! --- (environment variable OMP_NUM_THREADS); if so, the programs and
+  ! --- the DLL keep it instead of choosing their own number of threads
+  ! -------------------------------------------------------------
+  FUNCTION NThreadsSetByUser() RESULT(lSet)
+    LOGICAL :: lSet
+
+    !Local variables
+    INTEGER :: iLen,iStat
+
+    CALL GET_ENVIRONMENT_VARIABLE('OMP_NUM_THREADS',LENGTH=iLen,STATUS=iStat)
+    lSet = (iStat .EQ. 0)  .AND.  (iLen .GT. 0)
+
+  END FUNCTION NThreadsSetByUser
   
   
   ! -------------------------------------------------------------

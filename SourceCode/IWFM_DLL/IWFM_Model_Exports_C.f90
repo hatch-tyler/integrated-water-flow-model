@@ -29,6 +29,7 @@ MODULE IWFM_Model_Exports
                                           f_iWarn                                  , &
                                           f_iFatal
   USE GeneralUtilities            , ONLY: FirstLocation                            , &
+                                          NThreadsSetByUser                        , &
                                           GetFileDirectory                         , &
                                           String_Copy_C_F                          , &
                                           String_Copy_F_C                          , &
@@ -134,7 +135,7 @@ CONTAINS
 
     !Set environment for parallel processing
     !$ CALL KMP_SET_BLOCKTIME(0)                                  !Let threads sleep right away
-    !$ CALL OMP_SET_NUM_THREADS(MIN(OMP_GET_NUM_PROCS()-1 , 16))  !Set number of threads to minimum of 16 or number of available processors
+    !$ IF (.NOT. NThreadsSetByUser()) CALL OMP_SET_NUM_THREADS(MIN(OMP_GET_NUM_PROCS()-1 , 16))  !Unless OMP_NUM_THREADS is set: minimum of 16 and the number of processors
     !$ CALL OMP_SET_MAX_ACTIVE_LEVELS(2)                          !Maximum 2 levels of nested paralellization
     !$ CALL KMP_SET_STACKSIZE_S(16777216)                         !Set thread stack size to 16MB
 
@@ -212,7 +213,7 @@ CONTAINS
 
     !Set environment for parallel processing
     !$ CALL KMP_SET_BLOCKTIME(0)                                  !Let threads sleep right away
-    !$ CALL OMP_SET_NUM_THREADS(MIN(OMP_GET_NUM_PROCS()-1 , 16))  !Set number of threads to minimum of 16 or number of available processors
+    !$ IF (.NOT. NThreadsSetByUser()) CALL OMP_SET_NUM_THREADS(MIN(OMP_GET_NUM_PROCS()-1 , 16))  !Unless OMP_NUM_THREADS is set: minimum of 16 and the number of processors
     !$ CALL OMP_SET_MAX_ACTIVE_LEVELS(2)                          !Maximum 2 levels of nested paralellization
     !$ CALL KMP_SET_STACKSIZE_S(16777216)                         !Set thread stack size to 16MB
 
